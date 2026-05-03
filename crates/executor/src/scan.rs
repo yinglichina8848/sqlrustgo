@@ -162,10 +162,7 @@ mod tests {
 
     #[test]
     fn test_scan_executor_with_null_values() {
-        let data = vec![
-            vec![Value::Null],
-            vec![Value::Integer(1)],
-        ];
+        let data = vec![vec![Value::Null], vec![Value::Integer(1)]];
         let mut executor = MockScanExecutor::new(data);
         executor.init().unwrap();
         let r1 = executor.next().unwrap();
@@ -186,10 +183,7 @@ mod tests {
 
     #[test]
     fn test_scan_executor_with_float_values() {
-        let data = vec![
-            vec![Value::Float(3.14)],
-            vec![Value::Float(-2.5)],
-        ];
+        let data = vec![vec![Value::Float(3.14)], vec![Value::Float(-2.5)]];
         let mut executor = MockScanExecutor::new(data);
         executor.init().unwrap();
         let r1 = executor.next().unwrap();
@@ -207,10 +201,7 @@ mod tests {
 
     #[test]
     fn test_scan_executor_with_boolean_values() {
-        let data = vec![
-            vec![Value::Boolean(true)],
-            vec![Value::Boolean(false)],
-        ];
+        let data = vec![vec![Value::Boolean(true)], vec![Value::Boolean(false)]];
         let mut executor = MockScanExecutor::new(data);
         executor.init().unwrap();
         let r1 = executor.next().unwrap();

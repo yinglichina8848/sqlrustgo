@@ -12,7 +12,9 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 fn test_volcano_basic_query() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (id INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (1), (2), (3)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1), (2), (3)")
+        .unwrap();
     let result = engine.execute("SELECT id FROM t").unwrap();
     assert_eq!(result.rows.len(), 3);
 }
@@ -57,8 +59,12 @@ fn test_volcano_insert_select() {
 #[test]
 fn test_volcano_select_columns() {
     let mut engine = create_engine();
-    engine.execute("CREATE TABLE t (a INTEGER, b INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (1, 10), (2, 20)").unwrap();
+    engine
+        .execute("CREATE TABLE t (a INTEGER, b INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1, 10), (2, 20)")
+        .unwrap();
     let count = engine.execute("SELECT COUNT(*) FROM t").unwrap();
     assert_eq!(count.rows[0][0], Value::Integer(2));
 }
@@ -67,7 +73,9 @@ fn test_volcano_select_columns() {
 fn test_volcano_ten_rows_insert() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (n INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)")
+        .unwrap();
     let result = engine.execute("SELECT COUNT(*) FROM t").unwrap();
     assert_eq!(result.rows[0][0], Value::Integer(10));
 }
@@ -76,11 +84,17 @@ fn test_volcano_ten_rows_insert() {
 fn test_volcano_aggregate_filter() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (v INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)")
+        .unwrap();
     let sum = engine.execute("SELECT SUM(v) FROM t").unwrap();
     assert_eq!(sum.rows[0][0], Value::Integer(15));
-    let filtered = engine.execute("SELECT COUNT(*) FROM t WHERE v = 3").unwrap();
+    let filtered = engine
+        .execute("SELECT COUNT(*) FROM t WHERE v = 3")
+        .unwrap();
     assert_eq!(filtered.rows[0][0], Value::Integer(1));
-    let not_eq = engine.execute("SELECT COUNT(*) FROM t WHERE v <> 3").unwrap();
+    let not_eq = engine
+        .execute("SELECT COUNT(*) FROM t WHERE v <> 3")
+        .unwrap();
     assert_eq!(not_eq.rows[0][0], Value::Integer(4));
 }

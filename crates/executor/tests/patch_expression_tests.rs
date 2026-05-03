@@ -84,7 +84,9 @@ fn test_case_when_on_table() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
     e.execute("INSERT INTO t VALUES (1),(2),(3)").unwrap();
-    let r = e.execute("SELECT CASE WHEN a=1 THEN 'one' WHEN a=2 THEN 'two' ELSE 'other' END FROM t").unwrap();
+    let r = e
+        .execute("SELECT CASE WHEN a=1 THEN 'one' WHEN a=2 THEN 'two' ELSE 'other' END FROM t")
+        .unwrap();
     assert_eq!(r.rows.len(), 3);
 }
 

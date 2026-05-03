@@ -48,7 +48,8 @@ fn test_limit_exact_all() {
 fn test_limit_with_offset_zero() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
-    e.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)").unwrap();
+    e.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)")
+        .unwrap();
     let r = e.execute("SELECT * FROM t LIMIT 3 OFFSET 0").unwrap();
     assert_eq!(r.rows.len(), 3);
 }
@@ -57,7 +58,8 @@ fn test_limit_with_offset_zero() {
 fn test_limit_with_offset_mid() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
-    e.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)").unwrap();
+    e.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)")
+        .unwrap();
     let r = e.execute("SELECT * FROM t LIMIT 2 OFFSET 2").unwrap();
     assert_eq!(r.rows.len(), 2);
 }
@@ -66,7 +68,8 @@ fn test_limit_with_offset_mid() {
 fn test_limit_after_filter() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
-    e.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)").unwrap();
+    e.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)")
+        .unwrap();
     let r = e.execute("SELECT * FROM t WHERE a > 2 LIMIT 2").unwrap();
     assert_eq!(r.rows.len(), 2);
 }
@@ -94,7 +97,9 @@ fn test_limit_with_order_desc() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
     e.execute("INSERT INTO t VALUES (3), (1), (2)").unwrap();
-    let r = e.execute("SELECT * FROM t ORDER BY a DESC LIMIT 2").unwrap();
+    let r = e
+        .execute("SELECT * FROM t ORDER BY a DESC LIMIT 2")
+        .unwrap();
     assert_eq!(r.rows.len(), 2);
 }
 
@@ -102,7 +107,8 @@ fn test_limit_with_order_desc() {
 fn test_pagination_three_pages() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
-    e.execute("INSERT INTO t VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10)")
+        .unwrap();
     for offset in &[0usize, 3, 6] {
         let sql = format!("SELECT * FROM t ORDER BY a LIMIT 3 OFFSET {}", offset);
         let r = e.execute(&sql).unwrap();

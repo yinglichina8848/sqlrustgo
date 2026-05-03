@@ -17,7 +17,9 @@ fn setup_employees_departments() -> ExecutionEngine<MemoryStorage> {
         .execute("CREATE TABLE departments (id INTEGER, dept_name TEXT)")
         .unwrap();
     engine
-        .execute("INSERT INTO employees VALUES (1, 'Alice', 10), (2, 'Bob', 20), (3, 'Charlie', 30)")
+        .execute(
+            "INSERT INTO employees VALUES (1, 'Alice', 10), (2, 'Bob', 20), (3, 'Charlie', 30)",
+        )
         .unwrap();
     engine
         .execute("INSERT INTO departments VALUES (10, 'Engineering'), (20, 'Sales')")
@@ -77,8 +79,12 @@ fn test_join_with_filter() {
         .execute("SELECT employees.name, departments.dept_name FROM employees INNER JOIN departments ON employees.dept_id = departments.id WHERE employees.name = 'Alice'")
         .unwrap();
     assert_eq!(result.rows.len(), 1);
-    let row_has_engineering = result.rows[0].iter().any(|v| *v == Value::Text("Engineering".to_string()));
-    let row_has_alice = result.rows[0].iter().any(|v| *v == Value::Text("Alice".to_string()));
+    let row_has_engineering = result.rows[0]
+        .iter()
+        .any(|v| *v == Value::Text("Engineering".to_string()));
+    let row_has_alice = result.rows[0]
+        .iter()
+        .any(|v| *v == Value::Text("Alice".to_string()));
     assert!(row_has_alice);
     assert!(row_has_engineering);
 }
@@ -86,12 +92,8 @@ fn test_join_with_filter() {
 #[test]
 fn test_join_empty_table() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE t1 (id INTEGER)")
-        .unwrap();
-    engine
-        .execute("CREATE TABLE t2 (id INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE t1 (id INTEGER)").unwrap();
+    engine.execute("CREATE TABLE t2 (id INTEGER)").unwrap();
     engine.execute("INSERT INTO t1 VALUES (1)").unwrap();
     let result = engine
         .execute("SELECT * FROM t1 INNER JOIN t2 ON t1.id = t2.id")
@@ -151,7 +153,9 @@ fn test_join_with_aggregate() {
         .execute("CREATE TABLE departments (id INTEGER, dept_name TEXT)")
         .unwrap();
     engine
-        .execute("INSERT INTO employees VALUES (1, 'Alice', 10), (2, 'Bob', 10), (3, 'Charlie', 20)")
+        .execute(
+            "INSERT INTO employees VALUES (1, 'Alice', 10), (2, 'Bob', 10), (3, 'Charlie', 20)",
+        )
         .unwrap();
     engine
         .execute("INSERT INTO departments VALUES (10, 'Engineering'), (20, 'Sales')")
@@ -166,12 +170,9 @@ fn test_join_with_aggregate() {
 #[test]
 fn test_join_three_tables() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE a (id INTEGER)").unwrap();
-    engine
-        .execute("CREATE TABLE b (id INTEGER)").unwrap();
-    engine
-        .execute("CREATE TABLE c (id INTEGER)").unwrap();
+    engine.execute("CREATE TABLE a (id INTEGER)").unwrap();
+    engine.execute("CREATE TABLE b (id INTEGER)").unwrap();
+    engine.execute("CREATE TABLE c (id INTEGER)").unwrap();
     engine.execute("INSERT INTO a VALUES (1), (2)").unwrap();
     engine.execute("INSERT INTO b VALUES (1), (3)").unwrap();
     engine.execute("INSERT INTO c VALUES (1), (4)").unwrap();
