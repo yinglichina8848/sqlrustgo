@@ -301,6 +301,28 @@ pub struct JoinClause {
     pub on_clause: Expression,
 }
 
+/// A single table reference in a FROM clause (possibly with alias)
+#[derive(Debug, Clone, PartialEq)]
+pub struct FromTable {
+    pub name: String,
+    pub alias: Option<String>,
+}
+
+/// FROM clause — holds all tables from a comma-separated list, plus explicit JOINs
+#[derive(Debug, Clone, PartialEq)]
+pub struct FromClause {
+    /// Tables in the comma-separated FROM part (empty if only explicit JOINs)
+    pub tables: Vec<FromTable>,
+    /// Explicit JOIN clauses (INNER/LEFT/RIGHT/FULL/CROSS)
+    pub join_clauses: Vec<JoinClause>,
+}
+
+impl Default for FromClause {
+    fn default() -> Self {
+        Self { tables: vec![], join_clauses: vec![] }
+    }
+}
+
 /// Aggregate function call
 #[derive(Debug, Clone, PartialEq)]
 pub struct AggregateCall {
@@ -313,7 +335,10 @@ pub struct AggregateCall {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectStatement {
     pub columns: Vec<SelectColumn>,
+    /// Primary table (backward compat; for multi-table use `from.tables`)
     pub table: String,
+    /// Full FROM clause with multi-table support
+    pub from: Option<FromClause>,
     pub where_clause: Option<Expression>,
     pub join_clause: Option<JoinClause>,
     pub aggregates: Vec<AggregateCall>,
@@ -323,6 +348,35 @@ pub struct SelectStatement {
     pub limit: Option<u64>,
     pub offset: Option<u64>,
     pub distinct: bool,
+}
+
+impl SelectStatement {
+    /// Returns the name of the first/primary table, for backward compatibility.
+    pub fn first_table(&self) -> String {
+        self.from
+            .as_ref()
+            .and_then(|f| f.tables.first())
+            .map(|t| t.name.clone())
+            .unwrap_or_else(|| self.table.clone())
+    }
+
+    /// Returns all table names in the FROM clause (including JOINs).
+    pub fn all_table_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .from
+            .as_ref()
+            .map(|f| f.tables.iter().map(|t| t.name.clone()).collect())
+            .unwrap_or_default();
+        if names.is_empty() && !self.table.is_empty() {
+            names.push(self.table.clone());
+        }
+        if let Some(ref jc) = self.join_clause {
+            if !names.contains(&jc.table) {
+                names.push(jc.table.clone());
+            }
+        }
+        names
+    }
 }
 
 /// ORDER BY expression
@@ -1600,36 +1654,75 @@ impl Parser {
         }
 
         // Handle SELECT without FROM (e.g., SELECT NULL, SELECT 1, SELECT 'hello')
-        let table = match self.current() {
+        let mut tables: Vec<FromTable> = Vec::new();
+        let mut primary_table = String::new();
+
+        match self.current() {
             Some(Token::From) => {
                 self.next(); // consume FROM
-                match self.next() {
-                    Some(Token::Identifier(name)) => name,
-                    Some(Token::LParen) => {
-                        // Handle subquery: FROM (SELECT ...)
-                        let _subquery_stmt = Box::new(self.parse_select()?);
-                        self.expect(Token::RParen)?;
-                        // Return special marker for subquery (executor will handle)
-                        "__subquery".to_string()
+                loop {
+                    match self.next() {
+                        Some(Token::Identifier(name)) => {
+                            // Check for table alias (e.g., `FROM users u`)
+                            let alias = if matches!(self.current(), Some(Token::Identifier(_)))
+                                && !matches!(self.peek(), Some(Token::Dot))
+                            {
+                                let a = match self.current().cloned() {
+                                    Some(Token::Identifier(ident)) => Some(ident),
+                                    _ => None,
+                                };
+                                self.next(); // consume alias
+                                a
+                            } else {
+                                None
+                            };
+                            tables.push(FromTable { name: name.clone(), alias });
+                            if primary_table.is_empty() {
+                                primary_table = name;
+                            }
+                        }
+                        Some(Token::LParen) => {
+                            // Handle subquery: FROM (SELECT ...)
+                            let _subquery_stmt = Box::new(self.parse_select()?);
+                            self.expect(Token::RParen)?;
+                            tables.push(FromTable {
+                                name: "__subquery".to_string(),
+                                alias: None,
+                            });
+                            if primary_table.is_empty() {
+                                primary_table = "__subquery".to_string();
+                            }
+                        }
+                        Some(t) => return Err(format!("Expected table name, got {:?}", t)),
+                        None => return Err("Expected table name".to_string()),
                     }
-                    Some(t) => return Err(format!("Expected table name, got {:?}", t)),
-                    None => return Err("Expected table name".to_string()),
+
+                    // Continue only if comma (comma-separated multi-table)
+                    if matches!(self.current(), Some(Token::Comma)) {
+                        self.next(); // consume comma
+                        continue;
+                    }
+                    break;
                 }
             }
             Some(Token::Eof) | None => {
                 // No FROM clause - this is a SELECT without table (e.g., SELECT 1+1)
-                // Return an empty table name to indicate no table
-                "".to_string()
+                primary_table = "".to_string();
             }
             Some(t) => return Err(format!("Expected FROM or end of query, got {:?}", t)),
-        };
-
-        // Check for table alias (e.g., `FROM users u`)
-        if matches!(self.current(), Some(Token::Identifier(_))) {
-            self.next(); // consume alias
         }
 
-        // Check for JOIN
+        // Build the FROM clause
+        let from = if tables.is_empty() {
+            None
+        } else {
+            Some(FromClause {
+                tables,
+                join_clauses: vec![],
+            })
+        };
+
+        // Check for JOIN (these come after the comma-separated list)
         let join_clause = if matches!(
             self.current(),
             Some(Token::Join)
@@ -1757,7 +1850,8 @@ impl Parser {
 
         Ok(SelectStatement {
             columns,
-            table,
+            table: primary_table,
+            from,
             where_clause,
             join_clause,
             aggregates,
