@@ -1197,6 +1197,81 @@ impl Parser {
                     });
                     self.next();
                 }
+                // Handle DATE_ADD/DATE_SUB with INTERVAL - MUST come before generic Identifier
+                Some(Token::Identifier(ref name)) if name.to_uppercase() == "DATE_ADD" 
+                    || name.to_uppercase() == "DATE_SUB" => {
+                    let func_name = name.to_uppercase();
+                    self.next(); // consume DATE_ADD/DATE_SUB
+                    self.expect(Token::LParen)?;
+                    let mut args = Vec::new();
+                    
+                    // Parse date expression
+                    args.push(self.parse_expression()?);
+                    
+                    // Handle INTERVAL syntax OR comma syntax
+                    if matches!(self.current(), Some(Token::Comma)) {
+                        self.next(); // consume comma
+                        
+                        // Check if second arg is INTERVAL
+                        if matches!(self.current(), Some(Token::Interval)) {
+                            self.next(); // consume INTERVAL
+                            let value = self.parse_expression()?;
+                            args.push(Expression::Identifier("INTERVAL".to_string()));
+                            args.push(value);
+                            
+                            // Parse unit
+                            if matches!(self.current(), Some(Token::Day)) {
+                                args.push(Expression::Identifier("DAY".to_string()));
+                                self.next();
+                            } else if matches!(self.current(), Some(Token::Month)) {
+                                args.push(Expression::Identifier("MONTH".to_string()));
+                                self.next();
+                            } else if matches!(self.current(), Some(Token::Year)) {
+                                args.push(Expression::Identifier("YEAR".to_string()));
+                                self.next();
+                            } else if matches!(self.current(), Some(Token::Hour)) {
+                                args.push(Expression::Identifier("HOUR".to_string()));
+                                self.next();
+                            } else if matches!(self.current(), Some(Token::Minute)) {
+                                args.push(Expression::Identifier("MINUTE".to_string()));
+                                self.next();
+                            } else if matches!(self.current(), Some(Token::Second)) {
+                                args.push(Expression::Identifier("SECOND".to_string()));
+                                self.next();
+                            } else if matches!(self.current(), Some(Token::Week)) {
+                                args.push(Expression::Identifier("WEEK".to_string()));
+                                self.next();
+                            }
+                        } else {
+                            // Second arg is regular expression (number of days, etc.)
+                            args.push(self.parse_expression()?);
+                        }
+                    } else if matches!(self.current(), Some(Token::Interval)) {
+                        // Handle INTERVAL-first syntax (not MySQL standard but accept)
+                        self.next(); // consume INTERVAL
+                        let value = self.parse_expression()?;
+                        args.push(Expression::Identifier("INTERVAL".to_string()));
+                        args.push(value);
+                        
+                        if matches!(self.current(), Some(Token::Day)) {
+                            args.push(Expression::Identifier("DAY".to_string()));
+                            self.next();
+                        } else if matches!(self.current(), Some(Token::Month)) {
+                            args.push(Expression::Identifier("MONTH".to_string()));
+                            self.next();
+                        } else if matches!(self.current(), Some(Token::Year)) {
+                            args.push(Expression::Identifier("YEAR".to_string()));
+                            self.next();
+                        }
+                    }
+                    
+                    self.expect(Token::RParen)?;
+                    columns.push(SelectColumn {
+                        name: func_name.clone(),
+                        alias: None,
+                        expression: Some(Expression::FunctionCall(func_name, args)),
+                    });
+                }
                 // Handle REPLACE function in SELECT
                 Some(Token::Replace) => {
                     let name = "REPLACE".to_string();
@@ -1238,6 +1313,56 @@ impl Parser {
                         name: name.clone(),
                         alias: None,
                         expression: Some(Expression::FunctionCall(name, args)),
+                    });
+                }
+                // Handle DATE_ADD/DATE_SUB with INTERVAL
+                Some(Token::Identifier(ref name)) if name.to_uppercase() == "DATE_ADD" 
+                    || name.to_uppercase() == "DATE_SUB" => {
+                    let func_name = name.to_uppercase();
+                    self.next(); // consume DATE_ADD/DATE_SUB
+                    self.expect(Token::LParen)?;
+                    let mut args = Vec::new();
+                    
+                    // Parse date expression
+                    args.push(self.parse_expression()?);
+                    
+                    // Look for INTERVAL
+                    if matches!(self.current(), Some(Token::Interval)) {
+                        self.next(); // consume INTERVAL
+                        let value = self.parse_expression()?;
+                        args.push(Expression::Identifier("INTERVAL".to_string()));
+                        args.push(value);
+                        
+                        // Parse optional unit (DAY, MONTH, YEAR, etc.)
+                        if matches!(self.current(), Some(Token::Day)) {
+                            args.push(Expression::Identifier("DAY".to_string()));
+                            self.next();
+                        } else if matches!(self.current(), Some(Token::Month)) {
+                            args.push(Expression::Identifier("MONTH".to_string()));
+                            self.next();
+                        } else if matches!(self.current(), Some(Token::Year)) {
+                            args.push(Expression::Identifier("YEAR".to_string()));
+                            self.next();
+                        } else if matches!(self.current(), Some(Token::Hour)) {
+                            args.push(Expression::Identifier("HOUR".to_string()));
+                            self.next();
+                        } else if matches!(self.current(), Some(Token::Minute)) {
+                            args.push(Expression::Identifier("MINUTE".to_string()));
+                            self.next();
+                        } else if matches!(self.current(), Some(Token::Second)) {
+                            args.push(Expression::Identifier("SECOND".to_string()));
+                            self.next();
+                        } else if matches!(self.current(), Some(Token::Week)) {
+                            args.push(Expression::Identifier("WEEK".to_string()));
+                            self.next();
+                        }
+                    }
+                    
+                    self.expect(Token::RParen)?;
+                    columns.push(SelectColumn {
+                        name: func_name.clone(),
+                        alias: None,
+                        expression: Some(Expression::FunctionCall(func_name, args)),
                     });
                 }
                 // Handle aggregate functions: COUNT(*), SUM(col), etc.
