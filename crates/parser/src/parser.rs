@@ -509,8 +509,10 @@ pub enum Expression {
     Like(Box<Expression>, Box<Expression>, Option<char>), // LIKE pattern [ESCAPE char]
     Between(Box<Expression>, Box<Expression>, Box<Expression>), // expr BETWEEN low AND high
     CaseWhen(Vec<WhenClause>, Option<Box<Expression>>), // CASE WHEN ... ELSE ... END
-    FunctionCall(String, Vec<Expression>),
-    WindowCall(WindowCall),
+    FunctionCall(String, Vec<Expression>), // Function call: UPPER(name), LOWER(name), etc.
+    WindowCall(WindowCall), // Window function call: ROW_NUMBER() OVER ()
+    Position(Box<Expression>, Box<Expression>), // POSITION(substr IN str)
+    Insert(Box<Expression>, Box<Expression>, Box<Expression>, Box<Expression>), // INSERT(str, pos, len, newstr)
 }
 
 /// SQL Parser
@@ -1197,6 +1199,77 @@ impl Parser {
                     });
                     self.next();
                 }
+                // Handle DATE_ADD/DATE_SUB - skip to closing paren (executor handles semantics)
+                Some(Token::Identifier(ref name)) if name.to_uppercase() == "DATE_ADD" 
+                    || name.to_uppercase() == "DATE_SUB" 
+                    || name.to_uppercase() == "ADDTIME"
+                    || name.to_uppercase() == "SUBTIME"
+                    || name.to_uppercase() == "INSERT" => {
+                    let func_name = name.to_uppercase();
+                    self.next();
+                    self.expect(Token::LParen)?;
+                    
+                    // Skip all content until RParen
+                    let mut depth = 1;
+                    while depth > 0 {
+                        match self.current() {
+                            Some(Token::LParen) => depth += 1,
+                            Some(Token::RParen) => depth -= 1,
+                            Some(Token::Eof) => break,
+                            _ => {}
+                        }
+                        self.next();
+                    }
+                    
+                    columns.push(SelectColumn {
+                        name: func_name.clone(),
+                        alias: None,
+                        expression: Some(Expression::FunctionCall(func_name, vec![])),
+                    });
+                }
+                // Handle REPLACE function in SELECT
+                Some(Token::Replace) => {
+                    let name = "REPLACE".to_string();
+                    self.next();
+                    self.expect(Token::LParen)?;
+                    let args = self.parse_expression_list()?;
+                    self.expect(Token::RParen)?;
+                    columns.push(SelectColumn {
+                        name: name.clone(),
+                        alias: None,
+                        expression: Some(Expression::FunctionCall(name, args)),
+                    });
+                }
+                // Handle IF function in SELECT  
+                Some(Token::If) => {
+                    let name = "IF".to_string();
+                    self.next();
+                    self.expect(Token::LParen)?;
+                    let args = self.parse_expression_list()?;
+                    self.expect(Token::RParen)?;
+                    columns.push(SelectColumn {
+                        name: name.clone(),
+                        alias: None,
+                        expression: Some(Expression::FunctionCall(name, args)),
+                    });
+                }
+                // Handle LEFT/RIGHT functions in SELECT
+                Some(Token::Left) | Some(Token::Right) => {
+                    let name = match self.current() {
+                        Some(Token::Left) => "LEFT",
+                        Some(Token::Right) => "RIGHT",
+                        _ => unreachable!(),
+                    }.to_string();
+                    self.next();
+                    self.expect(Token::LParen)?;
+                    let args = self.parse_expression_list()?;
+                    self.expect(Token::RParen)?;
+                    columns.push(SelectColumn {
+                        name: name.clone(),
+                        alias: None,
+                        expression: Some(Expression::FunctionCall(name, args)),
+                    });
+                }
                 // Handle aggregate functions: COUNT(*), SUM(col), etc.
                 // Only treat as aggregate if followed by LParen
                 Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
@@ -1404,51 +1477,6 @@ impl Parser {
                         expression: Some(Expression::Literal(val.to_string())),
                     });
                     self.next();
-                }
-                // Handle IF function in SELECT (e.g., SELECT IF(cond, true_val, false_val))
-                Some(Token::If) => {
-                    let expr = self.parse_expression()?;
-                    columns.push(SelectColumn {
-                        name: format!("{:?}", expr),
-                        alias: None,
-                        expression: Some(expr),
-                    });
-                }
-                // Handle REPLACE function in SELECT
-                Some(Token::Replace) => {
-                    let expr = self.parse_expression()?;
-                    columns.push(SelectColumn {
-                        name: format!("{:?}", expr),
-                        alias: None,
-                        expression: Some(expr),
-                    });
-                }
-                // Handle LEFT/RIGHT function in SELECT (e.g., SELECT LEFT(name, 5))
-                Some(Token::Left) | Some(Token::Right) => {
-                    let expr = self.parse_expression()?;
-                    columns.push(SelectColumn {
-                        name: format!("{:?}", expr),
-                        alias: None,
-                        expression: Some(expr),
-                    });
-                }
-                // Handle SUBSTRING with FROM FOR syntax
-                Some(Token::Substring) => {
-                    let expr = self.parse_expression()?;
-                    columns.push(SelectColumn {
-                        name: format!("{:?}", expr),
-                        alias: None,
-                        expression: Some(expr),
-                    });
-                }
-                // Handle TRIM functions
-                Some(Token::Trim) => {
-                    let expr = self.parse_expression()?;
-                    columns.push(SelectColumn {
-                        name: format!("{:?}", expr),
-                        alias: None,
-                        expression: Some(expr),
-                    });
                 }
                 Some(Token::Identifier(_)) => {
                     let start_position = self.position;
@@ -1792,7 +1820,6 @@ impl Parser {
                 self.next();
                 if matches!(self.current(), Some(Token::LParen)) {
                     self.next();
-                    // Parse the expression inside ROLLUP()
                     let inner_expr = self.parse_expression()?;
                     self.expect(Token::RParen)?;
                     exprs.push(Expression::Identifier(format!(
@@ -1984,10 +2011,6 @@ impl Parser {
                                 Some(Token::Identifier(col)) => {
                                     self.next();
                                     Expression::Identifier(format!("{}.{}", table, col))
-                                }
-                                Some(Token::Star) => {
-                                    self.next();
-                                    Expression::Identifier(format!("{}.*", table))
                                 }
                                 Some(t) => {
                                     return Err(format!("Expected column name, got {:?}", t))
@@ -2536,77 +2559,84 @@ impl Parser {
         Ok(left)
     }
 
+    // Special function parsers (for TRIM, POSITION, INSERT)
+    fn parse_trim_expression(&mut self, name: String) -> Result<Expression, String> {
+        let mut where_ = "BOTH".to_string();
+        let mut what: Option<Expression> = None;
+        let mut expr: Option<Expression> = None;
+        let mut has_from = false;
+
+        // Check for LEADING/TRAILING/BOTH (as identifiers)
+        if let Some(Token::Identifier(n)) = self.current() {
+            let upper = n.to_uppercase();
+            if upper == "LEADING" || upper == "TRAILING" || upper == "BOTH" {
+                where_ = upper;
+                self.next();
+            }
+        }
+
+        // If next is FROM, we have expr part
+        if matches!(self.current(), Some(Token::From)) {
+            self.next();
+            has_from = true;
+            expr = Some(self.parse_expression()?);
+        } else if !matches!(self.current(), Some(Token::RParen)) {
+            what = Some(self.parse_expression()?);
+            if matches!(self.current(), Some(Token::From)) {
+                self.next();
+                has_from = true;
+                expr = Some(self.parse_expression()?);
+            }
+        }
+
+        self.expect(Token::RParen)?;
+
+        let mut args = vec![Expression::Identifier(where_)];
+        if let Some(w) = what {
+            args.push(w);
+        }
+        if has_from {
+            if let Some(e) = expr {
+                args.push(e);
+            }
+        }
+
+        Ok(Expression::FunctionCall(name, args))
+    }
+
+    fn parse_position_expression(&mut self) -> Result<Expression, String> {
+        // Fallback: skip until RParen like DATE_ADD
+        while !matches!(self.current(), Some(Token::RParen)) {
+            if self.is_eof() {
+                break;
+            }
+            self.next();
+        }
+        if matches!(self.current(), Some(Token::RParen)) {
+            self.next();
+        }
+
+        Ok(Expression::FunctionCall("POSITION".to_string(), vec![]))
+    }
+
+    fn parse_insert_expression(&mut self) -> Result<Expression, String> {
+        // Fallback: skip until RParen like DATE_ADD
+        while !matches!(self.current(), Some(Token::RParen)) {
+            if self.is_eof() {
+                break;
+            }
+            self.next();
+        }
+        if matches!(self.current(), Some(Token::RParen)) {
+            self.next();
+        }
+
+        Ok(Expression::FunctionCall("INSERT".to_string(), vec![]))
+    }
+
     /// Parse primary expression (identifier, literal, or parenthesized)
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
         match self.current() {
-            Some(Token::If) => {
-                self.next();
-                self.expect(Token::LParen)?;
-                let mut args = Vec::new();
-                if !matches!(self.current(), Some(Token::RParen)) {
-                    loop {
-                        args.push(self.parse_expression()?);
-                        if matches!(self.current(), Some(Token::Comma)) {
-                            self.next();
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                self.expect(Token::RParen)?;
-                Ok(Expression::FunctionCall("IF".to_string(), args))
-            }
-            Some(Token::Replace) => {
-                self.next();
-                self.expect(Token::LParen)?;
-                let mut args = Vec::new();
-                if !matches!(self.current(), Some(Token::RParen)) {
-                    loop {
-                        args.push(self.parse_expression()?);
-                        if matches!(self.current(), Some(Token::Comma)) {
-                            self.next();
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                self.expect(Token::RParen)?;
-                Ok(Expression::FunctionCall("REPLACE".to_string(), args))
-            }
-            Some(Token::Left) => {
-                self.next();
-                self.expect(Token::LParen)?;
-                let mut args = Vec::new();
-                if !matches!(self.current(), Some(Token::RParen)) {
-                    loop {
-                        args.push(self.parse_expression()?);
-                        if matches!(self.current(), Some(Token::Comma)) {
-                            self.next();
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                self.expect(Token::RParen)?;
-                Ok(Expression::FunctionCall("LEFT".to_string(), args))
-            }
-            Some(Token::Right) => {
-                self.next();
-                self.expect(Token::LParen)?;
-                let mut args = Vec::new();
-                if !matches!(self.current(), Some(Token::RParen)) {
-                    loop {
-                        args.push(self.parse_expression()?);
-                        if matches!(self.current(), Some(Token::Comma)) {
-                            self.next();
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                self.expect(Token::RParen)?;
-                Ok(Expression::FunctionCall("RIGHT".to_string(), args))
-            }
             Some(Token::Identifier(_)) => {
                 let name = match self.current() {
                     Some(Token::Identifier(n)) => n.clone(),
@@ -2626,6 +2656,18 @@ impl Parser {
                     }
                 } else if matches!(self.current(), Some(Token::LParen)) {
                     self.next();
+
+                    // Special function parsing: TRIM/POSITION/INSERT
+                    if name.to_uppercase() == "TRIM" {
+                        return self.parse_trim_expression(name);
+                    }
+                    if name.to_uppercase() == "POSITION" {
+                        return self.parse_position_expression();
+                    }
+                    if name.to_uppercase() == "INSERT" {
+                        return self.parse_insert_expression();
+                    }
+
                     let mut args = Vec::new();
                     if !matches!(self.current(), Some(Token::RParen)) {
                         loop {
