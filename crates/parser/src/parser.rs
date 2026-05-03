@@ -2810,9 +2810,6 @@ impl Parser {
                     Some(Token::Comma) => {
                         self.next();
                     }
-                    Some(Token::Identifier(_)) => {
-                        // Column definition consumed, loop continues to next column
-                    }
                     _ => break,
                 }
             }
