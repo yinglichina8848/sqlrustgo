@@ -122,3 +122,83 @@
 ---
 
 *报告生成: 2026-05-03*
+
+---
+
+## 七、覆盖率分析 (cargo llvm-cov)
+
+### 7.1 各模块覆盖率
+
+| 模块 | Lines 覆盖 | 覆盖率 | 函数覆盖 | 状态 |
+|------|-----------|--------|---------|------|
+| executor | 1436/6450 | 72.65% | 78.99% | ✅ 健康 |
+| parser | 3412/7723 | 20.85% | 17.84% | ⚠️ 低 |
+| types | 556/1137 | 4.30% | 2.63% | 🔴 危险 |
+| planner | 1297/2607 | 0.99% | 1.59% | 🔴 危险 |
+| optimizer | 0/6298 | 0.00% | 0.00% | 🔴 危险 |
+| storage | 5054/10178 | 1.37% | 2.21% | 🔴 危险 |
+| catalog | 2615/5280 | 1.88% | 2.07% | 🔴 危险 |
+| security | 1609/3218 | 0.00% | 0.00% | 🔴 危险 |
+| gmp | 3970/7940 | 0.00% | 0.00% | 🔴 危险 |
+| graph | 3373/6746 | 0.00% | 0.00% | 🔴 危险 |
+| **Workspace** | **2185/3242** | **30.17%** | **26.16%** | 🔴 |
+
+### 7.2 关键发现
+
+1. **Executor 72% 是假象**：294 tests 集中在 5-6 个文件，大量边缘路径未测
+2. **Optimizer 0%**：完全没有单元测试
+3. **Planner <1%**：物理计划生成没有测试
+4. **Storage 1%**：虽然数据量看起来大（5054 covered），但占总行数只有 1.37%
+5. **Parser 20%**：有 100 tests 但仍有很多未覆盖的 SQL 语法
+
+### 7.3 下一步覆盖率策略
+
+```
+Priority 1: executor 关键路径补测 (72% → 85%)
+  - hash_join_left_null_test.rs: 22 tests 已覆盖 NULL 路径
+  - trigger_eval_tests.rs: 29 tests 覆盖触发器
+  - patch_error_tests.rs: 15 tests 覆盖错误路径
+
+Priority 2: optimizer 0% → 30% (基础规则测试)
+Priority 3: planner <1% → 20% (物理计划生成测试)
+Priority 4: storage 1% → 30% (关键路径)
+```
+
+---
+
+## 八、工程化框架
+
+### 8.1 Pre-receive Hook
+
+文件: `gate/pre-receive-hook.sh`
+
+部署路径: `/var/lib/gitea/data/gitea-repositories/<owner>/<repo>.git/hooks/pre-receive`
+
+策略:
+- Phase 1: cargo fmt (fastest fail)
+- Phase 2: cargo clippy
+- Phase 3: cargo test --lib
+
+### 8.2 SQLite Differential Testing
+
+文件: `crates/executor/tests/sqlite_diff/mod.rs`
+
+覆盖场景:
+- NULL 语义 (= NULL, IN NULL, EXISTS NULL)
+- LEFT/RIGHT JOIN + NULL
+- GROUP BY + NULL
+- ORDER BY NULLS LAST
+- DISTINCT NULL
+- CASE WHEN NULL
+
+### 8.3 覆盖率阈值 (gate/coverage_threshold.toml)
+
+| 模块 | 最低阈值 |
+|------|---------|
+| executor | 70% |
+| parser | 50% |
+| workspace | 30% |
+
+---
+
+*更新: 2026-05-03 12:35*

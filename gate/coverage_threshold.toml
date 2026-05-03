@@ -1,0 +1,28 @@
+# SQLRustGo Coverage Thresholds
+# CI will FAIL if any crate falls below these thresholds
+
+[thresholds]
+# Per-crate minimum coverage (percentage)
+executor = 70      # Core execution engine - highest priority
+parser = 50         # Parser - critical path
+types = 30          # Type system
+planner = 15        # Planner - needs improvement
+optimizer = 10      # Optimizer - needs improvement
+storage = 20        # Storage engine
+catalog = 10        # Catalog
+security = 10       # Security
+information-schema = 10
+query-stats = 10
+gmp = 10
+graph = 10
+
+# Overall workspace minimum
+workspace = 30
+
+# Warn if any crate is below this (even if above threshold)
+warn_below = 50
+
+[fail_on]
+# CI will fail if any of these are true
+low_coverage = true
+regression = true   # Coverage dropped vs baseline
