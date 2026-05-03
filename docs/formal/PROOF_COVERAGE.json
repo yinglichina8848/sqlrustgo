@@ -1,7 +1,20 @@
 {
-  "version": "1.0",
+  "version": "2.0",
   "generated": "2026-05-03",
-  "description": "Machine-readable formal invariant coverage inventory. Tracks TLA+ invariant → Rust assertion → test → CI coverage.",
+  "description": "Machine-readable formal invariant coverage with risk weighting. Tracks TLA+ invariant → Rust assertion → test → CI coverage with severity scoring.",
+
+  "schema": {
+    "criticality": "0.0-1.0: how catastrophic is failure (1.0 = data corruption/deadlock)",
+    "confidence": "0.0-1.0: how well do we understand this invariant (1.0 = fully proven, 0.5 = partially modeled)",
+    "coverage_weight": "0.0-1.0: what fraction of risk is mitigated by tests (1.0 = fully tested, 0.0 = no tests)",
+    "risk_score": "criticality × confidence × coverage_weight"
+  },
+
+  "ci_gates": {
+    "risk_score_min": 0.70,
+    "criticality_min": 0.90,
+    "warn_risk_score": 0.50
+  },
 
   "invariants": [
     {
@@ -9,9 +22,9 @@
       "proof": "PROOF_023",
       "proof_file": "PROOF_023_deadlock_v4",
       "tla_invariant": "NoCycle",
-      "rust_api": "try_wait_edge",
-      "rust_enforcement": "DeadlockDetector::try_wait_edge() — atomic pre-check + add_edge inside Mutex",
-      "assertion": "debug_assert_no_cycle (debug build only)",
+      "rust_api": "DeadlockDetector::try_wait_edge()",
+      "rust_enforcement": "Atomic pre-check + add_edge inside Mutex. debug_assert_no_cycle in debug.",
+      "failure_severity": "total deadlock — system completely unresponsive",
       "tests": [
         "test_concurrent_mutual_deadlock_prevention",
         "test_try_wait_edge_rejects_cycle",
@@ -25,6 +38,10 @@
         "crates/transaction/src/lock.rs"
       ],
       "level": "critical",
+      "criticality": 1.0,
+      "confidence": 1.0,
+      "coverage_weight": 1.0,
+      "risk_score": 1.0,
       "ci_layer": "PR Gate",
       "status": "active"
     },
@@ -33,9 +50,9 @@
       "proof": "PROOF_023",
       "proof_file": "PROOF_023_deadlock_v4",
       "tla_invariant": "NoSelfWait",
-      "rust_api": "try_wait_edge",
-      "rust_enforcement": "holders.contains(&tx_id) check inside try_wait_edge",
-      "assertion": "Err(LockError::SelfWait) returned immediately",
+      "rust_api": "DeadlockDetector::try_wait_edge()",
+      "rust_enforcement": "holders.contains(&tx_id) check returns LockError::SelfWait",
+      "failure_severity": "self-deadlock — transaction waits for itself",
       "tests": [
         "test_no_self_wait",
         "test_try_wait_edge_rejects_cycle"
@@ -45,6 +62,10 @@
         "crates/transaction/src/lock.rs"
       ],
       "level": "critical",
+      "criticality": 0.9,
+      "confidence": 1.0,
+      "coverage_weight": 1.0,
+      "risk_score": 0.9,
       "ci_layer": "PR Gate",
       "status": "active"
     },
@@ -54,10 +75,10 @@
       "proof_file": "PROOF_023_deadlock_toctou",
       "tla_invariant": "NoCycle",
       "tla_expected": "VIOLATED",
-      "tla_note": "TOCTOU model proves separate check+commit creates cycle window. VIOLATED=expected in model.",
-      "rust_api": "try_wait_edge",
-      "rust_enforcement": "Atomic pre-check and add_edge inside single Mutex critical section",
-      "assertion": "Concurrent test proves no cycle forms despite concurrent requests",
+      "tla_note": "Model proves separate check+commit creates cycle. VIOLATED=expected.",
+      "rust_api": "DeadlockDetector::try_wait_edge()",
+      "rust_enforcement": "Atomic pre-check + add_edge inside single Mutex critical section",
+      "failure_severity": "TOCTOU deadlock — race condition between check and commit",
       "tests": [
         "test_concurrent_mutual_deadlock_prevention",
         "test_concurrent_no_false_positive"
@@ -66,17 +87,23 @@
         "crates/transaction/src/deadlock.rs"
       ],
       "level": "critical",
+      "criticality": 1.0,
+      "confidence": 0.95,
+      "coverage_weight": 1.0,
+      "risk_score": 0.95,
       "ci_layer": "PR Gate",
-      "status": "active"
+      "status": "active",
+      "note": "confidence 0.95: TLA+ proves TOCTOU exists, Rust proves atomicity fixes it"
     },
     {
       "id": "INV_MVCC_ATOMIC",
       "proof": "PROOF_016",
       "proof_file": "PROOF_016_023_mvcc_atomic",
-      "tla_invariant": "NoCycle",
-      "tla_note": "Unified MVCC + Wait-For model, atomic check+commit",
+      "tla_invariant": "NoCycle + NoWriteConflict",
+      "tla_note": "Unified MVCC + Wait-For, atomic check+commit, no write conflicts",
       "rust_api": "TransactionManager::commit",
-      "rust_enforcement": "try_wait_edge used for all lock acquisitions during transaction",
+      "rust_enforcement": "try_wait_edge for all lock acquisitions during transaction commit",
+      "failure_severity": "data corruption — lost writes or inconsistent reads",
       "tests": [
         "test_vote_serialization"
       ],
@@ -86,8 +113,13 @@
         "crates/transaction/src/mvcc_storage.rs"
       ],
       "level": "critical",
+      "criticality": 1.0,
+      "confidence": 0.8,
+      "coverage_weight": 0.5,
+      "risk_score": 0.4,
       "ci_layer": "PR Gate",
-      "status": "active"
+      "status": "active",
+      "note": "confidence 0.8: TLA+ model may not fully capture commit ordering. coverage_weight 0.5: only 1 of several paths tested"
     },
     {
       "id": "INV_MVCC_TOCTOU",
@@ -95,10 +127,10 @@
       "proof_file": "PROOF_016_023_mvcc_toctou",
       "tla_invariant": "NoCycle",
       "tla_expected": "VIOLATED",
-      "tla_note": "MVCC TOCTOU: separate commit check and commit write create cycle window. VIOLATED=expected.",
+      "tla_note": "Model proves separate commit-check + commit-write creates TOCTOU window. VIOLATED=expected.",
       "rust_api": "TransactionManager::commit",
-      "rust_enforcement": "Guarded by try_wait_edge atomicity (no TOCTOU in Rust impl)",
-      "assertion": "Rust impl is atomic — validated by INV_NO_DEADLOCK_TOCTOU tests",
+      "rust_enforcement": "Guarded by try_wait_edge atomicity (Rust impl is atomic)",
+      "failure_severity": "MVCC TOCTOU deadlock — concurrent commits create cycle",
       "tests": [
         "test_concurrent_mutual_deadlock_prevention"
       ],
@@ -106,9 +138,13 @@
         "crates/transaction/src/dtc.rs"
       ],
       "level": "info",
+      "criticality": 0.8,
+      "confidence": 0.95,
+      "coverage_weight": 0.5,
+      "risk_score": 0.38,
       "ci_layer": "Nightly",
       "status": "active",
-      "note": "VIOLATED is expected — proves TOCTOU exists in model but Rust impl is atomic"
+      "note": "risk_score ≈ 0: Rust atomicity is validated by INV_NO_DEADLOCK_TOCTOU"
     },
     {
       "id": "INV_WRITE_SKEW",
@@ -116,17 +152,23 @@
       "proof_file": "PROOF_026_write_skew",
       "tla_invariant": "NoWriteSkew",
       "tla_expected": "VIOLATED",
-      "tla_note": "Write skew counterexample exists — current MVCC allows it",
+      "tla_note": "Write skew counterexample exists. Current MVCC allows it.",
       "rust_api": "SerializationGraph",
       "rust_enforcement": "NOT IMPLEMENTED",
+      "failure_severity": "data inconsistency — two transactions read overlapping data, write different values, commit both (serializability violation)",
       "tests": [],
       "files": [
-        "crates/transaction/src/dtc.rs"
+        "crates/transaction/src/dtc.rs",
+        "execution_engine/src/execution"
       ],
       "level": "critical",
+      "criticality": 0.95,
+      "confidence": 1.0,
+      "coverage_weight": 0.0,
+      "risk_score": 0.0,
       "ci_layer": "Smoke",
       "status": "frozen",
-      "note": "FROZEN — known unsafe area. Deferred to Phase C."
+      "note": "FROZEN — known unsafe area. Deferred to Phase C. risk_score = 0 because coverage_weight = 0."
     },
     {
       "id": "INV_SNAPSHOT_ISOLATION",
@@ -135,8 +177,8 @@
       "tla_invariant": "SnapshotIsolation",
       "tla_note": "SSI model — commitTs ordering enforcement",
       "rust_api": "MvccStorage",
-      "rust_enforcement": "Partial — version chain read, no commit ordering",
-      "assertion": "mvcc::tests::test_snapshot_visibility validates snapshot reads",
+      "rust_enforcement": "Version chain read snapshot isolation (partial — no commitTs ordering)",
+      "failure_severity": "non-serializable reads — stale/mixed data from concurrent txns",
       "tests": [
         "test_snapshot_visibility",
         "test_row_version_is_visible_committed_before_snapshot",
@@ -148,8 +190,13 @@
         "crates/transaction/src/mvcc.rs"
       ],
       "level": "info",
+      "criticality": 0.7,
+      "confidence": 0.7,
+      "coverage_weight": 0.8,
+      "risk_score": 0.39,
       "ci_layer": "PR Gate",
-      "status": "active"
+      "status": "active",
+      "note": "confidence 0.7: SSI model exists but commitTs semantics incomplete"
     },
     {
       "id": "INV_NO_WRITE_CONFLICT",
@@ -158,31 +205,42 @@
       "tla_invariant": "NoWriteConflict",
       "tla_note": "No two transactions can commit writes to the same key at overlapping times",
       "rust_api": "TransactionManager::commit",
-      "rust_enforcement": "Write-write conflict detection in CommitTxn path",
+      "rust_enforcement": "Write-write conflict detection in CommitTxn path (NOT fully tested)",
+      "failure_severity": "lost update — concurrent writes to same key, last commit wins",
       "tests": [],
       "files": [
         "crates/transaction/src/dtc.rs"
       ],
       "level": "warning",
+      "criticality": 0.85,
+      "confidence": 0.6,
+      "coverage_weight": 0.0,
+      "risk_score": 0.0,
       "ci_layer": "PR Gate",
       "status": "active",
-      "note": "Test coverage gap — CommitTxn validation not exercised in unit tests"
+      "note": "CRITICAL GAP: no tests exercise CommitTxn write-write validation"
     },
     {
       "id": "INV_BTREE_STRUCTURAL",
       "proof": "PROOF_004",
       "proof_file": "btree_invariants",
       "tla_invariant": "BTreeInvariants",
-      "tla_note": "Dafny-verified B+Tree structural invariants",
+      "tla_note": "Dafny-verified B+Tree structural invariants (balance, search, range)",
       "rust_api": "BTreeMap",
-      "rust_enforcement": "Dafny proof (formal/proof) — no runtime assertion",
+      "rust_enforcement": "Dafny proof — no runtime Rust assertion. Rust std BTreeMap used.",
+      "failure_severity": "index corruption — wrong data returned or panic on corrupt tree",
       "tests": [],
       "files": [
         "crates/index/src/btree.rs"
       ],
       "level": "critical",
+      "criticality": 0.95,
+      "confidence": 0.9,
+      "coverage_weight": 0.0,
+      "risk_score": 0.0,
       "ci_layer": "Nightly",
-      "status": "active"
+      "status": "active",
+      "note": "Dafny proof validates model, not Rust implementation. Rust std library assumed correct."
     }
   ],
 
@@ -217,11 +275,5 @@
       "expected": "VIOLATED",
       "ci_cost": "S"
     }
-  },
-
-  "ci_gates": {
-    "proof_coverage_min": 80,
-    "critical_min": 100,
-    "warn_level": 50
   }
 }
