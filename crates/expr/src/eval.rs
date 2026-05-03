@@ -48,22 +48,34 @@ impl Expr {
             Expr::Literal(v) => v.clone(),
 
             Expr::Column { table, name } => {
-                let key = if let Some(t) = table {
-                    format!("{}.{}", t, name)
-                } else {
-                    format!("{}", name)
-                };
-                // Try fully-qualified first, then unqualified
-                if let Some(v) = ctx.values.get(&key) {
-                    v.clone()
-                } else {
-                    // Fallback: scan for unqualified column
-                    for (k, v) in &ctx.values {
-                        if k.ends_with(&format!(".{}", name)) {
-                            return v.clone();
-                        }
+                // Try fully-qualified key first
+                if let Some(t) = table {
+                    let key = format!("{}.{}", t, name);
+                    if let Some(v) = ctx.values.get(&key) {
+                        return v.clone();
                     }
-                    ctx.values.get(name.as_str()).cloned().unwrap_or(Value::Null)
+                    return Value::Null;
+                }
+
+                // Unqualified column: must match exactly ONE column
+                let matches: Vec<_> = ctx
+                    .values
+                    .iter()
+                    .filter(|(k, _)| {
+                        k.ends_with(&format!(".{}", name))
+                            || k == &name
+                    })
+                    .collect();
+
+                match matches.len() {
+                    0 => Value::Null,
+                    1 => matches[0].1.clone(),
+                    _ => panic!(
+                        "Ambiguous column reference: '{}' matches {} columns: {:?}",
+                        name,
+                        matches.len(),
+                        matches.iter().map(|(k, _)| k).collect::<Vec<_>>()
+                    ),
                 }
             }
 
@@ -109,15 +121,48 @@ impl Expr {
 
 /// Evaluate a binary operation
 fn eval_binary(l: Value, op: &BinaryOp, r: Value) -> Value {
+    // SQL NULL semantics: any comparison with NULL returns NULL (unless IS NULL / IS NOT NULL)
+    let null_check = |l: &Value, r: &Value| -> Option<Value> {
+        if matches!(l, Value::Null) || matches!(r, Value::Null) {
+            Some(Value::Null)
+        } else {
+            None
+        }
+    };
+
     match op {
-        BinaryOp::Eq => Value::Boolean(l == r),
-        BinaryOp::NotEq => Value::Boolean(l != r),
+        BinaryOp::Eq => {
+            if let Some(v) = null_check(&l, &r) { return v; }
+            Value::Boolean(l == r)
+        }
+        BinaryOp::NotEq => {
+            if let Some(v) = null_check(&l, &r) { return v; }
+            Value::Boolean(l != r)
+        }
         BinaryOp::Gt => cmp(l, r, |o| o.is_gt()),
         BinaryOp::Lt => cmp(l, r, |o| o.is_lt()),
         BinaryOp::GtEq => cmp(l, r, |o| o.is_ge()),
         BinaryOp::LtEq => cmp(l, r, |o| o.is_le()),
-        BinaryOp::And => bool_op(l, r, |a, b| a && b),
-        BinaryOp::Or => bool_op(l, r, |a, b| a || b),
+        BinaryOp::And => {
+            // Short-circuit: if left is false, don't eval right
+            if l == Value::Boolean(false) {
+                return Value::Boolean(false);
+            }
+            if l == Value::Null {
+                return Value::Null;
+            }
+            bool_op(l, r, |a, b| a && b)
+        }
+        BinaryOp::Or => {
+            // Short-circuit: if left is true, don't eval right
+            if l == Value::Boolean(true) {
+                return Value::Boolean(true);
+            }
+            if l == Value::Null {
+                return Value::Null;
+            }
+            bool_op(l, r, |a, b| a || b)
+        }
         BinaryOp::Plus => int_op(l, r, |a, b| a + b),
         BinaryOp::Minus => int_op(l, r, |a, b| a - b),
         BinaryOp::Multiply => int_op(l, r, |a, b| a * b),
