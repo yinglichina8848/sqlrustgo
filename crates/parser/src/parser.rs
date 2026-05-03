@@ -1405,51 +1405,6 @@ impl Parser {
                     });
                     self.next();
                 }
-                // Handle IF function in SELECT (e.g., SELECT IF(cond, true_val, false_val))
-                Some(Token::If) => {
-                    let expr = self.parse_expression()?;
-                    columns.push(SelectColumn {
-                        name: format!("{:?}", expr),
-                        alias: None,
-                        expression: Some(expr),
-                    });
-                }
-                // Handle REPLACE function in SELECT
-                Some(Token::Replace) => {
-                    let expr = self.parse_expression()?;
-                    columns.push(SelectColumn {
-                        name: format!("{:?}", expr),
-                        alias: None,
-                        expression: Some(expr),
-                    });
-                }
-                // Handle LEFT/RIGHT function in SELECT (e.g., SELECT LEFT(name, 5))
-                Some(Token::Left) | Some(Token::Right) => {
-                    let expr = self.parse_expression()?;
-                    columns.push(SelectColumn {
-                        name: format!("{:?}", expr),
-                        alias: None,
-                        expression: Some(expr),
-                    });
-                }
-                // Handle SUBSTRING with FROM FOR syntax
-                Some(Token::Substring) => {
-                    let expr = self.parse_expression()?;
-                    columns.push(SelectColumn {
-                        name: format!("{:?}", expr),
-                        alias: None,
-                        expression: Some(expr),
-                    });
-                }
-                // Handle TRIM functions
-                Some(Token::Trim) => {
-                    let expr = self.parse_expression()?;
-                    columns.push(SelectColumn {
-                        name: format!("{:?}", expr),
-                        alias: None,
-                        expression: Some(expr),
-                    });
-                }
                 Some(Token::Identifier(_)) => {
                     let start_position = self.position;
                     let (name, consumed, _is_expression) = match self.current().cloned() {
@@ -1778,7 +1733,6 @@ impl Parser {
                 self.next();
                 if matches!(self.current(), Some(Token::LParen)) {
                     self.next();
-                    // Parse the expression inside ROLLUP()
                     let inner_expr = self.parse_expression()?;
                     self.expect(Token::RParen)?;
                     exprs.push(Expression::Identifier(format!("ROLLUP({})", match &inner_expr {
@@ -1964,10 +1918,6 @@ impl Parser {
                                 Some(Token::Identifier(col)) => {
                                     self.next();
                                     Expression::Identifier(format!("{}.{}", table, col))
-                                }
-                                Some(Token::Star) => {
-                                    self.next();
-                                    Expression::Identifier(format!("{}.*", table))
                                 }
                                 Some(t) => {
                                     return Err(format!("Expected column name, got {:?}", t))
@@ -2519,74 +2469,6 @@ impl Parser {
     /// Parse primary expression (identifier, literal, or parenthesized)
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
         match self.current() {
-            Some(Token::If) => {
-                self.next();
-                self.expect(Token::LParen)?;
-                let mut args = Vec::new();
-                if !matches!(self.current(), Some(Token::RParen)) {
-                    loop {
-                        args.push(self.parse_expression()?);
-                        if matches!(self.current(), Some(Token::Comma)) {
-                            self.next();
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                self.expect(Token::RParen)?;
-                Ok(Expression::FunctionCall("IF".to_string(), args))
-            }
-            Some(Token::Replace) => {
-                self.next();
-                self.expect(Token::LParen)?;
-                let mut args = Vec::new();
-                if !matches!(self.current(), Some(Token::RParen)) {
-                    loop {
-                        args.push(self.parse_expression()?);
-                        if matches!(self.current(), Some(Token::Comma)) {
-                            self.next();
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                self.expect(Token::RParen)?;
-                Ok(Expression::FunctionCall("REPLACE".to_string(), args))
-            }
-            Some(Token::Left) => {
-                self.next();
-                self.expect(Token::LParen)?;
-                let mut args = Vec::new();
-                if !matches!(self.current(), Some(Token::RParen)) {
-                    loop {
-                        args.push(self.parse_expression()?);
-                        if matches!(self.current(), Some(Token::Comma)) {
-                            self.next();
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                self.expect(Token::RParen)?;
-                Ok(Expression::FunctionCall("LEFT".to_string(), args))
-            }
-            Some(Token::Right) => {
-                self.next();
-                self.expect(Token::LParen)?;
-                let mut args = Vec::new();
-                if !matches!(self.current(), Some(Token::RParen)) {
-                    loop {
-                        args.push(self.parse_expression()?);
-                        if matches!(self.current(), Some(Token::Comma)) {
-                            self.next();
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                self.expect(Token::RParen)?;
-                Ok(Expression::FunctionCall("RIGHT".to_string(), args))
-            }
             Some(Token::Identifier(_)) => {
                 let name = match self.current() {
                     Some(Token::Identifier(n)) => n.clone(),
