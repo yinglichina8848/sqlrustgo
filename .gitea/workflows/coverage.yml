@@ -1,0 +1,46 @@
+name: Coverage (Phase1)
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - 'release/**'
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install llvm-cov
+        run: |
+          cargo install cargo-llvm-cov
+          rustup component add llvm-tools-preview
+
+      - name: Run coverage
+        run: bash scripts/ci/test_all.sh
+
+      - name: Upload HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: target/coverage/html
+
+      - name: Upload JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-json
+          path: target/coverage/coverage.json
+
+      - name: Upload LCOV
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: target/coverage/lcov.info
