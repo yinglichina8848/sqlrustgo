@@ -197,6 +197,9 @@ features = ["bundled"]
 [dev-dependencies.mysql]
 version = "25"
 
+[dev-dependencies.sqllogictest]
+version = "0.17"
+
 [[test]]
 name = "buffer_pool_test"
 path = "tests/ci/buffer_pool_test.rs"
