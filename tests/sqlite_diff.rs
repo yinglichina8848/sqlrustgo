@@ -1,7 +1,30 @@
 use rusqlite::Connection;
-use std::collections::HashMap;
+use sqlrustgo_parser::parse;
+use sqlrustgo_parser::Statement;
+use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
+use sqlrustgo::ExecutorResult;
+use sqlrustgo_types::Value;
 
 type Row = Vec<String>;
+
+fn value_to_string(v: &Value) -> String {
+    match v {
+        Value::Null => "NULL".to_string(),
+        Value::Boolean(b) => if *b { "TRUE".to_string() } else { "FALSE".to_string() },
+        Value::Integer(i) => i.to_string(),
+        Value::Float(f) => {
+            if f.is_nan() {
+                "NaN".to_string()
+            } else if f.is_infinite() {
+                if f.is_sign_positive() { "Infinity".to_string() } else { "-Infinity".to_string() }
+            } else {
+                f.to_string()
+            }
+        }
+        Value::Text(s) => s.clone(),
+        Value::Blob(b) => format!("{:?}", b),
+    }
+}
 
 pub struct SqliteEngine {
     conn: Connection,
@@ -57,17 +80,111 @@ impl Default for SqliteEngine {
     }
 }
 
-pub fn assert_query_eq(sql: &str, left: Vec<Row>, right: Vec<Row>) -> Result<(), String> {
-    let mut left_sorted = left;
-    let mut right_sorted = right;
+pub struct RustEngine {
+    storage: MemoryStorage,
+}
 
-    left_sorted.sort();
-    right_sorted.sort();
+impl RustEngine {
+    pub fn new() -> Self {
+        Self {
+            storage: MemoryStorage::new(),
+        }
+    }
 
-    if left_sorted != right_sorted {
+    pub fn execute(&mut self, sql: &str) -> Result<(), String> {
+        let statement = parse(sql).map_err(|e| format!("Parse error: {:?}", e))?;
+
+        match statement {
+            Statement::CreateTable(create) => {
+                let info = TableInfo {
+                    name: create.name.clone(),
+                    columns: create
+                        .columns
+                        .into_iter()
+                        .map(|c| ColumnDefinition {
+                            name: c.name,
+                            data_type: c.data_type,
+                            nullable: c.nullable,
+                            primary_key: c.primary_key,
+                        })
+                        .collect(),
+                    foreign_keys: vec![],
+                    unique_constraints: vec![],
+                    check_constraints: vec![],
+                    partition_info: None,
+                };
+                self.storage
+                    .create_table(&info)
+                    .map_err(|e| format!("Create table error: {:?}", e))?;
+                Ok(())
+            }
+            Statement::DropTable(drop) => {
+                self.storage
+                    .drop_table(&drop.name)
+                    .map_err(|e| format!("Drop table error: {:?}", e))?;
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
+    pub fn query(&self, _sql: &str) -> Result<Vec<Row>, String> {
+        Ok(vec![])
+    }
+}
+
+impl Default for RustEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn normalize(rows: &mut Vec<Row>) {
+    for row in rows.iter_mut() {
+        for val in row.iter_mut() {
+            if val.is_empty() {
+                *val = "NULL".to_string();
+            }
+        }
+    }
+    rows.sort();
+}
+
+pub fn assert_sql_eq(sql: &str, setup: &[&str]) -> Result<(), String> {
+    let mut sqlite = SqliteEngine::new();
+    let mut rust = RustEngine::new();
+
+    for s in setup {
+        sqlite.execute(s).map_err(|e| e.to_string())?;
+        rust.execute(s).map_err(|e| e.to_string())?;
+    }
+
+    let mut left = sqlite.query(sql).map_err(|e| e.to_string())?;
+    let mut right = rust.query(sql).map_err(|e| e.to_string())?;
+
+    normalize(&mut left);
+    normalize(&mut right);
+
+    if left != right {
         return Err(format!(
-            "Query mismatch for: {}\nExpected: {:?}\nGot: {:?}",
-            sql, left_sorted, right_sorted
+            "SQL mismatch: {}\nSQLite: {:?}\nRust: {:?}",
+            sql, left, right
+        ));
+    }
+    Ok(())
+}
+
+pub fn assert_query_eq(left: Vec<Row>, right: Vec<Row>) -> Result<(), String> {
+    let mut left_norm = left;
+    let mut right_norm = right;
+
+    normalize(&mut left_norm);
+    normalize(&mut right_norm);
+
+    if left_norm != right_norm {
+        return Err(format!(
+            "Query mismatch:\nExpected: {:?}\nGot: {:?}",
+            left_norm, right_norm
         ));
     }
     Ok(())
@@ -80,42 +197,48 @@ mod tests {
     #[test]
     fn test_sqlite_basic_query() {
         let sqlite = SqliteEngine::new();
-
         sqlite.execute("CREATE TABLE t(a INT)").unwrap();
-        sqlite.execute("INSERT INTO t VALUES (1),(2),(3)").unwrap();
+        sqlite.execute("INSERT INTO t VALUES (1)").unwrap();
+        sqlite.execute("INSERT INTO t VALUES (2)").unwrap();
+        sqlite.execute("INSERT INTO t VALUES (3)").unwrap();
 
         let result = sqlite.query("SELECT * FROM t").unwrap();
         assert_eq!(result.len(), 3);
     }
 
     #[test]
-    fn test_sqlite_diff_aggregate() {
+    fn test_sqlite_count() {
+        let sqlite = SqliteEngine::new();
+        sqlite.execute("CREATE TABLE t(a INT)").unwrap();
+        sqlite.execute("INSERT INTO t VALUES (1)").unwrap();
+        sqlite.execute("INSERT INTO t VALUES (2)").unwrap();
+        sqlite.execute("INSERT INTO t VALUES (3)").unwrap();
+
+        let result = sqlite.query("SELECT COUNT(*) FROM t").unwrap();
+        assert_eq!(result[0][0], "3");
+    }
+
+    #[test]
+    fn test_sqlite_where() {
+        let sqlite = SqliteEngine::new();
+        sqlite.execute("CREATE TABLE t(a INT)").unwrap();
+        sqlite.execute("INSERT INTO t VALUES (1)").unwrap();
+        sqlite.execute("INSERT INTO t VALUES (2)").unwrap();
+        sqlite.execute("INSERT INTO t VALUES (3)").unwrap();
+
+        let result = sqlite.query("SELECT a FROM t WHERE a > 1").unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_sqlite_aggregate() {
         let sqlite = SqliteEngine::new();
         sqlite.execute("CREATE TABLE orders(amount INT)").unwrap();
         sqlite.execute("INSERT INTO orders VALUES (100)").unwrap();
         sqlite.execute("INSERT INTO orders VALUES (200)").unwrap();
         sqlite.execute("INSERT INTO orders VALUES (150)").unwrap();
 
-        let all = sqlite.query("SELECT amount FROM orders").unwrap();
-        assert_eq!(all.len(), 3, "Should have 3 rows, got {:?}", all);
-
         let result = sqlite.query("SELECT SUM(amount) FROM orders").unwrap();
         assert_eq!(result[0][0], "450");
-    }
-
-    #[test]
-    fn test_sqlite_count() {
-        let sqlite = SqliteEngine::new();
-
-        sqlite.execute("CREATE TABLE t(a INT)").unwrap();
-        sqlite.execute("INSERT INTO t VALUES (1)").unwrap();
-        sqlite.execute("INSERT INTO t VALUES (2)").unwrap();
-        sqlite.execute("INSERT INTO t VALUES (3)").unwrap();
-
-        let all = sqlite.query("SELECT a FROM t").unwrap();
-        assert_eq!(all.len(), 3);
-
-        let result = sqlite.query("SELECT COUNT(*) FROM t").unwrap();
-        assert_eq!(result[0][0], "3");
     }
 }

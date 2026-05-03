@@ -7,7 +7,7 @@ use sqlrustgo_parser::parse;
 use sqlrustgo_parser::Statement;
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo::ExecutorResult;
-use sqlite_diff::{assert_query_eq, SqliteEngine};
+use sqlite_diff::{assert_query_eq, assert_sql_eq, SqliteEngine};
 use std::collections::HashSet;
 
 #[tokio::main]
@@ -223,4 +223,53 @@ fn test_sqlite_diff_aggregate() {
 
     let result = sqlite.query("SELECT SUM(amount) FROM orders").unwrap();
     assert_eq!(result[0][0], "450");
+}
+
+const T_SETUP: [&str; 4] = [
+    "CREATE TABLE t(a INT, b TEXT)",
+    "INSERT INTO t VALUES (1, 'hello')",
+    "INSERT INTO t VALUES (2, 'world')",
+    "INSERT INTO t VALUES (3, NULL)",
+];
+
+#[test]
+#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
+fn test_diff_select_star() {
+    let sql = "SELECT * FROM t";
+    assert_sql_eq(sql, &T_SETUP).unwrap();
+}
+
+#[test]
+#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
+fn test_diff_select_column() {
+    let sql = "SELECT a FROM t";
+    assert_sql_eq(sql, &T_SETUP).unwrap();
+}
+
+#[test]
+#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
+fn test_diff_count() {
+    let sql = "SELECT COUNT(*) FROM t";
+    assert_sql_eq(sql, &T_SETUP).unwrap();
+}
+
+#[test]
+#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
+fn test_diff_sum() {
+    let sql = "SELECT SUM(a) FROM t";
+    assert_sql_eq(sql, &T_SETUP).unwrap();
+}
+
+#[test]
+#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
+fn test_diff_where_gt() {
+    let sql = "SELECT a FROM t WHERE a > 1";
+    assert_sql_eq(sql, &T_SETUP).unwrap();
+}
+
+#[test]
+#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
+fn test_diff_where_null() {
+    let sql = "SELECT a FROM t WHERE b IS NULL";
+    assert_sql_eq(sql, &T_SETUP).unwrap();
 }
