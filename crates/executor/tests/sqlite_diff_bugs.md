@@ -7,7 +7,9 @@
 
 | SQL | SQLite | SQLRustGo | 根因 | 状态 |
 |-----|--------|-----------|------|------|
-| WHERE 过滤 | filtered rows | wrong rows | 条件求值错误 | OPEN |
+| — | — | — | — | 已清空 |
+
+所有 Layer 1 correctness bugs 已修复。
 
 ## 🟨 capability（排入 roadmap，分期做）
 
@@ -23,4 +25,13 @@
 
 ## 修复记录
 
-_按修复顺序填入_
+### v2.9.0 — Projection + ORDER BY 修复 (develop/v2.9.0)
+
+**Root cause**: `execute_select` 从未应用 ORDER BY 和投影。
+
+**Fix**:
+1. 增加 Step 4: ORDER BY — `compare_order_by()` + `compare_values_for_order()`
+2. 增加 Step 5: PROJECTION — 遍历 `select.columns` 用 `evaluate_expression` 投影
+3. LIMIT/OFFSET 改为 Step 6，作用于 `final_rows`
+
+**Tests**: test_order_by_int ✅, test_order_by_text ✅, test_where_projection ✅
