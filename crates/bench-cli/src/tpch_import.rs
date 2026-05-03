@@ -164,8 +164,7 @@ fn import_table(
     let total_lines = count_tbl_lines(&table_path)?;
     let mut progress = ProgressTracker::new(total_lines);
 
-    let file = File::open(&table_path)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
+    let file = File::open(&table_path).map_err(|e| format!("Failed to open file: {}", e))?;
     let reader = BufReader::with_capacity(1024 * 1024, file); // 1MB buffer
 
     let mut batch: Vec<Vec<Value>> = Vec::with_capacity(batch_size);
@@ -229,8 +228,7 @@ fn save_metadata(
         let info_path = output_path.join(format!("{}.schema.json", schema.name));
         let json = serde_json::to_string_pretty(&info)
             .map_err(|e| format!("Failed to serialize schema: {}", e))?;
-        fs::write(&info_path, json)
-            .map_err(|e| format!("Failed to write schema file: {}", e))?;
+        fs::write(&info_path, json).map_err(|e| format!("Failed to write schema file: {}", e))?;
         println!("  Saved: {}.schema.json", schema.name);
     }
 
@@ -318,8 +316,7 @@ fn export_table_to_parquet(
         .map_err(|e| format!("Failed to create record batch: {}", e))?;
 
     // Write to Parquet
-    let file = File::create(path)
-        .map_err(|e| format!("Failed to create Parquet file: {}", e))?;
+    let file = File::create(path).map_err(|e| format!("Failed to create Parquet file: {}", e))?;
     let props = WriterProperties::builder().build();
 
     let mut writer = ArrowWriter::try_new(file, Arc::new(schema), Some(props))

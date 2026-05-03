@@ -67,9 +67,7 @@ fn test_pipeline_join_aggregate() {
 #[test]
 fn test_pipeline_scan_aggregate() {
     let mut engine = setup_staff();
-    let result = engine
-        .execute("SELECT SUM(salary) FROM staff")
-        .unwrap();
+    let result = engine.execute("SELECT SUM(salary) FROM staff").unwrap();
     assert_eq!(result.rows.len(), 1);
     assert_eq!(result.rows[0][0], Value::Integer(28000));
 }
@@ -79,9 +77,7 @@ fn test_pipeline_filter_with_expression() {
     let mut engine = setup_staff();
     let result = engine
         .execute("SELECT COUNT(*) FROM staff WHERE salary * 2 > 10000")
-        .unwrap_or_else(|_| {
-            engine.execute("SELECT SUM(salary) FROM staff").unwrap()
-        });
+        .unwrap_or_else(|_| engine.execute("SELECT SUM(salary) FROM staff").unwrap());
     assert_eq!(result.rows.len(), 1);
 }
 
@@ -98,7 +94,9 @@ fn test_pipeline_join_then_filter_then_aggregate() {
 #[test]
 fn test_pipeline_empty_scan_through() {
     let mut engine = create_engine();
-    engine.execute("CREATE TABLE empty (id INTEGER, val INTEGER)").unwrap();
+    engine
+        .execute("CREATE TABLE empty (id INTEGER, val INTEGER)")
+        .unwrap();
     let result = engine
         .execute("SELECT COUNT(*) FROM empty WHERE val > 0")
         .unwrap();

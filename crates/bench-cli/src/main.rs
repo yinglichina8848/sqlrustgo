@@ -8,8 +8,8 @@ mod cli;
 mod commands;
 mod metrics;
 mod reporter;
-mod tpch_import;
 mod tpch_bench;
+mod tpch_import;
 
 use cli::{BenchmarkConfig, TpchBenchArgs, TpchImportArgs};
 use commands::{custom, oltp, tpch};

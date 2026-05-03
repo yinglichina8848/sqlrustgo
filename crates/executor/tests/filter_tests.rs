@@ -1,5 +1,3 @@
-
-
 use sqlrustgo::ExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use sqlrustgo_types::Value;
@@ -27,7 +25,9 @@ fn setup_nulls() -> ExecutionEngine<MemoryStorage> {
         .execute("CREATE TABLE items (id INTEGER, value INTEGER, tag TEXT)")
         .unwrap();
     engine
-        .execute("INSERT INTO items VALUES (1, 10, 'a'), (2, NULL, 'b'), (3, 30, NULL), (4, NULL, NULL)")
+        .execute(
+            "INSERT INTO items VALUES (1, 10, 'a'), (2, NULL, 'b'), (3, 30, NULL), (4, NULL, NULL)",
+        )
         .unwrap();
     engine
 }
@@ -142,20 +142,24 @@ fn test_filter_combined_and_or() {
 #[test]
 fn test_filter_all_rows_match() {
     let mut engine = setup_employees();
-    let result = engine.execute("SELECT id FROM employees WHERE 1 = 1").unwrap();
+    let result = engine
+        .execute("SELECT id FROM employees WHERE 1 = 1")
+        .unwrap();
     assert_eq!(result.rows.len(), 5);
 }
 
 #[test]
 fn test_filter_no_rows_match() {
     let mut engine = setup_employees();
-    let result = engine.execute("SELECT id FROM employees WHERE 1 = 0").unwrap();
+    let result = engine
+        .execute("SELECT id FROM employees WHERE 1 = 0")
+        .unwrap();
     assert_eq!(result.rows.len(), 0);
 }
 
 #[test]
 fn test_filter_null_equals_null_zero_rows() {
-        let mut engine = setup_nulls();
+    let mut engine = setup_nulls();
     let result = engine
         .execute("SELECT id FROM items WHERE value = NULL")
         .unwrap();
@@ -164,7 +168,7 @@ fn test_filter_null_equals_null_zero_rows() {
 
 #[test]
 fn test_filter_null_not_equals_null_zero_rows() {
-        let mut engine = setup_nulls();
+    let mut engine = setup_nulls();
     let result = engine
         .execute("SELECT id FROM items WHERE value <> NULL")
         .unwrap();
@@ -174,7 +178,9 @@ fn test_filter_null_not_equals_null_zero_rows() {
 #[test]
 fn test_filter_is_null() {
     let mut engine = setup_nulls();
-    let result = engine.execute("SELECT id FROM items WHERE value IS NULL").unwrap();
+    let result = engine
+        .execute("SELECT id FROM items WHERE value IS NULL")
+        .unwrap();
     assert_eq!(result.rows.len(), 2);
     let ids: Vec<i64> = result
         .rows
@@ -210,7 +216,9 @@ fn test_filter_is_not_null() {
 #[test]
 fn test_filter_text_is_null() {
     let mut engine = setup_nulls();
-    let result = engine.execute("SELECT id FROM items WHERE tag IS NULL").unwrap();
+    let result = engine
+        .execute("SELECT id FROM items WHERE tag IS NULL")
+        .unwrap();
     assert_eq!(result.rows.len(), 2);
     let ids: Vec<i64> = result
         .rows
@@ -226,7 +234,7 @@ fn test_filter_text_is_null() {
 
 #[test]
 fn test_filter_column_compared_to_null() {
-        let mut engine = setup_nulls();
+    let mut engine = setup_nulls();
     let result = engine
         .execute("SELECT id FROM items WHERE tag = NULL")
         .unwrap();
@@ -236,12 +244,8 @@ fn test_filter_column_compared_to_null() {
 #[test]
 fn test_filter_on_empty_table() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE empty (id INTEGER)")
-        .unwrap();
-    let result = engine
-        .execute("SELECT id FROM empty WHERE id > 0")
-        .unwrap();
+    engine.execute("CREATE TABLE empty (id INTEGER)").unwrap();
+    let result = engine.execute("SELECT id FROM empty WHERE id > 0").unwrap();
     assert_eq!(result.rows.len(), 0);
 }
 

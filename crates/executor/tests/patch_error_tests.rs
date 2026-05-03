@@ -137,7 +137,8 @@ fn test_drop_table_no_data() {
 fn test_insert_large_values() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
-    e.execute("INSERT INTO t VALUES (10), (20), (30), (40), (50)").unwrap();
+    e.execute("INSERT INTO t VALUES (10), (20), (30), (40), (50)")
+        .unwrap();
     let r = e.execute("SELECT COUNT(*) FROM t").unwrap();
     assert_eq!(r.rows[0][0], Value::Integer(5));
 }
