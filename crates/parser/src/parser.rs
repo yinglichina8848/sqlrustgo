@@ -1204,7 +1204,9 @@ impl Parser {
                     || name.to_uppercase() == "DATE_SUB" 
                     || name.to_uppercase() == "ADDTIME"
                     || name.to_uppercase() == "SUBTIME"
-                    || name.to_uppercase() == "INSERT" => {
+                    || name.to_uppercase() == "INSERT"
+                    || name.to_uppercase() == "CAST"
+                    || name.to_uppercase() == "SUBSTRING" => {
                     let func_name = name.to_uppercase();
                     self.next();
                     self.expect(Token::LParen)?;
