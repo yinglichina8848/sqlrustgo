@@ -1043,7 +1043,10 @@ fn execute_write_statement(
     stmt: sqlrustgo_parser::parser::Statement,
     engine: &mut MemoryExecutionEngine,
 ) -> MySqlResult<usize> {
-    Ok(engine.execute_statement(stmt).map_err(MySqlError::from)?.affected_rows)
+    Ok(engine
+        .execute_statement(stmt)
+        .map_err(MySqlError::from)?
+        .affected_rows)
 }
 
 #[allow(clippy::type_complexity)]
@@ -1080,6 +1083,27 @@ fn is_transaction_cmd(sql: &str) -> bool {
     u == "BEGIN" || u == "COMMIT" || u == "ROLLBACK" || u == "START TRANSACTION"
 }
 
+pub fn parse_transaction_command(sql: &str) -> TransactionCommand {
+    let u = sql.trim().to_uppercase();
+    if u == "BEGIN" || u == "START TRANSACTION" {
+        TransactionCommand::Begin
+    } else if u == "COMMIT" {
+        TransactionCommand::Commit
+    } else if u == "ROLLBACK" {
+        TransactionCommand::Rollback
+    } else {
+        TransactionCommand::None
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TransactionCommand {
+    Begin,
+    Commit,
+    Rollback,
+    None,
+}
+
 fn generate_self_signed_cert() -> (Vec<u8>, Vec<u8>) {
     let key_pair = KeyPair::generate().unwrap();
     let key_der = key_pair.serialize_der();
@@ -1099,7 +1123,7 @@ fn make_tls_config() -> rustls::ServerConfig {
         .unwrap()
 }
 
-#[allow(unused_assignments)]
+#[allow(unused_assignments, clippy::too_many_arguments)]
 fn do_command_loop<S: Read + Write>(
     stream: &mut S,
     addr: SocketAddr,
@@ -1143,6 +1167,13 @@ fn do_command_loop<S: Read + Write>(
                     continue;
                 }
                 if is_transaction_cmd(&q) {
+                    match parse_transaction_command(&q) {
+                        TransactionCommand::Begin => session.transaction_active = true,
+                        TransactionCommand::Commit | TransactionCommand::Rollback => {
+                            session.transaction_active = false
+                        }
+                        TransactionCommand::None => {}
+                    }
                     make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
                     seq = seq.wrapping_add(1);
                     continue;
@@ -1330,7 +1361,12 @@ fn do_command_loop<S: Read + Write>(
                 if is_select(stmt_sql) {
                     let result = if let Some(ref parsed_stmt) = stmt_info.parsed_stmt {
                         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            execute_select_statement(parsed_stmt.clone(), stmt_sql, engine, &storage)
+                            execute_select_statement(
+                                parsed_stmt.clone(),
+                                stmt_sql,
+                                engine,
+                                &storage,
+                            )
                         }))
                     } else {
                         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

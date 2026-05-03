@@ -161,3 +161,106 @@ fn test_packet_payload_various_bytes() {
     let read = Packet::read_from(&mut cursor).unwrap();
     assert_eq!(read.payload, payload);
 }
+
+// ============ Transaction Command Tests ============
+
+use sqlrustgo_mysql_server::{parse_transaction_command, SessionState, TransactionCommand};
+
+#[test]
+fn test_transaction_cmd_begin() {
+    assert_eq!(
+        parse_transaction_command("BEGIN"),
+        TransactionCommand::Begin
+    );
+    assert_eq!(
+        parse_transaction_command("begin"),
+        TransactionCommand::Begin
+    );
+    assert_eq!(
+        parse_transaction_command("  BEGIN  "),
+        TransactionCommand::Begin
+    );
+    assert_eq!(
+        parse_transaction_command("START TRANSACTION"),
+        TransactionCommand::Begin
+    );
+    assert_eq!(
+        parse_transaction_command("start transaction"),
+        TransactionCommand::Begin
+    );
+}
+
+#[test]
+fn test_transaction_cmd_commit() {
+    assert_eq!(
+        parse_transaction_command("COMMIT"),
+        TransactionCommand::Commit
+    );
+    assert_eq!(
+        parse_transaction_command("commit"),
+        TransactionCommand::Commit
+    );
+    assert_eq!(
+        parse_transaction_command("  COMMIT  "),
+        TransactionCommand::Commit
+    );
+}
+
+#[test]
+fn test_transaction_cmd_rollback() {
+    assert_eq!(
+        parse_transaction_command("ROLLBACK"),
+        TransactionCommand::Rollback
+    );
+    assert_eq!(
+        parse_transaction_command("rollback"),
+        TransactionCommand::Rollback
+    );
+    assert_eq!(
+        parse_transaction_command("  ROLLBACK  "),
+        TransactionCommand::Rollback
+    );
+}
+
+#[test]
+fn test_transaction_cmd_non_transaction() {
+    assert_eq!(
+        parse_transaction_command("SELECT 1"),
+        TransactionCommand::None
+    );
+    assert_eq!(
+        parse_transaction_command("INSERT INTO t VALUES(1)"),
+        TransactionCommand::None
+    );
+    assert_eq!(parse_transaction_command(""), TransactionCommand::None);
+}
+
+#[test]
+fn test_session_state_transaction_flow() {
+    let mut session = SessionState::default();
+    assert!(!session.transaction_active);
+
+    match parse_transaction_command("BEGIN") {
+        TransactionCommand::Begin => session.transaction_active = true,
+        _ => panic!("expected BEGIN"),
+    }
+    assert!(session.transaction_active);
+
+    match parse_transaction_command("COMMIT") {
+        TransactionCommand::Commit => session.transaction_active = false,
+        _ => panic!("expected COMMIT"),
+    }
+    assert!(!session.transaction_active);
+
+    match parse_transaction_command("BEGIN") {
+        TransactionCommand::Begin => session.transaction_active = true,
+        _ => panic!("expected BEGIN"),
+    }
+    assert!(session.transaction_active);
+
+    match parse_transaction_command("ROLLBACK") {
+        TransactionCommand::Rollback => session.transaction_active = false,
+        _ => panic!("expected ROLLBACK"),
+    }
+    assert!(!session.transaction_active);
+}
