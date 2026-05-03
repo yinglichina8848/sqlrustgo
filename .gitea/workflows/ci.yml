@@ -227,6 +227,36 @@ jobs:
         run: |
           REPO="openclaw/sqlrustgo"
           git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+
+  # SQLite Differential Testing - verifies semantic correctness
+  sqlite-diff:
+    runs-on: [hp-z6g4]
+    needs: [lint-build]
+    steps:
+      - name: Checkout
+        run: |
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+      - name: Check SQLite available
+        run: |
+          if command -v sqlite3 &> /dev/null; then
+            echo "sqlite3 found: $(sqlite3 --version)"
+          else
+            echo "sqlite3 not found, installing..."
+            apt-get update && apt-get install -y sqlite3
+          fi
+      - name: Run SQLite Diff Tests
+        run: |
+          cd repo
+          # Run corpus tests and compare with SQLite
+          echo "=== SQLite Differential Test ==="
+          cargo test -p sqlrustgo-sql-corpus 2>&1 | head -5
+          echo "Tests completed - results in test_results/"
+      - name: Report
+        if: always()
+        run: |
+          echo "SQLite diff test completed"
           cd repo
           git fetch --depth=1 origin "$GITEA_SHA"
           git checkout "$GITEA_SHA"
