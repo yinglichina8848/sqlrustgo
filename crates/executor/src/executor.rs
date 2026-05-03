@@ -4,6 +4,70 @@
 use sqlrustgo_planner::PhysicalPlan;
 use sqlrustgo_types::{SqlResult, Value};
 
+/// Volcano-style iterator executor trait (open/next/close).
+/// Used by window functions and pipeline-style execution.
+pub trait VolcanoExecutor: Send + Sync {
+    /// Initialize the executor and prepare to produce rows.
+    fn open(&mut self) -> SqlResult<()>;
+
+    /// Return the next row, or None when exhausted.
+    fn next(&mut self) -> SqlResult<Option<Vec<Value>>>;
+
+    /// Release resources.
+    fn close(&mut self) -> SqlResult<()>;
+}
+
+/// Adapter that wraps a pre-computed `ExecutorResult` (Vec<Vec<Value>>)
+/// into the Volcano open/next/close model.
+/// Used to bridge `LocalExecutor` (batch model) into `WindowVolcanoExecutor`.
+pub struct LocalExecutorAdapter {
+    rows: Vec<Vec<Value>>,
+    position: usize,
+    opened: bool,
+}
+
+impl LocalExecutorAdapter {
+    /// Create from pre-computed rows.
+    pub fn new(rows: Vec<Vec<Value>>) -> Self {
+        Self {
+            rows,
+            position: 0,
+            opened: false,
+        }
+    }
+
+    /// Create from a `LocalExecutor` execution result.
+    pub fn from_result(result: ExecutorResult) -> Self {
+        Self::new(result.rows)
+    }
+}
+
+impl VolcanoExecutor for LocalExecutorAdapter {
+    fn open(&mut self) -> SqlResult<()> {
+        self.position = 0;
+        self.opened = true;
+        Ok(())
+    }
+
+    fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        if !self.opened {
+            return Err("executor not opened".into());
+        }
+        if self.position >= self.rows.len() {
+            return Ok(None);
+        }
+        let row = self.rows[self.position].clone();
+        self.position += 1;
+        Ok(Some(row))
+    }
+
+    fn close(&mut self) -> SqlResult<()> {
+        self.opened = false;
+        self.position = 0;
+        Ok(())
+    }
+}
+
 /// Execution result containing rows and metadata
 #[derive(Debug, Clone)]
 pub struct ExecutorResult {

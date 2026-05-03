@@ -922,3 +922,88 @@ mod tests {
         }
     }
 }
+
+impl VolcanoExecutor for WindowVolcanoExecutor {
+    fn open(&mut self) -> SqlResult<()> {
+        self.current_position = 0;
+        self.initialized = false;
+        self.current_rows.clear();
+        self.child.open()
+    }
+
+    fn next(&mut self) -> SqlResult<Option<Vec<Value>>> {
+        // First call: materialize all child rows and compute partitions
+        if !self.initialized {
+            let mut all_rows = Vec::new();
+            // Re-open child to collect rows
+            self.child.open()?;
+            while let Some(row) = self.child.next()? {
+                all_rows.push(row);
+            }
+            self.child.close()?;
+
+            if !all_rows.is_empty() {
+                self.compute_partitions(&all_rows)?;
+                // Build ordered output rows
+                let mut partition_keys: Vec<_> = self.partition_cache.keys().cloned().collect();
+                partition_keys.sort();
+                for partition_key in partition_keys {
+                    let partition_state = self.partition_cache.get(&partition_key).unwrap();
+                    for row_idx in &partition_state.indices {
+                        let mut output_row = partition_state.rows[*row_idx].clone();
+                        // Append window values
+                        for expr in &self.window_exprs {
+                            let value = self.compute_window_expression(
+                                expr,
+                                partition_state,
+                                partition_state.indices.iter().position(|&i| i == *row_idx).unwrap(),
+                            )?;
+                            output_row.push(value);
+                        }
+                        self.current_rows.push(output_row);
+                    }
+                }
+            }
+            self.initialized = true;
+            self.current_position = 0;
+        }
+
+        if self.current_position >= self.current_rows.len() {
+            return Ok(None);
+        }
+        let row = self.current_rows[self.current_position].clone();
+        self.current_position += 1;
+        Ok(Some(row))
+    }
+
+    fn close(&mut self) -> SqlResult<()> {
+        self.current_position = 0;
+        self.initialized = false;
+        self.current_rows.clear();
+        self.partition_cache.clear();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod volcano_tests {
+    use super::*;
+
+    /// Smoke test: WindowVolcanoExecutor open/next/close lifecycle.
+    #[test]
+    fn test_window_volcano_lifecycle() {
+        // A real test would need a child executor with data.
+        // This test just verifies the trait compiles and the struct is wired correctly.
+        let child = Box::new(MockExecutor::new());
+        let executor = WindowVolcanoExecutor::new(
+            child,
+            vec![],
+            Schema::empty(),
+            Schema::empty(),
+            vec![],
+            vec![],
+        );
+        // Verify the struct is constructible — actual execution tested via integration tests.
+        let _ = executor;
+    }
+}
