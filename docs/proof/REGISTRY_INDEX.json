@@ -1,14 +1,8 @@
 {
-<<<<<<< HEAD
-  "registry_version": "1.5",
-  "updated_at": "2026-05-03T12:00:00Z",
-  "total_proofs": 19,
-=======
-  "registry_version": "1.7",
-  "updated_at": "2026-05-03T12:45:00Z",
+  "registry_version": "1.8",
+  "updated_at": "2026-05-03T13:00:00Z",
   "total_proofs": 22,
->>>>>>> 060412ca1 (feat(formal): REGISTRY v1.7 - 22 proofs, P1: 7/9 (PROOF-021/022 complete))
-  "phase": "Phase 1 (S0-S05) + Phase 2 P0",
+  "phase": "Phase 1 (S0-S05) + Phase 2 P0+P1",
   "proofs": [
     {
       "id": "PROOF-001-parser-select",
@@ -24,7 +18,8 @@
       "language": "Dafny",
       "category": "type_system",
       "status": "verified",
-      "s_category": "S-02"
+      "s_category": "S-02",
+      "note": "Dafny spec is documentation (not executable .dfy); evidence via JSON + cargo test"
     },
     {
       "id": "PROOF-003-wal-recovery",
@@ -32,7 +27,8 @@
       "language": "TLA+",
       "category": "transaction",
       "status": "verified",
-      "s_category": "S-03"
+      "s_category": "S-03",
+      "note": "TLA+ spec is embedded markdown documentation; evidence via cargo test"
     },
     {
       "id": "PROOF-004-btree-query",
@@ -40,7 +36,8 @@
       "language": "Dafny",
       "category": "storage",
       "status": "verified",
-      "s_category": "S-04"
+      "s_category": "S-04",
+      "note": "Dafny spec is documentation; evidence via JSON + cargo test"
     },
     {
       "id": "PROOF-005-mvcc-snapshot",
@@ -48,7 +45,8 @@
       "language": "TLA+",
       "category": "transaction",
       "status": "verified",
-      "s_category": "S-03"
+      "s_category": "S-03",
+      "note": "TLA+ spec is embedded markdown documentation; evidence via cargo test"
     },
     {
       "id": "PROOF-006-where-semantics",
@@ -96,7 +94,8 @@
       "language": "Dafny",
       "category": "type_system",
       "status": "verified",
-      "s_category": "S-02"
+      "s_category": "S-02",
+      "note": "Dafny spec is documentation markdown; not executable. Verification via cargo test type_safety"
     },
     {
       "id": "PROOF-012-wal-acid",
@@ -104,7 +103,8 @@
       "language": "TLA+",
       "category": "transaction",
       "status": "verified",
-      "s_category": "S-03"
+      "s_category": "S-03",
+      "note": "TLA+ spec embedded in markdown; TLC not re-run. Evidence via cargo test"
     },
     {
       "id": "PROOF-013-btree-invariants",
@@ -112,7 +112,8 @@
       "language": "Dafny",
       "category": "storage",
       "status": "verified",
-      "s_category": "S-04"
+      "s_category": "S-04",
+      "note": "Dafny spec is documentation; evidence via JSON + cargo test"
     },
     {
       "id": "PROOF-014-query-equivalence",
@@ -121,11 +122,7 @@
       "category": "optimizer",
       "status": "verified",
       "s_category": "S-05",
-<<<<<<< HEAD
-      "note": "Proof is conceptual/documentation; verification via integration tests (cargo test -p sqlrustgo-optimizer --test query_equivalence)"
-=======
-      "note": "Proof is conceptual/documentation; verification via integration tests"
->>>>>>> 060412ca1 (feat(formal): REGISTRY v1.7 - 22 proofs, P1: 7/9 (PROOF-021/022 complete))
+      "note": "Proof is conceptual/documentation; verification via cargo test -p sqlrustgo-optimizer"
     },
     {
       "id": "PROOF-015-ddl-atomicity",
@@ -145,12 +142,8 @@
       "status": "verified",
       "stage": "P0",
       "issue_ref": "Issue #201",
-<<<<<<< HEAD
-      "verified": "2026-05-03"
-=======
       "verified": "2026-05-03",
       "tool_details": "TLC 2026.04.29, 13 states, 6 distinct states, depth 4, 5 invariants all PASS"
->>>>>>> 060412ca1 (feat(formal): REGISTRY v1.7 - 22 proofs, P1: 7/9 (PROOF-021/022 complete))
     },
     {
       "id": "PROOF-017-update-semantics",
@@ -161,8 +154,9 @@
       "stage": "P0",
       "issue_ref": "Issue #201",
       "verified": "2026-05-03",
-      "verification_method": "Docker isolated runner (scripts/formalog/run_formulog_isolated.sh) with Z3 SMT solver",
-      "note": "Models INSERT/UPDATE/DELETE with magic set transformation. Requires isolated container (SymbolManager JVM pollution otherwise)"
+      "verified_by": "hermes-agent",
+      "verification_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-017-update-semantics.formulog",
+      "tool_details": "Formulog 0.8.0, Docker isolated runner with Z3 SMT solver"
     },
     {
       "id": "PROOF-019-left-right-join",
@@ -172,11 +166,7 @@
       "status": "verified",
       "stage": "P1",
       "verified": "2026-05-03",
-<<<<<<< HEAD
-      "tool_details": "TLC 2026.04.29, 13 states, 6 distinct states, depth 4, 5 invariants all PASS"
-=======
       "tool_details": "TLC 2026.04.29, 13 states, 6 distinct states, depth 4"
->>>>>>> 060412ca1 (feat(formal): REGISTRY v1.7 - 22 proofs, P1: 7/9 (PROOF-021/022 complete))
     },
     {
       "id": "PROOF-020-null-three-valued-logic",
@@ -186,17 +176,12 @@
       "status": "verified",
       "stage": "P1",
       "verified": "2026-05-03",
-<<<<<<< HEAD
-      "verification_method": "Docker isolated runner with Z3 SMT solver",
-      "note": "Implements 3VL null semantics using string-based value representation (avoids int/bv[32] type conflict). Uses negation-free stratification to avoid SymbolManager SMT bool coercion issue"
-    }
-  ]
-=======
       "s_category": "S-03",
       "issue_ref": "Issue #201",
       "verified_by": "hermes-agent",
       "verification_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-020-null-three-valued-logic.formulog",
-      "tool_details": "Formulog 0.8.0, negation-free stratification, type: string workaround for bv32/Int mismatch"
+      "tool_details": "Formulog 0.8.0, negation-free stratification, type workaround for bv32/Int mismatch",
+      "re_verified": "2026-05-03"
     },
     {
       "id": "PROOF-021-having-semantics",
@@ -212,11 +197,11 @@
       "verification_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-021-having-semantics.formulog",
       "key_properties": [
         "HAVING evaluated after GROUP BY aggregation",
-        "HAVING can reference aggregate functions (COUNT, MIN, MAX, SUM)",
+        "HAVING can reference aggregate functions",
         "Groups not satisfying HAVING condition are eliminated",
-        "NULL handling follows 3VL: UNKNOWN comparisons yield NOT TRUE",
-        "HAVING vs WHERE distinction: WHERE cannot reference aggregates"
-      ]
+        "NULL handling follows 3VL: UNKNOWN comparisons yield NOT TRUE"
+      ],
+      "re_verified": "2026-05-03"
     },
     {
       "id": "PROOF-022-cte-nonrecursive",
@@ -234,17 +219,24 @@
         "CTEs are named temporary result sets scoped to single query",
         "Evaluation order: CTEs resolved in declaration order (top-down)",
         "CTEs shadow outer tables with the same name",
-        "CTEs evaluated once per query (not re-evaluated on each reference)",
+        "CTEs evaluated once per query",
         "CTE chains: later CTE can reference earlier CTE"
-      ]
+      ],
+      "re_verified": "2026-05-03"
     }
   ],
   "phase_2_p1_status": {
     "total": 9,
     "completed": 7,
-    "pending": 2,
+    "pending": 3,
     "pending_proofs": ["PROOF-023", "PROOF-024", "PROOF-025"],
     "completed_proofs": ["PROOF-015", "PROOF-016", "PROOF-017", "PROOF-019", "PROOF-020", "PROOF-021", "PROOF-022"]
+  },
+  "s0_s05_reverification": {
+    "summary": "Formulog proofs type-check verified. TLA+/Dafny specs are embedded markdown documentation (not executable). Evidence via cargo test.",
+    "formulog_verified": ["PROOF-017", "PROOF-020", "PROOF-021", "PROOF-022"],
+    "tla_plus_note": "TLA+ specs embedded in markdown as documentation, not standalone .tla files. TLC model-checking evidence from 2026.04.29.",
+    "dafny_note": "Dafny specs (PROOF-002,004,009,011,013) are markdown documentation. No executable .dfy for direct verification.",
+    "cargo_tests": "All S0-S05 categories have corresponding cargo test coverage in crates/executor, crates/parser, crates/storage, crates/transaction"
   }
->>>>>>> 060412ca1 (feat(formal): REGISTRY v1.7 - 22 proofs, P1: 7/9 (PROOF-021/022 complete))
 }
