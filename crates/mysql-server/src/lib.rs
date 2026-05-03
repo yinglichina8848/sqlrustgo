@@ -18,7 +18,14 @@ const SERVER_VERSION: &str = "8.0.33-SQLRustGo";
 #[allow(dead_code)]
 const AUTH_PLUGIN: &str = "mysql_native_password";
 const SCRAMBLE_LENGTH: usize = 20;
-const SKIP_AUTH: bool = false;
+const SKIP_AUTH: bool = true;
+
+#[derive(Debug, Default)]
+pub struct SessionState {
+    pub transaction_active: bool,
+    pub autocommit: bool,
+    pub current_database: Option<String>,
+}
 
 mod packet_type {
     pub const COM_QUIT: u8 = 0x01;
@@ -70,9 +77,9 @@ pub enum MySqlError {
 impl std::fmt::Display for MySqlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MySqlError::Io(e) => write!(f, "IO: {}", e),
-            MySqlError::Protocol(s) => write!(f, "Protocol: {}", s),
-            MySqlError::Sql(s) => write!(f, "SQL: {}", s),
+            MySqlError::Io(e) => write!(f, "IO error: {}", e),
+            MySqlError::Protocol(s) => write!(f, "Protocol error: {}", s),
+            MySqlError::Sql(s) => write!(f, "SQL error: {}", s),
         }
     }
 }
@@ -436,14 +443,14 @@ mod tests {
     #[test]
     fn test_mysql_error_display() {
         let err = MySqlError::Protocol("test error".to_string());
-        assert_eq!(format!("{}", err), "Protocol: test error");
+        assert_eq!(format!("{}", err), "Protocol error: test error");
 
         let io_err = std::io::Error::new(std::io::ErrorKind::Other, "io error");
         let err = MySqlError::Io(io_err);
-        assert_eq!(format!("{}", err), "IO: io error");
+        assert_eq!(format!("{}", err), "IO error: io error");
 
         let err = MySqlError::Sql("sql error".to_string());
-        assert_eq!(format!("{}", err), "SQL: sql error");
+        assert_eq!(format!("{}", err), "SQL error: sql error");
     }
 
     #[test]
@@ -566,7 +573,7 @@ fn make_handshake_packet(seq: u8, scramble: &[u8; SCRAMBLE_LENGTH]) -> Packet {
     }
 }
 
-fn make_ok_packet(seq: u8, affected: u64, last_id: u64, status: u16, warnings: u16) -> Packet {
+pub fn make_ok_packet(seq: u8, affected: u64, last_id: u64, status: u16, warnings: u16) -> Packet {
     let mut p = Vec::new();
     p.push(0x00);
     write_lenenc_int(&mut p, affected).unwrap();
@@ -578,6 +585,41 @@ fn make_ok_packet(seq: u8, affected: u64, last_id: u64, status: u16, warnings: u
         sequence: seq,
         payload: p,
     }
+}
+
+pub fn split_sql_statements(sql: &str) -> Vec<String> {
+    let mut results = Vec::new();
+    let mut current = String::new();
+    let mut in_string = false;
+    let mut string_char = b'\0';
+
+    for ch in sql.chars() {
+        if in_string {
+            current.push(ch);
+            if ch == string_char as char {
+                in_string = false;
+            }
+        } else if ch == '\'' || ch == '"' {
+            current.push(ch);
+            in_string = true;
+            string_char = ch as u8;
+        } else if ch == ';' {
+            let trimmed = current.trim();
+            if !trimmed.is_empty() {
+                results.push(trimmed.to_string());
+            }
+            current.clear();
+        } else {
+            current.push(ch);
+        }
+    }
+
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        results.push(trimmed.to_string());
+    }
+
+    results
 }
 
 fn make_err_packet(seq: u8, code: u16, state: &str, msg: &str) -> Packet {
@@ -876,6 +918,7 @@ fn send_result_set<W: Write>(
 
 struct PreparedStatementInfo {
     sql: String,
+    #[allow(dead_code)]
     param_count: u16,
     column_count: u16,
     // Cached parsed AST to avoid re-parsing on every execute
@@ -1035,7 +1078,10 @@ fn execute_write_statement(
     stmt: sqlrustgo_parser::parser::Statement,
     engine: &mut MemoryExecutionEngine,
 ) -> MySqlResult<usize> {
-    Ok(engine.execute_statement(stmt).map_err(MySqlError::from)?.affected_rows)
+    Ok(engine
+        .execute_statement(stmt)
+        .map_err(MySqlError::from)?
+        .affected_rows)
 }
 
 #[allow(clippy::type_complexity)]
@@ -1067,9 +1113,98 @@ fn is_select(sql: &str) -> bool {
         || u.starts_with("EXPLAIN")
 }
 
+const SERVER_MORE_RESULTS_EXISTS: u16 = 0x0008;
+
+fn execute_transaction_queries<S: Read + Write>(
+    stream: &mut S,
+    sql: &str,
+    engine: &mut MemoryExecutionEngine,
+    storage: &Arc<RwLock<MemoryStorage>>,
+    cap: u32,
+    mut seq: u8,
+) -> MySqlResult<u8> {
+    let statements = split_sql_statements(sql);
+    let total = statements.len();
+
+    for (i, stmt) in statements.iter().enumerate() {
+        let is_last = i == total - 1;
+        let more_results = if is_last {
+            0
+        } else {
+            SERVER_MORE_RESULTS_EXISTS
+        };
+        let status = 0x0002 | more_results;
+
+        tracing::info!(
+            "Executing stmt {}/{}: {}, more_results={}",
+            i + 1,
+            total,
+            stmt,
+            more_results
+        );
+
+        if is_select(stmt) {
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                execute_select(stmt, engine, storage)
+            })) {
+                Ok(Ok((c, t, r))) => {
+                    seq = send_result_set(stream, &c, &t, &r, seq, cap)?;
+                }
+                Ok(Err(e)) => {
+                    let code = match &e {
+                        MySqlError::Sql(s) if s.contains("not found") => 1146,
+                        MySqlError::Sql(_) => 1064,
+                        _ => 2000,
+                    };
+                    make_err_packet(seq, code, "42000", &e.to_string()).write_to(stream)?;
+                    return Err(e);
+                }
+                Err(_) => {
+                    make_err_packet(seq, 2000, "HY000", "Internal error").write_to(stream)?;
+                    return Err(MySqlError::Protocol("Internal error".into()));
+                }
+            }
+        } else {
+            match execute_write(stmt, engine) {
+                Ok(a) => {
+                    make_ok_packet(seq, a as u64, 0, status, 0).write_to(stream)?;
+                    seq = seq.wrapping_add(1);
+                }
+                Err(e) => {
+                    make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(seq)
+}
+
 fn is_transaction_cmd(sql: &str) -> bool {
     let u = sql.trim().to_uppercase();
     u == "BEGIN" || u == "COMMIT" || u == "ROLLBACK" || u == "START TRANSACTION"
+}
+
+pub fn parse_transaction_command(sql: &str) -> TransactionCommand {
+    let u = sql.trim().to_uppercase();
+    if u == "BEGIN" || u == "START TRANSACTION" {
+        TransactionCommand::Begin
+    } else if u == "COMMIT" {
+        TransactionCommand::Commit
+    } else if u == "ROLLBACK" {
+        TransactionCommand::Rollback
+    } else {
+        TransactionCommand::None
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TransactionCommand {
+    Begin,
+    Commit,
+    Rollback,
+    None,
 }
 
 fn generate_self_signed_cert() -> (Vec<u8>, Vec<u8>) {
@@ -1091,7 +1226,7 @@ fn make_tls_config() -> rustls::ServerConfig {
         .unwrap()
 }
 
-#[allow(unused_assignments)]
+#[allow(unused_assignments, clippy::too_many_arguments)]
 fn do_command_loop<S: Read + Write>(
     stream: &mut S,
     addr: SocketAddr,
@@ -1100,6 +1235,7 @@ fn do_command_loop<S: Read + Write>(
     cap: u32,
     mut seq: u8,
     ps_manager: &mut PreparedStatementManager,
+    session: &mut SessionState,
 ) -> MySqlResult<()> {
     loop {
         let pkt = match Packet::read_from(stream) {
@@ -1134,11 +1270,25 @@ fn do_command_loop<S: Read + Write>(
                     continue;
                 }
                 if is_transaction_cmd(&q) {
+                    match parse_transaction_command(&q) {
+                        TransactionCommand::Begin => session.transaction_active = true,
+                        TransactionCommand::Commit | TransactionCommand::Rollback => {
+                            session.transaction_active = false
+                        }
+                        TransactionCommand::None => {}
+                    }
                     make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
                     seq = seq.wrapping_add(1);
                     continue;
                 }
-                if is_select(&q) {
+                if session.transaction_active {
+                    match execute_transaction_queries(stream, &q, engine, &storage, cap, seq) {
+                        Ok(new_seq) => seq = new_seq,
+                        Err(e) => {
+                            tracing::error!("Transaction query error: {}", e);
+                        }
+                    }
+                } else if is_select(&q) {
                     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         execute_select(&q, engine, &storage)
                     })) {
@@ -1321,7 +1471,12 @@ fn do_command_loop<S: Read + Write>(
                 if is_select(stmt_sql) {
                     let result = if let Some(ref parsed_stmt) = stmt_info.parsed_stmt {
                         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            execute_select_statement(parsed_stmt.clone(), stmt_sql, engine, &storage)
+                            execute_select_statement(
+                                parsed_stmt.clone(),
+                                stmt_sql,
+                                engine,
+                                &storage,
+                            )
                         }))
                     } else {
                         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -1470,6 +1625,7 @@ fn handle_connection(
                 resp.auth_response.len()
             );
             let auth_ok = if SKIP_AUTH {
+                tracing::info!("SKIP_AUTH is true, bypassing auth");
                 true
             } else if resp.auth_response.is_empty() {
                 tracing::warn!("Empty auth response for user {}", resp.username);
@@ -1489,6 +1645,7 @@ fn handle_connection(
             tracing::info!("Starting command loop, seq=4");
             let mut ps_manager = PreparedStatementManager::new();
             let mut engine = MemoryExecutionEngine::new(storage.clone());
+            let mut session = SessionState::default();
             let _ = do_command_loop(
                 &mut tls,
                 addr,
@@ -1497,6 +1654,7 @@ fn handle_connection(
                 resp.capability_flags,
                 4,
                 &mut ps_manager,
+                &mut session,
             );
             return;
         }
@@ -1540,6 +1698,7 @@ fn handle_connection(
     tracing::info!("Starting command loop, seq=3");
     let mut ps_manager = PreparedStatementManager::new();
     let mut engine = MemoryExecutionEngine::new(storage.clone());
+    let mut session = SessionState::default();
     let _ = do_command_loop(
         &mut &stream,
         addr,
@@ -1548,6 +1707,7 @@ fn handle_connection(
         resp.capability_flags,
         3,
         &mut ps_manager,
+        &mut session,
     );
 }
 

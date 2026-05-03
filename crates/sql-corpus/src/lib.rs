@@ -214,6 +214,18 @@ impl SimpleExecutor {
                 self.execute_with_select(&with_select)?;
                 Ok(ExecutorResult::new(vec![], 0))
             }
+            Statement::Union(union_stmt) => {
+                let left_rows = self.execute_statement(&union_stmt.left)?;
+                let right_rows = self.execute_statement(&union_stmt.right)?;
+                let mut combined: Vec<Vec<Value>> = left_rows;
+                combined.extend(right_rows);
+                if !union_stmt.union_all {
+                    combined.sort();
+                    combined.dedup();
+                }
+                let count = combined.len();
+                Ok(ExecutorResult::new(combined, count))
+            }
             _ => Err("Unsupported statement type".to_string()),
         }
     }

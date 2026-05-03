@@ -125,6 +125,8 @@ pub enum Token {
     Grouping,
     Rollup,
     Cube,
+    Substring,
+    Trim,
 
     // MySQL-specific keywords
     Duplicate,
@@ -343,6 +345,8 @@ impl fmt::Display for Token {
             Token::Grouping => write!(f, "GROUPING"),
             Token::Rollup => write!(f, "ROLLUP"),
             Token::Cube => write!(f, "CUBE"),
+            Token::Substring => write!(f, "SUBSTRING"),
+            Token::Trim => write!(f, "TRIM"),
             Token::AsOf => write!(f, "ASOF"),
             Token::Window => write!(f, "WINDOW"),
             Token::Partition => write!(f, "PARTITION"),
@@ -576,6 +580,8 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "GROUPING" => Some(Token::Grouping),
         "ROLLUP" => Some(Token::Rollup),
         "CUBE" => Some(Token::Cube),
+        "SUBSTRING" => Some(Token::Substring),
+        "TRIM" => Some(Token::Trim),
         "ASOF" => Some(Token::AsOf),
         "WINDOW" => Some(Token::Window),
         "PARTITION" => Some(Token::Partition),

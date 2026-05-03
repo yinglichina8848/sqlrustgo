@@ -1,0 +1,46 @@
+@edb rel emp_name(string).
+@edb rel emp_sal(int).
+@edb rel emp_sal_is_null(string).
+@edb rel emp_comm(int).
+@edb rel emp_comm_is_null(string).
+
+emp_name("Alice").
+emp_name("Bob").
+emp_name("Carol").
+
+emp_sal(3000).
+emp_sal_is_null("Bob").
+emp_sal(5000).
+
+emp_comm_is_null("Alice").
+emp_comm(500).
+emp_comm_is_null("Carol").
+
+rel salary_gt_2000(string, int).
+salary_gt_2000(NAME, SAL) :-
+    emp_name(NAME),
+    emp_sal(SAL),
+    ~emp_sal_is_null(NAME),
+    SAL > 2000.
+
+rel comm_gt_0(string, int).
+comm_gt_0(NAME, COMM) :-
+    emp_name(NAME),
+    emp_comm(COMM),
+    ~emp_comm_is_null(NAME),
+    COMM > 0.
+
+rel where_pass(string, int, int).
+where_pass(NAME, SAL, COMM) :-
+    salary_gt_2000(NAME, SAL),
+    comm_gt_0(NAME, COMM).
+
+rel salary_is_null(string).
+salary_is_null(NAME) :- emp_sal_is_null(NAME).
+
+rel comm_is_null(string).
+comm_is_null(NAME) :- emp_comm_is_null(NAME).
+
+@query where_pass.
+@query salary_is_null.
+@query comm_is_null.

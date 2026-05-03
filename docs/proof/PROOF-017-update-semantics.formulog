@@ -1,0 +1,23 @@
+@edb rel base_table(id:int, field:int, matches:bool)
+@edb rel new_val(int)
+@edb rel pred(bool)
+
+rel updated_table(id:int, field:int, matches:bool)
+updated_table(I, V, M) :- base_table(I, _, M), M = true, new_val(V).
+updated_table(I, F, M) :- base_table(I, F, M), M = false.
+
+rel preserved_rows(id:int, field:int, matches:bool)
+preserved_rows(I, F, M) :- base_table(I, F, M), M = false.
+
+rel selective_update_ok(id:int, field:int)
+selective_update_ok(I, V) :- base_table(I, _, true), new_val(V).
+
+rel full_update_result(id:int, field:int)
+full_update_result(I, V) :- base_table(I, _, true), new_val(V).
+
+rel type_check_result(int)
+type_check_result(V) :- new_val(V).
+
+rel atomic_result(id:int, field:int, matches:bool)
+atomic_result(I, F, M) :- base_table(I, F, M), F = F.
+atomic_result(I, V, true) :- base_table(I, _, true), new_val(V).

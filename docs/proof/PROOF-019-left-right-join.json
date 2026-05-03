@@ -1,0 +1,52 @@
+{
+  "proof_id": "PROOF-019",
+  "title": "LEFT/RIGHT OUTER JOIN Algorithm Verification",
+  "module": "PROOF_019_left_right_join",
+  "tool": "TLA+",
+  "tool_version": "TLC 2026.04.29",
+  "status": "VERIFIED",
+  "verified_at": "2026-05-03T08:54:53Z",
+  "algorithm": "Nested loop outer join with null-marker",
+  "invariants": [
+    {
+      "name": "SideInvariant",
+      "description": "All left_result rows have side=1, all right_result rows have side=2",
+      "status": "PASS"
+    },
+    {
+      "name": "LeftDone",
+      "description": "Left buffer empty implies left_result has exactly LeftSize entries",
+      "status": "PASS"
+    },
+    {
+      "name": "RightDone",
+      "description": "Right buffer empty implies right_result has exactly RightSize entries",
+      "status": "PASS"
+    },
+    {
+      "name": "LeftUnique",
+      "description": "No duplicate ids in left_result",
+      "status": "PASS"
+    },
+    {
+      "name": "RightUnique",
+      "description": "No duplicate ids in right_result",
+      "status": "PASS"
+    }
+  ],
+  "model_parameters": {
+    "LeftSize": 2,
+    "RightSize": 1,
+    "states_generated": 13,
+    "distinct_states": 6,
+    "search_depth": 4
+  },
+  "notes": [
+    "Pure integer protocol - no strings",
+    "Record fields: id, matched, side",
+    "Uses Pick helper to avoid CHOOSE-in-Append TLC limitation",
+    "Termination guaranteed by WF_vars fairness on Next"
+  ],
+  "phase": 1,
+  "priority": "P1"
+}

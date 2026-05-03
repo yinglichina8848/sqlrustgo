@@ -12,3 +12,7 @@ data/tpch-sf01/
 artifacts/coverage/
 .DS_Store
 Cargo.lock
+# TLA+ TLC Trace outputs
+docs/formal/*_TTrace_*.tla
+docs/formal/*_TTrace_*.bin
+

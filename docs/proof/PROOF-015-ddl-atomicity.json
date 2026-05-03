@@ -1,0 +1,49 @@
+{
+  "id": "PROOF-015",
+  "title": "DDL Atomicity Verification",
+  "language": "TLA+",
+  "category": "ddl",
+  "status": "verified",
+  "tool": "TLC 2026.04.29",
+  "tool_version": "2026.04.29",
+  "runtime": "Java 17 (OpenJDK 17.0.18)",
+  "spec_file": "PROOF-015-ddl-atomicity.tla",
+  "created": "2026-05-03",
+  "verified": "2026-05-03",
+  "verified_by": "Hermes Agent",
+  "stage": "P0",
+  "issue_ref": "Issue #201",
+  "theorems": [
+    "AllOrNothing",
+    "SchemaConsistency",
+    "DDLIsolation",
+    "CommitImpliesLog",
+    "RollbackClearsBuffer",
+    "NoPartialDDL"
+  ],
+  "verified_properties": [
+    "DDL operations are atomic (all-or-nothing)",
+    "Committed schema always reflects the union of committed tables",
+    "No table appears in schema without a corresponding CREATE log entry",
+    "Rollback always clears catalogBuffer",
+    "No partial DDL state visible in committed schema"
+  ],
+  "sql_features_verified": [
+    "CREATE TABLE atomicity",
+    "DROP TABLE atomicity",
+    "CREATE INDEX atomicity",
+    "Schema consistency",
+    "DDL isolation from concurrent transactions"
+  ],
+  "verification_command": "java -cp /tmp/tla2tools.jar tlc2.TLC -metadir /tmp/meta PROOF-015-ddl-atomicity.tla",
+  "verification_mode": "Model checking (TLC breadth-first search)",
+  "model_config": {
+    "MaxTables": 3,
+    "MaxDDLOps": 2
+  },
+  "notes": [
+    "TLA+ spec uses CONSTANTS to bound the state space for model checking",
+    "Actual production code should handle unbounded schema; this spec validates the protocol",
+    "DDLIsolation property requires SI (Snapshot Isolation) level for full correctness"
+  ]
+}
