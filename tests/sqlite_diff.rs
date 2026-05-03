@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 use sqlrustgo_parser::parse;
 use sqlrustgo_parser::Statement;
-use sqlrustgo_parser::{AggregateFunction, Expression, JoinType, SelectColumn, SelectStatement};
+use sqlrustgo_parser::{AggregateFunction, Expression, JoinType, SelectStatement};
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
 use std::sync::{Arc, RwLock};
@@ -193,6 +193,49 @@ impl RustEngine {
                     .read()
                     .map_err(|e| format!("Lock error: {:?}", e))?;
 
+                // Handle Cross Join (comma-separated FROM clause with multiple tables)
+                if select.join_clause.is_none() {
+                    if let Some(ref from) = select.from {
+                        if from.tables.len() > 1 {
+                            let table_names: Vec<String> =
+                                from.tables.iter().map(|t| t.name.clone()).collect();
+                            let mut all_table_infos: Vec<TableInfo> = Vec::new();
+                            let mut all_table_rows: Vec<Vec<Vec<Value>>> = Vec::new();
+                            for name in &table_names {
+                                let info = storage
+                                    .get_table_info(name)
+                                    .map_err(|e| format!("Table error: {:?}", e))?;
+                                let rows = storage
+                                    .scan(name)
+                                    .map_err(|e| format!("Scan error: {:?}", e))?;
+                                all_table_infos.push(info);
+                                all_table_rows.push(rows);
+                            }
+
+                            let mut combined_info = all_table_infos[0].clone();
+                            for info in all_table_infos.iter().skip(1) {
+                                for col in &info.columns {
+                                    combined_info.columns.push(col.clone());
+                                }
+                            }
+
+                            let result_rows = compute_cartesian_product(&all_table_rows);
+
+                            if let Some(ref where_expr) = select.where_clause {
+                                let filtered: Vec<Vec<Value>> = result_rows
+                                    .into_iter()
+                                    .filter(|row| {
+                                        eval_predicate(where_expr, row, &combined_info, &storage)
+                                    })
+                                    .collect();
+                                return project_rows(&select, &filtered, &combined_info);
+                            }
+
+                            return project_rows(&select, &result_rows, &combined_info);
+                        }
+                    }
+                }
+
                 // Handle JOIN
                 if let Some(ref join) = select.join_clause {
                     let left_table = select.first_table();
@@ -269,7 +312,9 @@ impl RustEngine {
 
                     // Apply WHERE if present (after join)
                     if let Some(ref where_expr) = select.where_clause {
-                        result_rows.retain(|row| eval_predicate(where_expr, row, &combined_info));
+                        result_rows.retain(|row| {
+                            eval_predicate(where_expr, row, &combined_info, &storage)
+                        });
                     }
 
                     // Handle GROUP BY after JOIN
@@ -564,7 +609,7 @@ impl RustEngine {
                     .map_err(|e| format!("Scan error: {:?}", e))?;
 
                 if let Some(ref where_expr) = select.where_clause {
-                    rows.retain(|row| eval_predicate(where_expr, row, &table_info));
+                    rows.retain(|row| eval_predicate(where_expr, row, &table_info, &storage));
                 }
 
                 if !select.group_by.is_empty() {
@@ -849,6 +894,28 @@ fn sql_eq(left: &Value, right: &Value) -> bool {
     }
 }
 
+fn compute_cartesian_product(table_rows: &[Vec<Vec<Value>>]) -> Vec<Vec<Value>> {
+    match table_rows {
+        [] => vec![vec![]],
+        [first, rest @ ..] => {
+            let rest_result = compute_cartesian_product(rest);
+            first
+                .iter()
+                .flat_map(|row| {
+                    rest_result
+                        .iter()
+                        .map(|rest_row| {
+                            let mut combined = row.clone();
+                            combined.extend(rest_row.clone());
+                            combined
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        }
+    }
+}
+
 fn project_rows(
     select: &sqlrustgo_parser::SelectStatement,
     rows: &[Vec<Value>],
@@ -861,27 +928,29 @@ fn project_rows(
             .collect());
     }
 
-    let col_indices: Vec<usize> = select
-        .columns
-        .iter()
-        .filter_map(|c| {
-            if c.name == "*" {
-                None
-            } else {
-                table_info
-                    .columns
-                    .iter()
-                    .position(|col| &col.name == &c.name)
-            }
-        })
-        .collect();
-
     Ok(rows
         .iter()
         .map(|r| {
-            col_indices
+            select
+                .columns
                 .iter()
-                .map(|&i| value_to_string(r.get(i).unwrap_or(&Value::Null)))
+                .map(|col| {
+                    if col.name == "*" {
+                        return "*".to_string();
+                    }
+                    if let Some(ref expr) = col.expression {
+                        value_to_string(&eval_expr(expr, r, table_info))
+                    } else {
+                        value_to_string(
+                            table_info
+                                .columns
+                                .iter()
+                                .position(|c| &c.name == &col.name)
+                                .and_then(|i| r.get(i))
+                                .unwrap_or(&Value::Null),
+                        )
+                    }
+                })
                 .collect()
         })
         .collect())
@@ -893,21 +962,45 @@ impl Default for RustEngine {
     }
 }
 
-fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
+fn eval_predicate(
+    expr: &Expression,
+    row: &[Value],
+    table_info: &TableInfo,
+    storage: &MemoryStorage,
+) -> bool {
     match expr {
         Expression::BinaryOp(left, op, right) => {
             let op_upper = op.to_uppercase();
             match op_upper.as_str() {
                 "AND" => {
-                    eval_predicate(left, row, table_info) && eval_predicate(right, row, table_info)
+                    let left_val = eval_expr(left, row, table_info);
+                    if matches!(left_val, Value::Boolean(false)) {
+                        return false;
+                    }
+                    let right_result = eval_predicate(right, row, table_info, storage);
+                    match sql_and(left_val, Value::Boolean(right_result)) {
+                        Value::Boolean(true) => true,
+                        _ => false,
+                    }
                 }
                 "OR" => {
-                    eval_predicate(left, row, table_info) || eval_predicate(right, row, table_info)
+                    let left_val = eval_expr(left, row, table_info);
+                    if matches!(left_val, Value::Boolean(true)) {
+                        return true;
+                    }
+                    let right_result = eval_predicate(right, row, table_info, storage);
+                    match sql_or(left_val, Value::Boolean(right_result)) {
+                        Value::Boolean(true) => true,
+                        _ => false,
+                    }
                 }
                 _ => {
                     let left_val = eval_expr(left, row, table_info);
                     let right_val = eval_expr(right, row, table_info);
-                    sql_compare(&op_upper, &left_val, &right_val)
+                    match cmp_op(&op_upper, &left_val, &right_val) {
+                        Value::Boolean(true) => true,
+                        _ => false,
+                    }
                 }
             }
         }
@@ -917,15 +1010,144 @@ fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> b
         Expression::IsNotNull(inner) => !matches!(eval_expr(inner, row, table_info), Value::Null),
         Expression::UnaryOp(op, inner) => {
             if op.to_uppercase() == "NOT" {
-                !eval_predicate(inner, row, table_info)
+                let val = eval_expr(inner, row, table_info);
+                match sql_not(val) {
+                    Value::Boolean(true) => true,
+                    _ => false,
+                }
             } else {
                 false
             }
+        }
+        Expression::In(left, subquery) => {
+            let left_val = eval_expr(left, row, table_info);
+            let subquery_result = eval_subquery(subquery, storage);
+            let result = eval_in_subquery(&left_val, &subquery_result, false);
+            matches!(result, Value::Boolean(true))
+        }
+        Expression::NotIn(left, subquery) => {
+            let left_val = eval_expr(left, row, table_info);
+            let subquery_result = eval_subquery(subquery, storage);
+            let result = eval_in_subquery(&left_val, &subquery_result, true);
+            matches!(result, Value::Boolean(true))
+        }
+        Expression::InList(left, values) => {
+            let left_val = eval_expr(left, row, table_info);
+            let result = eval_in_list(&left_val, values, false);
+            matches!(result, Value::Boolean(true))
+        }
+        Expression::NotInList(left, values) => {
+            let left_val = eval_expr(left, row, table_info);
+            let result = eval_in_list(&left_val, values, true);
+            matches!(result, Value::Boolean(true))
+        }
+        Expression::Exists(subquery) => {
+            let subquery_result = eval_subquery(subquery, storage);
+            matches!(eval_exists(&subquery_result, false), Value::Boolean(true))
+        }
+        Expression::NotExists(subquery) => {
+            let subquery_result = eval_subquery(subquery, storage);
+            matches!(eval_exists(&subquery_result, true), Value::Boolean(true))
         }
         _ => {
             let val = eval_expr(expr, row, table_info);
             matches!(val, Value::Boolean(true))
         }
+    }
+}
+
+fn eval_subquery(subquery: &SelectStatement, storage: &MemoryStorage) -> Vec<Vec<Value>> {
+    let mut results = Vec::new();
+    let table_name = subquery.first_table();
+    if let Ok(table_info) = storage.get_table_info(&table_name) {
+        if let Ok(mut rows) = storage.scan(&table_name) {
+            if let Some(ref where_clause) = subquery.where_clause {
+                rows.retain(|row| eval_predicate(where_clause, row, &table_info, storage));
+            }
+            results = rows;
+        }
+    }
+    results
+}
+
+fn eval_in_subquery(expr: &Value, subquery_result: &[Vec<Value>], negated: bool) -> Value {
+    let mut has_null = false;
+    let found = subquery_result.iter().any(|row| {
+        if row.is_empty() {
+            return false;
+        }
+        let v = &row[0];
+        match v {
+            Value::Null => {
+                has_null = true;
+                false
+            }
+            _ => {
+                if matches!(expr, Value::Null) {
+                    has_null = true;
+                    return false;
+                }
+                let expr_str = value_to_string(expr);
+                let v_str = value_to_string(v);
+                expr_str == v_str
+            }
+        }
+    });
+
+    if found {
+        Value::Boolean(!negated)
+    } else if has_null {
+        Value::Null
+    } else {
+        Value::Boolean(negated)
+    }
+}
+
+fn eval_in_list(expr: &Value, values: &[Expression], negated: bool) -> Value {
+    let mut has_null = false;
+    let found = values.iter().any(|val_expr| {
+        let v = eval_expr(val_expr, &[], &TableInfo::default());
+        match &v {
+            Value::Null => {
+                has_null = true;
+                false
+            }
+            _ => {
+                if matches!(expr, Value::Null) {
+                    has_null = true;
+                    return false;
+                }
+                let expr_str = value_to_string(expr);
+                let v_str = value_to_string(&v);
+                expr_str == v_str
+            }
+        }
+    });
+
+    if found {
+        Value::Boolean(!negated)
+    } else if has_null {
+        Value::Null
+    } else {
+        Value::Boolean(negated)
+    }
+}
+
+fn eval_exists(subquery_result: &[Vec<Value>], negated: bool) -> Value {
+    let exists = !subquery_result.is_empty();
+    Value::Boolean(if negated { !exists } else { exists })
+}
+
+/// Compare two Values using operator, returning Value (for three-valued logic)
+fn cmp_op(op: &str, left: &Value, right: &Value) -> Value {
+    match op {
+        "=" | "==" => cmp_eq(left, right),
+        "!=" | "<>" => cmp_ne(left, right),
+        ">" => cmp_gt(left, right),
+        ">=" => cmp_ge(left, right),
+        "<" => cmp_lt(left, right),
+        "<=" => cmp_le(left, right),
+        _ => Value::Null,
     }
 }
 
@@ -944,51 +1166,13 @@ fn eval_expr(expr: &Expression, row: &[Value], table_info: &TableInfo) -> Value 
             let right_val = eval_expr(right, row, table_info);
             let op = op.to_uppercase();
             match op.as_str() {
-                "+" => {
-                    if let (Value::Integer(a), Value::Integer(b)) = (&left_val, &right_val) {
-                        Value::Integer(a + b)
-                    } else if let (Value::Float(a), Value::Float(b)) = (&left_val, &right_val) {
-                        Value::Float(a + b)
-                    } else if let (Value::Integer(a), Value::Float(b)) = (&left_val, &right_val) {
-                        Value::Float(*a as f64 + b)
-                    } else if let (Value::Float(a), Value::Integer(b)) = (&left_val, &right_val) {
-                        Value::Float(a + *b as f64)
-                    } else {
-                        Value::Null
-                    }
-                }
-                "-" => {
-                    if let (Value::Integer(a), Value::Integer(b)) = (&left_val, &right_val) {
-                        Value::Integer(a - b)
-                    } else if let (Value::Float(a), Value::Float(b)) = (&left_val, &right_val) {
-                        Value::Float(a - b)
-                    } else if let (Value::Integer(a), Value::Float(b)) = (&left_val, &right_val) {
-                        Value::Float(*a as f64 - b)
-                    } else if let (Value::Float(a), Value::Integer(b)) = (&left_val, &right_val) {
-                        Value::Float(a - *b as f64)
-                    } else {
-                        Value::Null
-                    }
-                }
-                "*" => {
-                    if let (Value::Integer(a), Value::Integer(b)) = (&left_val, &right_val) {
-                        Value::Integer(a * b)
-                    } else if let (Value::Float(a), Value::Float(b)) = (&left_val, &right_val) {
-                        Value::Float(a * b)
-                    } else {
-                        Value::Null
-                    }
-                }
+                "+" => arithmetic(left_val, right_val, |x, y| x + y),
+                "-" => arithmetic(left_val, right_val, |x, y| x - y),
+                "*" => arithmetic(left_val, right_val, |x, y| x * y),
                 "/" => {
-                    if let (Value::Integer(a), Value::Integer(b)) = (&left_val, &right_val) {
-                        if *b != 0 {
-                            Value::Integer(a / b)
-                        } else {
-                            Value::Null
-                        }
-                    } else if let (Value::Float(a), Value::Float(b)) = (&left_val, &right_val) {
-                        if *b != 0.0 {
-                            Value::Float(a / b)
+                    if let (Some(x), Some(y)) = (left_val.to_number(), right_val.to_number()) {
+                        if y != 0.0 {
+                            Value::Float(x / y)
                         } else {
                             Value::Null
                         }
@@ -996,8 +1180,22 @@ fn eval_expr(expr: &Expression, row: &[Value], table_info: &TableInfo) -> Value 
                         Value::Null
                     }
                 }
+                "=" | "==" => cmp_eq(&left_val, &right_val),
+                "!=" | "<>" => cmp_ne(&left_val, &right_val),
+                ">" => cmp_gt(&left_val, &right_val),
+                ">=" => cmp_ge(&left_val, &right_val),
+                "<" => cmp_lt(&left_val, &right_val),
+                "<=" => cmp_le(&left_val, &right_val),
                 _ => Value::Null,
             }
+        }
+        Expression::IsNull(inner) => {
+            let val = eval_expr(inner, row, table_info);
+            Value::Boolean(matches!(val, Value::Null))
+        }
+        Expression::IsNotNull(inner) => {
+            let val = eval_expr(inner, row, table_info);
+            Value::Boolean(!matches!(val, Value::Null))
         }
         _ => Value::Null,
     }
@@ -1061,6 +1259,124 @@ fn sql_compare(op: &str, left: &Value, right: &Value) -> bool {
             result
         }
         _ => false,
+    }
+}
+
+/// SQL AND with three-valued logic
+/// FALSE AND xxx = FALSE (short-circuit, don't evaluate xxx)
+/// NULL AND TRUE = NULL
+/// TRUE AND TRUE = TRUE
+pub fn sql_and(a: Value, b: Value) -> Value {
+    match (&a, &b) {
+        (Value::Boolean(false), _) | (_, Value::Boolean(false)) => Value::Boolean(false),
+        (Value::Null, _) | (_, Value::Null) => Value::Null,
+        (Value::Boolean(true), Value::Boolean(true)) => Value::Boolean(true),
+        _ => Value::Null,
+    }
+}
+
+/// SQL OR with three-valued logic
+/// TRUE OR xxx = TRUE (short-circuit, don't evaluate xxx)
+/// NULL OR FALSE = NULL
+/// FALSE OR FALSE = FALSE
+pub fn sql_or(a: Value, b: Value) -> Value {
+    match (&a, &b) {
+        (Value::Boolean(true), _) | (_, Value::Boolean(true)) => Value::Boolean(true),
+        (Value::Null, _) | (_, Value::Null) => Value::Null,
+        (Value::Boolean(false), Value::Boolean(false)) => Value::Boolean(false),
+        _ => Value::Null,
+    }
+}
+
+/// SQL NOT with three-valued logic
+pub fn sql_not(v: Value) -> Value {
+    match v {
+        Value::Boolean(b) => Value::Boolean(!b),
+        Value::Null => Value::Null,
+        _ => Value::Null,
+    }
+}
+
+/// Compare equality with three-valued logic (returns Value)
+fn cmp_eq(a: &Value, b: &Value) -> Value {
+    match (a, b) {
+        (Value::Null, _) | (_, Value::Null) => Value::Null,
+        _ => Value::Boolean(a == b),
+    }
+}
+
+/// Compare greater than with three-valued logic (returns Value)
+fn cmp_gt(a: &Value, b: &Value) -> Value {
+    match (a, b) {
+        (Value::Null, _) | (_, Value::Null) => Value::Null,
+        _ => Value::Boolean(cmp_numbers(a, b) == Some(std::cmp::Ordering::Greater)),
+    }
+}
+
+/// Compare less than with three-valued logic (returns Value)
+fn cmp_lt(a: &Value, b: &Value) -> Value {
+    match (a, b) {
+        (Value::Null, _) | (_, Value::Null) => Value::Null,
+        _ => Value::Boolean(cmp_numbers(a, b) == Some(std::cmp::Ordering::Less)),
+    }
+}
+
+/// Compare greater than or equal with three-valued logic (returns Value)
+fn cmp_ge(a: &Value, b: &Value) -> Value {
+    match (a, b) {
+        (Value::Null, _) | (_, Value::Null) => Value::Null,
+        _ => {
+            let ord = cmp_numbers(a, b);
+            Value::Boolean(
+                ord == Some(std::cmp::Ordering::Greater) || ord == Some(std::cmp::Ordering::Equal),
+            )
+        }
+    }
+}
+
+/// Compare less than or equal with three-valued logic (returns Value)
+fn cmp_le(a: &Value, b: &Value) -> Value {
+    match (a, b) {
+        (Value::Null, _) | (_, Value::Null) => Value::Null,
+        _ => {
+            let ord = cmp_numbers(a, b);
+            Value::Boolean(
+                ord == Some(std::cmp::Ordering::Less) || ord == Some(std::cmp::Ordering::Equal),
+            )
+        }
+    }
+}
+
+/// Compare not equal with three-valued logic (returns Value)
+fn cmp_ne(a: &Value, b: &Value) -> Value {
+    match (a, b) {
+        (Value::Null, _) | (_, Value::Null) => Value::Null,
+        _ => Value::Boolean(cmp_numbers(a, b) != Some(std::cmp::Ordering::Equal)),
+    }
+}
+
+/// Compare two Values numerically, returning Ordering
+fn cmp_numbers(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
+    match (a, b) {
+        (Value::Integer(a_i), Value::Integer(b_i)) => Some(a_i.cmp(b_i)),
+        (Value::Float(a_f), Value::Float(b_f)) => a_f.partial_cmp(b_f),
+        (Value::Integer(a_i), Value::Float(b_f)) => (*a_i as f64).partial_cmp(b_f),
+        (Value::Float(a_f), Value::Integer(b_i)) => a_f.partial_cmp(&(*b_i as f64)),
+        (Value::Text(a_s), Value::Text(b_s)) => Some(a_s.cmp(b_s)),
+        (Value::Boolean(a_b), Value::Boolean(b_b)) => Some(a_b.cmp(b_b)),
+        _ => None,
+    }
+}
+
+/// Arithmetic operation helper using to_number
+fn arithmetic<F>(a: Value, b: Value, f: F) -> Value
+where
+    F: Fn(f64, f64) -> f64,
+{
+    use sqlrustgo_types::Value;
+    match (a.to_number(), b.to_number()) {
+        (Some(x), Some(y)) => Value::Float(f(x, y)),
+        _ => Value::Null,
     }
 }
 

@@ -740,125 +740,323 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
     /// Execute JOIN and return (rows, combined_schema)
     /// This function only generates joined rows, does NOT apply WHERE/AGG/HAVING
+    /// Collect all table names from a SELECT statement (FROM clause + JOIN clause)
+    fn collect_all_tables(select: &SelectStatement) -> Vec<String> {
+        let mut tables = Vec::new();
+        if let Some(ref from) = select.from {
+            for t in &from.tables {
+                tables.push(t.name.clone());
+            }
+        }
+        if let Some(ref jc) = select.join_clause {
+            tables.push(jc.table.clone());
+        }
+        if tables.is_empty() && !select.table.is_empty() {
+            tables.push(select.table.clone());
+        }
+        tables
+    }
+
+    /// Extract (table, column) from a column reference expression
+    fn extract_table_col(expr: &Expression) -> Option<(String, String)> {
+        match expr {
+            Expression::Identifier(name) => {
+                if let Some((tbl, col)) = name.split_once('.') {
+                    Some((tbl.to_string(), col.to_string()))
+                } else {
+                    Some((String::new(), name.clone()))
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Build an Identifier expression from a string
+    fn make_identifier(name: &str) -> Expression {
+        Expression::Identifier(name.to_string())
+    }
+
+    /// Collect all cross-table equality predicates from WHERE clause
+    /// Returns (left_table, right_table, predicate_string)
+    fn collect_join_predicates(&self, select: &SelectStatement) -> Vec<(String, String, String)> {
+        let mut predicates = Vec::new();
+
+        // Extract from ON clause (for JOIN ... ON t1.id = t2.id)
+        if let Some(ref jc) = select.join_clause {
+            fn extract_equi_joins(
+                expr: &Expression,
+                predicates: &mut Vec<(String, String, String)>,
+                extract_fn: fn(&Expression) -> Option<(String, String)>,
+            ) {
+                match expr {
+                    Expression::BinaryOp(left, op, right) if op.to_uppercase() == "=" || op == "==" => {
+                        let (lt, lc, rt, rc) = {
+                            let (t1, c1) = match extract_fn(left) {
+                                Some(x) => x,
+                                None => return,
+                            };
+                            let (t2, c2) = match extract_fn(right) {
+                                Some(x) => x,
+                                None => return,
+                            };
+                            (t1, c1, t2, c2)
+                        };
+                        if !lt.is_empty() && !rt.is_empty() && lt != rt {
+                            let left_ref = if lt.is_empty() { lc.clone() } else { format!("{}.{}", lt, lc) };
+                            let right_ref = if rt.is_empty() { rc.clone() } else { format!("{}.{}", rt, rc) };
+                            predicates.push((lt, rt, format!("{} = {}", left_ref, right_ref)));
+                        }
+                    }
+                    Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
+                        extract_equi_joins(left, predicates, extract_fn);
+                        extract_equi_joins(right, predicates, extract_fn);
+                    }
+                    _ => {}
+                }
+            }
+            extract_equi_joins(&jc.on_clause, &mut predicates, |e| Self::extract_table_col(e));
+        }
+
+        // Also extract from WHERE clause
+        if let Some(where_expr) = &select.where_clause {
+            fn extract_equi_joins(
+                expr: &Expression,
+                predicates: &mut Vec<(String, String, String)>,
+                extract_fn: fn(&Expression) -> Option<(String, String)>,
+            ) {
+                match expr {
+                    Expression::BinaryOp(left, op, right) if op.to_uppercase() == "=" || op == "==" => {
+                        let (lt, lc, rt, rc) = {
+                            let (t1, c1) = match extract_fn(left) {
+                                Some(x) => x,
+                                None => return,
+                            };
+                            let (t2, c2) = match extract_fn(right) {
+                                Some(x) => x,
+                                None => return,
+                            };
+                            (t1, c1, t2, c2)
+                        };
+                        if !lt.is_empty() && !rt.is_empty() && lt != rt {
+                            let left_ref = if lt.is_empty() { lc.clone() } else { format!("{}.{}", lt, lc) };
+                            let right_ref = if rt.is_empty() { rc.clone() } else { format!("{}.{}", rt, rc) };
+                            predicates.push((lt, rt, format!("{} = {}", left_ref, right_ref)));
+                        }
+                    }
+                    Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
+                        extract_equi_joins(left, predicates, extract_fn);
+                        extract_equi_joins(right, predicates, extract_fn);
+                    }
+                    _ => {}
+                }
+            }
+            extract_equi_joins(where_expr, &mut predicates, |e| Self::extract_table_col(e));
+        }
+
+        predicates
+    }
+
+    /// Find the join predicate connecting built_tables and candidate table
+    fn find_predicate_for_tables(
+        &self,
+        predicates: &[(String, String, String)],
+        built_tables: &std::collections::HashSet<String>,
+        candidate: &str,
+    ) -> Option<String> {
+        for (lt, rt, cond) in predicates {
+            if built_tables.contains(lt) && rt == candidate {
+                return Some(cond.clone());
+            }
+            if built_tables.contains(rt) && lt == candidate {
+                return Some(cond.clone());
+            }
+        }
+        None
+    }
+
+    /// Perform hash inner join on two row sets
+    fn hash_inner_join_rows(
+        left_rows: &[Vec<Value>],
+        right_rows: &[Vec<Value>],
+        left_key_idx: usize,
+        right_key_idx: usize,
+        left_col_count: usize,
+        right_col_count: usize,
+        join_type: JoinType,
+    ) -> SqlResult<Vec<Vec<Value>>> {
+        use std::collections::{HashMap, HashSet};
+
+        let mut right_hash: HashMap<String, Vec<Vec<Value>>> = HashMap::new();
+        for right_row in right_rows {
+            if matches!(right_row[right_key_idx], Value::Null) {
+                continue;
+            }
+            let key = format!("{:?}", right_row[right_key_idx]);
+            right_hash.entry(key).or_default().push(right_row.clone());
+        }
+
+        let mut matched: Vec<Vec<Value>> = Vec::new();
+        let mut left_matched: HashSet<usize> = HashSet::new();
+
+        for (li, left_row) in left_rows.iter().enumerate() {
+            if matches!(left_row[left_key_idx], Value::Null) {
+                continue;
+            }
+            let key = format!("{:?}", left_row[left_key_idx]);
+            if let Some(right_match_rows) = right_hash.get(&key) {
+                left_matched.insert(li);
+                for right_row in right_match_rows {
+                    let mut combined = left_row.clone();
+                    combined.extend(right_row.clone());
+                    matched.push(combined);
+                }
+            }
+        }
+
+        if matches!(join_type, JoinType::Left | JoinType::Full) {
+            for (li, left_row) in left_rows.iter().enumerate() {
+                if !left_matched.contains(&li) {
+                    let mut combined = left_row.clone();
+                    combined.extend(vec![Value::Null; right_col_count]);
+                    matched.push(combined);
+                }
+            }
+        }
+
+        Ok(matched)
+    }
+
+    /// Execute multi-table JOIN with CBO-optimized order
+    /// Replaces the old 2-table-only execute_join
     fn execute_join(&self, select: &SelectStatement) -> SqlResult<(Vec<Vec<Value>>, TableInfo)> {
         use sqlrustgo_parser::JoinType as ParserJoinType;
-        use std::collections::HashMap;
-
-        let join_clause = select.join_clause.as_ref().unwrap();
-        let left_table_name = select.table.clone();
-        let right_table_name = join_clause.table.clone();
+        use std::collections::HashSet;
 
         let storage = self.storage.read().unwrap();
 
-        // Scan both tables
-        let left_rows = storage.scan(&left_table_name)?;
-        let right_rows = storage.scan(&right_table_name)?;
+        // Step 1: Collect all tables
+        let all_tables = Self::collect_all_tables(select);
+        if all_tables.is_empty() {
+            return Ok((
+                vec![],
+                TableInfo {
+                    name: String::new(),
+                    columns: vec![],
+                    foreign_keys: vec![],
+                    unique_constraints: vec![],
+                    check_constraints: vec![],
+                    partition_info: None,
+                },
+            ));
+        }
+        if all_tables.len() == 1 {
+            let rows = storage.scan(&all_tables[0])?;
+            let info = storage.get_table_info(&all_tables[0])?;
+            return Ok((rows, info));
+        }
 
-        // Get table info for column indices
-        let left_table_info = storage.get_table_info(&left_table_name)?;
-        let right_table_info = storage.get_table_info(&right_table_name)?;
+        // Step 2: CBO - get optimal join order
+        let table_refs: Vec<&str> = all_tables.iter().map(|s| s.as_str()).collect();
+        let ordered_tables = self.optimize_join_order(&table_refs);
 
-        // Extract join key column index from ON clause
-        // For "t1.id = t2.id", we need to find which column "id" refers to in each table
-        let left_key_idx =
-            self.find_join_key_index(&join_clause.on_clause, &left_table_info, &select.table)?;
-        let right_key_idx =
-            self.find_join_key_index(&join_clause.on_clause, &right_table_info, &right_table_name)?;
+        // Step 3: Collect join predicates from WHERE clause
+        let join_preds = self.collect_join_predicates(select);
 
-        // Determine join type
-        let join_type = match join_clause.join_type {
-            ParserJoinType::Inner => JoinType::Inner,
-            ParserJoinType::Left => JoinType::Left,
-            ParserJoinType::Right => JoinType::Right,
-            ParserJoinType::Full => JoinType::Full,
-            ParserJoinType::Cross => JoinType::Cross,
-        };
+        eprintln!(
+            "[EXEC] join order = {:?}  (all_tables={:?})",
+            ordered_tables, all_tables
+        );
 
-        let left_col_count = left_table_info.columns.len();
-        let right_col_count = right_table_info.columns.len();
+        // Step 4: Chain hash joins in optimal order
+        let mut iter = ordered_tables.iter();
+        let first_table = iter.next().unwrap();
 
-        let mut matched_results = match join_type {
-            JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
-                // Hash-based matching
-                // SQL semantics: NULL = NULL is UNKNOWN (not a match), so skip NULL keys
-                let mut right_hash: HashMap<String, Vec<Vec<Value>>> = HashMap::new();
-                for right_row in &right_rows {
-                    if matches!(right_row[right_key_idx], Value::Null) {
-                        // NULL keys can never match in a join
-                        continue;
-                    }
-                    let key = format!("{:?}", right_row[right_key_idx]);
-                    right_hash.entry(key).or_default().push(right_row.clone());
+        let mut result_rows = storage.scan(first_table)?;
+        let mut result_info = storage.get_table_info(first_table)?;
+        let mut built_tables: HashSet<String> = HashSet::new();
+        built_tables.insert(first_table.to_string());
+
+        let explicit_join_type = select
+            .join_clause
+            .as_ref()
+            .map(|jc| match jc.join_type {
+                ParserJoinType::Inner => JoinType::Inner,
+                ParserJoinType::Left => JoinType::Left,
+                ParserJoinType::Right => JoinType::Right,
+                ParserJoinType::Full => JoinType::Full,
+                ParserJoinType::Cross => JoinType::Cross,
+            })
+            .unwrap_or(JoinType::Inner);
+
+        for next_table in iter {
+            let next_table_name = next_table.to_string();
+
+            let on_clause = if let Some(pred) =
+                self.find_predicate_for_tables(&join_preds, &built_tables, &next_table_name)
+            {
+                let parts: Vec<&str> = pred.split(" = ").collect();
+                if parts.len() == 2 {
+                    Expression::BinaryOp(
+                        Box::new(Self::make_identifier(parts[0].trim())),
+                        "=".to_string(),
+                        Box::new(Self::make_identifier(parts[1].trim())),
+                    )
+                } else {
+                    return Err(SqlError::ExecutionError(format!(
+                        "Cannot parse join predicate: {}",
+                        pred
+                    )));
                 }
-
-                let mut matched: Vec<Vec<Value>> = Vec::new();
-                let mut left_matched: std::collections::HashSet<usize> =
-                    std::collections::HashSet::new();
-                let mut right_matched: std::collections::HashSet<usize> =
-                    std::collections::HashSet::new();
-
-                // Match left rows to right
-                for (li, left_row) in left_rows.iter().enumerate() {
-                    // SQL semantics: NULL keys never match
-                    if matches!(left_row[left_key_idx], Value::Null) {
-                        // For LEFT JOIN, this row will be added as unmatched later
-                        continue;
-                    }
-                    let key = format!("{:?}", left_row[left_key_idx]);
-                    if let Some(right_match_rows) = right_hash.get(&key) {
-                        left_matched.insert(li);
-                        for right_row in right_match_rows {
-                            // Find the original right row index
-                            if let Some(ri) = right_rows.iter().position(|r| r == right_row) {
-                                right_matched.insert(ri);
-                            }
-                            let mut combined = left_row.clone();
-                            combined.extend(right_row.clone());
-                            matched.push(combined);
-                        }
-                    }
-                }
-
-                // For LEFT/RIGHT/FULL, add unmatched rows
-                if matches!(join_type, JoinType::Left | JoinType::Full) {
-                    for (li, left_row) in left_rows.iter().enumerate() {
-                        if !left_matched.contains(&li) {
-                            let mut combined = left_row.clone();
-                            combined.extend(vec![Value::Null; right_col_count]);
-                            matched.push(combined);
-                        }
-                    }
-                }
-
-                if matches!(join_type, JoinType::Right | JoinType::Full) {
-                    for (ri, right_row) in right_rows.iter().enumerate() {
-                        if !right_matched.contains(&ri) {
-                            let mut combined = vec![Value::Null; left_col_count];
-                            combined.extend(right_row.clone());
-                            matched.push(combined);
-                        }
+            } else {
+                // Fallback: cross join if no predicate found
+                let right_rows = storage.scan(&next_table_name)?;
+                let right_info = storage.get_table_info(&next_table_name)?;
+                let left_col_count = result_info.columns.len();
+                let right_col_count = right_info.columns.len();
+                let mut cross = Vec::new();
+                for lr in &result_rows {
+                    for rr in &right_rows {
+                        let mut combined = lr.clone();
+                        combined.extend(rr.clone());
+                        cross.push(combined);
                     }
                 }
+                result_rows = cross;
+                result_info =
+                    build_combined_schema(&result_info, &next_table_name, &right_info)?;
+                built_tables.insert(next_table_name.clone());
+                continue;
+            };
 
-                matched
-            }
-            JoinType::Cross => {
-                let mut results = Vec::new();
-                for left_row in &left_rows {
-                    for right_row in &right_rows {
-                        let mut combined = left_row.clone();
-                        combined.extend(right_row.clone());
-                        results.push(combined);
-                    }
-                }
-                results
-            }
-        };
+            let right_rows = storage.scan(&next_table_name)?;
+            let right_info = storage.get_table_info(&next_table_name)?;
+            let left_key_idx =
+                self.find_join_key_index(&on_clause, &result_info, &result_info.name)?;
+            let right_key_idx =
+                self.find_join_key_index(&on_clause, &right_info, &next_table_name)?;
+            let join_type = explicit_join_type.clone();
+            let left_col_count = result_info.columns.len();
+            let right_col_count = right_info.columns.len();
 
-        let combined_schema =
-            build_combined_schema(&left_table_info, &right_table_name, &right_table_info)?;
-        Ok((matched_results, combined_schema))
+            let joined = Self::hash_inner_join_rows(
+                &result_rows,
+                &right_rows,
+                left_key_idx,
+                right_key_idx,
+                left_col_count,
+                right_col_count,
+                join_type,
+            )?;
+
+            result_rows = joined;
+            result_info = build_combined_schema(&result_info, &next_table_name, &right_info)?;
+            built_tables.insert(next_table_name);
+        }
+
+        Ok((result_rows, result_info))
     }
+
+
 
     /// Find the column index for a join key in a table
     /// Handles both simple column names and qualified names (e.g., "t1.id")

@@ -170,6 +170,20 @@ pub enum Expr {
     Wildcard,
     /// Qualified wildcard (table.*)
     QualifiedWildcard { qualifier: String },
+    /// IN subquery expression: expr IN (SELECT ...)
+    In {
+        expr: Box<Expr>,
+        subquery: Box<LogicalPlan>,
+    },
+    /// NOT IN subquery expression: expr NOT IN (SELECT ...)
+    NotIn {
+        expr: Box<Expr>,
+        subquery: Box<LogicalPlan>,
+    },
+    /// EXISTS subquery expression: EXISTS (SELECT ...)
+    Exists(Box<LogicalPlan>),
+    /// NOT EXISTS subquery expression: NOT EXISTS (SELECT ...)
+    NotExists(Box<LogicalPlan>),
 }
 
 /// Schema containing field definitions
@@ -253,6 +267,10 @@ impl fmt::Display for Expr {
             Expr::Alias { expr, name } => write!(f, "{} AS {}", expr, name),
             Expr::Wildcard => write!(f, "*"),
             Expr::QualifiedWildcard { qualifier } => write!(f, "{}.*", qualifier),
+            Expr::In { expr, subquery: _ } => write!(f, "{} IN (subquery)", expr),
+            Expr::NotIn { expr, subquery: _ } => write!(f, "{} NOT IN (subquery)", expr),
+            Expr::Exists(_) => write!(f, "EXISTS (subquery)"),
+            Expr::NotExists(_) => write!(f, "NOT EXISTS (subquery)"),
         }
     }
 }
