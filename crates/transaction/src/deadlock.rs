@@ -42,6 +42,36 @@ impl DeadlockDetector {
         self.dfs(start, &mut visited, &mut path)
     }
 
+    /// PROOF-023 v4 alignment: pre-check if adding `from → to_set` would create a cycle.
+    /// Returns true if Reachable(to, from) for any `to in to_set`.
+    /// This is the core of "Wait(t,k) only if ~Reachable(h,t) for all h in Holder(k)".
+    pub fn would_create_cycle(&self, from: TxId, to_set: &HashSet<TxId>) -> bool {
+        for &to in to_set {
+            if self.dfs_reachable(to, from, &mut HashSet::new()) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Runtime invariant: assert NoCycle holds for all entries.
+    /// Safety net against code regressions.
+    #[cfg(debug_assertions)]
+    pub fn assert_no_cycle(&self) {
+        for (&txn, holders) in self.waits_for.iter() {
+            debug_assert!(
+                !self.would_create_cycle(txn, holders),
+                "Cycle detected at runtime: txn {:?} waits for {:?}",
+                txn, holders
+            );
+        }
+    }
+
+    #[cfg(not(debug_assertions))]
+    pub fn assert_no_cycle(&self) {
+        // no-op in release builds
+    }
+
     fn dfs(
         &self,
         current: TxId,
@@ -70,6 +100,28 @@ impl DeadlockDetector {
 
         path.pop();
         None
+    }
+
+    fn dfs_reachable(
+        &self,
+        current: TxId,
+        target: TxId,
+        visited: &mut HashSet<TxId>,
+    ) -> bool {
+        if current == target {
+            return true;
+        }
+        if !visited.insert(current) {
+            return false;
+        }
+        if let Some(holders) = self.waits_for.get(&current) {
+            for &holder in holders {
+                if self.dfs_reachable(holder, target, visited) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
