@@ -159,7 +159,7 @@ fn execute_select(
     select: &SelectStatement,
     storage: &dyn StorageEngine,
 ) -> Result<ExecutorResult, String> {
-    let table_name = &select.table;
+    let table_name = &select.first_table();
 
     // Check if table exists
     if !storage.has_table(table_name) {
@@ -208,7 +208,7 @@ fn generate_explain_output(
     select: &SelectStatement,
     storage: &dyn StorageEngine,
 ) -> Result<ExecutorResult, String> {
-    let table_name = &select.table;
+    let table_name = &select.first_table();
 
     // Get table info for schema
     let table_info = storage

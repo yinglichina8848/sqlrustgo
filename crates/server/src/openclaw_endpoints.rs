@@ -1988,8 +1988,9 @@ fn execute_sql(
 
     match statement {
         sqlrustgo_parser::Statement::Select(select) => {
-            if !storage.has_table(&select.table) {
-                return Err(format!("Table '{}' not found", select.table));
+            let table_name = select.first_table();
+            if !storage.has_table(&table_name) {
+                return Err(format!("Table '{}' not found", table_name));
             }
 
             // 创建 RuleContext（Parser → Optimizer 桥接）
@@ -2016,15 +2017,15 @@ fn execute_sql(
 
             // 如果有 index hints，记录日志（当前 endpoint 不使用 optimizer）
             if !rule_context.index_hints.is_empty() {
-                log::info!("index hints detected for table '{}': {:?} - note: optimizer not used in this endpoint", select.table, rule_context.index_hints);
+                log::info!("index hints detected for table '{}': {:?} - note: optimizer not used in this endpoint", table_name, rule_context.index_hints);
             }
 
-            let table_info = storage.get_table_info(&select.table).ok();
+            let table_info = storage.get_table_info(&table_name).ok();
             let columns = table_info
                 .map(|info| info.columns.clone())
                 .unwrap_or_default();
 
-            let rows = storage.scan(&select.table).map_err(|e| e.to_string())?;
+            let rows = storage.scan(&table_name).map_err(|e| e.to_string())?;
 
             // Apply WHERE clause filter if present
             let filtered_rows: Vec<Vec<sqlrustgo_storage::engine::Value>> =

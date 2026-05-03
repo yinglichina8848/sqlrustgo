@@ -330,3 +330,68 @@ fn test_session_state_transaction_flow() {
     }
     assert!(!session.transaction_active);
 }
+
+#[test]
+fn test_split_sql_with_embedded_quotes() {
+    let sql = "SELECT \"a;b\" FROM t; SELECT 'c;d' FROM t2";
+    let results = split_sql_statements(sql);
+    assert_eq!(results.len(), 2);
+}
+
+#[test]
+fn test_split_sql_single_quoted_string() {
+    let sql = "SELECT 'hello; world' FROM t";
+    let results = split_sql_statements(sql);
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0], "SELECT 'hello; world' FROM t");
+}
+
+#[test]
+fn test_split_sql_double_quoted_string() {
+    let sql = "SELECT \"hello; world\" FROM t";
+    let results = split_sql_statements(sql);
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0], "SELECT \"hello; world\" FROM t");
+}
+
+#[test]
+fn test_split_sql_trailing_semicolons() {
+    let sql = "SELECT 1;;; SELECT 2";
+    let results = split_sql_statements(sql);
+    assert_eq!(results.len(), 2);
+}
+
+#[test]
+fn test_session_state_default() {
+    let session = SessionState::default();
+    assert!(!session.transaction_active);
+}
+
+#[test]
+fn test_packet_zero_sequence() {
+    let pkt = Packet {
+        length: 5,
+        sequence: 0,
+        payload: vec![1, 2, 3, 4, 5],
+    };
+    assert_eq!(pkt.sequence, 0);
+    let mut buf = Vec::new();
+    pkt.write_to(&mut buf).unwrap();
+    let mut cursor = std::io::Cursor::new(buf);
+    let read = Packet::read_from(&mut cursor).unwrap();
+    assert_eq!(read.sequence, 0);
+}
+
+#[test]
+fn test_packet_max_sequence() {
+    let pkt = Packet {
+        length: 3,
+        sequence: 255,
+        payload: vec![1, 2, 3],
+    };
+    let mut buf = Vec::new();
+    pkt.write_to(&mut buf).unwrap();
+    let mut cursor = std::io::Cursor::new(buf);
+    let read = Packet::read_from(&mut cursor).unwrap();
+    assert_eq!(read.sequence, 255);
+}

@@ -266,15 +266,17 @@ impl SimpleExecutor {
     }
 
     fn execute_select(&self, select: &SelectStatement) -> Result<Vec<Vec<Value>>, String> {
+        // Use first_table() for backward compat: from.tables[0] or select.table
+        let table_name = select.first_table();
         let mut rows = self
             .storage
-            .scan(&select.table)
+            .scan(&table_name)
             .map_err(|e| format!("Scan error: {:?}", e))?;
 
         if let Some(ref where_clause) = select.where_clause {
             let table_info = self
                 .storage
-                .get_table_info(&select.table)
+                .get_table_info(&table_name)
                 .map_err(|e| format!("Get table info error: {:?}", e))?;
             rows.retain(|row| self.evaluate_where(where_clause, row, &table_info));
         }

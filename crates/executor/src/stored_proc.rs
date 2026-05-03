@@ -797,7 +797,7 @@ impl StoredProcExecutor {
                 if let sqlrustgo_parser::Statement::Select(select) = statement {
                     let storage = self.storage.read().unwrap();
                     let records = storage
-                        .scan(&select.table)
+                        .scan(&select.first_table())
                         .map_err(|e| format!("Failed to scan table: {}", e))?;
                     ctx.set_cursor_records(name, records);
                     ctx.open_cursor(name)?;
@@ -874,7 +874,7 @@ impl StoredProcExecutor {
                     }
                 }
                 let select = &with_select.select;
-                let table_name = &select.table;
+                let table_name = &select.first_table();
 
                 let records = if ctx.cte_tables.contains_key(table_name) {
                     ctx.cte_tables.get(table_name).cloned().unwrap_or_default()
@@ -909,7 +909,7 @@ impl StoredProcExecutor {
                 Ok(())
             }
             sqlrustgo_parser::Statement::Select(select) => {
-                let table_name = &select.table;
+                let table_name = &select.first_table();
 
                 // Handle SELECT without FROM (e.g., SELECT 1, SELECT 'hello', SELECT NULL)
                 let records = if table_name.is_empty() {
@@ -965,7 +965,7 @@ impl StoredProcExecutor {
                 if let Some(ref select) = insert.select {
                     let storage = self.storage.read().unwrap();
                     let records = storage
-                        .scan(&select.table)
+                        .scan(&select.first_table())
                         .map_err(|e| format!("Failed to scan table: {}", e))?;
 
                     let selected_rows: Vec<Vec<Value>> =
@@ -1362,7 +1362,7 @@ impl StoredProcExecutor {
             Ok(s) => s,
             Err(_) => return Vec::new(),
         };
-        let records = match storage.scan(&select.table) {
+        let records = match storage.scan(&select.first_table()) {
             Ok(r) => r,
             Err(_) => return Vec::new(),
         };
@@ -1391,7 +1391,7 @@ impl StoredProcExecutor {
     ) -> Result<Vec<Vec<Value>>, String> {
         match statement {
             sqlrustgo_parser::Statement::Select(select) => {
-                let table_name = &select.table;
+                let table_name = &select.first_table();
                 let storage = self.storage.read().unwrap();
                 let records = storage
                     .scan(table_name)
