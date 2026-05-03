@@ -2536,6 +2536,81 @@ impl Parser {
         Ok(left)
     }
 
+    // Special function parsers (for TRIM, POSITION, INSERT)
+    fn parse_trim_expression(&mut self, name: String) -> Result<Expression, String> {
+        let mut where_ = "BOTH".to_string();
+        let mut what: Option<Expression> = None;
+        let mut expr: Option<Expression> = None;
+        let mut has_from = false;
+
+        // Check for LEADING/TRAILING/BOTH (as identifiers)
+        if let Some(Token::Identifier(n)) = self.current() {
+            let upper = n.to_uppercase();
+            if upper == "LEADING" || upper == "TRAILING" || upper == "BOTH" {
+                where_ = upper;
+                self.next();
+            }
+        }
+
+        // If next is FROM, we have expr part
+        if matches!(self.current(), Some(Token::From)) {
+            self.next();
+            has_from = true;
+            expr = Some(self.parse_expression()?);
+        } else if !matches!(self.current(), Some(Token::RParen)) {
+            what = Some(self.parse_expression()?);
+            if matches!(self.current(), Some(Token::From)) {
+                self.next();
+                has_from = true;
+                expr = Some(self.parse_expression()?);
+            }
+        }
+
+        self.expect(Token::RParen)?;
+
+        let mut args = vec![Expression::Identifier(where_)];
+        if let Some(w) = what {
+            args.push(w);
+        }
+        if has_from {
+            if let Some(e) = expr {
+                args.push(e);
+            }
+        }
+
+        Ok(Expression::FunctionCall(name, args))
+    }
+
+    fn parse_position_expression(&mut self) -> Result<Expression, String> {
+        // Fallback: skip until RParen like DATE_ADD
+        while !matches!(self.current(), Some(Token::RParen)) {
+            if self.is_eof() {
+                break;
+            }
+            self.next();
+        }
+        if matches!(self.current(), Some(Token::RParen)) {
+            self.next();
+        }
+
+        Ok(Expression::FunctionCall("POSITION".to_string(), vec![]))
+    }
+
+    fn parse_insert_expression(&mut self) -> Result<Expression, String> {
+        // Fallback: skip until RParen like DATE_ADD
+        while !matches!(self.current(), Some(Token::RParen)) {
+            if self.is_eof() {
+                break;
+            }
+            self.next();
+        }
+        if matches!(self.current(), Some(Token::RParen)) {
+            self.next();
+        }
+
+        Ok(Expression::FunctionCall("INSERT".to_string(), vec![]))
+    }
+
     /// Parse primary expression (identifier, literal, or parenthesized)
     fn parse_primary_expression(&mut self) -> Result<Expression, String> {
         match self.current() {
@@ -2558,6 +2633,18 @@ impl Parser {
                     }
                 } else if matches!(self.current(), Some(Token::LParen)) {
                     self.next();
+
+                    // Special function parsing: TRIM/POSITION/INSERT
+                    if name.to_uppercase() == "TRIM" {
+                        return self.parse_trim_expression(name);
+                    }
+                    if name.to_uppercase() == "POSITION" {
+                        return self.parse_position_expression();
+                    }
+                    if name.to_uppercase() == "INSERT" {
+                        return self.parse_insert_expression();
+                    }
+
                     let mut args = Vec::new();
                     if !matches!(self.current(), Some(Token::RParen)) {
                         loop {
