@@ -1,9 +1,9 @@
-use sqlrustgo_types::Value;
+use sqllogictest::{DBOutput, DefaultColumnType, DB};
+use sqlrustgo::{ExecutorResult, MemoryStorage as MemStorage};
 use sqlrustgo_parser::parse;
 use sqlrustgo_parser::Statement;
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
-use sqlrustgo::{ExecutorResult, MemoryStorage as MemStorage};
-use sqllogictest::{DB, DBOutput, DefaultColumnType};
+use sqlrustgo_types::Value;
 
 #[derive(Debug)]
 pub struct DbError(pub String);
@@ -49,13 +49,23 @@ impl Default for EngineAdapter {
 fn value_to_string(v: Value) -> String {
     match v {
         Value::Null => "NULL".to_string(),
-        Value::Boolean(b) => if b { "TRUE".to_string() } else { "FALSE".to_string() },
+        Value::Boolean(b) => {
+            if b {
+                "TRUE".to_string()
+            } else {
+                "FALSE".to_string()
+            }
+        }
         Value::Integer(i) => i.to_string(),
         Value::Float(f) => {
             if f.is_nan() {
                 "NaN".to_string()
             } else if f.is_infinite() {
-                if f.is_sign_positive() { "Infinity".to_string() } else { "-Infinity".to_string() }
+                if f.is_sign_positive() {
+                    "Infinity".to_string()
+                } else {
+                    "-Infinity".to_string()
+                }
             } else {
                 f.to_string()
             }
@@ -98,12 +108,8 @@ fn execute_sql(storage: &mut MemoryStorage, sql: &str) -> Result<ExecutorResult,
                 .map_err(|e| format!("Drop table error: {:?}", e))?;
             Ok(ExecutorResult::new(vec![], 0))
         }
-        Statement::Insert(_) => {
-            Ok(ExecutorResult::new(vec![], 0))
-        }
-        Statement::Select(_) => {
-            Ok(ExecutorResult::new(vec![], 0))
-        }
+        Statement::Insert(_) => Ok(ExecutorResult::new(vec![], 0)),
+        Statement::Select(_) => Ok(ExecutorResult::new(vec![], 0)),
         _ => Ok(ExecutorResult::new(vec![], 0)),
     }
 }

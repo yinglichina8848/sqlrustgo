@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 use sqlrustgo_parser::parse;
 use sqlrustgo_parser::Statement;
-use sqlrustgo_parser::{Expression, SelectColumn, AggregateFunction, JoinType};
+use sqlrustgo_parser::{AggregateFunction, Expression, JoinType, SelectColumn, SelectStatement};
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
 use std::sync::{Arc, RwLock};
@@ -11,13 +11,23 @@ type Row = Vec<String>;
 fn value_to_string(v: &Value) -> String {
     match v {
         Value::Null => "NULL".to_string(),
-        Value::Boolean(b) => if *b { "TRUE".to_string() } else { "FALSE".to_string() },
+        Value::Boolean(b) => {
+            if *b {
+                "TRUE".to_string()
+            } else {
+                "FALSE".to_string()
+            }
+        }
         Value::Integer(i) => i.to_string(),
         Value::Float(f) => {
             if f.is_nan() {
                 "NaN".to_string()
             } else if f.is_infinite() {
-                if f.is_sign_positive() { "Infinity".to_string() } else { "-Infinity".to_string() }
+                if f.is_sign_positive() {
+                    "Infinity".to_string()
+                } else {
+                    "-Infinity".to_string()
+                }
             } else {
                 f.to_string()
             }
@@ -35,8 +45,9 @@ fn literal_to_value(s: &str) -> Value {
         Value::Integer(i)
     } else if let Ok(f) = s.parse::<f64>() {
         Value::Float(f)
-    } else if (s.starts_with('\'') && s.ends_with('\'')) || (s.starts_with('"') && s.ends_with('"')) {
-        Value::Text(s[1..s.len()-1].to_string())
+    } else if (s.starts_with('\'') && s.ends_with('\'')) || (s.starts_with('"') && s.ends_with('"'))
+    {
+        Value::Text(s[1..s.len() - 1].to_string())
     } else if s.eq_ignore_ascii_case("TRUE") {
         Value::Boolean(true)
     } else if s.eq_ignore_ascii_case("FALSE") {
@@ -177,18 +188,29 @@ impl RustEngine {
 
         match statement {
             Statement::Select(select) => {
-                let storage = self.storage.read().map_err(|e| format!("Lock error: {:?}", e))?;
+                let storage = self
+                    .storage
+                    .read()
+                    .map_err(|e| format!("Lock error: {:?}", e))?;
 
                 // Handle JOIN
                 if let Some(ref join) = select.join_clause {
                     let left_table = select.first_table();
                     let right_table = &join.table;
 
-                    let left_info = storage.get_table_info(&left_table).map_err(|e| format!("Table error: {:?}", e))?;
-                    let right_info = storage.get_table_info(right_table).map_err(|e| format!("Table error: {:?}", e))?;
+                    let left_info = storage
+                        .get_table_info(&left_table)
+                        .map_err(|e| format!("Table error: {:?}", e))?;
+                    let right_info = storage
+                        .get_table_info(right_table)
+                        .map_err(|e| format!("Table error: {:?}", e))?;
 
-                    let left_rows = storage.scan(&left_table).map_err(|e| format!("Scan error: {:?}", e))?;
-                    let right_rows = storage.scan(right_table).map_err(|e| format!("Scan error: {:?}", e))?;
+                    let left_rows = storage
+                        .scan(&left_table)
+                        .map_err(|e| format!("Scan error: {:?}", e))?;
+                    let right_rows = storage
+                        .scan(right_table)
+                        .map_err(|e| format!("Scan error: {:?}", e))?;
 
                     // Build combined schema for eval_join_expr
                     let mut combined_info = left_info.clone();
@@ -203,7 +225,12 @@ impl RustEngine {
                                 for right_row in &right_rows {
                                     let mut combined = left_row.clone();
                                     combined.extend(right_row.clone());
-                                    if eval_join_expr(&join.on_clause, &combined, &left_info, &right_info) {
+                                    if eval_join_expr(
+                                        &join.on_clause,
+                                        &combined,
+                                        &left_info,
+                                        &right_info,
+                                    ) {
                                         rows.push(combined);
                                     }
                                 }
@@ -217,14 +244,21 @@ impl RustEngine {
                                 for right_row in &right_rows {
                                     let mut combined = left_row.clone();
                                     combined.extend(right_row.clone());
-                                    if eval_join_expr(&join.on_clause, &combined, &left_info, &right_info) {
+                                    if eval_join_expr(
+                                        &join.on_clause,
+                                        &combined,
+                                        &left_info,
+                                        &right_info,
+                                    ) {
                                         rows.push(combined);
                                         matched = true;
                                     }
                                 }
                                 if !matched {
                                     let mut combined = left_row.clone();
-                                    combined.extend(vec![Value::Null; right_info.columns.len()].into_iter());
+                                    combined.extend(
+                                        vec![Value::Null; right_info.columns.len()].into_iter(),
+                                    );
                                     rows.push(combined);
                                 }
                             }
@@ -238,7 +272,284 @@ impl RustEngine {
                         result_rows.retain(|row| eval_predicate(where_expr, row, &combined_info));
                     }
 
-                    // Projection and output
+                    // Handle GROUP BY after JOIN
+                    if !select.group_by.is_empty() {
+                        let left_col_count = left_info.columns.len();
+                        let group_indices: Vec<(usize, Option<usize>)> = select
+                            .group_by
+                            .iter()
+                            .filter_map(|expr| {
+                                if let Expression::Identifier(name) = expr {
+                                    let (table_name, col_name) =
+                                        if let Some(dot_pos) = name.find('.') {
+                                            (Some(&name[..dot_pos]), &name[dot_pos + 1..])
+                                        } else {
+                                            (None, name.as_str())
+                                        };
+                                    if let Some(table) = table_name {
+                                        if table == left_info.name {
+                                            if let Some(idx) = left_info
+                                                .columns
+                                                .iter()
+                                                .position(|c| &c.name == col_name)
+                                            {
+                                                return Some((idx, None));
+                                            }
+                                        } else {
+                                            if let Some(idx) = right_info
+                                                .columns
+                                                .iter()
+                                                .position(|c| &c.name == col_name)
+                                            {
+                                                return Some((left_col_count + idx, None));
+                                            }
+                                        }
+                                        None
+                                    } else {
+                                        if let Some(idx) = combined_info
+                                            .columns
+                                            .iter()
+                                            .position(|c| &c.name == col_name)
+                                        {
+                                            Some((idx, None))
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+
+                        let mut groups: std::collections::HashMap<Vec<String>, Vec<&Vec<Value>>> =
+                            std::collections::HashMap::new();
+                        for row in &result_rows {
+                            let key: Vec<String> = group_indices
+                                .iter()
+                                .map(|(i, _)| value_to_string(row.get(*i).unwrap_or(&Value::Null)))
+                                .collect();
+                            groups.entry(key).or_default().push(row);
+                        }
+
+                        let mut rows_after_group: Vec<Vec<Value>> = groups
+                            .into_iter()
+                            .map(|(key, group_rows)| {
+                                let mut result_row: Vec<Value> =
+                                    key.into_iter().map(|s| literal_to_value(&s)).collect();
+                                if !select.aggregates.is_empty() {
+                                    for agg in &select.aggregates {
+                                        let val = match agg.func {
+                                            AggregateFunction::Count => {
+                                                if agg.args.is_empty() {
+                                                    Value::Integer(group_rows.len() as i64)
+                                                } else if let Some(expr) = agg.args.first() {
+                                                    if let Expression::Identifier(ref col_name) =
+                                                        expr
+                                                    {
+                                                        let (table_name, col_only) =
+                                                            if let Some(dot_pos) =
+                                                                col_name.find('.')
+                                                            {
+                                                                (
+                                                                    Some(&col_name[..dot_pos]),
+                                                                    &col_name[dot_pos + 1..],
+                                                                )
+                                                            } else {
+                                                                (None, col_name.as_str())
+                                                            };
+                                                        let idx = if let Some(table) = table_name {
+                                                            if table == left_info.name {
+                                                                left_info.columns.iter().position(
+                                                                    |c| &c.name == col_only,
+                                                                )
+                                                            } else {
+                                                                right_info.columns.iter().position(
+                                                                    |c| &c.name == col_only,
+                                                                )
+                                                            }
+                                                            .map(|i| {
+                                                                if table == left_info.name {
+                                                                    i
+                                                                } else {
+                                                                    left_col_count + i
+                                                                }
+                                                            })
+                                                        } else {
+                                                            combined_info
+                                                                .columns
+                                                                .iter()
+                                                                .position(|c| &c.name == col_only)
+                                                        };
+                                                        if let Some(i) = idx {
+                                                            let count = group_rows
+                                                                .iter()
+                                                                .filter(|r| {
+                                                                    !matches!(
+                                                                        r.get(i),
+                                                                        Some(Value::Null)
+                                                                    )
+                                                                })
+                                                                .count();
+                                                            Value::Integer(count as i64)
+                                                        } else {
+                                                            Value::Integer(0)
+                                                        }
+                                                    } else {
+                                                        Value::Null
+                                                    }
+                                                } else {
+                                                    Value::Null
+                                                }
+                                            }
+                                            AggregateFunction::Sum => {
+                                                if let Some(expr) = agg.args.first() {
+                                                    if let Expression::Identifier(ref col_name) =
+                                                        expr
+                                                    {
+                                                        let (table_name, col_only) =
+                                                            if let Some(dot_pos) =
+                                                                col_name.find('.')
+                                                            {
+                                                                (
+                                                                    Some(&col_name[..dot_pos]),
+                                                                    &col_name[dot_pos + 1..],
+                                                                )
+                                                            } else {
+                                                                (None, col_name.as_str())
+                                                            };
+                                                        let idx = if let Some(table) = table_name {
+                                                            if table == left_info.name {
+                                                                left_info.columns.iter().position(
+                                                                    |c| &c.name == col_only,
+                                                                )
+                                                            } else {
+                                                                right_info.columns.iter().position(
+                                                                    |c| &c.name == col_only,
+                                                                )
+                                                            }
+                                                            .map(|i| {
+                                                                if table == left_info.name {
+                                                                    i
+                                                                } else {
+                                                                    left_col_count + i
+                                                                }
+                                                            })
+                                                        } else {
+                                                            combined_info
+                                                                .columns
+                                                                .iter()
+                                                                .position(|c| &c.name == col_only)
+                                                        };
+                                                        if let Some(i) = idx {
+                                                            let sum: i64 = group_rows
+                                                                .iter()
+                                                                .filter_map(|r| r.get(i))
+                                                                .filter_map(|v| {
+                                                                    if let Value::Integer(i) = v {
+                                                                        Some(*i)
+                                                                    } else {
+                                                                        None
+                                                                    }
+                                                                })
+                                                                .sum();
+                                                            Value::Integer(sum)
+                                                        } else {
+                                                            Value::Null
+                                                        }
+                                                    } else {
+                                                        Value::Null
+                                                    }
+                                                } else {
+                                                    Value::Null
+                                                }
+                                            }
+                                            _ => Value::Null,
+                                        };
+                                        result_row.push(val);
+                                    }
+                                }
+                                result_row
+                            })
+                            .collect();
+                        result_rows = rows_after_group;
+                        if !select.aggregates.is_empty() {
+                            return Ok(result_rows
+                                .into_iter()
+                                .map(|r| r.into_iter().map(|v| value_to_string(&v)).collect())
+                                .collect());
+                        }
+                    } else if !select.aggregates.is_empty() {
+                        let mut result_row: Vec<Value> = Vec::new();
+                        for agg in &select.aggregates {
+                            let val = match agg.func {
+                                AggregateFunction::Count => {
+                                    if agg.args.is_empty() {
+                                        Value::Integer(result_rows.len() as i64)
+                                    } else if let Some(expr) = agg.args.first() {
+                                        if let Expression::Identifier(ref col_name) = expr {
+                                            if let Some(idx) = combined_info
+                                                .columns
+                                                .iter()
+                                                .position(|c| &c.name == col_name)
+                                            {
+                                                let count = result_rows
+                                                    .iter()
+                                                    .filter(|r| {
+                                                        !matches!(r.get(idx), Some(Value::Null))
+                                                    })
+                                                    .count();
+                                                Value::Integer(count as i64)
+                                            } else {
+                                                Value::Null
+                                            }
+                                        } else {
+                                            Value::Null
+                                        }
+                                    } else {
+                                        Value::Null
+                                    }
+                                }
+                                AggregateFunction::Sum => {
+                                    if let Some(expr) = agg.args.first() {
+                                        if let Expression::Identifier(ref col_name) = expr {
+                                            if let Some(idx) = combined_info
+                                                .columns
+                                                .iter()
+                                                .position(|c| &c.name == col_name)
+                                            {
+                                                let sum: i64 = result_rows
+                                                    .iter()
+                                                    .filter_map(|r| r.get(idx))
+                                                    .filter_map(|v| {
+                                                        if let Value::Integer(i) = v {
+                                                            Some(*i)
+                                                        } else {
+                                                            None
+                                                        }
+                                                    })
+                                                    .sum();
+                                                Value::Integer(sum)
+                                            } else {
+                                                Value::Null
+                                            }
+                                        } else {
+                                            Value::Null
+                                        }
+                                    } else {
+                                        Value::Null
+                                    }
+                                }
+                                _ => Value::Null,
+                            };
+                            result_row.push(val);
+                        }
+                        return Ok(vec![result_row
+                            .into_iter()
+                            .map(|v| value_to_string(&v))
+                            .collect()]);
+                    }
+
                     return project_rows(&select, &result_rows, &combined_info);
                 }
 
@@ -257,56 +568,108 @@ impl RustEngine {
                 }
 
                 if !select.group_by.is_empty() {
-                    let group_indices: Vec<usize> = select.group_by.iter().filter_map(|expr| {
-                        if let Expression::Identifier(name) = expr {
-                            table_info.columns.iter().position(|c| &c.name == name)
-                        } else {
-                            None
-                        }
-                    }).collect();
+                    let group_indices: Vec<usize> = select
+                        .group_by
+                        .iter()
+                        .filter_map(|expr| {
+                            if let Expression::Identifier(name) = expr {
+                                table_info.columns.iter().position(|c| &c.name == name)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
 
-                    let mut groups: std::collections::HashMap<Vec<String>, Vec<&Vec<Value>>> = std::collections::HashMap::new();
+                    let mut groups: std::collections::HashMap<Vec<String>, Vec<&Vec<Value>>> =
+                        std::collections::HashMap::new();
                     for row in &rows {
-                        let key: Vec<String> = group_indices.iter()
+                        let key: Vec<String> = group_indices
+                            .iter()
                             .map(|&i| value_to_string(row.get(i).unwrap_or(&Value::Null)))
                             .collect();
                         groups.entry(key).or_default().push(row);
                     }
 
-                    let mut result_rows: Vec<Row> = groups.into_iter().map(|(key, group_rows)| {
-                        let mut result_row: Row = key;
-                        if !select.aggregates.is_empty() {
-                            for agg in &select.aggregates {
-                                let val = match agg.func {
-                                    AggregateFunction::Count => Value::Integer(group_rows.len() as i64),
-                                    AggregateFunction::Sum => {
-                                        if let Some(expr) = agg.args.first() {
-                                            if let Expression::Identifier(ref col_name) = expr {
-                                                if let Some(idx) = table_info.columns.iter().position(|c| &c.name == col_name) {
-                                                    let sum: i64 = group_rows.iter()
-                                                        .filter_map(|r| r.get(idx))
-                                                        .filter_map(|v| {
-                                                            if let Value::Integer(i) = v { Some(*i) } else { None }
-                                                        })
-                                                        .sum();
-                                                    Value::Integer(sum)
+                    let mut result_rows: Vec<Row> = groups
+                        .into_iter()
+                        .map(|(key, group_rows)| {
+                            let mut result_row: Row = key;
+                            if !select.aggregates.is_empty() {
+                                for agg in &select.aggregates {
+                                    let val = match agg.func {
+                                        AggregateFunction::Count => {
+                                            if agg.args.is_empty() {
+                                                Value::Integer(group_rows.len() as i64)
+                                            } else if let Some(expr) = agg.args.first() {
+                                                if let Expression::Identifier(ref col_name) = expr {
+                                                    if let Some(idx) = table_info
+                                                        .columns
+                                                        .iter()
+                                                        .position(|c| &c.name == col_name)
+                                                    {
+                                                        let count = group_rows
+                                                            .iter()
+                                                            .filter(|r| {
+                                                                !matches!(
+                                                                    r.get(idx),
+                                                                    Some(Value::Null)
+                                                                )
+                                                            })
+                                                            .count();
+                                                        Value::Integer(count as i64)
+                                                    } else {
+                                                        Value::Null
+                                                    }
                                                 } else {
                                                     Value::Null
                                                 }
                                             } else {
                                                 Value::Null
                                             }
-                                        } else {
-                                            Value::Null
                                         }
-                                    }
-                                    _ => Value::Null,
-                                };
-                                result_row.push(value_to_string(&val));
+                                        AggregateFunction::Sum => {
+                                            if let Some(expr) = agg.args.first() {
+                                                if let Expression::Identifier(ref col_name) = expr {
+                                                    if let Some(idx) = table_info
+                                                        .columns
+                                                        .iter()
+                                                        .position(|c| &c.name == col_name)
+                                                    {
+                                                        let sum: i64 = group_rows
+                                                            .iter()
+                                                            .filter_map(|r| r.get(idx))
+                                                            .filter_map(|v| {
+                                                                if let Value::Integer(i) = v {
+                                                                    Some(*i)
+                                                                } else {
+                                                                    None
+                                                                }
+                                                            })
+                                                            .sum();
+                                                        Value::Integer(sum)
+                                                    } else {
+                                                        Value::Null
+                                                    }
+                                                } else {
+                                                    Value::Null
+                                                }
+                                            } else {
+                                                Value::Null
+                                            }
+                                        }
+                                        _ => Value::Null,
+                                    };
+                                    result_row.push(value_to_string(&val));
+                                }
                             }
-                        }
-                        result_row
-                    }).collect();
+                            result_row
+                        })
+                        .collect();
+
+                    if let Some(ref having_expr) = select.having {
+                        result_rows
+                            .retain(|row| eval_having(having_expr, row, &select.group_by, &select));
+                    }
 
                     result_rows.sort();
                     return Ok(result_rows);
@@ -318,15 +681,50 @@ impl RustEngine {
 
                     for agg in &select.aggregates {
                         let val = match agg.func {
-                            AggregateFunction::Count => Value::Integer(rows.len() as i64),
+                            AggregateFunction::Count => {
+                                if agg.args.is_empty() {
+                                    Value::Integer(rows.len() as i64)
+                                } else if let Some(expr) = agg.args.first() {
+                                    if let Expression::Identifier(ref col_name) = expr {
+                                        if let Some(idx) = table_info
+                                            .columns
+                                            .iter()
+                                            .position(|c| &c.name == col_name)
+                                        {
+                                            let count = rows
+                                                .iter()
+                                                .filter(|r| {
+                                                    !matches!(r.get(idx), Some(Value::Null))
+                                                })
+                                                .count();
+                                            Value::Integer(count as i64)
+                                        } else {
+                                            Value::Null
+                                        }
+                                    } else {
+                                        Value::Null
+                                    }
+                                } else {
+                                    Value::Null
+                                }
+                            }
                             AggregateFunction::Sum => {
                                 if let Some(expr) = agg.args.first() {
                                     if let Expression::Identifier(ref col_name) = expr {
-                                        if let Some(idx) = table_info.columns.iter().position(|c| &c.name == col_name) {
-                                            let sum: i64 = rows.iter()
+                                        if let Some(idx) = table_info
+                                            .columns
+                                            .iter()
+                                            .position(|c| &c.name == col_name)
+                                        {
+                                            let sum: i64 = rows
+                                                .iter()
                                                 .filter_map(|r| r.get(idx))
                                                 .filter_map(|v| {
-                                                    if let Value::Integer(i) = v { Some(*i) } else { None }
+                                                    if let Value::Integer(i) = v {
+                                                        Some(*i)
+                                                    } else {
+                                                        None
+                                                    }
                                                 })
                                                 .sum();
                                             Value::Integer(sum)
@@ -356,13 +754,24 @@ impl RustEngine {
     }
 }
 
-fn eval_join_expr(expr: &Expression, row: &[Value], left_info: &TableInfo, right_info: &TableInfo) -> bool {
+fn eval_join_expr(
+    expr: &Expression,
+    row: &[Value],
+    left_info: &TableInfo,
+    right_info: &TableInfo,
+) -> bool {
     match expr {
         Expression::BinaryOp(left, op, right) => {
             let op_upper = op.to_uppercase();
             match op_upper.as_str() {
-                "AND" => eval_join_expr(left, row, left_info, right_info) && eval_join_expr(right, row, left_info, right_info),
-                "OR" => eval_join_expr(left, row, left_info, right_info) || eval_join_expr(right, row, left_info, right_info),
+                "AND" => {
+                    eval_join_expr(left, row, left_info, right_info)
+                        && eval_join_expr(right, row, left_info, right_info)
+                }
+                "OR" => {
+                    eval_join_expr(left, row, left_info, right_info)
+                        || eval_join_expr(right, row, left_info, right_info)
+                }
                 "=" | "==" => {
                     let left_val = eval_join_expr_val(left, row, left_info, right_info);
                     let right_val = eval_join_expr_val(right, row, left_info, right_info);
@@ -375,8 +784,14 @@ fn eval_join_expr(expr: &Expression, row: &[Value], left_info: &TableInfo, right
                 }
             }
         }
-        Expression::IsNull(inner) => matches!(eval_join_expr_val(inner, row, left_info, right_info), Value::Null),
-        Expression::IsNotNull(inner) => !matches!(eval_join_expr_val(inner, row, left_info, right_info), Value::Null),
+        Expression::IsNull(inner) => matches!(
+            eval_join_expr_val(inner, row, left_info, right_info),
+            Value::Null
+        ),
+        Expression::IsNotNull(inner) => !matches!(
+            eval_join_expr_val(inner, row, left_info, right_info),
+            Value::Null
+        ),
         _ => {
             let val = eval_join_expr_val(expr, row, left_info, right_info);
             matches!(val, Value::Boolean(true))
@@ -384,7 +799,12 @@ fn eval_join_expr(expr: &Expression, row: &[Value], left_info: &TableInfo, right
     }
 }
 
-fn eval_join_expr_val(expr: &Expression, row: &[Value], left_info: &TableInfo, right_info: &TableInfo) -> Value {
+fn eval_join_expr_val(
+    expr: &Expression,
+    row: &[Value],
+    left_info: &TableInfo,
+    right_info: &TableInfo,
+) -> Value {
     match expr {
         Expression::Identifier(name) => {
             if let Some(dot_pos) = name.find('.') {
@@ -418,7 +838,7 @@ fn eval_join_expr_val(expr: &Expression, row: &[Value], left_info: &TableInfo, r
 
 fn sql_eq(left: &Value, right: &Value) -> bool {
     match (left, right) {
-        (Value::Null, Value::Null) => true,
+        (Value::Null, Value::Null) => false,
         (Value::Null, _) => false,
         (_, Value::Null) => false,
         (Value::Integer(a), Value::Integer(b)) => a == b,
@@ -429,22 +849,42 @@ fn sql_eq(left: &Value, right: &Value) -> bool {
     }
 }
 
-fn project_rows(select: &sqlrustgo_parser::SelectStatement, rows: &[Vec<Value>], table_info: &TableInfo) -> Result<Vec<Row>, String> {
+fn project_rows(
+    select: &sqlrustgo_parser::SelectStatement,
+    rows: &[Vec<Value>],
+    table_info: &TableInfo,
+) -> Result<Vec<Row>, String> {
     if select.columns.is_empty() || select.columns.iter().all(|c| c.name == "*") {
-        return Ok(rows.iter().map(|r| r.iter().map(value_to_string).collect()).collect());
+        return Ok(rows
+            .iter()
+            .map(|r| r.iter().map(value_to_string).collect())
+            .collect());
     }
 
-    let col_indices: Vec<usize> = select.columns.iter().filter_map(|c| {
-        if c.name == "*" {
-            None
-        } else {
-            table_info.columns.iter().position(|col| &col.name == &c.name)
-        }
-    }).collect();
+    let col_indices: Vec<usize> = select
+        .columns
+        .iter()
+        .filter_map(|c| {
+            if c.name == "*" {
+                None
+            } else {
+                table_info
+                    .columns
+                    .iter()
+                    .position(|col| &col.name == &c.name)
+            }
+        })
+        .collect();
 
-    Ok(rows.iter().map(|r| {
-        col_indices.iter().map(|&i| value_to_string(r.get(i).unwrap_or(&Value::Null))).collect()
-    }).collect())
+    Ok(rows
+        .iter()
+        .map(|r| {
+            col_indices
+                .iter()
+                .map(|&i| value_to_string(r.get(i).unwrap_or(&Value::Null)))
+                .collect()
+        })
+        .collect())
 }
 
 impl Default for RustEngine {
@@ -458,8 +898,12 @@ fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> b
         Expression::BinaryOp(left, op, right) => {
             let op_upper = op.to_uppercase();
             match op_upper.as_str() {
-                "AND" => eval_predicate(left, row, table_info) && eval_predicate(right, row, table_info),
-                "OR" => eval_predicate(left, row, table_info) || eval_predicate(right, row, table_info),
+                "AND" => {
+                    eval_predicate(left, row, table_info) && eval_predicate(right, row, table_info)
+                }
+                "OR" => {
+                    eval_predicate(left, row, table_info) || eval_predicate(right, row, table_info)
+                }
                 _ => {
                     let left_val = eval_expr(left, row, table_info);
                     let right_val = eval_expr(right, row, table_info);
@@ -470,9 +914,7 @@ fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> b
         Expression::IsNull(inner) => {
             matches!(eval_expr(inner, row, table_info), Value::Null)
         }
-        Expression::IsNotNull(inner) => {
-            !matches!(eval_expr(inner, row, table_info), Value::Null)
-        }
+        Expression::IsNotNull(inner) => !matches!(eval_expr(inner, row, table_info), Value::Null),
         Expression::UnaryOp(op, inner) => {
             if op.to_uppercase() == "NOT" {
                 !eval_predicate(inner, row, table_info)
@@ -563,18 +1005,16 @@ fn eval_expr(expr: &Expression, row: &[Value], table_info: &TableInfo) -> Value 
 
 fn sql_compare(op: &str, left: &Value, right: &Value) -> bool {
     match op {
-        "=" | "==" => {
-            match (left, right) {
-                (Value::Null, Value::Null) => true,
-                (Value::Null, _) => false,
-                (_, Value::Null) => false,
-                (Value::Integer(a), Value::Integer(b)) => a == b,
-                (Value::Float(a), Value::Float(b)) => (a - b).abs() < 1e-9,
-                (Value::Text(a), Value::Text(b)) => a == b,
-                (Value::Boolean(a), Value::Boolean(b)) => a == b,
-                _ => false,
-            }
-        }
+        "=" | "==" => match (left, right) {
+            (Value::Null, Value::Null) => true,
+            (Value::Null, _) => false,
+            (_, Value::Null) => false,
+            (Value::Integer(a), Value::Integer(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => (a - b).abs() < 1e-9,
+            (Value::Text(a), Value::Text(b)) => a == b,
+            (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            _ => false,
+        },
         "!=" | "<>" => !sql_compare("=", left, right),
         ">" => {
             let result = match (left, right) {
@@ -725,5 +1165,163 @@ mod tests {
 
         let result = sqlite.query("SELECT SUM(amount) FROM orders").unwrap();
         assert_eq!(result[0][0], "450");
+    }
+}
+
+/// Evaluate HAVING expression on aggregated result rows.
+/// row_idxs maps column names to their indices in the result row.
+fn eval_having(
+    expr: &Expression,
+    row: &[String],
+    group_by: &[Expression],
+    _select: &SelectStatement,
+) -> bool {
+    match expr {
+        Expression::IsNull(inner) => {
+            let val = eval_having_expr(inner, row, group_by, _select);
+            val == "NULL" || val.is_empty()
+        }
+        Expression::IsNotNull(inner) => {
+            let val = eval_having_expr(inner, row, group_by, _select);
+            val != "NULL" && !val.is_empty()
+        }
+        Expression::BinaryOp(left, op, right) => {
+            let op_upper = op.to_uppercase();
+            match op_upper.as_str() {
+                "AND" => {
+                    eval_having(left, row, group_by, _select)
+                        && eval_having(right, row, group_by, _select)
+                }
+                "OR" => {
+                    eval_having(left, row, group_by, _select)
+                        || eval_having(right, row, group_by, _select)
+                }
+                _ => {
+                    let left_val = eval_having_expr(left, row, group_by, _select);
+                    let right_val = eval_having_expr(right, row, group_by, _select);
+                    let left_parsed = parse_for_compare(&left_val);
+                    let right_parsed = parse_for_compare(&right_val);
+                    sql_compare_having(&op_upper, &left_parsed, &right_parsed)
+                }
+            }
+        }
+        Expression::UnaryOp(op, inner) => {
+            if op.to_uppercase() == "NOT" {
+                !eval_having(inner, row, group_by, _select)
+            } else {
+                false
+            }
+        }
+        _ => {
+            let val = eval_having_expr(expr, row, group_by, _select);
+            val != "NULL" && !val.is_empty()
+        }
+    }
+}
+
+fn eval_having_expr(
+    expr: &Expression,
+    row: &[String],
+    group_by: &[Expression],
+    select: &SelectStatement,
+) -> String {
+    match expr {
+        Expression::Identifier(name) => {
+            // First check if it's a GROUP BY column
+            if let Some(idx) = group_by.iter().position(|g| {
+                if let Expression::Identifier(g_name) = g {
+                    g_name == name
+                } else {
+                    false
+                }
+            }) {
+                return row.get(idx).cloned().unwrap_or_else(|| "NULL".to_string());
+            }
+            // Otherwise check if it's an aggregate (COUNT(*), SUM(col), etc.)
+            // Aggregates appear after group by columns in the result row
+            let group_by_count = group_by.len();
+            for (i, agg) in select.aggregates.iter().enumerate() {
+                let agg_name = format!(
+                    "{}({})",
+                    format!("{:?}", agg.func).to_uppercase(),
+                    agg.args
+                        .iter()
+                        .map(|a| {
+                            if let Expression::Identifier(id) = a {
+                                id.clone()
+                            } else {
+                                "*".to_string()
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(",")
+                );
+                if agg_name.to_uppercase().contains(&name.to_uppercase())
+                    || (name == "*" && matches!(agg.func, AggregateFunction::Count))
+                {
+                    return row
+                        .get(group_by_count + i)
+                        .cloned()
+                        .unwrap_or_else(|| "NULL".to_string());
+                }
+            }
+            // For COUNT(*) just return the aggregate result
+            if name == "*" {
+                return row
+                    .get(group_by_count)
+                    .cloned()
+                    .unwrap_or_else(|| "0".to_string());
+            }
+            "NULL".to_string()
+        }
+        Expression::Literal(s) => s.clone(),
+        _ => "NULL".to_string(),
+    }
+}
+
+fn parse_for_compare(s: &str) -> Value {
+    if s == "NULL" || s.is_empty() {
+        return Value::Null;
+    }
+    if let Ok(i) = s.parse::<i64>() {
+        return Value::Integer(i);
+    }
+    if let Ok(f) = s.parse::<f64>() {
+        return Value::Float(f);
+    }
+    Value::Text(s.to_string())
+}
+
+fn sql_compare_having(op: &str, left: &Value, right: &Value) -> bool {
+    match op {
+        "=" | "==" => match (left, right) {
+            (Value::Null, Value::Null) => true,
+            (Value::Null, _) => false,
+            (_, Value::Null) => false,
+            (Value::Integer(a), Value::Integer(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => (a - b).abs() < 1e-9,
+            (Value::Integer(a), Value::Float(b)) => (*a as f64 - b).abs() < 1e-9,
+            (Value::Float(a), Value::Integer(b)) => (a - *b as f64).abs() < 1e-9,
+            (Value::Text(a), Value::Text(b)) => a == b,
+            _ => false,
+        },
+        "!=" | "<>" => !sql_compare_having("=", left, right),
+        ">" => match (left, right) {
+            (Value::Integer(a), Value::Integer(b)) => *a > *b,
+            (Value::Float(a), Value::Float(b)) => *a > *b,
+            (Value::Integer(a), Value::Float(b)) => (*a as f64) > *b,
+            (Value::Float(a), Value::Integer(b)) => *a > (*b as f64),
+            _ => false,
+        },
+        ">=" => sql_compare_having(">", left, right) || sql_compare_having("=", left, right),
+        "<" => match (left, right) {
+            (Value::Integer(a), Value::Integer(b)) => *a < *b,
+            (Value::Float(a), Value::Float(b)) => *a < *b,
+            (Value::Integer(a), Value::Float(b)) => (*a as f64) < *b,
+            (Value::Float(a), Value::Integer(b)) => *a < (*b as f64),
+            _ => false,
+        },
+        "<=" => sql_compare_having("<", left, right) || sql_compare_having("=", left, right),
+        _ => false,
     }
 }

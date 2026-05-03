@@ -2,28 +2,24 @@ mod engine;
 mod sqlite_diff;
 
 use engine::EngineAdapter;
+use sqlite_diff::{assert_query_eq, assert_sql_eq, SqliteEngine};
 use sqllogictest::Runner;
+use sqlrustgo::ExecutorResult;
 use sqlrustgo_parser::parse;
 use sqlrustgo_parser::Statement;
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
-use sqlrustgo::ExecutorResult;
-use sqlite_diff::{assert_query_eq, assert_sql_eq, SqliteEngine};
 use std::collections::HashSet;
 
 #[tokio::main]
 async fn main() {
-    let mut runner = Runner::new(|| async {
-        Ok(EngineAdapter::new())
-    });
+    let mut runner = Runner::new(|| async { Ok(EngineAdapter::new()) });
 
     runner.run_file("tests/engine/basic.slt").unwrap();
 }
 
 #[test]
 fn test_sqllogic_basic() {
-    let mut runner = Runner::new(|| async {
-        Ok(EngineAdapter::new())
-    });
+    let mut runner = Runner::new(|| async { Ok(EngineAdapter::new()) });
 
     runner.run_file("tests/engine/basic.slt").unwrap();
 }
@@ -101,14 +97,28 @@ fn test_fuzz_ddl_create_drop() {
         let create_sql = format!("CREATE TABLE {}(a INT)", table_name);
 
         let result = engine.execute(&create_sql);
-        assert!(result.is_ok(), "Failed to create table {}: {:?}", table_name, result);
+        assert!(
+            result.is_ok(),
+            "Failed to create table {}: {:?}",
+            table_name,
+            result
+        );
 
         let names = engine.get_table_names();
-        assert!(names.contains(&table_name), "Table {} not found after create", table_name);
+        assert!(
+            names.contains(&table_name),
+            "Table {} not found after create",
+            table_name
+        );
 
         let drop_sql = format!("DROP TABLE {}", table_name);
         let result = engine.execute(&drop_sql);
-        assert!(result.is_ok(), "Failed to drop table {}: {:?}", table_name, result);
+        assert!(
+            result.is_ok(),
+            "Failed to drop table {}: {:?}",
+            table_name,
+            result
+        );
     }
 }
 
@@ -118,12 +128,20 @@ fn test_fuzz_ddl_recreate_same_name() {
     let table_name = "users";
 
     for _ in 0..10 {
-        engine.execute(&format!("CREATE TABLE {}(a INT)", table_name)).unwrap();
-        engine.execute(&format!("DROP TABLE {}", table_name)).unwrap();
+        engine
+            .execute(&format!("CREATE TABLE {}(a INT)", table_name))
+            .unwrap();
+        engine
+            .execute(&format!("DROP TABLE {}", table_name))
+            .unwrap();
     }
 
     let result = engine.execute(&format!("CREATE TABLE {}(a INT)", table_name));
-    assert!(result.is_ok(), "Failed to create table after multiple recreate: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to create table after multiple recreate: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -158,7 +176,10 @@ fn test_differential_drop_nonexistent() {
     let mut engine = DDLEngine::new();
 
     let result1 = engine.execute("DROP TABLE nonexistent");
-    assert!(result1.is_ok(), "DROP nonexistent should succeed (lenient mode)");
+    assert!(
+        result1.is_ok(),
+        "DROP nonexistent should succeed (lenient mode)"
+    );
 
     engine.execute("CREATE TABLE t(a INT)").unwrap();
 
@@ -176,7 +197,10 @@ fn test_fuzz_idempotent_ddl() {
     assert!(result1.is_ok());
 
     let result2 = engine.execute(sql);
-    assert!(result2.is_ok(), "CREATE same table twice should succeed (lenient mode)");
+    assert!(
+        result2.is_ok(),
+        "CREATE same table twice should succeed (lenient mode)"
+    );
 }
 
 #[test]
@@ -328,4 +352,95 @@ fn test_diff_order_by_desc() {
 fn test_diff_where_null() {
     let sql = "SELECT a FROM t WHERE b IS NULL";
     assert_sql_eq(sql, &T_SETUP).unwrap();
+}
+
+const ANTI_JOIN_MULTI_SETUP: [&str; 4] = [
+    "CREATE TABLE t1(id INT)",
+    "CREATE TABLE t2(id INT)",
+    "INSERT INTO t1 VALUES (1),(1)",
+    "INSERT INTO t2 VALUES (1),(1)",
+];
+
+#[test]
+fn test_anti_join_multiplicity() {
+    let sql = "SELECT COUNT(*) FROM t1 JOIN t2 ON t1.id = t2.id";
+    assert_sql_eq(sql, &ANTI_JOIN_MULTI_SETUP).unwrap();
+}
+
+const ANTI_NULL_JOIN_SETUP: [&str; 4] = [
+    "CREATE TABLE t1(id INT)",
+    "CREATE TABLE t2(id INT)",
+    "INSERT INTO t1 VALUES (NULL)",
+    "INSERT INTO t2 VALUES (NULL)",
+];
+
+#[test]
+fn test_anti_join_null_never_matches() {
+    let sql = "SELECT COUNT(*) FROM t1 JOIN t2 ON t1.id = t2.id";
+    assert_sql_eq(sql, &ANTI_NULL_JOIN_SETUP).unwrap();
+}
+
+const ANTI_LEFT_JOIN_GROUP_SETUP: [&str; 4] = [
+    "CREATE TABLE t1(id INT)",
+    "CREATE TABLE t2(id INT)",
+    "INSERT INTO t1 VALUES (1),(2)",
+    "INSERT INTO t2 VALUES (2)",
+];
+
+#[test]
+fn test_anti_left_join_group_null_fill() {
+    let sql = "SELECT t1.id, COUNT(t2.id) FROM t1 LEFT JOIN t2 ON t1.id = t2.id GROUP BY t1.id";
+    assert_sql_eq(sql, &ANTI_LEFT_JOIN_GROUP_SETUP).unwrap();
+}
+
+const ANTI_GROUP_NULL_SETUP: [&str; 4] = [
+    "CREATE TABLE t(a INT)",
+    "INSERT INTO t VALUES (NULL)",
+    "INSERT INTO t VALUES (NULL)",
+    "INSERT INTO t VALUES (1)",
+];
+
+#[test]
+fn test_anti_group_by_null_bucket() {
+    let sql = "SELECT a, COUNT(*) FROM t GROUP BY a";
+    assert_sql_eq(sql, &ANTI_GROUP_NULL_SETUP).unwrap();
+}
+
+const ANTI_JOIN_THEN_GROUP_SETUP: [&str; 4] = [
+    "CREATE TABLE t1(id INT)",
+    "CREATE TABLE t2(id INT)",
+    "INSERT INTO t1 VALUES (1),(1),(2)",
+    "INSERT INTO t2 VALUES (1),(1),(2)",
+];
+
+#[test]
+fn test_anti_join_then_group_order() {
+    let sql = "SELECT t1.id, COUNT(*) FROM t1 JOIN t2 ON t1.id = t2.id GROUP BY t1.id";
+    assert_sql_eq(sql, &ANTI_JOIN_THEN_GROUP_SETUP).unwrap();
+}
+
+const ANTI_COUNT_SETUP: [&str; 4] = [
+    "CREATE TABLE t(a INT)",
+    "INSERT INTO t VALUES (1)",
+    "INSERT INTO t VALUES (NULL)",
+    "INSERT INTO t VALUES (2)",
+];
+
+#[test]
+fn test_anti_count_col_vs_star() {
+    let sql = "SELECT COUNT(*), COUNT(a) FROM t";
+    assert_sql_eq(sql, &ANTI_COUNT_SETUP).unwrap();
+}
+
+const ANTI_HAVING_NULL_SETUP: [&str; 4] = [
+    "CREATE TABLE t(a INT)",
+    "INSERT INTO t VALUES (NULL)",
+    "INSERT INTO t VALUES (NULL)",
+    "INSERT INTO t VALUES (1)",
+];
+
+#[test]
+fn test_anti_having_null() {
+    let sql = "SELECT a, COUNT(*) FROM t GROUP BY a HAVING a IS NULL";
+    assert_sql_eq(sql, &ANTI_HAVING_NULL_SETUP).unwrap();
 }
