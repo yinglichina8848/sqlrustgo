@@ -17,10 +17,10 @@ use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
     CreateProcedureStatement, CreateRoleStatement, CreateTableStatement, CreateTriggerStatement,
     DropRoleStatement, DropTableStatement, GrantRoleStatement, GrantStatement, InsertStatement,
-    ObjectType as ParserObjectType, Privilege as ParserPrivilege, RevokeRoleStatement,
-    RevokeStatement, SelectStatement, SetRoleStatement, StoredProcParam as ParserStoredProcParam,
-    StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
-    TruncateStatement,
+    ObjectType as ParserObjectType, OrderByExpression, Privilege as ParserPrivilege,
+    RevokeRoleStatement, RevokeStatement, SelectStatement, SetRoleStatement,
+    StoredProcParam as ParserStoredProcParam, StoredProcParamMode as ParserParamMode,
+    StoredProcStatement as ParserStatement, TruncateStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::JoinType; // For join type matching
@@ -557,19 +557,49 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
-        // Step 4: LIMIT / OFFSET
+        // Step 4: ORDER BY
+        if !select.order_by.is_empty() {
+            let order_by_exprs = &select.order_by;
+            rows.sort_by(|a, b| {
+                compare_order_by(a, b, order_by_exprs, &table_info)
+            });
+        }
+
+        // Step 5: PROJECTION — apply SELECT columns (projection)
+        // "SELECT *" means no projection (return full rows)
+        // Otherwise project only the specified columns
+        let needs_projection = !select.columns.is_empty()
+            && !select.columns.iter().any(|c| c.name == "*");
+
+        let final_rows = if needs_projection {
+            rows.into_iter()
+                .map(|row| {
+                    select.columns
+                        .iter()
+                        .map(|col| {
+                            evaluate_expression(&col.expression.as_ref().unwrap_or(&Expression::Identifier(col.name.clone())), &row, &table_info)
+                                .unwrap_or(Value::Null)
+                        })
+                        .collect()
+                })
+                .collect()
+        } else {
+            rows
+        };
+
+        // Step 6: LIMIT / OFFSET
         let limited_rows = if let Some(limit) = select.limit {
             let offset = select.offset.unwrap_or(0);
-            if offset as usize >= rows.len() {
+            if offset as usize >= final_rows.len() {
                 vec![]
             } else {
-                rows.into_iter()
+                final_rows.into_iter()
                     .skip(offset as usize)
                     .take(limit as usize)
                     .collect()
             }
         } else {
-            rows
+            final_rows
         };
 
         let row_count = limited_rows.len();
@@ -2209,6 +2239,61 @@ fn compare_values(left: &Value, right: &Value) -> i32 {
         (Value::Null, _) => -1,
         (_, Value::Null) => 1,
         _ => 0,
+    }
+}
+
+/// Compare two rows for ORDER BY using the given expressions
+fn compare_order_by(
+    a: &[Value],
+    b: &[Value],
+    order_by_exprs: &[OrderByExpression],
+    table_info: &TableInfo,
+) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    for expr in order_by_exprs {
+        let val_a = evaluate_expression(&expr.expression, a, table_info)
+            .unwrap_or(Value::Null);
+        let val_b = evaluate_expression(&expr.expression, b, table_info)
+            .unwrap_or(Value::Null);
+
+        let cmp = compare_values_for_order(&val_a, &val_b);
+        let cmp = if expr.nulls_first.unwrap_or(false) {
+            // NULLS FIRST: nulls compare less
+            match (&val_a, &val_b) {
+                (Value::Null, Value::Null) => Ordering::Equal,
+                (Value::Null, _) => Ordering::Less,
+                (_, Value::Null) => Ordering::Greater,
+                _ => cmp,
+            }
+        } else {
+            // NULLS LAST (default for ASC in most DBs)
+            match (&val_a, &val_b) {
+                (Value::Null, Value::Null) => Ordering::Equal,
+                (Value::Null, _) => Ordering::Greater,
+                (_, Value::Null) => Ordering::Less,
+                _ => cmp,
+            }
+        };
+
+        if cmp != Ordering::Equal {
+            return if expr.ascending { cmp } else { cmp.reverse() };
+        }
+    }
+    Ordering::Equal
+}
+
+/// Compare two values for ORDER BY (null-aware)
+fn compare_values_for_order(left: &Value, right: &Value) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    match (left, right) {
+        (Value::Integer(l), Value::Integer(r)) => l.cmp(r),
+        (Value::Float(l), Value::Float(r)) => l.partial_cmp(r).unwrap_or(Ordering::Equal),
+        (Value::Text(l), Value::Text(r)) => l.cmp(r),
+        (Value::Boolean(l), Value::Boolean(r)) => l.cmp(r),
+        (Value::Null, Value::Null) => Ordering::Equal,
+        (Value::Null, _) => Ordering::Greater,  // NULL sorts last in default ASC
+        (_, Value::Null) => Ordering::Less,
+        _ => Ordering::Equal,
     }
 }
 
