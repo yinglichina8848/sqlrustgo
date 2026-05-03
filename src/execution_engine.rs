@@ -557,28 +557,27 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
-        // Step 4: ORDER BY
-        if !select.order_by.is_empty() {
-            let order_by_exprs = &select.order_by;
-            rows.sort_by(|a, b| {
-                compare_order_by(a, b, order_by_exprs, &table_info)
-            });
-        }
-
-        // Step 5: PROJECTION — apply SELECT columns (projection)
+        // Step 4: PROJECTION — apply SELECT columns (projection)
         // "SELECT *" means no projection (return full rows)
         // Otherwise project only the specified columns
+        // NOTE: DISTINCT operates on projected rows, so projection must come first
         let needs_projection = !select.columns.is_empty()
             && !select.columns.iter().any(|c| c.name == "*");
 
-        let final_rows = if needs_projection {
+        let projected_rows: Vec<Vec<Value>> = if needs_projection {
             rows.into_iter()
                 .map(|row| {
                     select.columns
                         .iter()
                         .map(|col| {
-                            evaluate_expression(&col.expression.as_ref().unwrap_or(&Expression::Identifier(col.name.clone())), &row, &table_info)
-                                .unwrap_or(Value::Null)
+                            evaluate_expression(
+                                &col.expression
+                                    .as_ref()
+                                    .unwrap_or(&Expression::Identifier(col.name.clone())),
+                                &row,
+                                &table_info,
+                            )
+                            .unwrap_or(Value::Null)
                         })
                         .collect()
                 })
@@ -587,19 +586,54 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             rows
         };
 
-        // Step 6: LIMIT / OFFSET
+        // Step 5: DISTINCT — deduplicate after projection
+        let deduped_rows: Vec<Vec<Value>> = if select.distinct {
+            let mut seen: std::collections::HashSet<Vec<Value>> = std::collections::HashSet::new();
+            projected_rows
+                .into_iter()
+                .filter(|row| seen.insert(row.clone()))
+                .collect()
+        } else {
+            projected_rows
+        };
+
+        // Step 6: ORDER BY — sort using original row values
+        let ordered_rows = if !select.order_by.is_empty() {
+            let order_by_exprs = &select.order_by;
+            let mut rows_with_idx: Vec<(Vec<Value>, usize)> = deduped_rows
+                .into_iter()
+                .enumerate()
+                .map(|(idx, row)| (row, idx))
+                .collect();
+
+            rows_with_idx.sort_by(|(row_a, idx_a), (row_b, idx_b)| {
+                let cmp = compare_order_by(row_a, row_b, order_by_exprs, &table_info);
+                if cmp != std::cmp::Ordering::Equal {
+                    cmp
+                } else {
+                    // Stable tie-break by original index
+                    idx_a.cmp(idx_b)
+                }
+            });
+            rows_with_idx.into_iter().map(|(row, _)| row).collect()
+        } else {
+            deduped_rows
+        };
+
+        // Step 7: LIMIT / OFFSET
         let limited_rows = if let Some(limit) = select.limit {
             let offset = select.offset.unwrap_or(0);
-            if offset as usize >= final_rows.len() {
+            if offset as usize >= ordered_rows.len() {
                 vec![]
             } else {
-                final_rows.into_iter()
+                ordered_rows
+                    .into_iter()
                     .skip(offset as usize)
                     .take(limit as usize)
                     .collect()
             }
         } else {
-            final_rows
+            ordered_rows
         };
 
         let row_count = limited_rows.len();
