@@ -17,6 +17,8 @@ miniz_oxide.workspace = true
 lz4_flex.workspace = true
 snap.workspace = true
 zstd.workspace = true
+parquet.workspace = true
+arrow.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

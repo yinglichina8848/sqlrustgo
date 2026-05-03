@@ -137,7 +137,7 @@ fn main() {
             }
         }
         Command::TpchImport(args) => {
-            if let Err(e) = tpch_import::run(args) {
+            if let Err(e) = tpch_import::run(&args) {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);
             }

@@ -18,6 +18,8 @@ sqlrustgo-bench = { path = "../bench" }
 sqlrustgo-parser = { path = "../parser" }
 sqlrustgo-types = { path = "../types" }
 tokio = { version = "1.0", features = ["full"] }
+parquet = { version = "58.1.0" }
+arrow = { version = "58.1.0" }
 tokio-postgres = "0.7"
 
 [dev-dependencies]
