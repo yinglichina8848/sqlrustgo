@@ -1658,7 +1658,13 @@ impl StoredProcExecutor {
     }
 
     /// Evaluate a binary operation and return a boolean Value
+    /// SQL NULL semantics: any comparison with NULL returns NULL (not TRUE or FALSE)
     fn evaluate_binary_op(&self, left: &Value, right: &Value, op: &str) -> Value {
+        // SQL NULL semantics: any comparison with NULL returns NULL
+        if matches!(left, Value::Null) || matches!(right, Value::Null) {
+            return Value::Null;
+        }
+
         match op {
             "=" | "==" | "IS" => Value::Boolean(left == right),
             "!=" | "<>" => Value::Boolean(left != right),
@@ -1707,15 +1713,35 @@ impl StoredProcExecutor {
                 }
             }
             "AND" | "&&" => {
+                // SQL three-valued logic: TRUE AND NULL = NULL, FALSE AND NULL = FALSE
                 if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
                     Value::Boolean(*l && *r)
+                } else if matches!(left, Value::Null) || matches!(right, Value::Null) {
+                    // If either is NULL
+                    if let Value::Boolean(false) = left {
+                        Value::Boolean(false) // FALSE AND NULL = FALSE
+                    } else if let Value::Boolean(false) = right {
+                        Value::Boolean(false) // NULL AND FALSE = FALSE
+                    } else {
+                        Value::Null // TRUE AND NULL = NULL
+                    }
                 } else {
                     Value::Boolean(false)
                 }
             }
             "OR" | "||" => {
+                // SQL three-valued logic: TRUE OR NULL = TRUE, FALSE OR NULL = NULL
                 if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
                     Value::Boolean(*l || *r)
+                } else if matches!(left, Value::Null) || matches!(right, Value::Null) {
+                    // If either is NULL
+                    if let Value::Boolean(true) = left {
+                        Value::Boolean(true) // TRUE OR NULL = TRUE
+                    } else if let Value::Boolean(true) = right {
+                        Value::Boolean(true) // NULL OR TRUE = TRUE
+                    } else {
+                        Value::Null // FALSE OR NULL = NULL
+                    }
                 } else {
                     Value::Boolean(false)
                 }
