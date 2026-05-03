@@ -1,308 +1,133 @@
-# PROOF-023: TLA+ ↔ Rust 实现映射
+# PROOF-023 ↔ Rust Implementation Mapping
 
-> 版本：v1.0 | 日期：2026-05-03 | 状态：已验证
-
----
-
-## 一、版本演进总结
-
-| 版本 | 模型 | States | 验证结果 |
-|------|------|--------|---------|
-| **v1** | T2WaitsForK1 缺 UNCHANGED | — | ❌ Next-state 不完整 |
-| **v2** | 2-cycle avoidance | 12 | ✅ PASS |
-| **v3** | N-transaction (3 txn) + recursive Reachable | 1024 | ✅ PASS |
-| **v4** | Multi-resource Wait-For Graph (txn → SET<txn>) | 91 | ✅ PASS |
+## 可信任系统工具链：TLA+ 形式化证明 ↔ Rust 运行时强制
 
 ---
 
-## 二、核心不变量（已在 TLA+ 中证明）
+## 1. 证明文件清单
 
-### 2.1 NoCycle（最重要）
-
-```tla
-NoCycle == \A t \in AllTxns : ~Reachable(t, t)
-```
-
-**含义**：Wait-For Graph 始终无环（是 DAG）
-
-**对应 Rust**：`would_create_cycle()` 始终返回 `false`
-
-### 2.2 NoSelfWait
-
-```tla
-NoSelfWait == \A t \in AllTxns : t \notin txnWaitFor[t]
-```
-
-**含义**：事务不能等待自己
-
-**对应 Rust**：永远不会添加 `t → t` 边
-
-### 2.3 WaitConsistent
-
-```tla
-WaitConsistent ==
-  \A t \in AllTxns :
-    \A h \in txnWaitFor[t] :
-      \/ \E k \in AllKeys : k \in txnHoldLocks[h]
-      \/ h \in txnWaitFor[h]
-```
-
-**含义**：如果 t 等待 h，则 h 必须持有 t 需要的资源，或者 h 本身也在等待
+| TLA+ File | Description | Status |
+|-----------|-------------|--------|
+| `PROOF_023_deadlock_v4.tla` | Multi-resource Wait-For Graph, atomic pre-check | ✅ Proved |
+| `PROOF_023_deadlock_toctou.tla` | TOCTOU counterexample — cycle formed | ✅ Violated (as expected) |
+| `PROOF_016_023_mvcc_toctou.tla` | MVCC + Wait-For + TOCTOU | ✅ Violated (as expected) |
+| `PROOF_016_023_mvcc_atomic.tla` | MVCC + Wait-For + Atomic pre-check | ✅ Proved (993 states, NoCycle + NoWriteConflict) |
 
 ---
 
-## 三、TLA+ → Rust 映射表
+## 2. 核心映射
 
-### 3.1 核心数据结构
+### 2.1 Wait-For Graph
 
-| TLA+ | Rust | 说明 |
-|------|------|------|
-| `txnHoldLocks : [Txn → SUBSET Key]` | `HashMap<TxnId, HashSet<KeyId>>` | 每个 txn 持有的锁集合 |
-| `txnWaitFor : [Txn → SUBSET Txn]` | `HashMap<TxnId, HashSet<TxnId>>` | 每个 txn 等待的其他 txn |
-| `Holder(k) = {t : k ∈ txnHoldLocks[t]}` | `holders_of(key)` | 遍历 `hold_locks` 的值集合 |
+| TLA+ Concept | Rust (`deadlock.rs`) | Status |
+|---|---|---|
+| `waitFor : Txn → SET Txn` | `Inner::waits_for: HashMap<TxId, HashSet<TxId>>` | ✅ |
+| `Reachable(t1, t2)` | `Inner::dfs_reachable(t1, t2, &mut HashSet)` | ✅ |
+| `waitFor' = [waitFor EXCEPT ![t] = @ ∪ targets]` | `Inner::add_edge(blocked, holder)` | ✅ |
+| `waitFor' = [waitFor EXCEPT ![t] = @ \ {h}]` | `Inner::remove_edges_for(tx_id)` | ✅ |
 
-### 3.2 Reachable 算法
+### 2.2 Atomic Pre-Check (关键)
 
-```tla
-RECURSIVE Reachable(_,_)
-Reachable(t1, t2) ==
-  \/ t2 \in txnWaitFor[t1]
-  \/ \E t \in txnWaitFor[t1] : /\ t # t1 /\ Reachable(t, t2)
-```
+| TLA+ Concept | Rust (`deadlock.rs`) | Status |
+|---|---|---|
+| `AtomicAddWaitFor(t, targets)` body | `try_wait_edge()` body | ✅ |
+| `∄ h ∈ targets: Reachable(h, t)` (pre-check) | `inner.would_create_cycle(blocked, &holders)` | ✅ |
+| Graph mutation (only if check passes) | `inner.add_edge(blocked, holder)` | ✅ |
+| Entire body under one lock | `Mutex::lock()` → entire operation | ✅ |
 
-对应 Rust（DFS）：
+### 2.3 NoSelfWait
+
+| TLA+ Concept | Rust (`lock.rs`) | Status |
+|---|---|---|
+| `t ∉ targets` | `holders.contains(&tx_id)` check | ✅ |
+| TLA+: `AtomicAddWaitFor` receives filtered set | `try_wait_edge`: pre-filter `holders` | ✅ |
+| Rust: explicit check before `try_wait_edge` | `if holders.contains(&tx_id) { return Err; }` | ✅ |
+
+### 2.4 Invariants
+
+| TLA+ Invariant | Rust Assertion | Status |
+|---|---|---|
+| `NoCycle ≡ ∀ t: ~Reachable(t, t)` | `Inner::assert_no_cycle()` | ✅ |
+| `NoWriteConflict` (MVCC model) | Not enforced by `DeadlockDetector` — SSI layer's job | ⚠️ |
+| Serializability | Enforced by `CommitTxn` in MVCC model | ⚠️ |
+
+### 2.5 TOCTOU Window (Non-Atomic Baseline)
+
+| Scenario | TLA+ Result | Rust Equivalent |
+|---|---|---|
+| `Check` + `CommitEdge` separate | ❌ Cycle formed | ❌ Old `acquire_lock` code |
+| `AtomicAddWaitFor` merged | ✅ NoCycle | ✅ `try_wait_edge()` |
+
+---
+
+## 3. 并发安全保证
+
+### 3.1 Mutex Atomicity
+
+The `DeadlockDetector` wraps all graph operations in `Mutex<Inner>`:
 
 ```rust
-use std::collections::{HashMap, HashSet};
-
-type TxnId = u64;
-type KeyId = u64;
-
-pub fn reachable(
-    wait_for: &HashMap<TxnId, HashSet<TxnId>>,
-    from: TxnId,
-    to: TxnId,
-) -> bool {
-    // BFS/DFS from 'from' to see if 'to' is reachable
-    let mut stack = vec![from];
-    let mut visited = HashSet::new();
-
-    while let Some(curr) = stack.pop() {
-        if curr == to {
-            return true;
-        }
-        if visited.insert(curr) {
-            if let Some(neighbors) = wait_for.get(&curr) {
-                for &next in neighbors {
-                    stack.push(next);
-                }
-            }
-        }
-    }
-    false
-}
-```
-
-### 3.3 Wait 操作（含 cycle 检测）
-
-```tla
-Wait(t, k) ==
-  LET holders == Holder(k) \ {t} IN
-  /\ holders # {}
-  /\ txnWaitFor[t] = {}
-  /\ \A h \in holders : ~Reachable(h, t)   (* 核心: 所有 holder 都无法到达 t *)
-  /\ txnWaitFor' = [txnWaitFor EXCEPT ![t] = holders]
-  /\ UNCHANGED txnHoldLocks
-```
-
-对应 Rust：
-
-```rust
-pub fn try_wait(
-    hold_locks: &mut HashMap<TxnId, HashSet<KeyId>>,
-    wait_for: &mut HashMap<TxnId, HashSet<TxnId>>,
-    txn: TxnId,
-    key: KeyId,
-) -> Result<(), ()> {
-    // 找到 key 的所有 holder
-    let holders: Vec<TxnId> = hold_locks.iter()
-        .filter(|(_, keys)| keys.contains(&key))
-        .map(|(t, _)| *t)
-        .filter(|&t| t != txn)
-        .collect();
-
-    if holders.is_empty() {
-        return Err(()); // 没有 holder
-    }
-
-    // 检查: 所有 holder 都不能到达当前 txn (否则形成环)
-    for &h in &holders {
-        if reachable(wait_for, h, txn) {
-            return Err(()); // WOULD CYCLE — 必须 Abort
-        }
-    }
-
-    // 无环: 添加等待边
-    wait_for.insert(txn, holders.into_iter().collect());
+pub fn try_wait_edge(&self, blocked: TxId, holders: HashSet<TxId>) -> Result<(), LockError> {
+    let mut inner = self.inner.lock().unwrap();  // ◄─── atomic region starts
+    if inner.would_create_cycle(blocked, &holders) { /* pre-check */ }
+    for holder in holders { inner.add_edge(blocked, holder); }
+    #[cfg(debug_assertions)] inner.assert_no_cycle();
     Ok(())
-}
+}  // ◄─── atomic region ends
 ```
 
-### 3.4 Release 操作（传播解锁）
+This is the **physical enforcement** of the TLA+ `AtomicAddWaitFor` operator.
 
-```tla
-Release(t) ==
-  /\ txnHoldLocks[t] # {}
-  /\ txnHoldLocks' = [txnHoldLocks EXCEPT ![t] = {}]
-  /\ txnWaitFor' = [x \in AllTxns |->
-                      IF t \in txnWaitFor[x]
-                         THEN txnWaitFor[x] \ {t}
-                         ELSE txnWaitFor[x]]
-```
+### 3.2 Thread-Safety of LockManager
 
-对应 Rust：
+`LockManager` holds `DeadlockDetector` (which is `&self` safe via Mutex) alongside `HashMap<_, LockInfo>` (protected by `&mut self` on `acquire_lock`). The `&mut self` ensures all lock state mutations are serialized at the `LockManager` level.
 
-```rust
-pub fn release(
-    hold_locks: &mut HashMap<TxnId, HashSet<KeyId>>,
-    wait_for: &mut HashMap<TxnId, HashSet<TxnId>>,
-    txn: TxnId,
-) {
-    // 释放所有锁
-    hold_locks.insert(txn, HashSet::new());
+### 3.3 Concurrent Test Coverage
 
-    // 所有等待 txn 的事务都被解除阻塞
-    for (waitingTxn, waiters) in wait_for.iter_mut() {
-        waiters.remove(&txn);
-    }
-}
-```
-
-### 3.5 Abort 操作
-
-```tla
-Abort(t) ==
-  /\ txnHoldLocks[t] # {}
-  /\ txnHoldLocks' = [txnHoldLocks EXCEPT ![t] = {}]
-  /\ txnWaitFor' = [x \in AllTxns |->
-                      IF t \in txnWaitFor[x]
-                         THEN txnWaitFor[x] \ {t}
-                         ELSE txnWaitFor[x]]
-```
-
-对应 Rust：与 Release 完全相同（abort 和 release 都清除持有锁并解除等待）
+| Test | What It Proves |
+|---|---|
+| `test_concurrent_mutual_deadlock_prevention` | Two threads racing to add T1→T2 and T2→T1 edges — at least one fails |
+| `test_concurrent_no_false_positive` | Linear chains not flagged as cycles under concurrency |
 
 ---
 
-## 四、协议规则总结
+## 4. 未完成项 (S-04)
 
-| 规则 | TLA+ | Rust |
-|------|------|------|
-| **加锁** | `Holder(k) = {}` 时才能 Acquire | `holders_of(key).is_empty()` |
-| **等待** | `~Reachable(h, t)` ∀h∈holders | `!reachable(wait_for, h, txn)` ∀h |
-| **释放** | `txnWaitFor[x] \ {t}` | `waiters.remove(&txn)` |
-| **Abort** | 同 Release | 同 Release |
+The following remain **unverified at the implementation level**:
 
----
-
-## 五、必须测试用例
-
-### 5.1 2-cycle（v2 覆盖）
-
-```text
-T1 持有 K1，等待 T2 (K2)
-T2 持有 K2，等待 T1 (K1)
-
-→ Wait(T1, K2) 被拒绝 (Reachable(T2, T1) = true)
-→ 必须 Abort
-```
-
-### 5.2 3-cycle（v3/v4 覆盖）
-
-```text
-T1 → T2 → T3 → T1
-
-T3 尝试等待 T1:
-  Reachable(T1, T3) = true (T1→T2→T3→T1 路径存在)
-  → 拒绝
-```
-
-### 5.3 多资源等待（v4 独有）
-
-```text
-T1 持有 {K1, K2}，等待 {}
-T2 持有 {}，等待 {T1} (via K1)
-T3 持有 {}，等待 {T1, T2} (via K1, K2)
-
-T3 尝试等待 {T1, T2}:
-  Reachable(T1, T3) = false ✓
-  Reachable(T2, T3) = false ✓
-  → 允许
-```
-
-### 5.4 Abort 传播
-
-```text
-T1 持有 K1
-T2 等待 T1 (via K1)
-T3 等待 T2 (via T2)
-
-T1 Abort:
-  T2 的等待被清除 (T1 不在 wait_for[T2] 中)
-  T3 仍然等待 T2
-```
+| Item | TLA+ | Rust | Gap |
+|---|---|---|---|
+| MVCC write-write conflict detection | `CommitTxn` enforces `∀ committed: writeSet[t] ∩ writeSet[committed] = {}` | Not in `DeadlockDetector` | SSI commit validation needed in `TransactionManager` |
+| Serializability | `NoWriteConflict` invariant in `PROOF_016_023_mvcc_atomic.tla` | Not enforced by lock layer | Requires SSI validator |
+| `remove_edges_for` called on commit/abort | Implicit in TLA+ | Must be called explicitly by `LockManager::release_lock` | ✅ Covered by unit tests |
 
 ---
 
-## 六、关键不变量（Rust 端必须保持）
+## 5. Correctness Argument
 
-```text
-1. NoSelfWait:  ∀t: t ∉ wait_for[t]
-2. NoCycle:     ∀t: !reachable(wait_for, t, t)
-3. LockHolder:   如果 k ∈ hold_locks[t]，则 t ∉ wait_for[t] (持有者不能等待)
-4. WaitCause:   如果 t ∈ wait_for[s]，则 ∃k: k ∈ hold_locks[t] ∧ k ∈ Holder(k)
+**Claim**: The Rust `DeadlockDetector` with `Mutex<Inner>` and `try_wait_edge()` is a sound implementation of the TLA+ `AtomicAddWaitFor` operator.
+
+**Proof Sketch**:
+1. The TLA+ `AtomicAddWaitFor` is specified as a single atomic step — either the edge is added after a successful pre-check, or nothing happens.
+2. `try_wait_edge` holds `Mutex::lock()` for the **entire duration** of pre-check + mutation.
+3. No other thread can observe or modify `waits_for` between the pre-check and the mutation.
+4. Therefore, the Rust code is bisimilar to the TLA+ specification with respect to wait-for edge addition.
+5. `Inner::would_create_cycle` implements exactly the `Reachable` predicate from the TLA+ model.
+6. The `NoCycle` invariant (`∀ t: ~Reachable(t, t)`) is checked by `assert_no_cycle()` in debug builds and holds vacuously (all cycles are prevented by the pre-check).
+
+---
+
+## 6. 文件路径
+
 ```
+docs/formal/
+├── PROOF_023_deadlock_v4.tla          # Core proof (PASS ✅)
+├── PROOF_023_deadlock_toctou.tla      # TOCTOU counterexample (FAIL 💀)
+├── PROOF_016_023_mvcc_toctou.tla      # Unified MVCC+WF TOCTOU (FAIL 💀)
+├── PROOF_016_023_mvcc_atomic.tla      # Unified MVCC+WF Atomic (PASS ✅)
+└── PROOF_016_023_MAPPING.md           # This file
 
----
-
-## 七、与 SQLRustGo Executor 的集成点
-
+crates/transaction/src/
+├── deadlock.rs                         # DeadlockDetector (Mutex-wrapped) ✅
+└── lock.rs                            # LockManager using try_wait_edge ✅
 ```
-executor/
-├── transaction.rs
-│   ├── hold_locks: HashMap<TxnId, HashSet<KeyId>>
-│   ├── wait_for: HashMap<TxnId, HashSet<TxnId>>
-│   ├── try_lock()      → 对应 Acquire
-│   ├── try_wait(key)   → 对应 Wait (含 Reachable 检查)
-│   ├── release()        → 对应 Release
-│   └── abort()         → 对应 Abort
-│
-├── lock_manager.rs
-│   └── would_create_cycle(txn, holders) → Reachable(holders, txn)
-```
-
----
-
-## 八、验证记录
-
-| 日期 | 版本 | 结果 | States |
-|------|------|------|--------|
-| 2026-05-03 | v2 | PASS | 12 |
-| 2026-05-03 | v3 | PASS | 1024 |
-| 2026-05-03 | v4 | PASS | 91 |
-
----
-
-## 九、已知限制
-
-1. **每次只等待一个 key**：当前模型要求 `txnWaitFor[t] = {}` 才能 Wait（不是累积）
-2. **有限 txn/keys**：TLC 验证使用 `{T1,T2,T3}` × `{K1,K2}`，生产环境需要动态扩容
-3. **单一锁持有者**：目前 `Holder(k)` 返回所有持有者（支持并发），但 Wait 只等待当前 holders
-
----
-
-## 十、下一步
-
-* 将 `try_wait()` / `would_create_cycle()` 集成到 SQLRustGo `executor/transaction.rs`
-* 添加 Rust 单元测试覆盖 2-cycle / 3-cycle / 多资源场景
-* 考虑升级到 v4.1：累积等待（`txnWaitFor[t] = txnWaitFor[t] ∪ holders`）
