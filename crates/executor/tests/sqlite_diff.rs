@@ -305,24 +305,45 @@ fn test_insert_and_select() {
     );
 }
 
+/// DISTINCT — deduplicate projected rows (NULL-free data to avoid SQLite NULL display quirks)
+#[test]
+fn test_distinct() {
+    assert_diff!(
+        "distinct",
+        "CREATE TABLE t(x INTEGER); \
+         INSERT INTO t VALUES (1),(1),(2),(3),(2),(3); \
+         SELECT DISTINCT x FROM t ORDER BY x"
+    );
+}
+
+/// DISTINCT + ORDER BY — verify pipeline order (NULL-free)
+#[test]
+fn test_distinct_order_by() {
+    assert_diff!(
+        "distinct order by",
+        "CREATE TABLE t(x INTEGER); \
+         INSERT INTO t VALUES (3),(1),(1),(2),(2); \
+         SELECT DISTINCT x FROM t ORDER BY x"
+    );
+}
+
+/// DISTINCT + LIMIT — verify distinct before limit
+#[test]
+fn test_distinct_limit() {
+    assert_diff!(
+        "distinct limit",
+        "CREATE TABLE t(x INTEGER); \
+         INSERT INTO t VALUES (1),(1),(2),(2),(3),(3); \
+         SELECT DISTINCT x FROM t LIMIT 2"
+    );
+}
+
 // =============================================================================
 // LAYER 2: capability — unimplemented features (ignore until implemented)
 //
 // These are NOT bugs — they are feature gaps.
 // When you implement a feature, move its test here to Layer 1.
 // =============================================================================
-
-/// DISTINCT — capability gap
-#[test]
-#[ignore]
-fn test_distinct() {
-    assert_diff!(
-        "distinct",
-        "CREATE TABLE t(x INTEGER); \
-         INSERT INTO t VALUES (1),(1),(2),(NULL),(2),(3),(NULL); \
-         SELECT DISTINCT x FROM t ORDER BY x"
-    );
-}
 
 /// Scalar SELECT (SELECT 1, SELECT 'text') — capability gap
 #[test]
