@@ -309,18 +309,12 @@ pub struct FromTable {
 }
 
 /// FROM clause — holds all tables from a comma-separated list, plus explicit JOINs
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct FromClause {
     /// Tables in the comma-separated FROM part (empty if only explicit JOINs)
     pub tables: Vec<FromTable>,
     /// Explicit JOIN clauses (INNER/LEFT/RIGHT/FULL/CROSS)
     pub join_clauses: Vec<JoinClause>,
-}
-
-impl Default for FromClause {
-    fn default() -> Self {
-        Self { tables: vec![], join_clauses: vec![] }
-    }
 }
 
 /// Aggregate function call

@@ -233,42 +233,36 @@ const T_SETUP: [&str; 4] = [
 ];
 
 #[test]
-#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
 fn test_diff_select_star() {
     let sql = "SELECT * FROM t";
     assert_sql_eq(sql, &T_SETUP).unwrap();
 }
 
 #[test]
-#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
 fn test_diff_select_column() {
     let sql = "SELECT a FROM t";
     assert_sql_eq(sql, &T_SETUP).unwrap();
 }
 
 #[test]
-#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
 fn test_diff_count() {
     let sql = "SELECT COUNT(*) FROM t";
     assert_sql_eq(sql, &T_SETUP).unwrap();
 }
 
 #[test]
-#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
 fn test_diff_sum() {
     let sql = "SELECT SUM(a) FROM t";
     assert_sql_eq(sql, &T_SETUP).unwrap();
 }
 
 #[test]
-#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
 fn test_diff_where_gt() {
     let sql = "SELECT a FROM t WHERE a > 1";
     assert_sql_eq(sql, &T_SETUP).unwrap();
 }
 
 #[test]
-#[ignore = "SELECT execution not implemented in RustEngine - requires full query pipeline"]
 fn test_diff_where_null() {
     let sql = "SELECT a FROM t WHERE b IS NULL";
     assert_sql_eq(sql, &T_SETUP).unwrap();
