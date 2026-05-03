@@ -1,7 +1,8 @@
 {
-  "registry_version": "1.2",
-  "updated_at": "2026-05-03T00:00:00Z",
-  "total_proofs": 14,
+  "registry_version": "1.3",
+  "updated_at": "2026-05-03T08:00:00Z",
+  "total_proofs": 17,
+  "phase": "Phase 1 (S0-S05) + Phase 2 P0",
   "proofs": [
     {"id": "PROOF-001-parser-select", "title": "SQL SELECT 解析不丢失信息", "language": "Formulog", "category": "parser", "status": "verified"},
     {"id": "PROOF-002-type-inference", "title": "类型推断终止且唯一", "language": "Dafny", "category": "type_system", "status": "verified"},
@@ -16,6 +17,9 @@
     {"id": "PROOF-011-type-safety", "title": "类型系统安全性证明", "language": "Dafny", "category": "type_system", "status": "verified"},
     {"id": "PROOF-012-wal-acid", "title": "WAL恢复保持ACID性质", "language": "TLA+", "category": "transaction", "status": "verified"},
     {"id": "PROOF-013-btree-invariants", "title": "B+Tree查询完整性证明", "language": "Dafny", "category": "storage", "status": "verified"},
-    {"id": "PROOF-014-query-equivalence", "title": "查询等价性证明框架", "language": "Formulog", "category": "optimizer", "status": "verified"}
+    {"id": "PROOF-014-query-equivalence", "title": "查询等价性证明框架", "language": "Formulog", "category": "optimizer", "status": "verified"},
+    {"id": "PROOF-015-ddl-atomicity", "title": "DDL 原子性 (CREATE/DROP TABLE)", "language": "TLA+", "category": "ddl", "status": "verified", "stage": "P0", "issue_ref": "Issue #201"},
+    {"id": "PROOF-016-mvcc-ssi", "title": "MVCC SSI 冲突检测正确性", "language": "TLA+", "category": "transaction", "status": "verified", "stage": "P0", "issue_ref": "Issue #201"},
+    {"id": "PROOF-017-update-semantics", "title": "UPDATE/DELETE 语义完整性", "language": "Formulog", "category": "executor", "status": "spec_created", "stage": "P0", "issue_ref": "Issue #201", "note": "Spec created; verification pending"}
   ]
 }
