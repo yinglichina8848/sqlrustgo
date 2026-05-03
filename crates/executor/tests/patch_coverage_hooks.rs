@@ -14,14 +14,20 @@ fn test_multiple_selects_same_conn() {
     e.execute("INSERT INTO t VALUES (1),(2),(3)").unwrap();
     assert_eq!(e.execute("SELECT * FROM t").unwrap().rows.len(), 3);
     assert_eq!(e.execute("SELECT COUNT(*) FROM t").unwrap().rows.len(), 1);
-    assert_eq!(e.execute("SELECT * FROM t WHERE a>1").unwrap().rows.len(), 2);
+    assert_eq!(
+        e.execute("SELECT * FROM t WHERE a>1").unwrap().rows.len(),
+        2
+    );
 }
 
 #[test]
 fn test_empty_table_count_star() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
-    assert_eq!(e.execute("SELECT COUNT(*) FROM t").unwrap().rows[0][0], Value::Integer(0));
+    assert_eq!(
+        e.execute("SELECT COUNT(*) FROM t").unwrap().rows[0][0],
+        Value::Integer(0)
+    );
 }
 
 #[test]
@@ -29,7 +35,9 @@ fn test_single_row_all_aggregates() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
     e.execute("INSERT INTO t VALUES (42)").unwrap();
-    let r = e.execute("SELECT COUNT(*), SUM(a), MIN(a), MAX(a) FROM t").unwrap();
+    let r = e
+        .execute("SELECT COUNT(*), SUM(a), MIN(a), MAX(a) FROM t")
+        .unwrap();
     assert_eq!(r.rows[0].len(), 4);
 }
 
@@ -37,18 +45,32 @@ fn test_single_row_all_aggregates() {
 fn test_all_null_column_agg() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
-    e.execute("INSERT INTO t VALUES (NULL),(NULL),(NULL)").unwrap();
-    assert_eq!(e.execute("SELECT COUNT(*) FROM t").unwrap().rows[0][0], Value::Integer(3));
-    assert_eq!(e.execute("SELECT COUNT(a) FROM t").unwrap().rows[0][0], Value::Integer(0));
+    e.execute("INSERT INTO t VALUES (NULL),(NULL),(NULL)")
+        .unwrap();
+    assert_eq!(
+        e.execute("SELECT COUNT(*) FROM t").unwrap().rows[0][0],
+        Value::Integer(3)
+    );
+    assert_eq!(
+        e.execute("SELECT COUNT(a) FROM t").unwrap().rows[0][0],
+        Value::Integer(0)
+    );
 }
 
 #[test]
 fn test_mixed_null_agg() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
-    e.execute("INSERT INTO t VALUES (1),(NULL),(3),(NULL),(5)").unwrap();
-    assert_eq!(e.execute("SELECT COUNT(a) FROM t").unwrap().rows[0][0], Value::Integer(3));
-    assert_eq!(e.execute("SELECT SUM(a) FROM t").unwrap().rows[0][0], Value::Integer(9));
+    e.execute("INSERT INTO t VALUES (1),(NULL),(3),(NULL),(5)")
+        .unwrap();
+    assert_eq!(
+        e.execute("SELECT COUNT(a) FROM t").unwrap().rows[0][0],
+        Value::Integer(3)
+    );
+    assert_eq!(
+        e.execute("SELECT SUM(a) FROM t").unwrap().rows[0][0],
+        Value::Integer(9)
+    );
 }
 
 #[test]
@@ -56,34 +78,61 @@ fn test_ops_on_single_val() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
     e.execute("INSERT INTO t VALUES (100)").unwrap();
-    assert_eq!(e.execute("SELECT SUM(a) FROM t").unwrap().rows[0][0], Value::Integer(100));
+    assert_eq!(
+        e.execute("SELECT SUM(a) FROM t").unwrap().rows[0][0],
+        Value::Integer(100)
+    );
     assert_eq!(e.execute("SELECT AVG(a) FROM t").unwrap().rows.len(), 1);
-    assert_eq!(e.execute("SELECT MIN(a) FROM t").unwrap().rows[0][0], Value::Integer(100));
-    assert_eq!(e.execute("SELECT MAX(a) FROM t").unwrap().rows[0][0], Value::Integer(100));
+    assert_eq!(
+        e.execute("SELECT MIN(a) FROM t").unwrap().rows[0][0],
+        Value::Integer(100)
+    );
+    assert_eq!(
+        e.execute("SELECT MAX(a) FROM t").unwrap().rows[0][0],
+        Value::Integer(100)
+    );
 }
 
 #[test]
 fn test_neg_numbers_filter() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
-    e.execute("INSERT INTO t VALUES (-1),(0),(1),(-100)").unwrap();
-    assert_eq!(e.execute("SELECT * FROM t WHERE a<0").unwrap().rows.len(), 2);
+    e.execute("INSERT INTO t VALUES (-1),(0),(1),(-100)")
+        .unwrap();
+    assert_eq!(
+        e.execute("SELECT * FROM t WHERE a<0").unwrap().rows.len(),
+        2
+    );
 }
 
 #[test]
 fn test_text_ord_comparison() {
     let mut e = engine();
     e.execute("CREATE TABLE t (name TEXT)").unwrap();
-    e.execute("INSERT INTO t VALUES ('apple'),('banana'),('cherry')").unwrap();
-    assert_eq!(e.execute("SELECT * FROM t WHERE name>'banana'").unwrap().rows.len(), 1);
+    e.execute("INSERT INTO t VALUES ('apple'),('banana'),('cherry')")
+        .unwrap();
+    assert_eq!(
+        e.execute("SELECT * FROM t WHERE name>'banana'")
+            .unwrap()
+            .rows
+            .len(),
+        1
+    );
 }
 
 #[test]
 fn test_text_equality_multi() {
     let mut e = engine();
     e.execute("CREATE TABLE t (name TEXT)").unwrap();
-    e.execute("INSERT INTO t VALUES ('Alice'),('Bob'),('Alice')").unwrap();
-    assert_eq!(e.execute("SELECT * FROM t WHERE name='Alice'").unwrap().rows.len(), 2);
+    e.execute("INSERT INTO t VALUES ('Alice'),('Bob'),('Alice')")
+        .unwrap();
+    assert_eq!(
+        e.execute("SELECT * FROM t WHERE name='Alice'")
+            .unwrap()
+            .rows
+            .len(),
+        2
+    );
 }
 
 #[test]
@@ -98,7 +147,8 @@ fn test_float_mul() {
 fn test_text_special_chars() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a TEXT)").unwrap();
-    e.execute("INSERT INTO t VALUES ('a/b'),('c-d'),('e_f')").unwrap();
+    e.execute("INSERT INTO t VALUES ('a/b'),('c-d'),('e_f')")
+        .unwrap();
     assert_eq!(e.execute("SELECT * FROM t").unwrap().rows.len(), 3);
 }
 
@@ -132,7 +182,9 @@ fn test_having_filters_group() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
     e.execute("INSERT INTO t VALUES (1),(1),(2)").unwrap();
-    let r = e.execute("SELECT a, COUNT(*) FROM t GROUP BY a HAVING COUNT(*) > 1").unwrap();
+    let r = e
+        .execute("SELECT a, COUNT(*) FROM t GROUP BY a HAVING COUNT(*) > 1")
+        .unwrap();
     assert_eq!(r.rows.len(), 1);
 }
 
@@ -140,8 +192,11 @@ fn test_having_filters_group() {
 fn test_where_and_having() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER, b INTEGER)").unwrap();
-    e.execute("INSERT INTO t VALUES (1,10),(1,20),(2,30)").unwrap();
-    let r = e.execute("SELECT a, SUM(b) FROM t WHERE a>0 GROUP BY a HAVING SUM(b)>15").unwrap();
+    e.execute("INSERT INTO t VALUES (1,10),(1,20),(2,30)")
+        .unwrap();
+    let r = e
+        .execute("SELECT a, SUM(b) FROM t WHERE a>0 GROUP BY a HAVING SUM(b)>15")
+        .unwrap();
     assert_eq!(r.rows.len(), 2);
 }
 
@@ -167,7 +222,8 @@ fn test_order_by_desc_count() {
 fn test_distinct_no_crash() {
     let mut e = engine();
     e.execute("CREATE TABLE t (a INTEGER)").unwrap();
-    e.execute("INSERT INTO t VALUES (1),(1),(2),(3),(3)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(1),(2),(3),(3)")
+        .unwrap();
     let r = e.execute("SELECT DISTINCT a FROM t").unwrap();
     assert_eq!(r.rows.len(), 5);
 }

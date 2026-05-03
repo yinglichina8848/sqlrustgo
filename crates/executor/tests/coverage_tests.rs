@@ -116,9 +116,7 @@ fn test_aggregate_sum_with_null() {
 #[test]
 fn test_limit_basic() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE numbers (n INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE numbers (n INTEGER)").unwrap();
     engine
         .execute("INSERT INTO numbers VALUES (1), (2), (3), (4), (5)")
         .unwrap();
@@ -130,9 +128,7 @@ fn test_limit_basic() {
 #[test]
 fn test_limit_zero() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE numbers (n INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE numbers (n INTEGER)").unwrap();
     engine
         .execute("INSERT INTO numbers VALUES (1), (2), (3)")
         .unwrap();
@@ -144,28 +140,28 @@ fn test_limit_zero() {
 #[test]
 fn test_null_is_null() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE test (a INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE test (a INTEGER)").unwrap();
     engine
         .execute("INSERT INTO test VALUES (1), (NULL), (3)")
         .unwrap();
 
-    let result = engine.execute("SELECT * FROM test WHERE a IS NULL").unwrap();
+    let result = engine
+        .execute("SELECT * FROM test WHERE a IS NULL")
+        .unwrap();
     assert_eq!(result.rows.len(), 1);
 }
 
 #[test]
 fn test_null_is_not_null() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE test (a INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE test (a INTEGER)").unwrap();
     engine
         .execute("INSERT INTO test VALUES (1), (NULL), (3)")
         .unwrap();
 
-    let result = engine.execute("SELECT * FROM test WHERE a IS NOT NULL").unwrap();
+    let result = engine
+        .execute("SELECT * FROM test WHERE a IS NOT NULL")
+        .unwrap();
     assert_eq!(result.rows.len(), 2);
 }
 
@@ -202,9 +198,7 @@ fn test_simple_filter() {
         .execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')")
         .unwrap();
 
-    let result = engine
-        .execute("SELECT * FROM users WHERE id > 1")
-        .unwrap();
+    let result = engine.execute("SELECT * FROM users WHERE id > 1").unwrap();
     assert_eq!(result.rows.len(), 2);
 }
 
@@ -215,7 +209,9 @@ fn test_filter_with_and() {
         .execute("CREATE TABLE orders (id INTEGER, amount INTEGER, status TEXT)")
         .unwrap();
     engine
-        .execute("INSERT INTO orders VALUES (1, 100, 'active'), (2, 200, 'active'), (3, 300, 'closed')")
+        .execute(
+            "INSERT INTO orders VALUES (1, 100, 'active'), (2, 200, 'active'), (3, 300, 'closed')",
+        )
         .unwrap();
 
     let result = engine
@@ -273,23 +269,21 @@ fn test_projection_with_expression() {
 #[test]
 fn test_order_by_ascending() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE numbers (n INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE numbers (n INTEGER)").unwrap();
     engine
         .execute("INSERT INTO numbers VALUES (3), (1), (2)")
         .unwrap();
 
-    let result = engine.execute("SELECT * FROM numbers ORDER BY n ASC").unwrap();
+    let result = engine
+        .execute("SELECT * FROM numbers ORDER BY n ASC")
+        .unwrap();
     assert_eq!(result.rows.len(), 3);
 }
 
 #[test]
 fn test_order_by_descending() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE numbers (n INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE numbers (n INTEGER)").unwrap();
     engine
         .execute("INSERT INTO numbers VALUES (3), (1), (2)")
         .unwrap();
@@ -310,7 +304,9 @@ fn test_inner_join() {
         .execute("CREATE TABLE departments (id INTEGER, dept_name TEXT)")
         .unwrap();
     engine
-        .execute("INSERT INTO employees VALUES (1, 'Alice', 10), (2, 'Bob', 20), (3, 'Charlie', 30)")
+        .execute(
+            "INSERT INTO employees VALUES (1, 'Alice', 10), (2, 'Bob', 20), (3, 'Charlie', 30)",
+        )
         .unwrap();
     engine
         .execute("INSERT INTO departments VALUES (10, 'Engineering'), (20, 'Sales')")
@@ -332,7 +328,9 @@ fn test_left_join() {
         .execute("CREATE TABLE departments (id INTEGER, dept_name TEXT)")
         .unwrap();
     engine
-        .execute("INSERT INTO employees VALUES (1, 'Alice', 10), (2, 'Bob', 20), (3, 'Charlie', 30)")
+        .execute(
+            "INSERT INTO employees VALUES (1, 'Alice', 10), (2, 'Bob', 20), (3, 'Charlie', 30)",
+        )
         .unwrap();
     engine
         .execute("INSERT INTO departments VALUES (10, 'Engineering'), (20, 'Sales')")

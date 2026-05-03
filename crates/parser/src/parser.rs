@@ -1656,7 +1656,7 @@ impl Parser {
         if matches!(self.current(), Some(Token::Group)) {
             self.next();
             self.expect(Token::By)?;
-            
+
             // Handle ROLLUP and CUBE
             if matches!(self.current(), Some(Token::Rollup)) {
                 self.next();
@@ -1664,10 +1664,17 @@ impl Parser {
                     self.next();
                     let inner_exprs = self.parse_expression_list()?;
                     self.expect(Token::RParen)?;
-                    group_by.push(Expression::Identifier(format!("ROLLUP({})", inner_exprs.iter().map(|e| match e {
-                        Expression::Identifier(s) => s.clone(),
-                        _ => "".to_string(),
-                    }).collect::<Vec<_>>().join(","))));
+                    group_by.push(Expression::Identifier(format!(
+                        "ROLLUP({})",
+                        inner_exprs
+                            .iter()
+                            .map(|e| match e {
+                                Expression::Identifier(s) => s.clone(),
+                                _ => "".to_string(),
+                            })
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    )));
                 } else {
                     group_by.push(Expression::Identifier("ROLLUP".to_string()));
                 }
@@ -1677,10 +1684,17 @@ impl Parser {
                     self.next();
                     let inner_exprs = self.parse_expression_list()?;
                     self.expect(Token::RParen)?;
-                    group_by.push(Expression::Identifier(format!("CUBE({})", inner_exprs.iter().map(|e| match e {
-                        Expression::Identifier(s) => s.clone(),
-                        _ => "".to_string(),
-                    }).collect::<Vec<_>>().join(","))));
+                    group_by.push(Expression::Identifier(format!(
+                        "CUBE({})",
+                        inner_exprs
+                            .iter()
+                            .map(|e| match e {
+                                Expression::Identifier(s) => s.clone(),
+                                _ => "".to_string(),
+                            })
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    )));
                 } else {
                     group_by.push(Expression::Identifier("CUBE".to_string()));
                 }
@@ -1781,10 +1795,13 @@ impl Parser {
                     // Parse the expression inside ROLLUP()
                     let inner_expr = self.parse_expression()?;
                     self.expect(Token::RParen)?;
-                    exprs.push(Expression::Identifier(format!("ROLLUP({})", match &inner_expr {
-                        Expression::Identifier(s) => s.clone(),
-                        _ => "".to_string(),
-                    })));
+                    exprs.push(Expression::Identifier(format!(
+                        "ROLLUP({})",
+                        match &inner_expr {
+                            Expression::Identifier(s) => s.clone(),
+                            _ => "".to_string(),
+                        }
+                    )));
                 } else {
                     exprs.push(Expression::Identifier("ROLLUP".to_string()));
                 }
@@ -1794,10 +1811,13 @@ impl Parser {
                     self.next();
                     let inner_expr = self.parse_expression()?;
                     self.expect(Token::RParen)?;
-                    exprs.push(Expression::Identifier(format!("CUBE({})", match &inner_expr {
-                        Expression::Identifier(s) => s.clone(),
-                        _ => "".to_string(),
-                    })));
+                    exprs.push(Expression::Identifier(format!(
+                        "CUBE({})",
+                        match &inner_expr {
+                            Expression::Identifier(s) => s.clone(),
+                            _ => "".to_string(),
+                        }
+                    )));
                 } else {
                     exprs.push(Expression::Identifier("CUBE".to_string()));
                 }
@@ -3026,9 +3046,20 @@ impl Parser {
                     let mut depth = 1;
                     while let Some(token) = self.current() {
                         match token {
-                            Token::LParen => { self.next(); depth += 1; }
-                            Token::RParen => { self.next(); depth -= 1; if depth == 0 { break; } }
-                            _ => { self.next(); }
+                            Token::LParen => {
+                                self.next();
+                                depth += 1;
+                            }
+                            Token::RParen => {
+                                self.next();
+                                depth -= 1;
+                                if depth == 0 {
+                                    break;
+                                }
+                            }
+                            _ => {
+                                self.next();
+                            }
                         }
                     }
                 }

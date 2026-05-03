@@ -286,7 +286,8 @@ impl Default for CboOptimizer {
 impl CostModel for CboOptimizer {
     fn estimate_cost(&self, _plan: &dyn std::any::Any) -> f64 {
         // Simplified - return default cost based on row count
-        self.cost_model.seq_scan_cost(self.default_row_count, self.default_page_count)
+        self.cost_model
+            .seq_scan_cost(self.default_row_count, self.default_page_count)
     }
 }
 

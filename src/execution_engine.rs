@@ -431,9 +431,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::SetRole(ref stmt) => self.execute_set_role(stmt),
             Statement::ShowRoles => self.execute_show_roles(),
             Statement::ShowGrantsFor(ref user) => self.execute_show_grants_for(user),
-            _ => Err(SqlError::ExecutionError(
-                format!("Unsupported statement type: {:?}", std::mem::discriminant(&statement)),
-            )),
+            _ => Err(SqlError::ExecutionError(format!(
+                "Unsupported statement type: {:?}",
+                std::mem::discriminant(&statement)
+            ))),
         }
     }
 
@@ -456,7 +457,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     size_bytes: result.rows.iter().map(|r| r.len()).sum(),
                     last_access: 0,
                 };
-                self.query_cache.write().unwrap().put(cache_key, entry, vec![]);
+                self.query_cache
+                    .write()
+                    .unwrap()
+                    .put(cache_key, entry, vec![]);
             }
 
             return Ok(result);
@@ -951,7 +955,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
-        self.query_cache.write().unwrap().invalidate_table(&table_name);
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&table_name);
 
         Ok(ExecutorResult::new(vec![], insert.values.len()))
     }
@@ -1118,7 +1125,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
-        self.query_cache.write().unwrap().invalidate_table(&table_name);
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&table_name);
         Ok(ExecutorResult::new(vec![], count))
     }
 

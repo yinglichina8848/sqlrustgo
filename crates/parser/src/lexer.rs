@@ -254,7 +254,9 @@ impl<'a> Lexer<'a> {
                     "INTEGER" | "INT" => Token::Integer,
                     "TEXT" => Token::Text,
                     "VARCHAR" | "CHAR" => Token::Identifier("VARCHAR".to_string()),
-                    "FLOAT" | "DOUBLE" | "REAL" | "DECIMAL" | "NUMERIC" => Token::Identifier("FLOAT".to_string()),
+                    "FLOAT" | "DOUBLE" | "REAL" | "DECIMAL" | "NUMERIC" => {
+                        Token::Identifier("FLOAT".to_string())
+                    }
                     "BOOLEAN" | "BOOL" => Token::Boolean,
                     "BLOB" => Token::Blob,
                     "NULL" => Token::Null,

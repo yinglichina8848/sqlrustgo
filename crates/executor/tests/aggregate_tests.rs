@@ -49,9 +49,7 @@ fn test_aggregate_count_column() {
 #[test]
 fn test_aggregate_count_empty() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE empty (id INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE empty (id INTEGER)").unwrap();
     let result = engine.execute("SELECT COUNT(*) FROM empty").unwrap();
     assert_eq!(result.rows.len(), 1);
     assert_eq!(result.rows[0][0], Value::Integer(0));
@@ -60,9 +58,7 @@ fn test_aggregate_count_empty() {
 #[test]
 fn test_aggregate_count_empty_column() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE empty (id INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE empty (id INTEGER)").unwrap();
     let result = engine.execute("SELECT COUNT(id) FROM empty").unwrap();
     assert_eq!(result.rows.len(), 1);
     assert_eq!(result.rows[0][0], Value::Integer(0));
@@ -140,9 +136,7 @@ fn test_aggregate_with_filter() {
 #[test]
 fn test_aggregate_sum_empty() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE empty (id INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE empty (id INTEGER)").unwrap();
     let result = engine.execute("SELECT SUM(id) FROM empty").unwrap();
     assert_eq!(result.rows.len(), 1);
 }
@@ -150,15 +144,13 @@ fn test_aggregate_sum_empty() {
 #[test]
 fn test_aggregate_count_with_distinct() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE t (x INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE t (x INTEGER)").unwrap();
     engine
         .execute("INSERT INTO t VALUES (1), (1), (2), (3), (3)")
         .unwrap();
-    let result = engine.execute("SELECT COUNT(DISTINCT x) FROM t").unwrap_or_else(|_| {
-        engine.execute("SELECT COUNT(*) FROM t").unwrap()
-    });
+    let result = engine
+        .execute("SELECT COUNT(DISTINCT x) FROM t")
+        .unwrap_or_else(|_| engine.execute("SELECT COUNT(*) FROM t").unwrap());
     assert_eq!(result.rows.len(), 1);
 }
 
