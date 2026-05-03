@@ -10,8 +10,8 @@
 
 use crate::cli::TpchBenchArgs;
 use sqlrustgo::ExecutionEngine;
-use sqlrustgo_storage::{MemoryStorage, StorageEngine};
 use sqlrustgo_storage::engine::Record;
+use sqlrustgo_storage::{MemoryStorage, StorageEngine};
 use sqlrustgo_types::Value;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
@@ -38,13 +38,19 @@ struct ColumnSchema {
 /// Normalize data type names
 fn normalize_data_type(dt: &str) -> String {
     let dt_upper = dt.to_uppercase();
-    if dt_upper.contains("INT") || dt_upper == "INTEGER" || dt_upper == "BIGINT" || dt_upper == "SMALLINT" {
+    if dt_upper.contains("INT")
+        || dt_upper == "INTEGER"
+        || dt_upper == "BIGINT"
+        || dt_upper == "SMALLINT"
+    {
         "INTEGER".to_string()
-    } else if dt_upper.contains("FLOAT") || dt_upper.contains("DOUBLE") || dt_upper.contains("REAL") {
+    } else if dt_upper.contains("FLOAT") || dt_upper.contains("DOUBLE") || dt_upper.contains("REAL")
+    {
         "FLOAT".to_string()
     } else if dt_upper.contains("DECIMAL") || dt_upper.contains("NUMERIC") {
         "DECIMAL".to_string()
-    } else if dt_upper.contains("VARCHAR") || dt_upper.contains("CHAR") || dt_upper.contains("TEXT") {
+    } else if dt_upper.contains("VARCHAR") || dt_upper.contains("CHAR") || dt_upper.contains("TEXT")
+    {
         "TEXT".to_string()
     } else if dt_upper.contains("DATE") {
         "DATE".to_string()
@@ -60,8 +66,8 @@ fn parse_ddl(ddl_path: &str) -> Result<Vec<TableSchema>, String> {
     use sqlrustgo_parser::parse;
     use sqlrustgo_parser::Statement;
 
-    let content = fs::read_to_string(ddl_path)
-        .map_err(|e| format!("Failed to read DDL file: {}", e))?;
+    let content =
+        fs::read_to_string(ddl_path).map_err(|e| format!("Failed to read DDL file: {}", e))?;
 
     let mut schemas = Vec::new();
 
@@ -109,10 +115,21 @@ fn parse_ddl(ddl_path: &str) -> Result<Vec<TableSchema>, String> {
         }
 
         if let Ok(Statement::CreateTable(stmt)) = parse(&content_no_comments) {
-            eprintln!("DEBUG: parse_ddl got {} columns for table {}: col_names={:?}", stmt.columns.len(), stmt.name, stmt.columns.iter().map(|c|c.name.clone()).collect::<Vec<_>>());
+            eprintln!(
+                "DEBUG: parse_ddl got {} columns for table {}: col_names={:?}",
+                stmt.columns.len(),
+                stmt.name,
+                stmt.columns
+                    .iter()
+                    .map(|c| c.name.clone())
+                    .collect::<Vec<_>>()
+            );
             schemas.push(convert_create_table(&stmt)?);
         } else {
-            eprintln!("DEBUG: parse_ddl failed to parse as CREATE TABLE: {}", &content_no_comments[..content_no_comments.len().min(120)]);
+            eprintln!(
+                "DEBUG: parse_ddl failed to parse as CREATE TABLE: {}",
+                &content_no_comments[..content_no_comments.len().min(120)]
+            );
         }
         remaining = rest;
     }
@@ -121,7 +138,9 @@ fn parse_ddl(ddl_path: &str) -> Result<Vec<TableSchema>, String> {
 }
 
 /// Convert parser's CreateTableStatement to our TableSchema
-fn convert_create_table(stmt: &sqlrustgo_parser::CreateTableStatement) -> Result<TableSchema, String> {
+fn convert_create_table(
+    stmt: &sqlrustgo_parser::CreateTableStatement,
+) -> Result<TableSchema, String> {
     let mut columns = Vec::new();
     let mut primary_key = Vec::new();
 
@@ -179,11 +198,11 @@ fn import_table(
         ..Default::default()
     };
 
-    storage.create_table(&info)
+    storage
+        .create_table(&info)
         .map_err(|e| format!("Failed to create table: {:?}", e))?;
 
-    let file = File::open(&table_path)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
+    let file = File::open(&table_path).map_err(|e| format!("Failed to open file: {}", e))?;
     let reader = BufReader::with_capacity(1024 * 1024, file);
 
     let mut count = 0;
@@ -228,23 +247,32 @@ fn import_table(
 
 /// Parse a field value based on data type
 fn parse_value(field: &str, data_type: &str) -> Value {
-
     if field.is_empty() {
         return Value::Null;
     }
 
     let dt_upper = data_type.to_uppercase();
-    if dt_upper == "INTEGER" || dt_upper == "INT" || dt_upper == "BIGINT" || dt_upper == "SMALLINT" {
+    if dt_upper == "INTEGER" || dt_upper == "INT" || dt_upper == "BIGINT" || dt_upper == "SMALLINT"
+    {
         match field.parse::<i64>() {
             Ok(v) => Value::Integer(v),
             Err(_) => Value::Null,
         }
-    } else if dt_upper == "FLOAT" || dt_upper == "REAL" || dt_upper == "DOUBLE" || dt_upper == "DECIMAL" || dt_upper == "NUMERIC" {
+    } else if dt_upper == "FLOAT"
+        || dt_upper == "REAL"
+        || dt_upper == "DOUBLE"
+        || dt_upper == "DECIMAL"
+        || dt_upper == "NUMERIC"
+    {
         match field.parse::<f64>() {
             Ok(v) => Value::Float(v),
             Err(_) => Value::Null,
         }
-    } else if dt_upper == "TEXT" || dt_upper == "VARCHAR" || dt_upper == "CHAR" || dt_upper == "DATE" {
+    } else if dt_upper == "TEXT"
+        || dt_upper == "VARCHAR"
+        || dt_upper == "CHAR"
+        || dt_upper == "DATE"
+    {
         Value::Text(field.to_string())
     } else if dt_upper == "BLOB" {
         Value::Blob(field.as_bytes().to_vec())
@@ -315,7 +343,12 @@ pub fn run(args: TpchBenchArgs) -> Result<(), String> {
         let start = Instant::now();
         match import_table(&mut storage, schema, &data_path, args.batch_size) {
             Ok(count) => {
-                println!("  {}: {} rows in {:.2}s", schema.name, count, start.elapsed().as_secs_f64());
+                println!(
+                    "  {}: {} rows in {:.2}s",
+                    schema.name,
+                    count,
+                    start.elapsed().as_secs_f64()
+                );
                 imported_count += count;
             }
             Err(e) => {
@@ -324,14 +357,21 @@ pub fn run(args: TpchBenchArgs) -> Result<(), String> {
         }
     }
 
-    println!("\nTotal import: {} rows in {:.2}s", imported_count, import_start.elapsed().as_secs_f64());
+    println!(
+        "\nTotal import: {} rows in {:.2}s",
+        imported_count,
+        import_start.elapsed().as_secs_f64()
+    );
     println!();
 
     // Determine which queries to run
     let query_names: Vec<String> = if args.queries == "all" {
         (1..=22).map(|i| format!("Q{}", i)).collect()
     } else {
-        args.queries.split(',').map(|s| s.trim().to_string()).collect()
+        args.queries
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect()
     };
 
     println!("=== Running {} TPC-H Queries ===", query_names.len());
