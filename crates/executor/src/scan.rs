@@ -1,4 +1,4 @@
-use sqlrustgo_planner::{PhysicalPlan, Schema};
+use sqlrustgo_planner::Schema;
 use sqlrustgo_storage::predicate::Predicate;
 use sqlrustgo_types::{SqlResult, Value};
 
@@ -10,21 +10,11 @@ pub trait ScanExecutor: Send {
     fn close(&mut self) -> SqlResult<()>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ScanStats {
     pub rows_scanned: u64,
     pub rows_returned: u64,
     pub used_index: bool,
-}
-
-impl Default for ScanStats {
-    fn default() -> Self {
-        Self {
-            rows_scanned: 0,
-            rows_returned: 0,
-            used_index: false,
-        }
-    }
 }
 
 pub trait IndexScanable {
