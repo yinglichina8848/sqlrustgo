@@ -8,10 +8,11 @@
 
 ## Branch Strategy
 
-- **Main development branch**: `develop/v2.8.0`
+- **Main development branch**: `develop/v2.9.0`
 - **DO NOT modify `main` branch directly**
-- Create feature branches from `develop/v2.8.0`
+- Create feature branches from `develop/v2.9.0`
 - Use git worktrees for isolated feature work: `git worktree add .worktrees/<name> -b feature/<name>`
+- **Git remote: Gitea** — `http://192.168.0.252:3000/openclaw/sqlrustgo.git`
 
 ## Essential Commands
 
