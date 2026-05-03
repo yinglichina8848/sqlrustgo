@@ -509,8 +509,10 @@ pub enum Expression {
     Like(Box<Expression>, Box<Expression>, Option<char>), // LIKE pattern [ESCAPE char]
     Between(Box<Expression>, Box<Expression>, Box<Expression>), // expr BETWEEN low AND high
     CaseWhen(Vec<WhenClause>, Option<Box<Expression>>), // CASE WHEN ... ELSE ... END
-    FunctionCall(String, Vec<Expression>),
-    WindowCall(WindowCall),
+    FunctionCall(String, Vec<Expression>), // Function call: UPPER(name), LOWER(name), etc.
+    WindowCall(WindowCall), // Window function call: ROW_NUMBER() OVER ()
+    Position(Box<Expression>, Box<Expression>), // POSITION(substr IN str)
+    Insert(Box<Expression>, Box<Expression>, Box<Expression>, Box<Expression>), // INSERT(str, pos, len, newstr)
 }
 
 /// SQL Parser
@@ -1201,7 +1203,8 @@ impl Parser {
                 Some(Token::Identifier(ref name)) if name.to_uppercase() == "DATE_ADD" 
                     || name.to_uppercase() == "DATE_SUB" 
                     || name.to_uppercase() == "ADDTIME"
-                    || name.to_uppercase() == "SUBTIME" => {
+                    || name.to_uppercase() == "SUBTIME"
+                    || name.to_uppercase() == "INSERT" => {
                     let func_name = name.to_uppercase();
                     self.next();
                     self.expect(Token::LParen)?;
