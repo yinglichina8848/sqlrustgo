@@ -1197,6 +1197,49 @@ impl Parser {
                     });
                     self.next();
                 }
+                // Handle REPLACE function in SELECT
+                Some(Token::Replace) => {
+                    let name = "REPLACE".to_string();
+                    self.next();
+                    self.expect(Token::LParen)?;
+                    let args = self.parse_expression_list()?;
+                    self.expect(Token::RParen)?;
+                    columns.push(SelectColumn {
+                        name: name.clone(),
+                        alias: None,
+                        expression: Some(Expression::FunctionCall(name, args)),
+                    });
+                }
+                // Handle IF function in SELECT  
+                Some(Token::If) => {
+                    let name = "IF".to_string();
+                    self.next();
+                    self.expect(Token::LParen)?;
+                    let args = self.parse_expression_list()?;
+                    self.expect(Token::RParen)?;
+                    columns.push(SelectColumn {
+                        name: name.clone(),
+                        alias: None,
+                        expression: Some(Expression::FunctionCall(name, args)),
+                    });
+                }
+                // Handle LEFT/RIGHT functions in SELECT
+                Some(Token::Left) | Some(Token::Right) => {
+                    let name = match self.current() {
+                        Some(Token::Left) => "LEFT",
+                        Some(Token::Right) => "RIGHT",
+                        _ => unreachable!(),
+                    }.to_string();
+                    self.next();
+                    self.expect(Token::LParen)?;
+                    let args = self.parse_expression_list()?;
+                    self.expect(Token::RParen)?;
+                    columns.push(SelectColumn {
+                        name: name.clone(),
+                        alias: None,
+                        expression: Some(Expression::FunctionCall(name, args)),
+                    });
+                }
                 // Handle aggregate functions: COUNT(*), SUM(col), etc.
                 // Only treat as aggregate if followed by LParen
                 Some(Token::Count) | Some(Token::Sum) | Some(Token::Avg) | Some(Token::Min)
