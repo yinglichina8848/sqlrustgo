@@ -1,0 +1,227 @@
+{
+  "version": "1.0",
+  "generated": "2026-05-03",
+  "description": "Machine-readable formal invariant coverage inventory. Tracks TLA+ invariant → Rust assertion → test → CI coverage.",
+
+  "invariants": [
+    {
+      "id": "INV_NO_CYCLE",
+      "proof": "PROOF_023",
+      "proof_file": "PROOF_023_deadlock_v4",
+      "tla_invariant": "NoCycle",
+      "rust_api": "try_wait_edge",
+      "rust_enforcement": "DeadlockDetector::try_wait_edge() — atomic pre-check + add_edge inside Mutex",
+      "assertion": "debug_assert_no_cycle (debug build only)",
+      "tests": [
+        "test_concurrent_mutual_deadlock_prevention",
+        "test_try_wait_edge_rejects_cycle",
+        "test_detect_two_node_cycle",
+        "test_prevent_3_cycle_via_precheck",
+        "test_no_cycle_linear_chain",
+        "test_would_create_cycle_unsafe_detects_cycle"
+      ],
+      "files": [
+        "crates/transaction/src/deadlock.rs",
+        "crates/transaction/src/lock.rs"
+      ],
+      "level": "critical",
+      "ci_layer": "PR Gate",
+      "status": "active"
+    },
+    {
+      "id": "INV_NO_SELF_WAIT",
+      "proof": "PROOF_023",
+      "proof_file": "PROOF_023_deadlock_v4",
+      "tla_invariant": "NoSelfWait",
+      "rust_api": "try_wait_edge",
+      "rust_enforcement": "holders.contains(&tx_id) check inside try_wait_edge",
+      "assertion": "Err(LockError::SelfWait) returned immediately",
+      "tests": [
+        "test_no_self_wait",
+        "test_try_wait_edge_rejects_cycle"
+      ],
+      "files": [
+        "crates/transaction/src/deadlock.rs",
+        "crates/transaction/src/lock.rs"
+      ],
+      "level": "critical",
+      "ci_layer": "PR Gate",
+      "status": "active"
+    },
+    {
+      "id": "INV_NO_DEADLOCK_TOCTOU",
+      "proof": "PROOF_023",
+      "proof_file": "PROOF_023_deadlock_toctou",
+      "tla_invariant": "NoCycle",
+      "tla_expected": "VIOLATED",
+      "tla_note": "TOCTOU model proves separate check+commit creates cycle window. VIOLATED=expected in model.",
+      "rust_api": "try_wait_edge",
+      "rust_enforcement": "Atomic pre-check and add_edge inside single Mutex critical section",
+      "assertion": "Concurrent test proves no cycle forms despite concurrent requests",
+      "tests": [
+        "test_concurrent_mutual_deadlock_prevention",
+        "test_concurrent_no_false_positive"
+      ],
+      "files": [
+        "crates/transaction/src/deadlock.rs"
+      ],
+      "level": "critical",
+      "ci_layer": "PR Gate",
+      "status": "active"
+    },
+    {
+      "id": "INV_MVCC_ATOMIC",
+      "proof": "PROOF_016",
+      "proof_file": "PROOF_016_023_mvcc_atomic",
+      "tla_invariant": "NoCycle",
+      "tla_note": "Unified MVCC + Wait-For model, atomic check+commit",
+      "rust_api": "TransactionManager::commit",
+      "rust_enforcement": "try_wait_edge used for all lock acquisitions during transaction",
+      "tests": [
+        "test_vote_serialization"
+      ],
+      "files": [
+        "crates/transaction/src/deadlock.rs",
+        "crates/transaction/src/dtc.rs",
+        "crates/transaction/src/mvcc_storage.rs"
+      ],
+      "level": "critical",
+      "ci_layer": "PR Gate",
+      "status": "active"
+    },
+    {
+      "id": "INV_MVCC_TOCTOU",
+      "proof": "PROOF_016",
+      "proof_file": "PROOF_016_023_mvcc_toctou",
+      "tla_invariant": "NoCycle",
+      "tla_expected": "VIOLATED",
+      "tla_note": "MVCC TOCTOU: separate commit check and commit write create cycle window. VIOLATED=expected.",
+      "rust_api": "TransactionManager::commit",
+      "rust_enforcement": "Guarded by try_wait_edge atomicity (no TOCTOU in Rust impl)",
+      "assertion": "Rust impl is atomic — validated by INV_NO_DEADLOCK_TOCTOU tests",
+      "tests": [
+        "test_concurrent_mutual_deadlock_prevention"
+      ],
+      "files": [
+        "crates/transaction/src/dtc.rs"
+      ],
+      "level": "info",
+      "ci_layer": "Nightly",
+      "status": "active",
+      "note": "VIOLATED is expected — proves TOCTOU exists in model but Rust impl is atomic"
+    },
+    {
+      "id": "INV_WRITE_SKEW",
+      "proof": "PROOF_026",
+      "proof_file": "PROOF_026_write_skew",
+      "tla_invariant": "NoWriteSkew",
+      "tla_expected": "VIOLATED",
+      "tla_note": "Write skew counterexample exists — current MVCC allows it",
+      "rust_api": "SerializationGraph",
+      "rust_enforcement": "NOT IMPLEMENTED",
+      "tests": [],
+      "files": [
+        "crates/transaction/src/dtc.rs"
+      ],
+      "level": "critical",
+      "ci_layer": "Smoke",
+      "status": "frozen",
+      "note": "FROZEN — known unsafe area. Deferred to Phase C."
+    },
+    {
+      "id": "INV_SNAPSHOT_ISOLATION",
+      "proof": "PROOF_016",
+      "proof_file": "PROOF_016_mvcc_ssi",
+      "tla_invariant": "SnapshotIsolation",
+      "tla_note": "SSI model — commitTs ordering enforcement",
+      "rust_api": "MvccStorage",
+      "rust_enforcement": "Partial — version chain read, no commit ordering",
+      "assertion": "mvcc::tests::test_snapshot_visibility validates snapshot reads",
+      "tests": [
+        "test_snapshot_visibility",
+        "test_row_version_is_visible_committed_before_snapshot",
+        "test_row_version_is_visible_committed_after_snapshot"
+      ],
+      "files": [
+        "crates/transaction/src/mvcc_storage.rs",
+        "crates/transaction/src/version_chain.rs",
+        "crates/transaction/src/mvcc.rs"
+      ],
+      "level": "info",
+      "ci_layer": "PR Gate",
+      "status": "active"
+    },
+    {
+      "id": "INV_NO_WRITE_CONFLICT",
+      "proof": "PROOF_016",
+      "proof_file": "PROOF_016_023_mvcc_atomic",
+      "tla_invariant": "NoWriteConflict",
+      "tla_note": "No two transactions can commit writes to the same key at overlapping times",
+      "rust_api": "TransactionManager::commit",
+      "rust_enforcement": "Write-write conflict detection in CommitTxn path",
+      "tests": [],
+      "files": [
+        "crates/transaction/src/dtc.rs"
+      ],
+      "level": "warning",
+      "ci_layer": "PR Gate",
+      "status": "active",
+      "note": "Test coverage gap — CommitTxn validation not exercised in unit tests"
+    },
+    {
+      "id": "INV_BTREE_STRUCTURAL",
+      "proof": "PROOF_004",
+      "proof_file": "btree_invariants",
+      "tla_invariant": "BTreeInvariants",
+      "tla_note": "Dafny-verified B+Tree structural invariants",
+      "rust_api": "BTreeMap",
+      "rust_enforcement": "Dafny proof (formal/proof) — no runtime assertion",
+      "tests": [],
+      "files": [
+        "crates/index/src/btree.rs"
+      ],
+      "level": "critical",
+      "ci_layer": "Nightly",
+      "status": "active"
+    }
+  ],
+
+  "proof_files": {
+    "PROOF_023_deadlock_v4": {
+      "spec": "DeadlockFree",
+      "invariants": ["NoCycle", "NoSelfWait"],
+      "expected": "PASS",
+      "ci_cost": "S"
+    },
+    "PROOF_023_deadlock_toctou": {
+      "spec": "DeadlockTOCTOU",
+      "invariants": ["NoCycle"],
+      "expected": "VIOLATED",
+      "ci_cost": "S"
+    },
+    "PROOF_016_023_mvcc_atomic": {
+      "spec": "MVCCAtomic",
+      "invariants": ["NoCycle", "NoWriteConflict"],
+      "expected": "PASS",
+      "ci_cost": "M"
+    },
+    "PROOF_016_023_mvcc_toctou": {
+      "spec": "MVCCToctou",
+      "invariants": ["NoCycle"],
+      "expected": "VIOLATED",
+      "ci_cost": "M"
+    },
+    "PROOF_026_write_skew": {
+      "spec": "WriteSkew",
+      "invariants": ["NoWriteSkew"],
+      "expected": "VIOLATED",
+      "ci_cost": "S"
+    }
+  },
+
+  "ci_gates": {
+    "proof_coverage_min": 80,
+    "critical_min": 100,
+    "warn_level": 50
+  }
+}

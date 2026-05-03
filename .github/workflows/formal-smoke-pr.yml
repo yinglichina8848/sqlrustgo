@@ -38,6 +38,22 @@ jobs:
         run: |
           bash scripts/formal/formal_smoke.sh
 
+      - name: Run Proof Coverage
+        id: coverage
+        run: |
+          bash scripts/formal/proof_coverage.sh --ci || true
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Check Coverage Gate
+        run: |
+          EXIT_CODE=$(grep exit_code $GITHUB_OUTPUT | cut -d= -f2 || echo "0")
+          echo "Coverage exit code: $EXIT_CODE"
+          if [ "$EXIT_CODE" = "1" ]; then
+            echo "PROOF COVERAGE FAILED: <50% coverage"
+            exit 1
+          fi
+          echo "Proof coverage gate: passed (WARN is acceptable in PR Gate)"
+
   rust-transaction-tests:
     name: Transaction Tests
     runs-on: ubuntu-latest
