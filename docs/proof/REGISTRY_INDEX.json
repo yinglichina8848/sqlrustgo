@@ -1,7 +1,7 @@
 {
   "registry_version": "1.3",
   "updated_at": "2026-05-03T08:30:00Z",
-  "total_proofs": 17,
+  "total_proofs": 18,
   "phase": "Phase 1 (S0-S05) + Phase 2 P0",
   "proofs": [
     {
@@ -129,6 +129,16 @@
       "stage": "P0",
       "issue_ref": "Issue #201",
       "verified": "2026-05-03"
+    },
+    {
+      "id": "PROOF-019-left-right-join",
+      "title": "LEFT/RIGHT OUTER JOIN Algorithm",
+      "language": "TLA+",
+      "category": "executor",
+      "status": "verified",
+      "stage": "P1",
+      "verified": "2026-05-03",
+      "tool_details": "TLC 2026.04.29, 13 states, 6 distinct states, depth 4"
     }
   ]
 }
