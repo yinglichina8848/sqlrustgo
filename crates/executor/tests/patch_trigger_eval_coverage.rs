@@ -64,7 +64,11 @@ fn value_to_string(v: &Value) -> String {
         }
         Value::Text(s) => s.clone(),
         Value::Boolean(b) => {
-            if *b { "1".to_string() } else { "0".to_string() }
+            if *b {
+                "1".to_string()
+            } else {
+                "0".to_string()
+            }
         }
         Value::Blob(b) => format!("[BLOB {} bytes]", b.len()),
     }
@@ -75,7 +79,13 @@ fn test_trigger_insert_fires() {
     let mut engine = TestEngine::new();
     engine.run("CREATE TABLE t(a INT)").unwrap();
     let r = engine.run("INSERT INTO t VALUES (1)");
-    assert!(r.is_ok() || r.as_ref().err().map(|e| e.contains("unsupported") | e.contains("not implemented")).unwrap_or(false));
+    assert!(
+        r.is_ok()
+            || r.as_ref()
+                .err()
+                .map(|e| e.contains("unsupported") | e.contains("not implemented"))
+                .unwrap_or(false)
+    );
 }
 
 #[test]
@@ -101,7 +111,15 @@ fn test_trigger_before_insert_placeholder() {
     let mut engine = TestEngine::new();
     engine.run("CREATE TABLE t(a INT)").unwrap();
     let r = engine.run("CREATE TRIGGER t1 BEFORE INSERT ON t FOR EACH ROW SET NEW.a = 10");
-    assert!(r.is_ok() || r.as_ref().err().map(|e| e.contains("unsupported") | e.contains("not implemented") | e.contains("CREATE TRIGGER")).unwrap_or(false));
+    assert!(
+        r.is_ok()
+            || r.as_ref()
+                .err()
+                .map(|e| e.contains("unsupported")
+                    | e.contains("not implemented")
+                    | e.contains("CREATE TRIGGER"))
+                .unwrap_or(false)
+    );
 }
 
 #[test]
@@ -109,8 +127,17 @@ fn test_trigger_after_insert_placeholder() {
     let mut engine = TestEngine::new();
     engine.run("CREATE TABLE t(a INT)").unwrap();
     engine.run("CREATE TABLE log(x INT)").unwrap();
-    let r = engine.run("CREATE TRIGGER t2 AFTER INSERT ON t FOR EACH ROW INSERT INTO log VALUES (NEW.a)");
-    assert!(r.is_ok() || r.as_ref().err().map(|e| e.contains("unsupported") | e.contains("not implemented") | e.contains("CREATE TRIGGER")).unwrap_or(false));
+    let r = engine
+        .run("CREATE TRIGGER t2 AFTER INSERT ON t FOR EACH ROW INSERT INTO log VALUES (NEW.a)");
+    assert!(
+        r.is_ok()
+            || r.as_ref()
+                .err()
+                .map(|e| e.contains("unsupported")
+                    | e.contains("not implemented")
+                    | e.contains("CREATE TRIGGER"))
+                .unwrap_or(false)
+    );
 }
 
 #[test]

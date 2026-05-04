@@ -1,5 +1,5 @@
 mod sqlite_diff;
-use sqlite_diff::{SqliteEngine, RustEngine, assert_sql_eq};
+use sqlite_diff::{assert_sql_eq, RustEngine, SqliteEngine};
 
 fn setup() -> Vec<&'static str> {
     vec![

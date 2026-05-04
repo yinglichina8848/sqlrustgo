@@ -143,7 +143,11 @@ impl LockManager {
 
             // PROOF-023 atomicity requirement: would_create_cycle + add_edge
             // must happen in the same locked region (no TOCTOU window).
-            if self.deadlock_detector.try_wait_edge(tx_id, holders).is_err() {
+            if self
+                .deadlock_detector
+                .try_wait_edge(tx_id, holders)
+                .is_err()
+            {
                 return Err(LockError::Deadlock);
             }
 

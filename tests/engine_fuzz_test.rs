@@ -1,6 +1,6 @@
 mod sqlite_diff;
 
-use sqlite_diff::{SqliteEngine, RustEngine};
+use sqlite_diff::{RustEngine, SqliteEngine};
 
 fn basic_setup() -> Vec<&'static str> {
     vec![
