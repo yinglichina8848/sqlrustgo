@@ -8,6 +8,7 @@ run-name: ${{ gitea.ref_name }} - ${{ gitea.sha }}
       - develop/v2.8.0
       - alpha/v2.9.0
       - beta/v2.8.0
+      - beta/v2.9.0
       - ci/gitea-compat
       - ci/v2.9.0-*
       - ci/v2.8.0-*
@@ -23,6 +24,7 @@ run-name: ${{ gitea.ref_name }} - ${{ gitea.sha }}
       - develop/v2.8.0
       - alpha/v2.9.0
       - beta/v2.8.0
+      - beta/v2.9.0
       - ci/gitea-compat
       - ci/v2.9.0-*
       - ci/v2.8.0-*
