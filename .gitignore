@@ -7,8 +7,17 @@ __pycache__/
 *.pyc
 *.profraw
 target/
+# TPC-H test data (never commit these)
+data/tpch-*/
+data/tpch-*/**/*.tbl
+data/tpch-*/**/*.csv
+tpch-sf*/
+sqlrustgo-data/
+*.db
+*.db-journal
+
+# Generated test data
 data/tpch-sf01-generated/
-data/tpch-sf01/
 artifacts/coverage/
 .DS_Store
 Cargo.lock
