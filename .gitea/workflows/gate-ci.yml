@@ -98,29 +98,29 @@ jobs:
           TEST_COUNT=$(grep -c "test result: ok" target/*.log 2>/dev/null || echo "0")
 
           # Build report
-          python3 -c "
-import json, datetime, os
-report = {
-    'gate': 'B-GATE-v2.9.0',
-    'version': 'v2.9.0',
-    'commit': os.environ.get('GITEA_SHA', 'unknown')[:12],
-    'status': '$GATE_STATUS',
-    'coverage': float('$COVERAGE') if '$COVERAGE' != '0' else 0,
-    'test_count': int('$TEST_COUNT'),
-    'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
-    'stages': {
-        'build': 'PASS',
-        'test': '$GATE_STATUS',
-        'clippy': 'PASS',
-        'fmt': 'PASS',
-        'coverage': 'PASS' if float('$COVERAGE') >= 75 else 'FAIL',
-        'sql_corpus': 'PASS'
-    }
-}
-with open('/tmp/gate-workspace/gate_report.json', 'w') as f:
-    json.dump(report, f, indent=2)
-print(json.dumps(report, indent=2))
-"
+          python3 - <<'PYEOF'
+            import json, datetime, os
+            report = {
+                'gate': 'B-GATE-v2.9.0',
+                'version': 'v2.9.0',
+                'commit': os.environ.get('GITEA_SHA', 'unknown')[:12],
+                'status': '$GATE_STATUS',
+                'coverage': float('$COVERAGE') if '$COVERAGE' != '0' else 0,
+                'test_count': int('$TEST_COUNT'),
+                'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
+                'stages': {
+                    'build': 'PASS',
+                    'test': '$GATE_STATUS',
+                    'clippy': 'PASS',
+                    'fmt': 'PASS',
+                    'coverage': 'PASS' if float('$COVERAGE') >= 75 else 'FAIL',
+                    'sql_corpus': 'PASS'
+                }
+            }
+            with open('/tmp/gate-workspace/gate_report.json', 'w') as f:
+                json.dump(report, f, indent=2)
+            print(json.dumps(report, indent=2))
+            PYEOF
 
       - name: Upload Gate Report Artifact
         uses: actions/upload-artifact@v4
