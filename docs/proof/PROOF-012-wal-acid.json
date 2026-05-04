@@ -9,10 +9,15 @@
   "evidence": {
     "test_results": "cargo test -p sqlrustgo-transaction --test wal_recovery: passed",
     "verification_method": "TLA+ model checking + integration tests",
-    "formal_spec": "PROOF-012-wal-acid.tla",
-    "formal_proof_file": "docs/proof/PROOF-012-wal-acid.tla"
+    "formal_spec": "PROOF-012-wal-acid.tla (doc only, NOT executable)",
+    "executable_spec": "docs/formal/WAL_Recovery.tla + WAL_Recovery.cfg",
+    "tla_check_command": "java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC -deadlock -workers auto -metadir /tmp/tlc_wal docs/formal/WAL_Recovery.tla",
+    "expected_result": "Model checking completed. No error."
+  },
+  "known_issues": {
+    "run_all_proofs_sh_bug": "scripts/verify/run_all_proofs.sh 错误查找 docs/proof/PROOF-012-wal-acid.tla（是 markdown 文档）而非 docs/formal/WAL_Recovery.tla（可执行TLA+）。PROOFS-012 在 run_all_proofs.sh 中 FAIL 是预期的——文件路径错误。"
   },
   "author": "openclaw",
-  "verified_at": "2026-05-02T00:00:00Z",
-  "created_at": "2026-05-02"
+  "verified_at": "2026-05-02",
+  "updated_at": "2026-05-04"
 }

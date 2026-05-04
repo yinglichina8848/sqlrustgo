@@ -225,7 +225,8 @@ fn test_distinct_no_crash() {
     e.execute("INSERT INTO t VALUES (1),(1),(2),(3),(3)")
         .unwrap();
     let r = e.execute("SELECT DISTINCT a FROM t").unwrap();
-    assert_eq!(r.rows.len(), 5);
+    // DISTINCT deduplicates: values {1,1,2,3,3} -> {1,2,3} = 3 rows
+    assert_eq!(r.rows.len(), 3);
 }
 
 #[test]
