@@ -172,7 +172,8 @@ impl DefaultPlanner {
                         };
                         self.create_physical_plan_internal(&anti_join_plan)
                     }
-                    Expr::InList { .. } | Expr::CaseWhen { .. } | Expr::Column(_) | Expr::Literal(_)
+                    Expr::InList { .. } | Expr::CaseWhen { .. } | Expr::Extract { .. }
+                    | Expr::Column(_) | Expr::Literal(_)
                     | Expr::BinaryExpr { .. } | Expr::UnaryExpr { .. } | Expr::AggregateFunction { .. }
                     | Expr::Alias { .. } | Expr::Wildcard | Expr::QualifiedWildcard { .. } => {
                         let input_plan = self.create_physical_plan_internal(input)?;

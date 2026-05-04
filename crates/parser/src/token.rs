@@ -135,6 +135,7 @@ pub enum Token {
     Week,
     Month,
     Year,
+    Extract,
 
     // MySQL-specific keywords
     Duplicate,
@@ -363,6 +364,7 @@ impl fmt::Display for Token {
             Token::Week => write!(f, "WEEK"),
             Token::Month => write!(f, "MONTH"),
             Token::Year => write!(f, "YEAR"),
+            Token::Extract => write!(f, "EXTRACT"),
             Token::AsOf => write!(f, "ASOF"),
             Token::Window => write!(f, "WINDOW"),
             Token::Partition => write!(f, "PARTITION"),
@@ -606,6 +608,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "WEEK" => Some(Token::Week),
         "MONTH" => Some(Token::Month),
         "YEAR" => Some(Token::Year),
+        "EXTRACT" => Some(Token::Extract),
         "ASOF" => Some(Token::AsOf),
         "WINDOW" => Some(Token::Window),
         "PARTITION" => Some(Token::Partition),
