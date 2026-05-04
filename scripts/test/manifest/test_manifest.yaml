@@ -16,17 +16,35 @@
   dimension: correctness
   command: cargo test --test network_tcp_smoke_test --all-features
   description: TCP connection smoke tests - bind, connect, read/write, options
+- name: catalog_ddl_cache
+  type: integration
+  component: catalog
+  dimension: correctness
+  command: cargo test --test catalog_ddl_cache_test --all-features
+  description: DDL operations (CREATE/DROP TABLE) and cache invalidation tests
+- name: executor_null_agg
+  type: integration
+  component: executor
+  dimension: correctness
+  command: cargo test --test executor_null_agg_test --all-features
+  description: NULL handling in aggregate functions - COUNT/SUM/AVG/MIN/MAX with NULLs
 known_failures: []
 groups:
   correctness:
     - planner_multi_join
     - optimizer_cbo_accuracy
     - network_tcp_smoke
+    - catalog_ddl_cache
+    - executor_null_agg
   full:
     - planner_multi_join
     - optimizer_cbo_accuracy
     - network_tcp_smoke
+    - catalog_ddl_cache
+    - executor_null_agg
   quick:
     - planner_multi_join
     - optimizer_cbo_accuracy
     - network_tcp_smoke
+    - catalog_ddl_cache
+    - executor_null_agg
