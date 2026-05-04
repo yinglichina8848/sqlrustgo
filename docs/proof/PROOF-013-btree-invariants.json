@@ -19,6 +19,7 @@
     "dafny_version": "Dafny 2.3.0.10506 does not support --verification-time-limit syntax; use /dafnyVerify:1 /compile:0 instead"
   },
   "author": "openclaw",
+  "created_at": "2026-05-02",
   "verified_at": "2026-05-02",
   "updated_at": "2026-05-04"
 }
