@@ -16,3 +16,4 @@ Cargo.lock
 docs/formal/*_TTrace_*.tla
 docs/formal/*_TTrace_*.bin
 
+ci_artifacts/
