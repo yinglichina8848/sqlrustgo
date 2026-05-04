@@ -561,13 +561,14 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         // "SELECT *" means no projection (return full rows)
         // Otherwise project only the specified columns
         // NOTE: DISTINCT operates on projected rows, so projection must come first
-        let needs_projection = !select.columns.is_empty()
-            && !select.columns.iter().any(|c| c.name == "*");
+        let needs_projection =
+            !select.columns.is_empty() && !select.columns.iter().any(|c| c.name == "*");
 
         let projected_rows: Vec<Vec<Value>> = if needs_projection {
             rows.into_iter()
                 .map(|row| {
-                    select.columns
+                    select
+                        .columns
                         .iter()
                         .map(|col| {
                             evaluate_expression(
@@ -789,7 +790,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 extract_fn: fn(&Expression) -> Option<(String, String)>,
             ) {
                 match expr {
-                    Expression::BinaryOp(left, op, right) if op.to_uppercase() == "=" || op == "==" => {
+                    Expression::BinaryOp(left, op, right)
+                        if op.to_uppercase() == "=" || op == "==" =>
+                    {
                         let (lt, lc, rt, rc) = {
                             let (t1, c1) = match extract_fn(left) {
                                 Some(x) => x,
@@ -802,8 +805,16 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             (t1, c1, t2, c2)
                         };
                         if !lt.is_empty() && !rt.is_empty() && lt != rt {
-                            let left_ref = if lt.is_empty() { lc.clone() } else { format!("{}.{}", lt, lc) };
-                            let right_ref = if rt.is_empty() { rc.clone() } else { format!("{}.{}", rt, rc) };
+                            let left_ref = if lt.is_empty() {
+                                lc.clone()
+                            } else {
+                                format!("{}.{}", lt, lc)
+                            };
+                            let right_ref = if rt.is_empty() {
+                                rc.clone()
+                            } else {
+                                format!("{}.{}", rt, rc)
+                            };
                             predicates.push((lt, rt, format!("{} = {}", left_ref, right_ref)));
                         }
                     }
@@ -814,7 +825,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     _ => {}
                 }
             }
-            extract_equi_joins(&jc.on_clause, &mut predicates, |e| Self::extract_table_col(e));
+            extract_equi_joins(&jc.on_clause, &mut predicates, |e| {
+                Self::extract_table_col(e)
+            });
         }
 
         // Also extract from WHERE clause
@@ -825,7 +838,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 extract_fn: fn(&Expression) -> Option<(String, String)>,
             ) {
                 match expr {
-                    Expression::BinaryOp(left, op, right) if op.to_uppercase() == "=" || op == "==" => {
+                    Expression::BinaryOp(left, op, right)
+                        if op.to_uppercase() == "=" || op == "==" =>
+                    {
                         let (lt, lc, rt, rc) = {
                             let (t1, c1) = match extract_fn(left) {
                                 Some(x) => x,
@@ -838,8 +853,16 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             (t1, c1, t2, c2)
                         };
                         if !lt.is_empty() && !rt.is_empty() && lt != rt {
-                            let left_ref = if lt.is_empty() { lc.clone() } else { format!("{}.{}", lt, lc) };
-                            let right_ref = if rt.is_empty() { rc.clone() } else { format!("{}.{}", rt, rc) };
+                            let left_ref = if lt.is_empty() {
+                                lc.clone()
+                            } else {
+                                format!("{}.{}", lt, lc)
+                            };
+                            let right_ref = if rt.is_empty() {
+                                rc.clone()
+                            } else {
+                                format!("{}.{}", rt, rc)
+                            };
                             predicates.push((lt, rt, format!("{} = {}", left_ref, right_ref)));
                         }
                     }
@@ -892,7 +915,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 continue;
             }
             let key = format!("{:?}", right_row[right_key_idx]);
-            right_hash.entry(key).or_default().push((ri, right_row.clone()));
+            right_hash
+                .entry(key)
+                .or_default()
+                .push((ri, right_row.clone()));
         }
 
         let mut matched: Vec<Vec<Value>> = Vec::new();
@@ -1036,8 +1062,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     }
                 }
                 result_rows = cross;
-                result_info =
-                    build_combined_schema(&result_info, &next_table_name, &right_info)?;
+                result_info = build_combined_schema(&result_info, &next_table_name, &right_info)?;
                 built_tables.insert(next_table_name.clone());
                 continue;
             };
@@ -1069,8 +1094,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         Ok((result_rows, result_info))
     }
-
-
 
     /// Find the column index for a join key in a table
     /// Handles both simple column names and qualified names (e.g., "t1.id")
@@ -2497,10 +2520,8 @@ fn compare_order_by(
 ) -> std::cmp::Ordering {
     use std::cmp::Ordering;
     for expr in order_by_exprs {
-        let val_a = evaluate_expression(&expr.expression, a, table_info)
-            .unwrap_or(Value::Null);
-        let val_b = evaluate_expression(&expr.expression, b, table_info)
-            .unwrap_or(Value::Null);
+        let val_a = evaluate_expression(&expr.expression, a, table_info).unwrap_or(Value::Null);
+        let val_b = evaluate_expression(&expr.expression, b, table_info).unwrap_or(Value::Null);
 
         let cmp = compare_values_for_order(&val_a, &val_b);
         let cmp = if expr.nulls_first.unwrap_or(false) {
@@ -2537,7 +2558,7 @@ fn compare_values_for_order(left: &Value, right: &Value) -> std::cmp::Ordering {
         (Value::Text(l), Value::Text(r)) => l.cmp(r),
         (Value::Boolean(l), Value::Boolean(r)) => l.cmp(r),
         (Value::Null, Value::Null) => Ordering::Equal,
-        (Value::Null, _) => Ordering::Greater,  // NULL sorts last in default ASC
+        (Value::Null, _) => Ordering::Greater, // NULL sorts last in default ASC
         (_, Value::Null) => Ordering::Less,
         _ => Ordering::Equal,
     }

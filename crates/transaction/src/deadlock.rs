@@ -145,7 +145,12 @@ impl DeadlockDetector {
     /// Used for diagnostic / background detector (not for pre-check).
     pub fn detect_cycle(&self, start: TxId) -> Option<Vec<TxId>> {
         let inner = self.inner.lock().unwrap();
-        Self::dfs_cycle(&inner.waits_for, start, &mut HashSet::new(), &mut Vec::new())
+        Self::dfs_cycle(
+            &inner.waits_for,
+            start,
+            &mut HashSet::new(),
+            &mut Vec::new(),
+        )
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -222,8 +227,9 @@ mod tests {
         let detector = DeadlockDetector::new();
         detector.add_edge_unsafe(TxId::new(1), TxId::new(2));
         detector.add_edge_unsafe(TxId::new(2), TxId::new(1));
-        assert!(detector
-            .would_create_cycle_unsafe(TxId::new(1), &[TxId::new(2)].into_iter().collect()));
+        assert!(
+            detector.would_create_cycle_unsafe(TxId::new(1), &[TxId::new(2)].into_iter().collect())
+        );
     }
 
     #[test]
@@ -288,14 +294,10 @@ mod tests {
         let detector = Arc::new(DeadlockDetector::new());
 
         let d1 = Arc::clone(&detector);
-        let t1 = thread::spawn(move || {
-            d1.try_wait_edge(TxId::new(1), [TxId::new(2)].into())
-        });
+        let t1 = thread::spawn(move || d1.try_wait_edge(TxId::new(1), [TxId::new(2)].into()));
 
         let d2 = Arc::clone(&detector);
-        let t2 = thread::spawn(move || {
-            d2.try_wait_edge(TxId::new(2), [TxId::new(1)].into())
-        });
+        let t2 = thread::spawn(move || d2.try_wait_edge(TxId::new(2), [TxId::new(1)].into()));
 
         let r1 = t1.join().unwrap();
         let r2 = t2.join().unwrap();
@@ -328,11 +330,9 @@ mod tests {
         detector.add_edge_unsafe(TxId::new(2), TxId::new(3));
 
         let d1 = Arc::clone(&detector);
-        let r1 = thread::spawn(move || {
-            d1.try_wait_edge(TxId::new(1), [TxId::new(2)].into())
-        })
-        .join()
-        .unwrap();
+        let r1 = thread::spawn(move || d1.try_wait_edge(TxId::new(1), [TxId::new(2)].into()))
+            .join()
+            .unwrap();
 
         let d3 = Arc::clone(&detector);
         let r3 = thread::spawn(move || {
