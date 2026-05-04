@@ -6,7 +6,7 @@
 //! - EXISTS → SEMI JOIN
 //! - NOT EXISTS → ANTI JOIN
 
-use sqlrustgo_planner::{Expr, Field, LogicalPlan, Schema, DataType, JoinType};
+use sqlrustgo_planner::{DataType, Expr, Field, JoinType, LogicalPlan, Schema};
 
 /// Test helper to create a simple table scan
 fn make_table_scan(table_name: &str, schema: Schema) -> LogicalPlan {
@@ -48,17 +48,13 @@ fn test_in_subquery_logical_plan() {
 
     // Verify the plan structure
     match filter_plan {
-        LogicalPlan::Filter { predicate, .. } => {
-            match predicate {
-                Expr::In { expr, subquery: _ } => {
-                    match expr.as_ref() {
-                        Expr::Column(col) => assert_eq!(col.name, "a"),
-                        _ => panic!("Expected column expression"),
-                    }
-                }
-                _ => panic!("Expected In expression"),
-            }
-        }
+        LogicalPlan::Filter { predicate, .. } => match predicate {
+            Expr::In { expr, subquery: _ } => match expr.as_ref() {
+                Expr::Column(col) => assert_eq!(col.name, "a"),
+                _ => panic!("Expected column expression"),
+            },
+            _ => panic!("Expected In expression"),
+        },
         _ => panic!("Expected Filter plan"),
     }
 }
@@ -85,12 +81,10 @@ fn test_not_in_subquery_logical_plan() {
     };
 
     match filter_plan {
-        LogicalPlan::Filter { predicate, .. } => {
-            match predicate {
-                Expr::NotIn { .. } => {}
-                _ => panic!("Expected NotIn expression"),
-            }
-        }
+        LogicalPlan::Filter { predicate, .. } => match predicate {
+            Expr::NotIn { .. } => {}
+            _ => panic!("Expected NotIn expression"),
+        },
         _ => panic!("Expected Filter plan"),
     }
 }
@@ -114,12 +108,10 @@ fn test_exists_subquery_logical_plan() {
     };
 
     match filter_plan {
-        LogicalPlan::Filter { predicate, .. } => {
-            match predicate {
-                Expr::Exists(_) => {}
-                _ => panic!("Expected Exists expression"),
-            }
-        }
+        LogicalPlan::Filter { predicate, .. } => match predicate {
+            Expr::Exists(_) => {}
+            _ => panic!("Expected Exists expression"),
+        },
         _ => panic!("Expected Filter plan"),
     }
 }
@@ -143,12 +135,10 @@ fn test_not_exists_subquery_logical_plan() {
     };
 
     match filter_plan {
-        LogicalPlan::Filter { predicate, .. } => {
-            match predicate {
-                Expr::NotExists(_) => {}
-                _ => panic!("Expected NotExists expression"),
-            }
-        }
+        LogicalPlan::Filter { predicate, .. } => match predicate {
+            Expr::NotExists(_) => {}
+            _ => panic!("Expected NotExists expression"),
+        },
         _ => panic!("Expected Filter plan"),
     }
 }
@@ -177,12 +167,10 @@ fn test_in_subquery_to_semi_join() {
     match filter_plan {
         LogicalPlan::Filter { predicate, input } => {
             match predicate {
-                Expr::In { expr, subquery: _ } => {
-                    match expr.as_ref() {
-                        Expr::Column(col) => assert_eq!(col.name, "a"),
-                        _ => panic!("Expected column a"),
-                    }
-                }
+                Expr::In { expr, subquery: _ } => match expr.as_ref() {
+                    Expr::Column(col) => assert_eq!(col.name, "a"),
+                    _ => panic!("Expected column a"),
+                },
                 _ => panic!("Expected In expression"),
             }
             match input.as_ref() {
@@ -216,12 +204,10 @@ fn test_not_in_subquery_to_anti_join() {
     };
 
     match filter_plan {
-        LogicalPlan::Filter { predicate, .. } => {
-            match predicate {
-                Expr::NotIn { .. } => {}
-                _ => panic!("Expected NotIn expression"),
-            }
-        }
+        LogicalPlan::Filter { predicate, .. } => match predicate {
+            Expr::NotIn { .. } => {}
+            _ => panic!("Expected NotIn expression"),
+        },
         _ => panic!("Expected Filter plan"),
     }
 }
@@ -245,12 +231,10 @@ fn test_exists_to_semi_join() {
     };
 
     match filter_plan {
-        LogicalPlan::Filter { predicate, .. } => {
-            match predicate {
-                Expr::Exists(_) => {}
-                _ => panic!("Expected Exists expression"),
-            }
-        }
+        LogicalPlan::Filter { predicate, .. } => match predicate {
+            Expr::Exists(_) => {}
+            _ => panic!("Expected Exists expression"),
+        },
         _ => panic!("Expected Filter plan"),
     }
 }
@@ -274,12 +258,10 @@ fn test_not_exists_to_anti_join() {
     };
 
     match filter_plan {
-        LogicalPlan::Filter { predicate, .. } => {
-            match predicate {
-                Expr::NotExists(_) => {}
-                _ => panic!("Expected NotExists expression"),
-            }
-        }
+        LogicalPlan::Filter { predicate, .. } => match predicate {
+            Expr::NotExists(_) => {}
+            _ => panic!("Expected NotExists expression"),
+        },
         _ => panic!("Expected Filter plan"),
     }
 }

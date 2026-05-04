@@ -160,15 +160,23 @@ pub enum Expr {
         op: Operator,
         right: Box<Expr>,
     },
-    UnaryExpr { op: Operator, expr: Box<Expr> },
+    UnaryExpr {
+        op: Operator,
+        expr: Box<Expr>,
+    },
     AggregateFunction {
         func: AggregateFunction,
         args: Vec<Expr>,
         distinct: bool,
     },
-    Alias { expr: Box<Expr>, name: String },
+    Alias {
+        expr: Box<Expr>,
+        name: String,
+    },
     Wildcard,
-    QualifiedWildcard { qualifier: String },
+    QualifiedWildcard {
+        qualifier: String,
+    },
     In {
         expr: Box<Expr>,
         subquery: Box<LogicalPlan>,
@@ -282,9 +290,16 @@ impl fmt::Display for Expr {
             }
             Expr::Exists(_) => write!(f, "EXISTS (subquery)"),
             Expr::NotExists(_) => write!(f, "NOT EXISTS (subquery)"),
-            Expr::CaseWhen { conditions, else_result } => {
+            Expr::CaseWhen {
+                conditions,
+                else_result,
+            } => {
                 let mut result = String::from("CASE ");
-                for WhenClause { condition, result: then_result } in conditions {
+                for WhenClause {
+                    condition,
+                    result: then_result,
+                } in conditions
+                {
                     result.push_str(&format!("WHEN {} THEN {} ", condition, then_result));
                 }
                 if let Some(else_expr) = else_result {

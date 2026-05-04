@@ -2995,7 +2995,12 @@ impl Parser {
                         self.next();
                         name
                     }
-                    Some(t) => return Err(format!("Expected date part (YEAR, MONTH, etc), got {:?}", t)),
+                    Some(t) => {
+                        return Err(format!(
+                            "Expected date part (YEAR, MONTH, etc), got {:?}",
+                            t
+                        ))
+                    }
                     None => return Err("Unexpected end of input".to_string()),
                 };
                 self.expect(Token::From)?;

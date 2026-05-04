@@ -1,10 +1,13 @@
-use sqlrustgo_planner::{LogicalPlan, Schema, DataType, Field, JoinType, Expr, Operator};
+use sqlrustgo_planner::{DataType, Expr, Field, JoinType, LogicalPlan, Operator, Schema};
 
 fn make_table_scan(table_name: &str, fields: Vec<(&str, DataType)>) -> LogicalPlan {
     LogicalPlan::TableScan {
         table_name: table_name.to_string(),
         schema: Schema::new(
-            fields.into_iter().map(|(n, t)| Field::new(n.to_string(), t)).collect()
+            fields
+                .into_iter()
+                .map(|(n, t)| Field::new(n.to_string(), t))
+                .collect(),
         ),
         projection: None,
     }
@@ -39,7 +42,12 @@ fn test_three_table_join() {
     };
 
     match join_abc {
-        LogicalPlan::Join { left, right, join_type, .. } => {
+        LogicalPlan::Join {
+            left,
+            right,
+            join_type,
+            ..
+        } => {
             assert_eq!(join_type, JoinType::Inner);
             match (*left, *right) {
                 (LogicalPlan::Join { .. }, LogicalPlan::TableScan { table_name, .. }) => {
@@ -85,7 +93,11 @@ fn test_cross_join() {
     };
 
     match join {
-        LogicalPlan::Join { join_type, condition, .. } => {
+        LogicalPlan::Join {
+            join_type,
+            condition,
+            ..
+        } => {
             assert_eq!(join_type, JoinType::Cross);
             assert!(condition.is_none());
         }
