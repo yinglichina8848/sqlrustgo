@@ -1353,6 +1353,36 @@ impl StoredProcExecutor {
             sqlrustgo_parser::Expression::WindowCall(_) => Value::Null,
             sqlrustgo_parser::Expression::Position(_, _) => Value::Null,
             sqlrustgo_parser::Expression::Insert(_, _, _, _) => Value::Null,
+            sqlrustgo_parser::Expression::Extract(field, inner) => {
+                let val = self.expression_to_value(inner, ctx);
+                match (field.as_str(), &val) {
+                    ("YEAR", Value::Integer(n)) => Value::Integer(*n / 10000),
+                    ("MONTH", Value::Integer(n)) => Value::Integer((*n / 100) % 100),
+                    ("DAY", Value::Integer(n)) => Value::Integer(*n % 100),
+                    ("YEAR", Value::Text(s)) => {
+                        if s.len() >= 4 {
+                            s[..4].parse().map(Value::Integer).unwrap_or(Value::Null)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    ("MONTH", Value::Text(s)) => {
+                        if s.len() >= 7 {
+                            s[5..7].parse().map(Value::Integer).unwrap_or(Value::Null)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    ("DAY", Value::Text(s)) => {
+                        if s.len() >= 10 {
+                            s[8..10].parse().map(Value::Integer).unwrap_or(Value::Null)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    _ => Value::Null,
+                }
+            }
         }
     }
 

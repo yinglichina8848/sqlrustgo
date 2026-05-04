@@ -4,12 +4,12 @@
 
 use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
-use crate::{Expr, JoinType};
 use crate::physical_plan::{
     AggregateExec, DeleteExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
     ProjectionExec, SeqScanExec, SortExec,
 };
 use crate::Schema;
+use crate::{Expr, JoinType};
 use sqlrustgo_optimizer::SimpleCostModel;
 use sqlrustgo_storage::StorageEngine;
 use std::sync::{Arc, RwLock};
@@ -163,7 +163,6 @@ impl DefaultPlanner {
                         self.create_physical_plan_internal(&semi_join_plan)
                     }
                     Expr::NotExists(subquery) => {
-                        // NOT EXISTS → LeftAnti JOIN with TRUE condition
                         let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
                         let anti_join_plan = LogicalPlan::Join {
                             left: input.clone(),
@@ -173,8 +172,10 @@ impl DefaultPlanner {
                         };
                         self.create_physical_plan_internal(&anti_join_plan)
                     }
-                    _ => {
-                        // Regular filter - no rewrite needed
+                    Expr::InList { .. } | Expr::CaseWhen { .. } | Expr::Extract { .. }
+                    | Expr::Column(_) | Expr::Literal(_)
+                    | Expr::BinaryExpr { .. } | Expr::UnaryExpr { .. } | Expr::AggregateFunction { .. }
+                    | Expr::Alias { .. } | Expr::Wildcard | Expr::QualifiedWildcard { .. } => {
                         let input_plan = self.create_physical_plan_internal(input)?;
                         Ok(Box::new(FilterExec::new(input_plan, predicate.clone())))
                     }

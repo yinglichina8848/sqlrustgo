@@ -63,6 +63,32 @@
 
 - E-08: 性能优化目标 (≥10K QPS) 尚未达成
 
+### 测试与质量
+
+- **TPC-H 性能改进** - PR #238
+  - RIGHT/FULL JOIN 支持
+  - Hash Join NULL 处理优化
+  - TPC-H Q1-Q23 基准测试集成
+
+- **Formal Verification Phase B** - PR #239
+  - Proof Coverage v2 系统
+  - 混沌 CI 集成
+  - 不变式保护机制
+  - PROOF-011~019 形式化验证
+
+- **Gate OS Lite B-Gate CI** - PR #242
+  - .gitea/workflows/gate-ci.yml
+  - B-Gate 自动化测试流水线
+  - gate_report.json artifact 生成
+  - hp-z6g4 nomad runner 执行
+
+### 文档
+
+- **v2.9.0 Beta 测试报告** - PR #237
+  - 集成测试状态
+  - 覆盖率分析
+  - 已知问题清单
+
 ---
 
 ## v2.8.0 (GA)

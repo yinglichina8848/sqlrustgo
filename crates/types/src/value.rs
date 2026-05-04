@@ -101,6 +101,16 @@ impl Value {
         }
     }
 
+    /// Convert Value to f64 for arithmetic operations.
+    /// Integer is promoted to float; Text/Boolean/Null return None.
+    pub fn to_number(&self) -> Option<f64> {
+        match self {
+            Value::Integer(i) => Some(*i as f64),
+            Value::Float(f) => Some(*f),
+            _ => None,
+        }
+    }
+
     /// Convert Value to SQL string representation
     pub fn to_sql_string(&self) -> String {
         match self {

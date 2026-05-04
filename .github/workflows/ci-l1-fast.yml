@@ -1,0 +1,189 @@
+name: L1 Fast Gate (V3)
+
+# ---------------------------------------------------------------------------
+# L1 = ~30-60s via:
+#   1. cargo build --workspace (shared artifact)
+#   2. cargo nextest run --fail-fast (fast tests only)
+#   3. test grouping (fast vs slow via #[ignore])
+# ---------------------------------------------------------------------------
+
+on:
+  push:
+    branches:
+      - develop/v2.9.0
+  pull_request:
+    branches:
+      - develop/v2.9.0
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # -------------------------------------------------------------------------
+  # L1a: Build once (shared for all L1 jobs)
+  # -------------------------------------------------------------------------
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build workspace
+        run: cargo build --workspace --all-targets
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: target/debug/deps/*.so target/debug/*.rlib target/debug/build/
+          retention-days: 1
+
+  # -------------------------------------------------------------------------
+  # L1b: Fast tests (nextest + fail-fast)
+  # -------------------------------------------------------------------------
+  test-fast:
+    name: Test Fast
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: target/debug/
+
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
+
+      # Run fast tests only (skip #[ignore = "slow"])
+      - name: Nextest fast tests
+        run: cargo nextest run --run-ignored=never --fail-fast
+
+      # Save test list for replay
+      - name: Save test list
+        run: |
+          mkdir -p ci_artifacts
+          cargo nextest list --message-format=json 2>/dev/null | python3 -c "
+import sys, json
+tests = [json.loads(l) for l in sys.stdin if l.startswith('{')]
+with open('ci_artifacts/test_list.txt', 'w') as f:
+    for t in tests:
+        name = t.get('name', '')
+        if name:
+            f.write(name + '\n')
+" || true
+
+      - name: Upload test list
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-list
+          path: ci_artifacts/test_list.txt
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  # L1c: Clippy
+  # -------------------------------------------------------------------------
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: target/debug/
+
+      - name: Clippy
+        run: cargo clippy --all -- -D warnings
+
+  # -------------------------------------------------------------------------
+  # L1d: Impact analysis (V3 #1)
+  # -------------------------------------------------------------------------
+  impact:
+    name: Impact Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run impact analysis
+        run: |
+          mkdir -p ci_artifacts
+          bash scripts/ci/impact.sh origin/main HEAD ci_artifacts/affected_crates.txt
+          echo "${{ github.sha }}" > ci_artifacts/commit_sha
+          env | grep -E '^(RUST_|CARGO_|CI_)' > ci_artifacts/env.txt || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-artifacts
+          path: ci_artifacts/
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  # L1 result gate
+  # -------------------------------------------------------------------------
+  l1-pass:
+    name: L1 Gate
+    runs-on: ubuntu-latest
+    needs: [test-fast, clippy, impact]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          FAILED=false
+
+          if [ "{{ needs.test-fast.result }}" == "failure" ]; then
+            echo "test-fast FAILED"
+            FAILED=true
+          fi
+
+          if [ "{{ needs.clippy.result }}" == "failure" ]; then
+            echo "clippy FAILED"
+            FAILED=true
+          fi
+
+          if [ "{{ needs.impact.result }}" == "failure" ]; then
+            echo "impact FAILED"
+            FAILED=true
+          fi
+
+          if [ "$FAILED" == "true" ]; then
+            exit 1
+          fi
+
+          echo "L1 PASS"

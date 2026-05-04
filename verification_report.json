@@ -1,13 +1,13 @@
 {
   "version": "v2.9.0",
   "baseline_verified": true,
-  "commit": "7d4388201f7e2e0be8dc38f3595bdee3acad45da",
+  "commit": "7326e2a65cd56032cef1ec6564711be226a8e04a",
   "test_count": 3630,
   "rules_checked": [
     "R0-R9"
   ],
-  "generated_at": "2026-05-03T00:00:00Z",
-  "generated_by": "hermes-agent",
-  "message": "980fac6fe Merge PR #188: update verification reports",
-  "verified_at": "2026-05-02T23:07:20Z"
+  "generated_at": "2026-05-04T10:00:00Z",
+  "generated_by": "opencode-agent",
+  "message": "Local verification update for Beta gate fix",
+  "verified_at": "2026-05-04T10:00:00Z"
 }

@@ -566,6 +566,7 @@ pub enum Expression {
         Box<Expression>,
         Box<Expression>,
     ), // INSERT(str, pos, len, newstr)
+    Extract(String, Box<Expression>), // EXTRACT(YEAR FROM date)
 }
 
 /// SQL Parser
@@ -2956,6 +2957,51 @@ impl Parser {
                     let expr = self.parse_expression()?;
                     Ok(Expression::UnaryOp("NOT".to_string(), Box::new(expr)))
                 }
+            }
+            Some(Token::Extract) => {
+                self.next();
+                self.expect(Token::LParen)?;
+                let field = match self.current() {
+                    Some(Token::Year) => {
+                        self.next();
+                        "YEAR".to_string()
+                    }
+                    Some(Token::Month) => {
+                        self.next();
+                        "MONTH".to_string()
+                    }
+                    Some(Token::Day) => {
+                        self.next();
+                        "DAY".to_string()
+                    }
+                    Some(Token::Week) => {
+                        self.next();
+                        "WEEK".to_string()
+                    }
+                    Some(Token::Hour) => {
+                        self.next();
+                        "HOUR".to_string()
+                    }
+                    Some(Token::Minute) => {
+                        self.next();
+                        "MINUTE".to_string()
+                    }
+                    Some(Token::Second) => {
+                        self.next();
+                        "SECOND".to_string()
+                    }
+                    Some(Token::Identifier(n)) => {
+                        let name = n.to_uppercase();
+                        self.next();
+                        name
+                    }
+                    Some(t) => return Err(format!("Expected date part (YEAR, MONTH, etc), got {:?}", t)),
+                    None => return Err("Unexpected end of input".to_string()),
+                };
+                self.expect(Token::From)?;
+                let expr = self.parse_expression()?;
+                self.expect(Token::RParen)?;
+                Ok(Expression::Extract(field, Box::new(expr)))
             }
             Some(Token::Case) => {
                 self.next();

@@ -384,10 +384,10 @@ impl ExplainExecutor {
                 else_result,
             } => {
                 let mut s = "CASE ".to_string();
-                for (cond, result) in conditions {
+                for WhenClause { condition, result } in conditions {
                     s.push_str(&format!(
                         "WHEN {} THEN {} ",
-                        self.format_expr(cond),
+                        self.format_expr(condition),
                         self.format_expr(result)
                     ));
                 }
