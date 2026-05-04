@@ -117,7 +117,11 @@ fn value_to_string(v: &Value) -> String {
         }
         Value::Text(s) => s.clone(),
         Value::Boolean(b) => {
-            if *b { "1".to_string() } else { "0".to_string() }
+            if *b {
+                "1".to_string()
+            } else {
+                "0".to_string()
+            }
         }
         Value::Blob(b) => format!("[blob {} bytes]", b.len()),
     }
@@ -176,7 +180,10 @@ fn compare_results(sqlite_out: &str, sqlrustgo_out: &str) -> Result<(), String> 
                     "Row {}, col {}: value mismatch\n\
                      SQLite:    '{}'\n\
                      SQLRustGo: '{}'",
-                    i + 1, j + 1, sq_cell, sw_cell
+                    i + 1,
+                    j + 1,
+                    sq_cell,
+                    sw_cell
                 ));
             }
         }

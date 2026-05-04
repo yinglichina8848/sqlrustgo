@@ -61,10 +61,7 @@ impl Expr {
                 let matches: Vec<_> = ctx
                     .values
                     .iter()
-                    .filter(|(k, _)| {
-                        k.ends_with(&format!(".{}", name))
-                            || k == &name
-                    })
+                    .filter(|(k, _)| k.ends_with(&format!(".{}", name)) || k == &name)
                     .collect();
 
                 match matches.len() {
@@ -132,11 +129,15 @@ fn eval_binary(l: Value, op: &BinaryOp, r: Value) -> Value {
 
     match op {
         BinaryOp::Eq => {
-            if let Some(v) = null_check(&l, &r) { return v; }
+            if let Some(v) = null_check(&l, &r) {
+                return v;
+            }
             Value::Boolean(l == r)
         }
         BinaryOp::NotEq => {
-            if let Some(v) = null_check(&l, &r) { return v; }
+            if let Some(v) = null_check(&l, &r) {
+                return v;
+            }
             Value::Boolean(l != r)
         }
         BinaryOp::Gt => cmp(l, r, |o| o.is_gt()),
@@ -194,7 +195,8 @@ fn eval_unary(op: &crate::expr::UnaryOp, v: Value) -> Value {
 /// Compare two values using a closure
 fn cmp<F>(l: Value, r: Value, f: F) -> Value
 where
-    F: Fn(std::cmp::Ordering) -> bool, {
+    F: Fn(std::cmp::Ordering) -> bool,
+{
     Value::Boolean(f(l.cmp(&r)))
 }
 
