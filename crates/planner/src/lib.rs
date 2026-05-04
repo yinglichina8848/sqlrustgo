@@ -187,6 +187,10 @@ pub enum Expr {
         conditions: Vec<WhenClause>,
         else_result: Option<Box<Expr>>,
     },
+    Extract {
+        field: String,
+        expr: Box<Expr>,
+    },
 }
 
 /// Schema containing field definitions
@@ -288,6 +292,9 @@ impl fmt::Display for Expr {
                 }
                 result.push_str("END");
                 write!(f, "{}", result)
+            }
+            Expr::Extract { field, expr } => {
+                write!(f, "EXTRACT({} FROM {})", field, expr)
             }
         }
     }
