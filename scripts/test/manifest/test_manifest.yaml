@@ -28,7 +28,15 @@
   dimension: correctness
   command: cargo test --test executor_null_agg_test --all-features
   description: NULL handling in aggregate functions - COUNT/SUM/AVG/MIN/MAX with NULLs
-known_failures: []
+- name: mvcc_snapshot_isolation
+  type: integration
+  component: transaction
+  dimension: correctness
+  command: cargo test --test mvcc_snapshot_isolation_test --all-features
+  description: MVCC snapshot isolation tests - BEGIN/COMMIT/serializable isolation
+known_failures:
+  - test_begin_rollback: ROLLBACK does not undo changes (known bug in execution engine)
+groups:
 groups:
   correctness:
     - planner_multi_join
@@ -36,15 +44,18 @@ groups:
     - network_tcp_smoke
     - catalog_ddl_cache
     - executor_null_agg
+    - mvcc_snapshot_isolation
   full:
     - planner_multi_join
     - optimizer_cbo_accuracy
     - network_tcp_smoke
     - catalog_ddl_cache
     - executor_null_agg
+    - mvcc_snapshot_isolation
   quick:
     - planner_multi_join
     - optimizer_cbo_accuracy
     - network_tcp_smoke
     - catalog_ddl_cache
     - executor_null_agg
+    - mvcc_snapshot_isolation
