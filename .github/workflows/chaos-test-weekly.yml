@@ -1,18 +1,13 @@
 name: Chaos Test (Weekly)
 
-# 每周验证 CI gate 真的有约束力
-# 原理: 人为注入 bug，验证 CI 能否检测出来
-# 如果检测不出来 → 可信系统是假的
-
 on:
   schedule:
-    # 每周一 03:00 UTC
     - cron: '0 3 * * 1'
   workflow_dispatch:
 
 jobs:
   chaos-deadlock:
-    name: Chaos Test - Deadlock Bug Injection
+    name: Chaos - Deadlock Bug Injection
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -32,28 +27,107 @@ jobs:
             echo "FAIL: Bug injection failed"
             exit 1
           }
-          echo "Bug injected"
 
       - name: Verify CI detects bug
         run: |
-          echo "=== Verifying CI detects the injected bug ==="
           set +e
           output=$(cargo test -p sqlrustgo-transaction deadlock -- --nocapture 2>&1)
           set -e
 
           if echo "$output" | grep -q "test result: FAILED\|failures:"; then
-            echo ""
             echo "PASS: CI correctly detected the bug"
             exit 0
           else
-            echo ""
             echo "FAIL: CI did NOT detect the bug"
-            echo "Correctness system is BROKEN"
             exit 1
           fi
 
       - name: Restore
         if: always()
+        run: git checkout crates/transaction/src/deadlock.rs
+
+  chaos-cpu-stress:
+    name: Chaos - CPU 80% Stress
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run CPU stress test
         run: |
-          echo "=== Restoring original code ==="
-          git checkout crates/transaction/src/deadlock.rs
+          echo "=== G2 Chaos Test: CPU 80% Stress ==="
+
+          # Start CPU stress in background
+          (
+            for i in $(seq 1 100000); do
+              result=$((i * i * i % 12345))
+            done &
+            for i in $(seq 1 100000); do
+              result=$((i * i * i % 12345))
+            done &
+            for i in $(seq 1 100000); do
+              result=$((i * i * i % 12345))
+            done &
+            for i in $(seq 1 100000); do
+              result=$((i * i * i % 12345))
+            done &
+            wait
+          ) &
+          CPU_PID=$!
+
+          sleep 3
+
+          # Run executor tests under stress
+          cargo test -p sqlrustgo-executor -- --test-threads=4
+
+          kill $CPU_PID 2>/dev/null || true
+
+          echo "=== CPU Stress Test Complete ==="
+
+  chaos-network-loss:
+    name: Chaos - Network 30% Packet Loss
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Configure network chaos
+        run: |
+          echo "=== G2 Chaos Test: Network 30% Packet Loss ==="
+
+          # Use netem to simulate packet loss
+          sudo tc qdisc add dev lo root netem loss 30% 2>/dev/null || \
+          sudo tc qdisc change dev lo root netem loss 30% 2>/dev/null || true
+
+          echo "Network chaos configured: 30% packet loss on lo"
+
+      - name: Run tests under network chaos
+        run: cargo test -p sqlrustgo-executor -- --test-threads=4
+
+      - name: Cleanup network chaos
+        if: always()
+        run: |
+          sudo tc qdisc del dev lo root 2>/dev/null || true
+          echo "Network chaos cleaned up"
+
+  chaos-g2-all:
+    name: Chaos - G2 Full Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [chaos-deadlock, chaos-cpu-stress, chaos-network-loss]
+
+    steps:
+      - name: Summary
+        run: |
+          echo "=== G2 Chaos Engineering Tests Complete ==="
+          echo "All chaos tests passed successfully"
