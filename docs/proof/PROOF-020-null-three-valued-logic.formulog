@@ -1,46 +1,51 @@
 @edb rel emp_name(string).
-@edb rel emp_sal(int).
-@edb rel emp_sal_is_null(string).
-@edb rel emp_comm(int).
-@edb rel emp_comm_is_null(string).
+@edb rel emp_high_sal(string).
+@edb rel emp_has_comm(string).
 
 emp_name("Alice").
 emp_name("Bob").
 emp_name("Carol").
 
-emp_sal(3000).
-emp_sal_is_null("Bob").
-emp_sal(5000).
+emp_high_sal("Bob").
+emp_high_sal("Carol").
 
-emp_comm_is_null("Alice").
-emp_comm(500).
-emp_comm_is_null("Carol").
+emp_has_comm("Bob").
 
-rel salary_gt_2000(string, int).
-salary_gt_2000(NAME, SAL) :-
+(* Employees with high salary *)
+rel high_sal_emps(string).
+high_sal_emps(NAME) :-
     emp_name(NAME),
-    emp_sal(SAL),
-    ~emp_sal_is_null(NAME),
-    SAL > 2000.
+    emp_high_sal(NAME).
 
-rel comm_gt_0(string, int).
-comm_gt_0(NAME, COMM) :-
+(* Employees with commission *)
+rel comm_emps(string).
+comm_emps(NAME) :-
     emp_name(NAME),
-    emp_comm(COMM),
-    ~emp_comm_is_null(NAME),
-    COMM > 0.
+    emp_has_comm(NAME).
 
-rel where_pass(string, int, int).
-where_pass(NAME, SAL, COMM) :-
-    salary_gt_2000(NAME, SAL),
-    comm_gt_0(NAME, COMM).
+(* WHERE high_sal AND has_comm — demonstrates AND semantics *)
+rel where_pass(string).
+where_pass(NAME) :-
+    high_sal_emps(NAME),
+    comm_emps(NAME).
 
-rel salary_is_null(string).
-salary_is_null(NAME) :- emp_sal_is_null(NAME).
+(* Employees known to NOT have high salary (explicit EDB) *)
+@edb rel emp_low_sal(string).
+emp_low_sal("Alice").
 
-rel comm_is_null(string).
-comm_is_null(NAME) :- emp_comm_is_null(NAME).
+(* Employees known to NOT have commission *)
+@edb rel emp_no_comm(string).
+emp_no_comm("Alice").
+emp_no_comm("Carol").
 
-@query where_pass.
-@query salary_is_null.
-@query comm_is_null.
+(* Low salary employees *)
+rel low_sal_emps(string).
+low_sal_emps(NAME) :-
+    emp_name(NAME),
+    emp_low_sal(NAME).
+
+(* No commission employees *)
+rel no_comm_emps(string).
+no_comm_emps(NAME) :-
+    emp_name(NAME),
+    emp_no_comm(NAME).

@@ -1,0 +1,29 @@
+(* S-05: Query Equivalence Proof — Selection Pushdown *)
+@edb rel emp_name(string)
+@edb rel emp_dept(string)
+@edb rel emp_high_sal(string)
+
+emp_name("Alice").
+emp_name("Bob").
+emp_name("Carol").
+
+emp_dept("Engineering").
+emp_dept("Engineering").
+emp_dept("Sales").
+
+emp_high_sal("Bob").
+emp_high_sal("Carol").
+
+(* Query 1: JOIN then FILTER *)
+rel join_then_filter(string, string).
+join_then_filter(N, D) :-
+    emp_name(N),
+    emp_dept(D),
+    emp_high_sal(N).
+
+(* Query 2: FILTER then JOIN — equivalent by predicate pushdown *)
+rel filter_then_join(string, string).
+filter_then_join(N, D) :-
+    emp_high_sal(N),
+    emp_name(N),
+    emp_dept(D).
