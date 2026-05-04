@@ -450,7 +450,7 @@ impl<'a> LocalExecutor<'a> {
                 if let sqlrustgo_planner::Expr::AggregateFunction {
                     func,
                     args,
-                    distinct: _,
+                    distinct,
                 } = agg_expr
                 {
                     let values: Vec<Value> = child_result
@@ -466,7 +466,11 @@ impl<'a> LocalExecutor<'a> {
                         })
                         .collect();
 
-                    let result = self.compute_aggregate(func, &values);
+                    let result = if *distinct {
+                        self.compute_aggregate_distinct(func, &values)
+                    } else {
+                        self.compute_aggregate(func, &values)
+                    };
                     agg_results.push(result);
                 }
             }
@@ -510,7 +514,7 @@ impl<'a> LocalExecutor<'a> {
                     if let sqlrustgo_planner::Expr::AggregateFunction {
                         func,
                         args,
-                        distinct: _,
+                        distinct,
                     } = agg_expr
                     {
                         let values: Vec<Value> = group_rows
@@ -524,7 +528,11 @@ impl<'a> LocalExecutor<'a> {
                             })
                             .collect();
 
-                        let result = self.compute_aggregate(func, &values);
+                        let result = if *distinct {
+                            self.compute_aggregate_distinct(func, &values)
+                        } else {
+                            self.compute_aggregate(func, &values)
+                        };
                         row.push(result);
                     }
                 }
@@ -595,6 +603,72 @@ impl<'a> LocalExecutor<'a> {
                             Some(m) if *n > m => max_val = Some(*n),
                             None => max_val = Some(*n),
                             _ => {}
+                        }
+                    }
+                }
+                max_val.map(Value::Integer).unwrap_or(Value::Null)
+            }
+        }
+    }
+
+    fn compute_aggregate_distinct(&self, func: &AggregateFunction, values: &[Value]) -> Value {
+        use std::collections::HashSet;
+        let mut unique_values: HashSet<String> = HashSet::new();
+        for v in values {
+            unique_values.insert(format!("{:?}", v));
+        }
+        let unique_count = unique_values.len() as i64;
+        match func {
+            AggregateFunction::Count => Value::Integer(unique_count),
+            AggregateFunction::Sum | AggregateFunction::Avg => {
+                let mut sum: i64 = 0;
+                let mut count = 0;
+                for v in &values {
+                    if let Value::Integer(n) = v {
+                        let key = format!("{:?}", v);
+                        if unique_values.contains(&key) {
+                            sum += n;
+                            count += 1;
+                        }
+                    }
+                }
+                if count > 0 {
+                    if matches!(func, AggregateFunction::Avg) {
+                        Value::Integer(sum / count as i64)
+                    } else {
+                        Value::Integer(sum)
+                    }
+                } else {
+                    Value::Null
+                }
+            }
+            AggregateFunction::Min => {
+                let mut min_val: Option<i64> = None;
+                for v in values {
+                    if let Value::Integer(n) = v {
+                        let key = format!("{:?}", v);
+                        if unique_values.contains(&key) {
+                            match min_val {
+                                Some(m) if n < m => min_val = Some(*n),
+                                None => min_val = Some(*n),
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                min_val.map(Value::Integer).unwrap_or(Value::Null)
+            }
+            AggregateFunction::Max => {
+                let mut max_val: Option<i64> = None;
+                for v in values {
+                    if let Value::Integer(n) = v {
+                        let key = format!("{:?}", v);
+                        if unique_values.contains(&key) {
+                            match max_val {
+                                Some(m) if n > m => max_val = Some(*n),
+                                None => max_val = Some(*n),
+                                _ => {}
+                            }
                         }
                     }
                 }
