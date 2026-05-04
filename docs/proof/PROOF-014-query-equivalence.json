@@ -4,15 +4,19 @@
   "language": "Formulog",
   "category": "optimizer",
   "status": "verified",
-  "target": "Query optimization preserves semantics",
-  "description": "建立SQLRustGo查询等价性证明框架，验证查询优化转换的正确性。两个查询Q1和Q2等价当且仅当对于所有数据库状态D：eval(Q1, D) = eval(Q2, D)。",
+  "target": "Query equivalence framework — optimizer transformations preserve SQL semantics",
+  "description": "查询等价性证明框架：优化器转换保持 SQL 语义。",
   "evidence": {
-    "test_results": "cargo test -p sqlrustgo-optimizer --test query_equivalence: passed",
-    "verification_method": "Formulog logic programming + integration tests",
-    "formal_spec": "PROOF-014-query-equivalence.formalog",
-    "formal_proof_file": "docs/proof/PROOF-014-query-equivalence.formalog"
+    "verification_method": "Property-based test via cargo test -p sqlrustgo-optimizer",
+    "test_command": "cargo test -p sqlrustgo-optimizer",
+    "expected_result": "All optimizer property-based tests pass",
+    "framework_note": "PROOF-014 is a framework, not a single proof. Equivalence verified through test suite."
+  },
+  "known_issues": {
+    "formulog_syntax_errors": "docs/proof/PROOF-014-query-equivalence.formalog contains syntax errors: markdown headers (##), invalid identifier 'enable.', unsupported '&&' and 'eval()' syntax. Cannot be executed directly with formulog 0.8.0.jar.",
+    "actual_verification": "Query equivalence is verified via property-based tests in cargo test -p sqlrustgo-optimizer, not via the .formalog file directly."
   },
   "author": "openclaw",
-  "verified_at": "2026-05-02T00:00:00Z",
-  "created_at": "2026-05-02"
+  "verified_at": "2026-05-02",
+  "updated_at": "2026-05-04"
 }

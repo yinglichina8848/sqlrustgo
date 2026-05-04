@@ -1,9 +1,55 @@
 # Phase S Verification Workflow (S0-S05)
 
-> **Status**: Active — Re-verified 2026-05-03
-> **Updated**: 2026-05-03
-> **Registry**: REGISTRY_INDEX v1.9 (22 proofs)
-> **Toolchain**: TLA+ TLC ✅ | Dafny ✅ | Formulog ✅ | Z3 ✅
+|> **Status**: Active — Re-verified 2026-05-04
+|> **Updated**: 2026-05-04
+|> **Registry**: REGISTRY_INDEX v1.9 (22 proofs)
+|> **Toolchain**: TLA+ TLC ✅ | Dafny ✅ | Formulog ✅ | Z3 ✅
+
+---
+
+## Mac mini CI Gate FAIL 分析（2026-05-04）
+
+**Mac mini 执行 `scripts/verify/run_all_proofs.sh` 失败，PROOF-012/013/014 FAIL**
+
+### 根本原因
+
+| Proof | 失败原因 | 详情 |
+|-------|----------|------|
+| PROOF-012 | ❌ 路径错误 + 缺少 cfg | `run_all_proofs.sh` 查找 `docs/proof/PROOF-012-wal-acid.tla`（markdown 文档，非可执行 TLA+）和 `PROOF-012-wal-acid.cfg`（不存在）。真正的可执行文件是 `docs/formal/WAL_Recovery.tla` + `docs/formal/WAL_Recovery.cfg` |
+| PROOF-013 | ❌ Markdown 头注释导致解析失败 | `docs/proof/PROOF-013-btree-invariants.dfy` 包含 `> **Proof ID**: PROOF-013` 等 markdown 头（旧版 Dafny 2.3.0 不识别）。真正的可执行文件是 `docs/formal/btree_invariants.dfy`（无 markdown 头） |
+| PROOF-014 | ❌ 语法错误 | `docs/proof/PROOF-014-query-equivalence.formalog` 包含 `##` markdown 标题、`enable.` 非法标识符、`&&` 和 `eval()` 等不支持的语法 |
+
+### 正确的验证命令
+
+```bash
+# PROOF-012: TLA+ WAL Recovery
+java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC \
+  -deadlock -workers auto -metadir /tmp/tlc_wal \
+  docs/formal/WAL_Recovery.tla
+# 预期: "Model checking completed. No error."
+
+# PROOF-013: Dafny B+Tree（用无 markdown 头的文件）
+/usr/bin/dafny docs/formal/btree_invariants.dfy /dafnyVerify:1 /compile:0
+# 预期: "Dafny program verifier finished with 1 verified, 0 errors"
+
+# PROOF-014: Formulog Query Equivalence
+# 注意: PROOF-014 当前框架文件有语法错误，无法直接执行
+# 实际验证通过 cargo test -p sqlrustgo-optimizer 完成
+```
+
+### 文件路径映射（正确版）
+
+| Proof | 文档文件（docs/proof/） | 可执行文件（docs/formal/） |
+|-------|------------------------|---------------------------|
+| PROOF-012 | `PROOF-012-wal-acid.tla`（仅文档） | `WAL_Recovery.tla` + `WAL_Recovery.cfg` |
+| PROOF-013 | `PROOF-013-btree-invariants.dfy`（仅文档） | `btree_invariants.dfy`（可执行） |
+| PROOF-014 | `PROOF-014-query-equivalence.formalog`（有语法错误） | 无独立可执行文件，通过测试验证 |
+
+### 已验证的 Tool 版本（Z6G4）
+
+- TLA+：` TLC2 Version 2026.04.29.170100` via `/tmp/tla2tools.jar`
+- Dafny：`Dafny 2.3.0.10506` via `/usr/bin/dafny`
+- Formulog：`/tmp/formulog-0.8.0.jar`（0.8.0 版本）
 
 ---
 

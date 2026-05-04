@@ -397,7 +397,64 @@ cargo llvm-cov report -p sqlrustgo-parser
 
 ---
 
-## 9. 残留未竟项（S-04）
+## 9. Mac mini CI Gate PROOF-012/013/014 FAIL 分析
+
+### 问题描述
+
+Mac mini 执行 `scripts/verify/run_all_proofs.sh` 时 PROOF-012/013/014 FAIL，
+但 Z6G4 服务器本地执行相同脚本也 FAIL——说明这是脚本本身的路径/工具错误，不是 Mac mini 特有的问题。
+
+### 根本原因
+
+**PROOF-012（TLA+ WAL）**:
+- `run_all_proofs.sh` 查找 `docs/proof/PROOF-012-wal-acid.tla` —— 这是 markdown 文档（包含 `>` 注释头），不是有效的 TLA+ 模块
+- 还查找 `PROOF-012-wal-acid.cfg` —— 不存在
+- 正确路径：`docs/formal/WAL_Recovery.tla` + `docs/formal/WAL_Recovery.cfg`
+
+**PROOF-013（Dafny B+Tree）**:
+- `run_all_proofs.sh` 查找 `docs/proof/PROOF-013-*.dfy` —— 该文件包含 markdown 头注释（`>` 符号），旧版 Dafny 2.3.0 无法解析
+- 正确路径：`docs/formal/btree_invariants.dfy`（无 markdown 头）
+
+**PROOF-014（Formulog 查询等价）**:
+- `docs/proof/PROOF-014-query-equivalence.formalog` 有多个语法错误（`##` markdown 标题、`enable.` 非法标识符、`&&` 不支持、`eval()` 调用等）
+- 无法通过 formulog 0.8.0.jar 直接执行
+- **实际验证方式**：`cargo test -p sqlrustgo-optimizer`（property-based tests 验证查询等价性）
+
+### 正确的验证命令
+
+```bash
+# PROOF-012: TLA+ WAL Recovery（正确路径）
+mkdir -p /tmp/tlc_wal
+java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC \
+  -deadlock -workers auto -metadir /tmp/tlc_wal \
+  docs/formal/WAL_Recovery.tla
+# 预期: "Model checking completed. No error."
+
+# PROOF-013: Dafny B+Tree（正确路径，无 markdown 头）
+/usr/bin/dafny docs/formal/btree_invariants.dfy /dafnyVerify:1 /compile:0
+# 预期: "Dafny program verifier finished with 1 verified, 0 errors"
+
+# PROOF-014: 查询等价性（通过测试验证）
+cargo test -p sqlrustgo-optimizer
+# 预期: "test result: ok. N passed"
+```
+
+### 文件路径映射
+
+| Proof | 错误路径（run_all_proofs.sh） | 正确路径 |
+|-------|-----------------------------|---------|
+| PROOF-012 | `docs/proof/PROOF-012-wal-acid.tla`（文档） | `docs/formal/WAL_Recovery.tla` + `WAL_Recovery.cfg` |
+| PROOF-013 | `docs/proof/PROOF-013-btree-invariants.dfy`（有 md 头） | `docs/formal/btree_invariants.dfy` |
+| PROOF-014 | `docs/proof/PROOF-014-query-equivalence.formalog`（语法错误） | 通过 `cargo test -p sqlrustgo-optimizer` 验证 |
+
+### CI 门禁建议
+
+`scripts/verify/run_all_proofs.sh` 中的 TLA+/Dafny/Formulog 路径需要修正才能在 CI 中使用。
+当前 PR Gate `formal-smoke-pr.yml` 使用的 `formal_smoke.sh` 脚本路径正确（S0-S05 deadlock/MVCC 相关模型）。
+
+---
+
+## 10. 残留未竟项（S-04）
 
 | 未竟项 | 影响 | 建议 |
 |--------|------|------|
