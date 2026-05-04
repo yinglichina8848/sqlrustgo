@@ -280,10 +280,11 @@ jobs:
         run: |
           cp -r repo/coverage /tmp/coverage-report-$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
           echo "Coverage report saved to /tmp/ on runner host"
-          cat repo/coverage/*.json 2>/dev/null | python3 -c "
-import json,sys
-try:
-    d=json.load(sys.stdin)
-    print(f'Coverage: {d.get(\"coverage\",\"?\")}%')
-    print(f'Lines: {d.get(\"line_coverage\",\"?\")}')
-except: pass" || true
+          cat repo/coverage/*.json 2>/dev/null | python3 - <<'PYEOF'
+            import json,sys
+            try:
+                d=json.load(sys.stdin)
+                print(f'Coverage: {d.get(\"coverage\",\"?\")}%')
+                print(f'Lines: {d.get(\"line_coverage\",\"?\")}')
+            except: pass
+            PYEOF || true
