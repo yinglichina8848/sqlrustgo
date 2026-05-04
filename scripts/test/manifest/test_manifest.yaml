@@ -11,11 +11,20 @@ tests:
     dimension: correctness
     command: cargo test --test optimizer_cbo_accuracy_test --all-features
     description: CBO cost model accuracy tests - validates relative cost relationships
+  - name: network_tcp_smoke
+    type: integration
+    component: network
+    dimension: correctness
+    command: cargo test --test network_tcp_smoke_test --all-features
+    description: TCP connection smoke tests - bind, connect, read/write, options
 
 groups:
   correctness:
     - optimizer_cbo_accuracy
+    - network_tcp_smoke
   full:
     - optimizer_cbo_accuracy
+    - network_tcp_smoke
   quick:
     - optimizer_cbo_accuracy
+    - network_tcp_smoke
