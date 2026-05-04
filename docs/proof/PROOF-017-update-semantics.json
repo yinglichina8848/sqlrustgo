@@ -1,43 +1,25 @@
 {
-  "id": "PROOF-017",
+  "proof_id": "PROOF-017",
   "title": "UPDATE/DELETE Semantics Verification",
   "language": "Formulog",
   "category": "executor",
   "status": "verified",
-  "tool": "Formulog 0.8.0",
-  "tool_version": "0.8.0",
-  "runtime": "Java 17 (OpenJDK 17.0.18)",
-  "spec_file": "PROOF-017-update-semantics.formulog",
-  "created": "2026-05-03",
-  "verified": "2026-05-03",
-  "verified_by": "Hermes Agent",
-  "stage": "P0",
-  "issue_ref": "Issue #201",
-  "theorems": [
-    "SelectiveUpdate",
-    "PreservedRows",
-    "FullUpdate",
-    "TypeSafety",
-    "AtomicUpdate"
-  ],
-  "verified_properties": [
-    "Updated rows match predicate (SELECTIVE)",
-    "Non-matching rows preserved unchanged (PRESERVED)",
-    "Full table UPDATE sets all rows (FULL)",
-    "Type safety: SET expressions match column types (TYPE)",
-    "UPDATE is atomic - all-or-nothing (ATOMIC)"
-  ],
-  "sql_features_verified": [
-    "UPDATE SET col = value WHERE pred",
-    "UPDATE with no WHERE clause",
-    "UPDATE type checking",
-    "UPDATE atomicity"
-  ],
-  "verification_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-017-update-semantics.formulog",
-  "verification_mode": "Datalog evaluation (Formulog)",
-  "notes": [
-    "Formulog Datalog program verifies UPDATE semantics using relational rules",
-    "EDB relations provide input facts; IDB relations derive consequences",
-    "Properties verified: selective update, preserved rows, type safety, atomicity"
-  ]
+  "description": "证明UPDATE/DELETE操作的语义正确性：选择性更新、保留行、完全更新、类型安全和原子性。",
+  "evidence": {
+    "verification_method": "Formulog Datalog evaluation",
+    "test_results": "cargo test -p sqlrustgo-executor: passed",
+    "formal_spec": "PROOF-017-update-semantics.formulog",
+    "verification_command": "java -jar /tmp/formulog-0.8.0.jar docs/proof/PROOF-017-update-semantics.formulog",
+    "expected_result": "Datalog evaluation completed. All theorems verified.",
+    "verified_properties": [
+      "Updated rows match predicate (SELECTIVE)",
+      "Non-matching rows preserved unchanged (PRESERVED)",
+      "Full table UPDATE sets all rows (FULL)",
+      "Type safety: SET expressions match column types (TYPE)",
+      "UPDATE is atomic - all-or-nothing (ATOMIC)"
+    ]
+  },
+  "created_at": "2026-05-03",
+  "verified_at": "2026-05-03",
+  "author": "openclaw"
 }

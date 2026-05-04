@@ -18,6 +18,7 @@
     "run_all_proofs_sh_bug": "scripts/verify/run_all_proofs.sh 错误查找 docs/proof/PROOF-012-wal-acid.tla（是 markdown 文档）而非 docs/formal/WAL_Recovery.tla（可执行TLA+）。PROOFS-012 在 run_all_proofs.sh 中 FAIL 是预期的——文件路径错误。"
   },
   "author": "openclaw",
+  "created_at": "2026-05-02",
   "verified_at": "2026-05-02",
   "updated_at": "2026-05-04"
 }
