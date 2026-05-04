@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - develop/v2.9.0
+      - beta/v2.9.0
     paths:
       - 'docs/formal/**/*.tla'
       - 'docs/formal/**/*.cfg'

@@ -4798,6 +4798,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlrustgo-expr"
+version = "2.5.0"
+dependencies = [
+ "regex",
+ "serde",
+ "sqlrustgo-types",
+]
+
+[[package]]
 name = "sqlrustgo-gmp"
 version = "2.5.0"
 dependencies = [
