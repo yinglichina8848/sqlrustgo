@@ -18,7 +18,10 @@ fn setup_engine() -> MemoryExecutionEngine {
                 l_discount REAL,
                 l_tax REAL,
                 l_returnflag TEXT,
-                l_shipmode TEXT
+                l_shipmode TEXT,
+                l_shipdate INTEGER,
+                l_commitdate INTEGER,
+                l_receiptdate INTEGER
             )",
         )
         .expect("create lineitem table");
@@ -42,7 +45,10 @@ fn setup_engine() -> MemoryExecutionEngine {
             "CREATE TABLE customer (
                 c_custkey INTEGER,
                 c_name TEXT,
-                c_nationkey INTEGER
+                c_nationkey INTEGER,
+                c_phone TEXT,
+                c_acctbal REAL,
+                c_mktsegment TEXT
             )",
         )
         .expect("create customer table");
@@ -53,10 +59,26 @@ fn setup_engine() -> MemoryExecutionEngine {
             "CREATE TABLE part (
                 p_partkey INTEGER,
                 p_name TEXT,
-                p_mfgr TEXT
+                p_mfgr TEXT,
+                p_brand TEXT,
+                p_type TEXT,
+                p_size INTEGER,
+                p_container TEXT
             )",
         )
         .expect("create part table");
+
+    // Create partsupp table
+    engine
+        .execute(
+            "CREATE TABLE partsupp (
+                ps_partkey INTEGER,
+                ps_suppkey INTEGER,
+                ps_supplycost REAL,
+                ps_availqty INTEGER
+            )",
+        )
+        .expect("create partsupp table");
 
     // Create supplier table
     engine
@@ -64,7 +86,10 @@ fn setup_engine() -> MemoryExecutionEngine {
             "CREATE TABLE supplier (
                 s_suppkey INTEGER,
                 s_name TEXT,
-                s_nationkey INTEGER
+                s_nationkey INTEGER,
+                s_address TEXT,
+                s_phone TEXT,
+                s_acctbal REAL
             )",
         )
         .expect("create supplier table");
@@ -74,7 +99,8 @@ fn setup_engine() -> MemoryExecutionEngine {
         .execute(
             "CREATE TABLE nation (
                 n_nationkey INTEGER,
-                n_name TEXT
+                n_name TEXT,
+                n_regionkey INTEGER
             )",
         )
         .expect("create nation table");
@@ -97,10 +123,13 @@ fn setup_engine() -> MemoryExecutionEngine {
         let tax = 0.02 + (i % 5) as f64 * 0.01;
         let flag = if i % 3 == 0 { "R" } else { "N" };
         let ship = if i % 2 == 0 { "SHIP" } else { "MAIL" };
+        let shipdate = 87600 + (i % 2000) as i64;
+        let commitdate = 87800 + (i % 2000) as i64;
+        let receiptdate = 88000 + (i % 2000) as i64;
 
         engine
             .execute(&format!(
-                "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {}, '{}', '{}')",
+                "INSERT INTO lineitem VALUES ({}, {}, {}, {}, {}, {}, {}, '{}', '{}', {}, {}, {})",
                 (i % 1000) as i64 + 1,
                 i as i64 + 1,
                 (i % 100) as i64 + 1,
@@ -109,7 +138,10 @@ fn setup_engine() -> MemoryExecutionEngine {
                 discount,
                 tax,
                 flag,
-                ship
+                ship,
+                shipdate,
+                commitdate,
+                receiptdate
             ))
             .expect("insert lineitem");
     }
@@ -137,22 +169,31 @@ fn setup_engine() -> MemoryExecutionEngine {
     for i in 0..150 {
         engine
             .execute(&format!(
-                "INSERT INTO customer VALUES ({}, 'Customer{:05}', {})",
+                "INSERT INTO customer VALUES ({}, 'Customer{:05}', {}, '31-{}', {}, 'AUTOMOBILE')",
                 i as i64 + 1,
                 i,
-                (i % 25) as i64
+                (i % 25) as i64,
+                (i % 100) as i64,
+                ((i as f64) * 10.0)
             ))
             .expect("insert customer");
     }
 
     // Insert part data (100 rows)
     for i in 0..100 {
+        let brand = format!("Brand#{}", (i % 5) as i64 + 1);
+        let ptype = if i % 3 == 0 { "ECONOMY" } else if i % 3 == 1 { "MEDIUM" } else { "SMALL" };
+        let container = if i % 2 == 0 { "SM BOX" } else { "MED BOX" };
         engine
             .execute(&format!(
-                "INSERT INTO part VALUES ({}, 'Part{:05}', 'MFGR{}')",
+                "INSERT INTO part VALUES ({}, 'Part{:05}', 'MFGR{}', '{}', '{} POLISHED', {}, '{}')",
                 i as i64 + 1,
                 i,
-                i % 5
+                i % 5,
+                brand,
+                ptype,
+                (i % 50) as i64 + 1,
+                container
             ))
             .expect("insert part");
     }
@@ -161,30 +202,53 @@ fn setup_engine() -> MemoryExecutionEngine {
     for i in 0..50 {
         engine
             .execute(&format!(
-                "INSERT INTO supplier VALUES ({}, 'Supplier{:05}', {})",
+                "INSERT INTO supplier VALUES ({}, 'Supplier{:05}', {}, 'Address{}', '31-{}', {})",
                 i as i64 + 1,
                 i,
-                (i % 25) as i64
+                (i % 25) as i64,
+                i,
+                (i % 100) as i64,
+                ((i as f64) * 100.0)
             ))
             .expect("insert supplier");
     }
 
-    // Insert nation data
-    for i in 0..5 {
+    // Insert partsupp data (500 rows - each part has 5 suppliers)
+    for i in 0..100 {
+        for j in 0..5 {
+            let suppkey = (i % 50) as i64 + 1;
+            let availqty = 100 + ((i * 5 + j) % 500) as i64;
+            let supplycost = 10.0 + ((i * 5 + j) % 100) as f64;
+            engine
+                .execute(&format!(
+                    "INSERT INTO partsupp VALUES ({}, {}, {}, {})",
+                    i as i64 + 1,
+                    suppkey,
+                    supplycost,
+                    availqty
+                ))
+                .expect("insert partsupp");
+        }
+    }
+
+    // Insert nation data (5 nations for SF0.1)
+    let nations = [("GERMANY", 0), ("FRANCE", 0), ("EGYPT", 1), ("JAPAN", 1), ("CHINA", 1)];
+    for (i, (name, region)) in nations.iter().enumerate() {
         engine
             .execute(&format!(
-                "INSERT INTO nation VALUES ({}, 'Nation{}')",
-                i as i64, i
+                "INSERT INTO nation VALUES ({}, '{}', {})",
+                i as i64, name, *region as i64
             ))
             .expect("insert nation");
     }
 
     // Insert region data
-    for i in 0..2 {
+    let regions = ["EUROPE", "ASIA"];
+    for (i, name) in regions.iter().enumerate() {
         engine
             .execute(&format!(
-                "INSERT INTO region VALUES ({}, 'Region{}')",
-                i as i64, i
+                "INSERT INTO region VALUES ({}, '{}')",
+                i as i64, name
             ))
             .expect("insert region");
     }
@@ -528,8 +592,178 @@ fn tpch_basic_offset() {
 }
 
 // ============================================================
+// TPC-H Q7: Shipping Profitability
+// 6 tables JOIN with nation aliases
+// ============================================================
+#[test]
+fn tpch_q7_shipping_profitability() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT n1.n_name AS supp_nation, n2.n_name AS cust_nation,
+                SUM(l_extendedprice) AS revenue
+         FROM supplier, lineitem, orders, customer, nation n1, nation n2
+         WHERE s_suppkey = l_suppkey AND o_orderkey = l_orderkey
+           AND c_custkey = o_custkey AND s_nationkey = n1.n_nationkey
+           AND c_nationkey = n2.n_nationkey
+         GROUP BY n1.n_name, n2.n_name"
+    );
+    assert!(result.is_ok(), "Q7 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q8: National Market Share
+// 8 tables JOIN (simplified without EXTRACT and multiplication in agg)
+// ============================================================
+#[test]
+fn tpch_q8_national_market_share() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT o_orderdate AS o_year,
+                SUM(l_extendedprice) AS volume
+         FROM part, supplier, lineitem, orders, customer, nation n1, nation n2, region
+         WHERE p_partkey = l_partkey AND s_suppkey = l_suppkey
+           AND l_orderkey = o_orderkey AND o_custkey = c_custkey
+           AND c_nationkey = n1.n_nationkey AND n1.n_regionkey = r_regionkey
+           AND r_name = 'EUROPE' AND s_nationkey = n2.n_nationkey
+           AND o_orderdate >= 87600 AND o_orderdate <= 88000
+           AND p_type = 'ECONOMY POLISHED'
+         GROUP BY o_orderdate"
+    );
+    assert!(result.is_ok(), "Q8 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q9: Product Type Profit
+// 6 tables JOIN with LIKE (simplified without EXTRACT and mult in agg)
+// ============================================================
+#[test]
+fn tpch_q9_product_type_profit() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT n_name AS nation, o_orderdate AS o_year,
+                SUM(l_extendedprice) AS amount
+         FROM part, supplier, lineitem, partsupp, orders, nation
+         WHERE s_suppkey = l_suppkey AND ps_suppkey = l_suppkey
+           AND ps_partkey = l_partkey AND p_partkey = l_partkey
+           AND o_orderkey = l_orderkey AND s_nationkey = n_nationkey
+           AND p_name LIKE '%Part%'
+         GROUP BY n_name, o_orderdate"
+    );
+    assert!(result.is_ok(), "Q9 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q11: Important Stock
+// 3 tables JOIN with partsupp
+// ============================================================
+#[test]
+fn tpch_q11_important_stock() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT ps_partkey, SUM(ps_supplycost) AS total_cost
+         FROM partsupp, supplier, nation
+         WHERE ps_suppkey = s_suppkey AND s_nationkey = n_nationkey
+           AND n_name = 'GERMANY'
+         GROUP BY ps_partkey"
+    );
+    assert!(result.is_ok(), "Q11 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q12: Shipping Mode
+// 2 tables JOIN with IN and date comparisons
+// ============================================================
+#[test]
+fn tpch_q12_shipping_mode() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT l_shipmode, COUNT(*)
+         FROM orders, lineitem
+         WHERE l_orderkey = o_orderkey
+           AND l_shipmode IN ('MAIL', 'SHIP')
+           AND l_commitdate < l_receiptdate AND l_shipdate < l_commitdate
+           AND o_orderdate >= '1993-01-01' AND o_orderdate < '1994-01-01'
+         GROUP BY l_shipmode"
+    );
+    assert!(result.is_ok(), "Q12 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q15: Create View (simplified - using SELECT)
+// 2 tables JOIN with SUM and GROUP BY
+// ============================================================
+#[test]
+fn tpch_q15_create_view() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT s_suppkey, s_name, s_address, s_phone,
+                SUM(l_extendedprice) AS total_revenue
+         FROM supplier, lineitem
+         WHERE l_suppkey = s_suppkey
+           AND l_shipdate >= 87600 AND l_shipdate < 88000
+         GROUP BY s_suppkey, s_name, s_address, s_phone"
+    );
+    assert!(result.is_ok(), "Q15 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q16: Parts/Supplier
+// COUNT(DISTINCT) with NOT LIKE and IN
+// ============================================================
+#[test]
+fn tpch_q16_parts_supplier() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT p_brand, p_type, p_size,
+                COUNT(DISTINCT ps_suppkey) AS supplier_cnt
+         FROM partsupp, part
+         WHERE p_partkey = ps_partkey
+           AND p_brand <> 'Brand#45'
+           AND p_type NOT LIKE 'MEDIUM POLISHED%'
+           AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)
+         GROUP BY p_brand, p_type, p_size"
+    );
+    assert!(result.is_ok(), "Q16 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q17: Small-Quantity-Order
+// 2 tables JOIN
+// ============================================================
+#[test]
+fn tpch_q17_small_quantity_order() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT SUM(l_extendedprice) AS total_price
+         FROM lineitem, part
+         WHERE p_partkey = l_partkey
+           AND p_brand = 'Brand#1'
+           AND p_container = 'MED BOX'"
+    );
+    assert!(result.is_ok(), "Q17 should execute successfully");
+}
+
+// ============================================================
+// TPC-H Q19: Discounted Revenue
+// 2 tables JOIN with IN list and BETWEEN
+// ============================================================
+#[test]
+fn tpch_q19_discounted_revenue() {
+    let mut engine = setup_engine();
+    let result = engine.execute(
+        "SELECT SUM(l_extendedprice) AS revenue
+         FROM lineitem, part
+         WHERE p_partkey = l_partkey
+           AND p_brand = 'Brand#12'
+           AND p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
+           AND l_quantity >= 1 AND l_quantity <= 11
+           AND p_size BETWEEN 1 AND 5"
+    );
+    assert!(result.is_ok(), "Q19 should execute successfully");
+}
+
+// ============================================================
 // Unsupported Features (documented, tests commented out)
-// - DISTINCT: parsed but not fully supported in executor
 // - LEFT OUTER JOIN: not fully supported
 // - Multiply in aggregation: not fully supported
 // - GROUP BY on non-aggregate column: not fully supported

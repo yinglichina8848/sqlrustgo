@@ -662,6 +662,16 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     if agg.args.is_empty() {
                         // COUNT(*) - count all rows
                         Value::Integer(rows.len() as i64)
+                    } else if agg.distinct {
+                        // COUNT(DISTINCT col) - count unique non-NULL values
+                        use std::collections::HashSet;
+                        let mut unique_values: HashSet<String> = HashSet::new();
+                        for v in &values {
+                            if !matches!(v, Value::Null) {
+                                unique_values.insert(format!("{:?}", v));
+                            }
+                        }
+                        Value::Integer(unique_values.len() as i64)
                     } else {
                         // COUNT(col) - count non-NULL values
                         let non_null_count =
