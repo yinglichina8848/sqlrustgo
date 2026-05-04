@@ -18,3 +18,15 @@
   description: TCP connection smoke tests - bind, connect, read/write, options
 known_failures: []
 groups:
+  correctness:
+    - planner_multi_join
+    - optimizer_cbo_accuracy
+    - network_tcp_smoke
+  full:
+    - planner_multi_join
+    - optimizer_cbo_accuracy
+    - network_tcp_smoke
+  quick:
+    - planner_multi_join
+    - optimizer_cbo_accuracy
+    - network_tcp_smoke
