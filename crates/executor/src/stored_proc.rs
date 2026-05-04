@@ -1349,7 +1349,43 @@ impl StoredProcExecutor {
                 }
             }
             sqlrustgo_parser::Expression::Aggregate(_) => Value::Null,
-            sqlrustgo_parser::Expression::FunctionCall(_, _) => Value::Null,
+            sqlrustgo_parser::Expression::FunctionCall(name, args) => {
+                let name_upper = name.to_uppercase();
+                if name_upper == "SUBSTRING" {
+                    // SUBSTRING(str FROM start FOR length) - args: [str, start, length?]
+                    if args.is_empty() {
+                        Value::Null
+                    } else {
+                        let str_val = self.expression_to_value(&args[0], ctx);
+                        let start_val = if args.len() > 1 {
+                            self.expression_to_value(&args[1], ctx)
+                        } else {
+                            Value::Null
+                        };
+                        let len_val = if args.len() > 2 {
+                            Some(self.expression_to_value(&args[2], ctx))
+                        } else {
+                            None
+                        };
+
+                        match (str_val, start_val) {
+                            (Value::Text(s), Value::Integer(start)) => {
+                                let start_idx = ((start - 1).max(0)) as usize;
+                                let result: String = if let Some(Value::Integer(len)) = len_val {
+                                    s.chars().skip(start_idx).take(len as usize).collect()
+                                } else {
+                                    s.chars().skip(start_idx).collect()
+                                };
+                                Value::Text(result)
+                            }
+                            _ => Value::Null,
+                        }
+                    }
+                } else {
+                    // Other function calls not implemented
+                    Value::Null
+                }
+            }
             sqlrustgo_parser::Expression::WindowCall(_) => Value::Null,
             sqlrustgo_parser::Expression::Position(_, _) => Value::Null,
             sqlrustgo_parser::Expression::Insert(_, _, _, _) => Value::Null,
