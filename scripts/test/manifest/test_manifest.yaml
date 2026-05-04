@@ -1,0 +1,21 @@
+# SQLRustGo Test Manifest
+# Canonical list of all tests with metadata
+
+version: "1.0"
+last_updated: "2026-05-04"
+
+tests:
+  - name: optimizer_cbo_accuracy
+    type: integration
+    component: optimizer
+    dimension: correctness
+    command: cargo test --test optimizer_cbo_accuracy_test --all-features
+    description: CBO cost model accuracy tests - validates relative cost relationships
+
+groups:
+  correctness:
+    - optimizer_cbo_accuracy
+  full:
+    - optimizer_cbo_accuracy
+  quick:
+    - optimizer_cbo_accuracy
