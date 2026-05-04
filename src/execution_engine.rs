@@ -1438,6 +1438,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         if delete.where_clause.is_none() {
             let mut storage = self.storage.write().unwrap();
             let count = storage.delete(&table_name, &[])?;
+            self.query_cache
+                .write()
+                .unwrap()
+                .invalidate_table(&table_name);
             return Ok(ExecutorResult::new(vec![], count));
         }
 
@@ -1511,6 +1515,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&table_name);
         Ok(ExecutorResult::new(vec![], count))
     }
 
@@ -1535,12 +1543,20 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             partition_info: None,
         };
         storage.create_table(&info)?;
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&create.name);
         Ok(ExecutorResult::empty())
     }
 
     fn execute_drop_table(&self, drop: &DropTableStatement) -> SqlResult<ExecutorResult> {
         let mut storage = self.storage.write().unwrap();
         storage.drop_table(&drop.name)?;
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&drop.name);
         Ok(ExecutorResult::empty())
     }
 

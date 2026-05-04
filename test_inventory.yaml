@@ -4,11 +4,12 @@
 
 components:
   network:
-    total_tests: 1
-    risk: MEDIUM
+    total_tests: 7
+    risk: LOW
     tests:
       - unit_network
-    missing: "TCP connection smoke test, RPC message roundtrip"
+      - network_tcp_smoke (6 tests)
+    missing: "RPC message roundtrip"
     last_updated: "2026-05-04"
 
   executor:
@@ -38,21 +39,23 @@ components:
     last_updated: "2026-05-04"
 
   planner:
-    total_tests: 2
-    risk: HIGH
+    total_tests: 6
+    risk: MEDIUM
     tests:
       - unit_planner
       - engine_physical_plan
-    missing: "Multi-table JOIN ordering, Subquery decorrelation, CTE planning"
+      - planner_multi_join (4 tests)
+    missing: "Subquery decorrelation, CTE planning"
     last_updated: "2026-05-04"
 
   optimizer:
-    total_tests: 2
-    risk: HIGH
+    total_tests: 13
+    risk: LOW
     tests:
       - unit_optimizer
       - integration_cbo
-    missing: "CBO cost model accuracy, Index selection regression"
+      - optimizer_cbo_accuracy (11 tests)
+    missing: "Index selection regression"
     last_updated: "2026-05-04"
 
   storage:
@@ -66,23 +69,25 @@ components:
     last_updated: "2026-05-04"
 
   transaction:
-    total_tests: 4
+    total_tests: 12
     risk: LOW
     tests:
       - integration_mvcc
       - integration_wal
       - integration_crash_recovery
       - integration_concurrency_stress
+      - mvcc_snapshot_isolation (7 tests)
     missing: "Distributed transaction 2PC, Savepoint rollback"
     last_updated: "2026-05-04"
 
   catalog:
-    total_tests: 2
-    risk: MEDIUM
+    total_tests: 6
+    risk: LOW
     tests:
       - unit_catalog
       - integration_stored_proc
-    missing: "DDL cache invalidation, Schema evolution"
+      - catalog_ddl_cache (4 tests)
+    missing: "Schema evolution"
     last_updated: "2026-05-04"
 
   types:
@@ -152,21 +157,25 @@ components:
 
 risk_summary:
   HIGH:
-    - planner (2 tests, missing: JOIN ordering, subquery decorrelation)
-    - optimizer (2 tests, missing: CBO cost accuracy)
-  MEDIUM:
-    - catalog (2 tests, missing: DDL cache invalidation)
-    - network (1 test, missing: TCP smoke test)
     - distributed (5 tests, missing: partition simulation)
+  MEDIUM:
+    - storage (3 tests, missing: disk full, corruption recovery)
   LOW:
     - executor (23 tests, comprehensive)
-    - storage (3 tests, basic coverage)
-    - transaction (4 tests, core scenarios covered)
+    - planner (6 tests, multi-join covered)
+    - optimizer (13 tests, CBO accuracy covered)
+    - transaction (12 tests, snapshot isolation covered)
+    - catalog (6 tests, DDL cache covered)
+    - network (7 tests, TCP smoke covered)
     - expr (4 tests, corpus coverage)
 
 priority_order:
-  - planner_multi_join
-  - optimizer_cbo_accuracy
-  - network_tcp_smoke
-  - catalog_ddl_cache
-  - executor_null_agg
+  P0 completed:
+    - planner_multi_join ✅
+    - optimizer_cbo_accuracy ✅
+    - network_tcp_smoke ✅
+    - catalog_ddl_cache ✅
+    - executor_null_agg ✅
+  P1 pending:
+    - distributed tests enhancement
+    - storage corruption recovery
