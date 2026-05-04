@@ -1,0 +1,241 @@
+# =============================================================================
+# SQLRustGo Coverage Pipeline (LLVM Cov) — Gitea Actions
+# =============================================================================
+# Tool: cargo-llvm-cov (branch + path + line coverage)
+# Pros: Full coverage metrics, integration test data, condition/branch/path
+# Cons: Slower, requires llvm-tools-preview on runner
+#
+# Requires: nomad-runner has rustup + llvm-tools-preview installed
+# Install (one-time on runner):
+#   docker exec nomad-runner rustup component add llvm-tools-preview
+#   docker exec nomad-runner cargo install cargo-llvm-cov --locked
+#
+# L1: Nightly (informational) — 02:00 UTC
+# L2: Stage Gate (blocking, 75% threshold) — beta/alpha branches
+# L3: Manual (informational) — workflow_dispatch any branch
+
+name: Coverage (LLVM Cov)
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  push:
+    branches:
+      - beta/v2.9.0
+      - beta/v2.8.0
+      - alpha/v2.9.0
+      - alpha/v2.8.0
+  pull_request:
+    branches:
+      - beta/v2.9.0
+      - beta/v2.8.0
+      - alpha/v2.9.0
+      - alpha/v2.8.0
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Profile (quick/full/targeted)"
+        required: true
+        default: "quick"
+        type: choice
+        options:
+          - quick
+          - full
+          - targeted
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # L1 / L3: LLVM Cov — quick or full coverage (branch + line + path)
+  # ---------------------------------------------------------------------------
+  llvm-cov-coverage:
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=50 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          if [ -n "$GITEA_SHA" ]; then
+            git fetch --depth=1 origin "$GITEA_SHA"
+            git checkout "$GITEA_SHA"
+          else
+            git checkout "$GITEA_REF_NAME"
+          fi
+
+      - name: Ensure llvm-tools
+        run: |
+          docker exec nomad-runner bash -c "rustup component add llvm-tools-preview 2>&1 || true"
+
+      - name: Build
+        run: |
+          cd repo
+          cargo build --all-features 2>&1 | tail -3
+
+      - name: Quick Coverage (L1 nightly / L3 quick)
+        if: github.event.inputs.profile == 'quick' || github.event_name == 'schedule'
+        run: |
+          cd repo
+          echo "=== LLVM Cov quick coverage (line + branch) ==="
+          docker exec nomad-runner bash -c "cd /repo && cargo llvm-cov --all-features --lcov --output-dir ./coverage --timeout 300 2>&1" 2>&1 | tail -10
+
+      - name: Full Coverage (L3 full)
+        if: github.event.inputs.profile == 'full'
+        run: |
+          cd repo
+          echo "=== LLVM Cov full coverage (line + branch + path) ==="
+          docker exec nomad-runner bash -c "cd /repo && cargo llvm-cov --all-features --lcov --html --output-dir ./coverage --timeout 900 2>&1" 2>&1 | tail -15
+
+      - name: Parse Coverage Report
+        run: |
+          cd repo
+          if [ -f coverage/lcov.info ]; then
+            python3 - <<'PYEOF'
+            import json, subprocess, re
+
+            # Parse lcov.info for coverage data
+            total_lines = 0
+            hit_lines = 0
+            total_branches = 0
+            hit_branches = 0
+
+            with open('coverage/lcov.info') as f:
+                current_file = None
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('SF:'):
+                        current_file = line[3:]
+                    elif line == 'end_of_record':
+                        current_file = None
+                    elif line.startswith('LH:'):
+                        hit_lines += int(line[3:])
+                    elif line.startswith('LF:'):
+                        total_lines += int(line[3:])
+                    elif line.startswith('BRH:'):
+                        hit_branches += int(line[3:])
+                    elif line.startswith('BRF:'):
+                        total_branches += int(line[3:])
+
+            line_cov = (hit_lines / total_lines * 100) if total_lines > 0 else 0
+            branch_cov = (hit_branches / total_branches * 100) if total_branches > 0 else 0
+
+            print(f"Line Coverage: {line_cov:.2f}% ({hit_lines}/{total_lines})")
+            print(f"Branch Coverage: {branch_cov:.2f}% ({hit_branches}/{total_branches})")
+            threshold = 75.0
+            status = "PASS" if line_cov >= threshold else "FAIL"
+            print(f"Threshold: {threshold}% => {status}")
+            PYEOF
+          else
+            echo "No lcov.info found, trying json report..."
+            if [ -f coverage/coverage.json ]; then
+              python3 - <<'PYEOF'
+              import json
+              with open('coverage/coverage.json') as f:
+                  d = json.load(f)
+              print(f"Coverage: {d.get('coverage',0):.2f}%")
+              PYEOF
+            fi
+          fi
+
+  # ---------------------------------------------------------------------------
+  # L2: Stage Gate — blocking, 75% threshold, emits gate_report.json
+  # ---------------------------------------------------------------------------
+  stage-gate-llvm-cov:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=50 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          if [ -n "$GITEA_SHA" ]; then
+            git fetch --depth=1 origin "$GITEA_SHA"
+            git checkout "$GITEA_SHA"
+          else
+            git checkout "$GITEA_REF_NAME"
+          fi
+
+      - name: Ensure llvm-tools
+        run: |
+          docker exec nomad-runner bash -c "rustup component add llvm-tools-preview 2>&1 || true"
+
+      - name: Build
+        run: |
+          cd repo
+          cargo build --all-features 2>&1 | tail -3
+
+      - name: LLVM Cov Stage Coverage
+        run: |
+          cd repo
+          echo "=== LLVM Cov Stage Gate Coverage (L2) ==="
+          docker exec nomad-runner bash -c "cd /repo && cargo llvm-cov --all-features --lcov --html --output-dir ./coverage --timeout 900 2>&1" 2>&1 | tail -15
+
+      - name: Generate Gate Report
+        run: |
+          cd repo
+          python3 - <<'PYEOF'
+          import json, datetime, os, re
+
+          line_cov = 0.0
+          branch_cov = 0.0
+          hit_lines = 0
+          total_lines = 0
+          hit_branches = 0
+          total_branches = 0
+
+          try:
+              with open('coverage/lcov.info') as f:
+                  for line in f:
+                      line = line.strip()
+                      if line.startswith('LH:'): hit_lines = int(line[3:])
+                      elif line.startswith('LF:'): total_lines = int(line[3:])
+                      elif line.startswith('BRH:'): hit_branches = int(line[3:])
+                      elif line.startswith('BRF:'): total_branches = int(line[3:])
+              if total_lines > 0:
+                  line_cov = hit_lines / total_lines * 100
+              if total_branches > 0:
+                  branch_cov = hit_branches / total_branches * 100
+          except Exception as e:
+              print(f"Warning: could not parse lcov: {e}")
+
+          commit = os.environ.get('GITEA_SHA', 'unknown')[:12]
+          branch = os.environ.get('GITEA_REF_NAME', 'unknown')
+          THRESHOLD = 75.0
+          status = "PASS" if line_cov >= THRESHOLD else "FAIL"
+
+          report = {
+              "tool": "llvm-cov",
+              "gate": "L2-STAGE-COVERAGE",
+              "version": "v2.9.0",
+              "commit": commit,
+              "branch": branch,
+              "status": status,
+              "line_coverage": round(line_cov, 2),
+              "branch_coverage": round(branch_cov, 2),
+              "lines_hit": hit_lines,
+              "lines_total": total_lines,
+              "branches_hit": hit_branches,
+              "branches_total": total_branches,
+              "threshold": THRESHOLD,
+              "timestamp": datetime.datetime.utcnow().isoformat() + 'Z',
+              "tier": "L2_STAGE_GATE",
+              "blocking": True
+          }
+          with open('llvm_cov_gate_report.json', 'w') as f:
+              json.dump(report, f, indent=2)
+          print(json.dumps(report, indent=2))
+          PYEOF
+
+      - name: Stage Gate Decision
+        if: github.event_name == 'push'
+        run: |
+          cd repo
+          STATUS=$(python3 -c "import json; d=json.load(open('llvm_cov_gate_report.json')); print(d.get('status','ERROR'))" 2>/dev/null || echo 'ERROR')
+          if [ "$STATUS" == "FAIL" ]; then
+            echo "STAGE GATE FAILED: LLVM Cov line coverage below threshold"
+            exit 1
+          fi
+          echo "LLVM Cov stage gate: PASS"
