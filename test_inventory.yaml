@@ -1,0 +1,172 @@
+# SQLRustGo Test Inventory
+# Component-level test tracking with risk assessment
+# Update after each test addition
+
+components:
+  network:
+    total_tests: 1
+    risk: MEDIUM
+    tests:
+      - unit_network
+    missing: "TCP connection smoke test, RPC message roundtrip"
+    last_updated: "2026-05-04"
+
+  executor:
+    total_tests: 23
+    risk: LOW
+    tests:
+      - unit_executor
+      - integration_aggregate
+      - integration_distinct
+      - integration_limit_clause
+      - engine_cross_join
+      - engine_expr
+      - engine_fuzz
+      - engine_subquery
+      - engine_test
+      - executor_aggregate
+      - executor_coverage
+      - executor_filter
+      - executor_join
+      - executor_pipeline
+      - executor_volcano
+      - engine_insert
+      - engine_update
+      - engine_delete
+      - engine_order_by
+    missing: "Multi-batch insert performance, NULL in aggregations"
+    last_updated: "2026-05-04"
+
+  planner:
+    total_tests: 2
+    risk: HIGH
+    tests:
+      - unit_planner
+      - engine_physical_plan
+    missing: "Multi-table JOIN ordering, Subquery decorrelation, CTE planning"
+    last_updated: "2026-05-04"
+
+  optimizer:
+    total_tests: 2
+    risk: HIGH
+    tests:
+      - unit_optimizer
+      - integration_cbo
+    missing: "CBO cost model accuracy, Index selection regression"
+    last_updated: "2026-05-04"
+
+  storage:
+    total_tests: 3
+    risk: LOW
+    tests:
+      - unit_storage
+      - integration_binary_format
+      - integration_page_io
+    missing: "Disk full scenario, Corruption recovery"
+    last_updated: "2026-05-04"
+
+  transaction:
+    total_tests: 4
+    risk: LOW
+    tests:
+      - integration_mvcc
+      - integration_wal
+      - integration_crash_recovery
+      - integration_concurrency_stress
+    missing: "Distributed transaction 2PC, Savepoint rollback"
+    last_updated: "2026-05-04"
+
+  catalog:
+    total_tests: 2
+    risk: MEDIUM
+    tests:
+      - unit_catalog
+      - integration_stored_proc
+    missing: "DDL cache invalidation, Schema evolution"
+    last_updated: "2026-05-04"
+
+  types:
+    total_tests: 2
+    risk: LOW
+    tests:
+      - unit_types
+      - integration_boundary
+    missing: "Decimal precision edge cases, Date overflow"
+    last_updated: "2026-05-04"
+
+  expr:
+    total_tests: 4
+    risk: LOW
+    tests:
+      - unit_expr
+      - integration_expression_operators
+      - integration_in_value_list
+      - sql_corpus_expressions
+    missing: "Complex nested expressions, Short-circuit evaluation"
+    last_updated: "2026-05-04"
+
+  parser:
+    total_tests: 3
+    risk: LOW
+    tests:
+      - unit_parser
+      - integration_parser_token
+    missing: "Unicode identifiers, Fuzz input"
+    last_updated: "2026-05-04"
+
+  distributed:
+    total_tests: 5
+    risk: MEDIUM
+    tests:
+      - distributed_e2e
+      - distributed_integration
+      - distributed_read_write_splitter
+      - distributed_semisync
+      - distributed_xa
+    missing: "Network partition simulation, Raft leader election"
+    last_updated: "2026-05-04"
+
+  ci:
+    total_tests: 1
+    risk: MEDIUM
+    tests:
+      - integration_ci
+    missing: "CI/CD pipeline integration tests"
+    last_updated: "2026-05-04"
+
+  all:
+    total_tests: 9
+    risk: LOW
+    tests:
+      - integration_regression
+      - stability_long_run
+      - e2e_query
+      - e2e_observability
+      - e2e_monitoring
+      - sql_corpus
+      - sql_corpus_ddl
+      - sql_corpus_dml
+      - sql_corpus_expressions
+    missing: "End-to-end backup/restore, Multi-session concurrency"
+    last_updated: "2026-05-04"
+
+risk_summary:
+  HIGH:
+    - planner (2 tests, missing: JOIN ordering, subquery decorrelation)
+    - optimizer (2 tests, missing: CBO cost accuracy)
+  MEDIUM:
+    - catalog (2 tests, missing: DDL cache invalidation)
+    - network (1 test, missing: TCP smoke test)
+    - distributed (5 tests, missing: partition simulation)
+  LOW:
+    - executor (23 tests, comprehensive)
+    - storage (3 tests, basic coverage)
+    - transaction (4 tests, core scenarios covered)
+    - expr (4 tests, corpus coverage)
+
+priority_order:
+  - planner_multi_join
+  - optimizer_cbo_accuracy
+  - network_tcp_smoke
+  - catalog_ddl_cache
+  - executor_null_agg
