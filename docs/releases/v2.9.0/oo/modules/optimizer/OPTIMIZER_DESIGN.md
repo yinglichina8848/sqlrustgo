@@ -8,6 +8,29 @@ The optimizer transforms a parsed SQL statement (logical plan) into an efficient
 1. **Rule-Based Optimization (RBO)**: Apply heuristic transformations
 2. **Cost-Based Optimization (CBO)**: Select best plan using cost estimates
 
+## Implementation Status
+
+> ⚠️ **警告**: v2.9.0 版本中，优化器大多数规则为 **TODO stub**，实际查询未经过有意义的优化。当前优化器覆盖率为 0% (WEAKNESS_ANALYSIS.md)。
+
+| 组件 | 状态 | 说明 |
+|------|------|------|
+| **RBO** | ⚠️ 部分实现 | 基础规则已实现 |
+| PredicatePushdown | ❌ TODO | `rules.rs` 中为 stub |
+| ProjectionPruning | ❌ TODO | `rules.rs` 中为 stub |
+| ConstantFolding | ❌ TODO | `rules.rs` 中为 stub |
+| **CBO** | ❌ TODO | 代价模型未实现 |
+| Cost Model | ❌ TODO | 无统计信息 |
+| Plan Enumeration | ❌ TODO | 无枚举逻辑 |
+| **物理计划** | ✅ 已实现 | HashJoin, NestedLoopJoin 等 |
+
+### 架构图 (虚线 = TODO)
+
+```
+SQL → Parser → [RBO] → [CBO] → Physical Plan
+                   ↓           ↓
+              ⚠️ TODO    ⚠️ TODO
+```
+
 ## Plan Representation
 
 ### Logical Plan Nodes

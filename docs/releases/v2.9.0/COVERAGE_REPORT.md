@@ -4,6 +4,8 @@
 > **Date**: 2026-05-03
 > **Status**: PARTIAL (tarpaulin timeout)
 
+> ⚠️ **已归档**: 此文件已废弃。权威覆盖率数据请参考 `COVERAGE_RC_REPORT.md`。
+
 ## Coverage Summary
 
 | Metric | Value | Target | Status |

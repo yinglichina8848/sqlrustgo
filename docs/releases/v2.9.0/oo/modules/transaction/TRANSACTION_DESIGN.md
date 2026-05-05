@@ -47,9 +47,9 @@ Concurrent transactions appear serialized. SqlRustGo supports multiple isolation
 | `READ UNCOMMITTED` | Possible | Possible | Possible |
 | `READ COMMITTED` | Prevented | Possible | Possible |
 | `REPEATABLE READ` | Prevented | Prevented | Possible |
-| `SERIALIZABLE` | Prevented | Prevented | Prevented |
+| `SERIALIZABLE` | Prevented | Prevented | Prevented | ❌ 未实现 (v2.10.0 规划) |
 
-**Implementation**: MVCC with snapshot isolation at `READ COMMITTED` and above.
+**Implementation**: MVCC with snapshot isolation. v2.9.0 supports `READ COMMITTED` and `REPEATABLE READ` (via MVCC snapshots). `SERIALIZABLE` is not implemented.
 
 ### Durability
 
