@@ -1,0 +1,2119 @@
+   Compiling smallvec v1.15.1
+   Compiling serde v1.0.228
+   Compiling getrandom v0.3.4
+   Compiling half v2.7.1
+   Compiling num-bigint v0.4.6
+   Compiling crypto-common v0.1.7
+   Compiling futures-channel v0.3.32
+   Compiling futures-macro v0.3.32
+   Compiling futures-task v0.3.32
+   Compiling futures-io v0.3.32
+   Compiling libz-sys v1.1.28
+   Compiling parking_lot_core v0.9.12
+   Compiling rand v0.8.6
+   Compiling digest v0.10.7
+   Compiling http v1.4.0
+   Compiling parking_lot v0.12.5
+   Compiling heck v0.5.0
+   Compiling regex-syntax v0.8.10
+   Compiling tokio v1.52.1
+   Compiling chrono v0.4.44
+   Compiling sqlrustgo-common v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/common)
+   Compiling futures-util v0.3.32
+   Compiling sqlrustgo-types v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/types)
+   Compiling arrow-buffer v58.2.0
+   Compiling http-body v1.0.1
+   Compiling thiserror v1.0.69
+   Compiling tower-service v0.3.3
+   Compiling regex-automata v0.4.14
+   Compiling ahash v0.8.12
+   Compiling itertools v0.14.0
+   Compiling thiserror-impl v1.0.69
+   Compiling strsim v0.11.1
+   Compiling arrow-data v58.2.0
+   Compiling anstream v1.0.0
+   Compiling flate2 v1.1.9
+   Compiling icu_normalizer v2.2.0
+   Compiling num-traits v0.2.19
+   Compiling glob v0.3.3
+   Compiling system-configuration-sys v0.6.0
+   Compiling idna_adapter v1.2.2
+   Compiling sha2 v0.10.9
+   Compiling try-lock v0.2.5
+   Compiling atomic-waker v1.1.2
+   Compiling tower-layer v0.3.3
+   Compiling want v0.3.1
+   Compiling arrow-array v58.2.0
+   Compiling regex v1.12.3
+   Compiling prost-derive v0.13.5
+   Compiling idna v1.1.0
+   Compiling clang-sys v1.8.1
+   Compiling sync_wrapper v1.0.2
+   Compiling core-foundation v0.10.1
+   Compiling security-framework-sys v2.17.0
+   Compiling core-foundation v0.9.4
+   Compiling socket2 v0.5.10
+   Compiling native-tls v0.2.18
+   Compiling syn v1.0.109
+   Compiling system-configuration v0.7.0
+   Compiling getrandom v0.4.2
+   Compiling security-framework v3.7.0
+   Compiling num-integer v0.1.46
+   Compiling url v2.5.8
+   Compiling http-body-util v0.1.3
+   Compiling tokio-util v0.7.18
+   Compiling sqlrustgo-parser v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/parser)
+   Compiling hmac v0.12.1
+   Compiling uuid v1.23.1
+   Compiling h2 v0.4.13
+   Compiling errno v0.3.14
+   Compiling arrow-select v58.2.0
+   Compiling arrow-arith v58.2.0
+   Compiling arrow-row v58.2.0
+   Compiling ipnet v2.12.0
+   Compiling memchr v2.8.0
+   Compiling prettyplease v0.2.37
+   Compiling minimal-lexical v0.2.1
+   Compiling nom v7.1.3
+   Compiling rustix v1.1.4
+   Compiling pbkdf2 v0.12.2
+   Compiling arrow-ord v58.2.0
+   Compiling arrow-ipc v58.2.0
+   Compiling arrow-string v58.2.0
+   Compiling tower v0.5.3
+   Compiling actix-rt v2.11.0
+   Compiling prost v0.13.5
+   Compiling arrow-cast v58.2.0
+   Compiling parquet v58.2.0
+   Compiling hyper v1.9.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling libloading v0.8.9
+   Compiling proc-macro-error-attr v1.0.4
+   Compiling fixedbitset v0.5.7
+   Compiling unicode-width v0.1.14
+   Compiling rustversion v1.0.22
+   Compiling winnow v1.0.2
+   Compiling ident_case v1.0.1
+   Compiling frunk_core v0.4.4
+   Compiling bindgen v0.72.1
+   Compiling darling_core v0.20.11
+   Compiling hyper-util v0.1.20
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling petgraph v0.7.1
+   Compiling arrow-csv v58.2.0
+   Compiling arrow-json v58.2.0
+   Compiling frunk_proc_macro_helpers v0.1.4
+   Compiling prost-types v0.13.5
+   Compiling cexpr v0.6.0
+   Compiling tempfile v3.27.0
+   Compiling arrow v58.2.0
+   Compiling sqlrustgo-catalog v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/catalog)
+   Compiling h2 v0.3.27
+   Compiling actix-codec v0.5.2
+   Compiling inout v0.1.4
+   Compiling itertools v0.13.0
+   Compiling proc-macro-error v1.0.4
+   Compiling indexmap v1.9.3
+   Compiling radium v0.7.0
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling rustc-hash v2.1.2
+   Compiling termcolor v1.4.1
+   Compiling multimap v0.10.1
+   Compiling prost-build v0.13.5
+   Compiling clap_builder v4.6.0
+   Compiling toml_edit v0.25.11+spec-1.1.0
+   Compiling env_logger v0.11.10
+   Compiling cipher v0.4.4
+   Compiling darling_macro v0.20.11
+   Compiling actix-router v0.5.4
+   Compiling actix-server v2.6.0
+   Compiling rand_core v0.9.5
+   Compiling clap_derive v4.6.1
+   Compiling universal-hash v0.5.1
+   Compiling cmake v0.1.58
+   Compiling subprocess v0.2.15
+   Compiling actix-http v3.12.1
+   Compiling pin-project-internal v1.1.11
+   Compiling sqlrustgo-storage v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/storage)
+   Compiling proc-macro-error-attr2 v2.0.0
+   Compiling bigdecimal v0.4.10
+   Compiling zeroize v1.8.2
+   Compiling opaque-debug v0.3.1
+   Compiling tap v1.0.1
+   Compiling hashbrown v0.12.3
+   Compiling rust_decimal v1.41.0
+   Compiling lazy_static v1.5.0
+   Compiling hashbrown v0.14.5
+   Compiling dashmap v6.1.0
+   Compiling clap v4.6.1
+   Compiling wyz v0.5.1
+   Compiling sqlrustgo-optimizer v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/optimizer)
+   Compiling sqlrustgo-transaction v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/transaction)
+   Compiling rusqlite v0.39.0
+   Compiling sqlrustgo-planner v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/planner)
+   Compiling actix-web v4.13.0
+   Compiling sqlrustgo-executor v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/executor)
+   Compiling pin-project v1.1.11
+   Compiling polyval v0.6.2
+   Compiling proc-macro-error2 v2.0.1
+   Compiling axum-core v0.4.5
+   Compiling mysql_common v0.32.4
+   Compiling darling v0.20.11
+   Compiling proc-macro-crate v3.5.0
+   Compiling tonic-build v0.12.3
+   Compiling frunk_derives v0.4.4
+   Compiling frunk_proc_macros v0.1.4
+   Compiling textwrap v0.11.0
+   Compiling tokio-native-tls v0.3.1
+   Compiling futures-executor v0.3.32
+   Compiling heck v0.3.3
+   Compiling async-stream-impl v0.3.6
+   Compiling atty v0.2.14
+   Compiling num_cpus v1.17.0
+   Compiling fs-err v2.11.0
+   Compiling funty v2.0.0
+   Compiling allocator-api2 v0.2.21
+   Compiling vec_map v0.8.2
+   Compiling strsim v0.8.0
+   Compiling iri-string v0.7.12
+   Compiling arrayvec v0.7.6
+   Compiling matchit v0.7.3
+   Compiling bitflags v1.3.2
+   Compiling ansi_term v0.12.1
+   Compiling option-ext v0.2.0
+   Compiling dirs-sys v0.5.0
+   Compiling clap v2.34.0
+   Compiling bitvec v1.0.1
+   Compiling structopt-derive v0.4.18
+   Compiling async-stream v0.3.6
+   Compiling hashbrown v0.15.5
+   Compiling mysql-common-derive v0.31.2
+   Compiling frunk v0.4.4
+   Compiling tower-http v0.6.8
+   Compiling sqlrustgo-server v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/server)
+   Compiling ciborium-ll v0.2.2
+   Compiling threadpool v1.8.1
+   Compiling sqlrustgo-distributed v0.1.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/distributed)
+   Compiling futures v0.3.32
+   Compiling hyper-tls v0.6.0
+   Compiling tower v0.4.13
+   Compiling ghash v0.5.1
+   Compiling sqlrustgo-graph v0.1.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/graph)
+   Compiling rustls-pki-types v1.14.1
+   Compiling axum v0.7.9
+   Compiling sqlrustgo-vector v2.1.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/vector)
+   Compiling aes v0.8.4
+   Compiling ctr v0.9.2
+   Compiling hyper-timeout v0.5.2
+   Compiling enum-ordinalize v3.1.15
+   Compiling tokio-stream v0.1.18
+   Compiling sha1 v0.10.6
+   Compiling crossbeam-channel v0.5.15
+   Compiling crossbeam-queue v0.3.12
+   Compiling aead v0.5.2
+   Compiling itertools v0.10.5
+   Compiling btoi v0.4.3
+   Compiling derive_utils v0.15.1
+   Compiling wait-timeout v0.2.1
+   Compiling base64 v0.13.1
+   Compiling static_assertions v1.1.0
+   Compiling saturating v0.1.0
+   Compiling base64 v0.21.7
+   Compiling bit-vec v0.8.0
+   Compiling mysql v25.0.1
+   Compiling quick-error v1.2.3
+   Compiling rusty-fork v0.3.1
+   Compiling io-enum v1.2.1
+   Compiling bit-set v0.8.0
+   Compiling twox-hash v1.6.3
+   Compiling pem v1.1.1
+   Compiling crossbeam v0.8.4
+   Compiling educe v0.4.23
+   Compiling aes-gcm v0.10.3
+   Compiling criterion-plot v0.5.0
+   Compiling reqwest v0.12.28
+   Compiling libtest-mimic v0.6.1
+   Compiling structopt v0.3.26
+   Compiling ciborium v0.2.2
+   Compiling lru v0.12.5
+   Compiling dirs v6.0.0
+   Compiling rand v0.9.4
+   Compiling rand_chacha v0.9.0
+   Compiling rand_xorshift v0.4.0
+   Compiling tonic v0.12.3
+   Compiling subst v0.3.8
+   Compiling tinytemplate v1.2.1
+   Compiling md-5 v0.10.6
+   Compiling pem v3.0.6
+   Compiling itertools v0.11.0
+   Compiling is-terminal v0.4.17
+   Compiling humantime v2.3.0
+   Compiling unsafe-libyaml v0.2.11
+   Compiling unarray v0.1.4
+   Compiling bytemuck v1.25.0
+   Compiling owo-colors v3.5.0
+   Compiling similar v2.7.0
+   Compiling bufstream v0.1.4
+   Compiling criterion v0.5.1
+   Compiling sqlrustgo-tools v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/tools)
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling sqlrustgo-gmp v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/gmp)
+   Compiling proptest v1.11.0
+   Compiling sqlrustgo-security v0.1.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/security)
+   Compiling sqllogictest v0.17.2
+   Compiling sqlrustgo-unified-query v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/unified-query)
+   Compiling sqlrustgo v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo)
+   Compiling query-stats v0.1.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/query-stats)
+   Compiling sqlrustgo-telemetry v2.5.0 (/Users/liying/workspace/dev/yinglichina163/sqlrustgo/crates/telemetry)
+warning: unused import: `JoinType`
+ --> tests/engine_physical_plan_test.rs:9:48
+  |
+9 | use sqlrustgo_planner::{DataType, Expr, Field, JoinType, LogicalPlan, Schema};
+  |                                                ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `RustEngine` and `SqliteEngine`
+ --> tests/engine_subquery_test.rs:2:34
+  |
+2 | use sqlite_diff::{assert_sql_eq, RustEngine, SqliteEngine};
+  |                                  ^^^^^^^^^^  ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MemoryStorage as MemStorage`
+ --> tests/engine/mod.rs:2:33
+  |
+2 | use sqlrustgo::{ExecutorResult, MemoryStorage as MemStorage};
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `assert_query_eq`
+ --> tests/engine_test.rs:5:19
+  |
+5 | use sqlite_diff::{assert_query_eq, assert_sql_eq, SqliteEngine};
+  |                   ^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> tests/sqlite_diff.rs:380:29
+    |
+380 |                         let mut rows_after_group: Vec<Vec<Value>> = groups
+    |                             ----^^^^^^^^^^^^^^^^
+    |                             |
+    |                             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> tests/sqlite_diff.rs:1395:9
+     |
+1395 |     let mut sqlite = SqliteEngine::new();
+     |         ----^^^^^^
+     |         |
+     |         help: remove this `mut`
+
+warning: function `assert_query_eq` is never used
+    --> tests/sqlite_diff.rs:1418:8
+     |
+1418 | pub fn assert_query_eq(left: Vec<Row>, right: Vec<Row>) -> Result<(), String> {
+     |        ^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sqlrustgo` (test "engine_physical_plan_test") generated 1 warning (run `cargo fix --test "engine_physical_plan_test" -p sqlrustgo` to apply 1 suggestion)
+warning: unused imports: `RustEngine` and `SqliteEngine`
+ --> tests/coverage_null_matrix_tests.rs:2:34
+  |
+2 | use sqlite_diff::{assert_sql_eq, RustEngine, SqliteEngine};
+  |                                  ^^^^^^^^^^  ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sqlrustgo` (test "engine_subquery_test") generated 4 warnings (run `cargo fix --test "engine_subquery_test" -p sqlrustgo` to apply 3 suggestions)
+warning: unused imports: `RustEngine` and `SqliteEngine`
+ --> tests/coverage_error_path_tests.rs:2:34
+  |
+2 | use sqlite_diff::{assert_sql_eq, RustEngine, SqliteEngine};
+  |                                  ^^^^^^^^^^  ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sqlrustgo` (test "engine_cross_join_test") generated 3 warnings (3 duplicates)
+warning: `sqlrustgo` (test "coverage_operator_matrix_tests") generated 3 warnings (3 duplicates)
+warning: `sqlrustgo` (test "coverage_null_matrix_tests") generated 4 warnings (3 duplicates) (run `cargo fix --test "coverage_null_matrix_tests" -p sqlrustgo` to apply 1 suggestion)
+warning: `sqlrustgo` (test "sqlite_diff") generated 2 warnings (2 duplicates)
+warning: unused import: `Expr`
+ --> tests/e2e/e2e_query_test.rs:3:27
+  |
+3 | use sqlrustgo::{DataType, Expr, Field, PhysicalPlan, Schema, SeqScanExec};
+  |                           ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sqlrustgo` (test "e2e_query_test") generated 1 warning (run `cargo fix --test "e2e_query_test" -p sqlrustgo` to apply 1 suggestion)
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:31:18
+   |
+31 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:40:18
+   |
+40 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:49:18
+   |
+49 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:58:18
+   |
+58 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:67:18
+   |
+67 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:76:18
+   |
+76 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:85:18
+   |
+85 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: `sqlrustgo` (test "engine_test") generated 5 warnings (3 duplicates) (run `cargo fix --test "engine_test" -p sqlrustgo` to apply 2 suggestions)
+warning: function `normalize` is never used
+    --> tests/sqlite_diff.rs:1383:4
+     |
+1383 | fn normalize(rows: &mut Vec<Row>) {
+     |    ^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `assert_sql_eq` is never used
+    --> tests/sqlite_diff.rs:1394:8
+     |
+1394 | pub fn assert_sql_eq(sql: &str, setup: &[&str]) -> Result<(), String> {
+     |        ^^^^^^^^^^^^^
+
+warning: function `assert_query_eq` is never used
+    --> tests/sqlite_diff.rs:1418:8
+     |
+1418 | pub fn assert_query_eq(left: Vec<Row>, right: Vec<Row>) -> Result<(), String> {
+     |        ^^^^^^^^^^^^^^^
+
+warning: `sqlrustgo` (test "coverage_error_path_tests") generated 4 warnings (3 duplicates) (run `cargo fix --test "coverage_error_path_tests" -p sqlrustgo` to apply 1 suggestion)
+warning: variable does not need to be mutable
+  --> tests/page_io_benchmark_test.rs:55:9
+   |
+55 |     let mut file_for_sync = std::fs::OpenOptions::new()
+   |         ----^^^^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sqlrustgo` (test "engine_expr_test") generated 10 warnings (3 duplicates) (run `cargo fix --test "engine_expr_test" -p sqlrustgo` to apply 7 suggestions)
+warning: `sqlrustgo` (test "page_io_benchmark_test") generated 1 warning (run `cargo fix --test "page_io_benchmark_test" -p sqlrustgo` to apply 1 suggestion)
+warning: variable does not need to be mutable
+   --> tests/e2e/observability_test.rs:149:13
+    |
+149 |         let mut metrics = ExecutorMetrics::new();
+    |             ----^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sqlrustgo` (test "engine_fuzz_test") generated 5 warnings (2 duplicates)
+warning: `sqlrustgo` (test "e2e_observability_test") generated 1 warning (run `cargo fix --test "e2e_observability_test" -p sqlrustgo` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 29.97s
+     Running unittests src/lib.rs (target/debug/deps/sqlrustgo-09c3bcc8bdb4dc56)
+
+running 12 tests
+test execution_engine::tests::test_cbo_disable ... ok
+test execution_engine::tests::test_estimate_row_count ... ok
+test execution_engine::tests::test_analyze_table_stats ... ok
+test execution_engine::tests::test_execution_stats_default ... ok
+test execution_engine::tests::test_memory_engine_with_cbo ... ok
+test execution_engine::tests::test_estimate_join_cost ... ok
+test execution_engine::tests::test_estimate_selectivity ... ok
+test execution_engine::tests::test_optimize_join_order_after_analyze ... ok
+test execution_engine::tests::test_table_statistics ... ok
+test execution_engine::tests::test_optimize_join_order ... ok
+test execution_engine::tests::test_estimate_index_benefit ... ok
+test execution_engine::tests::test_should_use_index ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running unittests src/main.rs (target/debug/deps/sqlrustgo-268b52b03beefbe3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/aggregate_functions_test.rs (target/debug/deps/aggregate_functions_test-43fa1c069008c71f)
+
+running 9 tests
+test test_parse_count_distinct ... ok
+test test_parse_count_column ... ok
+test test_parse_avg ... ok
+test test_parse_aggregate_in_having ... ok
+test test_parse_count_star ... ok
+test test_parse_max ... ok
+test test_parse_min ... ok
+test test_parse_sum ... ok
+test test_parse_multiple_aggregates ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/binary_format_test.rs (target/debug/deps/binary_format_test-77320273471bf1f8)
+
+running 11 tests
+test test_binary_format_error_debug ... ok
+test test_helpers_read_f64 ... ok
+test test_helpers_read_i64 ... ok
+test test_helpers_read_i64_insufficient_data ... ok
+test test_helpers_read_string ... ok
+test test_helpers_read_u64 ... ok
+test test_helpers_read_u64_insufficient_data ... ok
+test test_helpers_write_f64 ... ok
+test test_helpers_write_i64 ... ok
+test test_helpers_write_string ... ok
+test test_helpers_write_u64 ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/boundary_test.rs (target/debug/deps/boundary_test-cbe2fcd04a0a26aa)
+
+running 21 tests
+test test_deeply_nested_subquery ... ignored
+test test_empty_string ... ok
+test test_hex_value ... ok
+test test_bool_true_false ... ok
+test test_bit_value ... ok
+test test_large_integer_negative ... ignored
+test test_large_float ... ok
+test test_large_integer_positive ... ok
+test test_max_column_name_length ... ok
+test test_max_table_name_length ... ok
+test test_null_handling_in_select ... ok
+test test_null_handling_in_where ... ok
+test test_null_handling_in_join ... ok
+test test_special_characters_chinese ... ok
+test test_special_characters_emoji ... ok
+test test_tab_and_newline_in_string ... ok
+test test_special_characters_sql_injection_attempt ... ok
+test test_zero_division_parsing ... ignored
+test test_whitespace_handling ... ok
+test test_many_values_in_insert ... ok
+test test_many_columns_in_select ... ok
+
+test result: ok. 18 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/ci/buffer_pool_benchmark_test.rs (target/debug/deps/buffer_pool_benchmark_test-322a87ff69e6f447)
+
+running 7 tests
+test test_buffer_pool_eviction_tracking ... ok
+test test_buffer_pool_hit_rate_sequential_scan ... ok
+test test_buffer_pool_large_working_set ... ok
+test test_buffer_pool_stats_collection ... ok
+test test_buffer_pool_hit_rate_repeated_read ... ok
+test test_buffer_pool_hit_rate_mixed_workload ... ok
+test test_buffer_pool_hit_rate_random_access ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ci/buffer_pool_test.rs (target/debug/deps/buffer_pool_test-aa8e7c7c5f90694c)
+
+running 16 tests
+test test_buffer_pool_allocate ... ok
+test test_buffer_pool_insert_and_get ... ok
+test test_buffer_pool_get_not_found ... ok
+test test_buffer_pool_clear ... ok
+test test_buffer_pool_len ... ok
+test test_buffer_pool_lru_eviction ... ok
+test test_buffer_pool_new ... ok
+test test_buffer_pool_remove ... ok
+test test_buffer_pool_reset_stats ... ok
+test test_buffer_pool_stats ... ok
+test test_buffer_pool_stats_hit_rate ... ok
+test test_buffer_pool_stats_hits_and_misses ... ok
+test test_buffer_pool_with_prefetch ... ok
+test test_memory_pool_allocate ... ok
+test test_memory_pool_free ... ok
+test test_memory_pool_new ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/catalog_ddl_cache_test.rs (target/debug/deps/catalog_ddl_cache_test-04f243c130f369f0)
+
+running 4 tests
+test test_create_table_then_immediate_select ... ok
+test test_drop_table_then_query ... ok
+test test_multiple_tables ... ok
+test test_create_and_recreate_table ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cbo_integration_test.rs (target/debug/deps/cbo_integration_test-2ccf4f4257d0a62f)
+
+running 12 tests
+test test_cbo_can_be_disabled ... ok
+test test_cbo_enabled_by_default ... ok
+test test_call_statement_returns_error ... ok
+test test_create_procedure_statement_returns_error ... ok
+test test_analyze_collects_table_stats ... ok
+test test_estimate_row_count ... ok
+test test_estimate_join_cost ... ok
+test test_estimate_selectivity ... ok
+test test_optimize_join_order_respects_stats ... ok
+test test_optimize_join_order ... ok
+test test_estimate_index_benefit ... ok
+test test_should_use_index ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/ci_test.rs (target/debug/deps/ci_test-80d0194c2e5aeefd)
+
+running 5 tests
+test test_cargo_toolchain_exists ... ok
+test test_claude_config_exists ... ok
+test test_github_workflows_exists ... ok
+test test_ci_workflows_has_build_job ... ok
+test test_claude_config_valid_json ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/concurrency_stress_test.rs (target/debug/deps/concurrency_stress_test-2584fe0e8a69ed0b)
+
+running 9 tests
+test test_concurrent_mixed_operations ... ok
+test test_long_running_query_interruption ... ok
+test test_concurrent_reads ... ok
+test test_concurrent_table_creation ... ok
+test test_concurrent_writes ... ok
+test test_sequential_operations ... ok
+test test_mixed_dml_operations ... ok
+test test_rapid_create_drop_table ... ok
+test test_repeated_same_query ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/coverage_error_path_tests.rs (target/debug/deps/coverage_error_path_tests-487cbe51c14c7e5b)
+
+running 6 tests
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test test_null_in_group_by ... ok
+test test_subquery_empty_result ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/coverage_null_matrix_tests.rs (target/debug/deps/coverage_null_matrix_tests-173685f1f8e8bc18)
+
+running 12 tests
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test test_is_null ... ok
+test test_null_and_false ... ok
+test test_not_null ... ok
+test test_is_not_null ... ok
+test test_null_and_true ... ok
+test test_null_equals_null ... ok
+test test_null_or_false ... ok
+test test_null_or_true ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/coverage_operator_matrix_tests.rs (target/debug/deps/coverage_operator_matrix_tests-214c1bcdbe8cd632)
+
+running 15 tests
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test test_equals ... ok
+test test_add ... ok
+test test_divide ... ok
+test test_divide_by_zero ... ok
+test test_greater_than_or_equals ... ok
+test test_less_than_or_equals ... ok
+test test_less_than ... ok
+test test_greater_than ... ok
+test test_subtract ... ok
+test test_not_equals ... ok
+test test_multiply ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/crash_recovery_test.rs (target/debug/deps/crash_recovery_test-8208c9d4d0c01f58)
+
+running 8 tests
+test test_concurrent_crash_simulation ... ok
+test test_recovery_after_failed_transaction ... ok
+test test_partial_query_failure_isolation ... ok
+test test_memory_cleanup_after_drops ... ok
+test test_recovery_after_parse_error ... ok
+test test_recovery_after_invalid_insert ... ok
+test test_state_persistence_across_queries ... ok
+test test_rollback_simulation ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/data_loader.rs (target/debug/deps/data_loader-d170b83d08599562)
+
+running 1 test
+test tests::test_load_json ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/distinct_test.rs (target/debug/deps/distinct_test-93d7bdbc212d8698)
+
+running 6 tests
+test test_parse_select_distinct ... ok
+test test_parse_select_distinct_multiple_columns ... ok
+test test_parse_select_count_distinct ... ok
+test test_parse_select_distinct_with_group_by ... ok
+test test_parse_select_not_distinct ... ok
+test test_parse_select_distinct_with_where ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/e2e/monitoring_test.rs (target/debug/deps/e2e_monitoring_test-d2afaf1290fc741b)
+
+running 8 tests
+test tests::test_grafana_dashboard_json_exists ... ok
+test tests::test_grafana_dashboard_json_valid ... ok
+test tests::test_grafana_dashboard_has_sqlrustgo_tag ... ok
+test tests::test_grafana_dashboard_has_required_fields ... ok
+test tests::test_prometheus_alerts_yml_exists ... ok
+test tests::test_prometheus_alerts_has_groups ... ok
+test tests::test_prometheus_alerts_structure ... ok
+test tests::test_prometheus_alerts_yaml_valid ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/e2e/observability_test.rs (target/debug/deps/e2e_observability_test-85c3680204f0244a)
+
+running 34 tests
+test tests::test_default_metrics_cache ... ok
+test tests::test_default_metrics_bytes ... ok
+test tests::test_default_metrics ... ok
+test tests::test_default_metrics_by_type ... ok
+test tests::test_executor_metrics_creation ... ok
+test tests::test_executor_metrics_by_type ... ok
+test tests::test_executor_metrics_error ... ok
+test tests::test_executor_metrics_record_query ... ok
+test tests::test_executor_metrics_reset ... ok
+test tests::test_executor_metrics_rows ... ok
+test tests::test_executor_metrics_success_rate ... ok
+test tests::test_health_checker_comprehensive ... ok
+test tests::test_health_checker_live ... ok
+test tests::test_full_monitoring_pipeline ... ok
+test tests::test_health_checker_ready ... ok
+test tests::test_health_checker_uptime ... ok
+test tests::test_health_report_status_calculation ... ok
+test tests::test_health_status_strings ... ok
+test tests::test_metrics_aggregation_flow ... ok
+test tests::test_metrics_aggregator_creation ... ok
+test tests::test_metrics_aggregator_custom_metric ... ok
+test tests::test_health_with_metrics_integration ... ok
+test tests::test_metrics_aggregator_multiple_sources ... ok
+test tests::test_metrics_aggregator_prometheus_format ... ok
+test tests::test_metrics_aggregator_register_source ... ok
+test tests::test_metrics_registry_creation ... ok
+test tests::test_metrics_registry_custom_metric ... ok
+test tests::test_metrics_registry_prometheus_format ... ok
+test tests::test_metrics_registry_with_default_metrics ... ok
+test tests::test_network_metrics_bytes ... ok
+test tests::test_network_metrics_connection_lifecycle ... ok
+test tests::test_network_metrics_creation ... ok
+test tests::test_network_metrics_errors ... ok
+test tests::test_network_metrics_packets ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/e2e/e2e_query_test.rs (target/debug/deps/e2e_query_test-98c49a16e9ca538a)
+
+running 8 tests
+test test_different_data_types ... ok
+test test_empty_table_name ... ok
+test test_multiple_tables ... ok
+test test_large_schema ... ok
+test test_physical_plan_traits ... ok
+test test_seqscan_name ... ok
+test test_seqscan_schema ... ok
+test test_simple_seqscan ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine_cross_join_test.rs (target/debug/deps/engine_cross_join_test-d181cb9782e3325f)
+
+running 6 tests
+test sqlite_diff::tests::test_sqlite_count ... ok
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test test_cross_join_basic ... ok
+test test_cross_join_3_tables ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine_expr_test.rs (target/debug/deps/engine_expr_test-ea763832327fdd61)
+
+running 15 tests
+test sqlite_diff::tests::test_sqlite_count ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_where ... ok
+test test_basic_select ... ok
+test test_null_and_true ... ok
+test test_arithmetic_expr ... ok
+test test_complex_where ... ok
+test test_null_or_false ... ok
+test test_projection_complex ... ok
+test test_projection_arithmetic ... ok
+test test_null_not ... ok
+test test_projection_with_null ... ok
+test test_short_circuit_and ... ok
+test test_short_circuit_or ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/engine_fuzz_test.rs (target/debug/deps/engine_fuzz_test-17eac0f00f3c1017)
+
+running 6 tests
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test fuzz_random_data ... ok
+test fuzz_all_queries ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine_physical_plan_test.rs (target/debug/deps/engine_physical_plan_test-89db922e7ec388aa)
+
+running 8 tests
+test test_exists_subquery_logical_plan ... ok
+test test_exists_to_semi_join ... ok
+test test_in_subquery_to_semi_join ... ok
+test test_in_subquery_logical_plan ... ok
+test test_not_exists_to_anti_join ... ok
+test test_not_in_subquery_logical_plan ... ok
+test test_not_exists_subquery_logical_plan ... ok
+test test_not_in_subquery_to_anti_join ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine_subquery_test.rs (target/debug/deps/engine_subquery_test-ea83efbfddc7c6b5)
+
+running 15 tests
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test test_exists_no_rows ... ok
+test test_in_basic ... ok
+test test_exists ... ok
+test test_in_empty_result ... ok
+test test_in_value_list ... ok
+test test_not_exists ... ok
+test test_in_with_null ... ok
+test test_in_value_list_with_null ... ok
+test test_not_exists_no_rows ... ok
+test test_not_in_value_list ... ok
+test test_not_in_with_null ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine_test.rs (target/debug/deps/engine_test-e0bac36938cfffd2)
+
+running 32 tests
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test test_anti_join_multiplicity ... ok
+test test_anti_count_col_vs_star ... ok
+test test_anti_group_by_null_bucket ... ok
+test test_anti_having_null ... ok
+test test_diff_count ... ok
+test test_anti_join_null_never_matches ... ok
+test test_anti_join_then_group_order ... ok
+test test_anti_left_join_group_null_fill ... ok
+test test_diff_group_by ... ok
+test test_diff_null_filter ... ok
+test test_diff_join_inner ... ok
+test test_diff_order_by_desc ... ok
+test test_diff_join_no_match ... ok
+test test_diff_select_column ... ok
+test test_diff_select_star ... ok
+test test_diff_where_gt ... ok
+test test_diff_sum ... ok
+test test_differential_drop_nonexistent ... ok
+test test_differential_ddl_state ... ok
+test test_fuzz_idempotent_ddl ... ok
+test test_fuzz_ddl_recreate_same_name ... ok
+test test_diff_where_null ... ok
+test test_sqlite_diff_aggregate ... ok
+test test_sqlite_diff_basic ... ok
+test test_sqlite_diff_count ... ok
+test test_sqlite_diff_where ... ok
+test test_sqllogic_basic ... ok
+test test_fuzz_ddl_create_drop ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/executor_null_agg_test.rs (target/debug/deps/executor_null_agg_test-45df96bee311fdf4)
+
+running 12 tests
+test test_avg_empty_table ... ok
+test test_avg_all_null_column ... ok
+test test_count_all_null_column ... ok
+test test_aggregate_mixed_null_and_values ... ok
+test test_count_empty_table ... ok
+test test_count_distinct_null ... ok
+test test_count_star_vs_count_column ... ok
+test test_first_last_aggregates_with_nulls ... ok
+test test_max_all_null_column ... ok
+test test_min_all_null_column ... ok
+test test_sum_all_null_column ... ok
+test test_sum_empty_table ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/expression_operators_test.rs (target/debug/deps/expression_operators_test-c4af5523b6dd7a46)
+
+running 7 tests
+test test_parse_exists ... ok
+test test_parse_binary_or ... ok
+test test_parse_binary_and ... ok
+test test_parse_comparison_operators ... ok
+test test_parse_is_not_null ... ok
+test test_parse_is_null ... ok
+test test_parse_not_exists ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/in_value_list_test.rs (target/debug/deps/in_value_list_test-768e7dd798682250)
+
+running 7 tests
+test test_parse_in_list_single_value_in_where ... ok
+test test_parse_in_list_integers_in_where ... ok
+test test_parse_in_list_in_having ... ok
+test test_parse_in_list_mixed_in_where ... ok
+test test_parse_in_list_strings_in_where ... ok
+test test_parse_in_list_subquery_in_where ... ok
+test test_parse_not_in_list_in_where ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/limit_clause_test.rs (target/debug/deps/limit_clause_test-7859b7f4e7f28354)
+
+running 3 tests
+test test_select_limit_zero ... ok
+test test_select_limit ... ok
+test test_select_limit_offset ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/long_run_stability_72h_test.rs (target/debug/deps/long_run_stability_72h_test-99116f4ad512e9dc)
+
+running 4 tests
+test test_concurrent_read_write_72h ... ignored
+test test_sustained_read_72h ... ignored
+test test_sustained_write_72h ... ignored
+test test_sustained_write_concurrent_72h ... ignored
+
+test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/long_run_stability_test.rs (target/debug/deps/long_run_stability_test-5d8caa2036b97c5d)
+
+running 10 tests
+test test_concurrent_read_write_stability ... ignored
+test test_interleaved_read_write_consistency ... ignored
+test test_list_tables_stability ... ignored
+test test_memory_stability_under_load ... ignored
+test test_rapid_burst_writes ... ignored
+test test_repeated_create_drop_stability ... ignored
+test test_stress_table_operations ... ignored
+test test_sustained_read_load ... ignored
+test test_sustained_write_load ... ignored
+test test_table_info_consistency_under_load ... ignored
+
+test result: ok. 0 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mvcc_snapshot_isolation_test.rs (target/debug/deps/mvcc_snapshot_isolation_test-a3d25c3387883a5c)
+
+running 7 tests
+test test_serializable_isolation ... ok
+test test_begin_commit_transaction ... ok
+test test_concurrent_transactions_with_shared_storage ... ok
+test test_multiple_concurrent_readers ... ok
+test test_start_transaction ... ok
+test test_set_transaction_isolation ... ok
+test test_transaction_reads_initial_state ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mvcc_transaction_test.rs (target/debug/deps/mvcc_transaction_test-0438a3d5f41d1019)
+
+running 6 tests
+test test_set_transaction_isolation ... ok
+test test_begin_rollback_transaction ... ok
+test test_begin_serializable ... ok
+test test_begin_commit_transaction ... ok
+test test_start_transaction ... ok
+test test_start_transaction_serializable ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/network_tcp_smoke_test.rs (target/debug/deps/network_tcp_smoke_test-3e3188337f49881d)
+
+running 6 tests
+test test_tcp_connection_refused_on_closed_port ... ok
+test test_tcp_set_options ... ok
+test test_tcp_listener_bind_and_accept ... ok
+test test_tcp_multiple_connections ... ok
+test test_tcp_stream_peer_addr ... ok
+test test_tcp_stream_write_read ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/optimizer_cbo_accuracy_test.rs (target/debug/deps/optimizer_cbo_accuracy_test-f7553a0e42dc545c)
+
+running 11 tests
+test test_agg_cost_increases_with_group_by ... ok
+test test_all_costs_are_positive ... ok
+test test_custom_cost_model_parameters ... ok
+test test_hash_join_asymmetry ... ok
+test test_hash_join_cheaper_than_nested_loop ... ok
+test test_index_scan_cheaper_than_seq_scan_for_selective_query ... ok
+test test_seq_scan_cheaper_for_large_result_sets ... ok
+test test_seq_scan_cost_scales_linearly ... ok
+test test_seq_scan_cost_scales_with_pages ... ok
+test test_sort_cost_external_vs_internal ... ok
+test test_sort_merge_join_scales_linearly ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/page_io_benchmark_test.rs (target/debug/deps/page_io_benchmark_test-3959fb411d03968c)
+
+running 8 tests
+test test_page_throughput_random_write ... ok
+test test_page_throughput_buffered_sequential_write ... ok
+test test_page_throughput_random_read ... ok
+test test_page_throughput_sequential_write ... ok
+test test_page_throughput_small_io ... ok
+test test_page_throughput_buffered_sequential_read ... ok
+test test_page_throughput_sequential_read ... ok
+test test_page_throughput_sync_overhead ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.95s
+
+     Running tests/parser_token_test.rs (target/debug/deps/parser_token_test-3ec78d40cb179606)
+
+running 4 tests
+test test_is_keyword ... ok
+test test_token_display ... ok
+test test_token_variants ... ok
+test test_from_keyword ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/planner_multi_join_test.rs (target/debug/deps/planner_multi_join_test-73da4b025da9ee8b)
+
+running 4 tests
+test test_cross_join ... ok
+test test_right_join ... ok
+test test_left_join ... ok
+test test_three_table_join ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/qps_benchmark_test.rs (target/debug/deps/qps_benchmark_test-05356b512607b511)
+
+running 10 tests
+test test_qps_aggregation ... ignored
+test test_qps_complex_where ... ignored
+test test_qps_concurrent_mixed ... ignored
+test test_qps_concurrent_select ... ignored
+test test_qps_delete ... ignored
+test test_qps_insert ... ignored
+test test_qps_join ... ignored
+test test_qps_order_by ... ignored
+test test_qps_simple_select ... ignored
+test test_qps_update ... ignored
+
+test result: ok. 0 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/regression_test.rs (target/debug/deps/regression_test-347462a0ac5892c4)
+
+running 1 test
+test test_regression_suite ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 40.31s
+
+     Running crates/server/tests/scheduler_integration_test.rs (target/debug/deps/scheduler_integration_test-8b06ae66f7543dbb)
+
+running 22 tests
+test test_conditional_workflow_step ... ok
+test test_create_and_get_workflow ... ok
+test test_create_and_get_task ... ok
+test test_delete_task ... ok
+test test_agent_serialization ... ok
+test test_delete_workflow ... ok
+test test_create_task_with_priority ... ok
+test test_execute_workflow_request_deserialization ... ok
+test test_execution_history ... ok
+test test_list_agents ... ok
+test test_list_tasks ... ok
+test test_register_agent_request_deserialization ... ok
+test test_register_and_get_agent ... ok
+test test_list_workflows ... ok
+test test_parallel_workflow_step ... ok
+test test_request_deserialization ... ok
+test test_sequential_workflow_step ... ok
+test test_sync_agent_status_request_deserialization ... ok
+test test_update_agent_status ... ok
+test test_workflow_request_deserialization ... ok
+test test_workflow_serialization ... ok
+test test_task_serialization ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sqlite_diff.rs (target/debug/deps/sqlite_diff-be3623a3d4999a8b)
+
+running 4 tests
+test tests::test_sqlite_where ... ok
+test tests::test_sqlite_aggregate ... ok
+test tests::test_sqlite_count ... ok
+test tests::test_sqlite_basic_query ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stored_proc_catalog_test.rs (target/debug/deps/stored_proc_catalog_test-66366c34b182ca19)
+
+running 16 tests
+test test_after_delete_trigger_executes ... ok
+test test_after_update_trigger_executes ... ok
+test test_after_insert_trigger_executes ... ok
+test test_before_delete_trigger_executes ... ok
+test test_call_requires_catalog ... ok
+test test_create_procedure_requires_catalog ... ok
+test test_create_and_call_procedure_with_catalog ... ok
+test test_before_update_trigger_sets_column ... ok
+test test_duplicate_procedure_error ... ok
+test test_procedure_not_found ... ok
+test test_create_trigger_with_catalog ... ok
+test test_before_insert_trigger_sets_column ... ok
+test test_trigger_executes_insert ... ok
+test test_multiple_triggers_on_same_table ... ok
+test test_trigger_executes_delete ... ok
+test test_trigger_executes_update ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stored_procedure_parser_test.rs (target/debug/deps/stored_procedure_parser_test-9b418f060ae0729d)
+
+running 10 tests
+test test_parse_call_simple ... ok
+test test_parse_call_with_null ... ok
+test test_parse_call_with_mixed_args ... ok
+test test_parse_call_with_args ... ok
+test test_parse_create_procedure_simple ... ok
+test test_parse_create_procedure_with_in_param ... ok
+test test_parse_create_procedure_with_inout_param ... ok
+test test_parse_create_procedure_without_param_mode ... ok
+test test_parse_create_procedure_with_out_param ... ok
+test test_parse_create_procedure_with_multiple_params ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/wal_integration_test.rs (target/debug/deps/wal_integration_test-954be41611b8ae91)
+
+running 16 tests
+test test_wal_archive_metadata_empty_file ... ok
+test test_wal_entry_large_payload ... ok
+test test_wal_archive_metadata_roundtrip ... ok
+test test_wal_entry_serialization_roundtrip ... ok
+test test_wal_entry_with_null_data ... ok
+test test_wal_concurrent_transactions_isolation ... ok
+test test_wal_checkpoint_recovery ... ok
+test test_wal_reader_empty_file ... ok
+test test_wal_recovery_after_crash ... ok
+test test_wal_multiple_transactions ... ok
+test test_wal_mixed_operations ... ok
+test test_wal_recovery_with_pending_transaction ... ok
+test test_wal_writer_lsn_tracking ... ok
+test test_wal_single_transaction ... ok
+test test_wal_rollback_recovery ... ok
+test test_wal_writer_reader_sequential ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sqlrustgo
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: variable does not need to be mutable
+   --> tests/e2e/observability_test.rs:149:13
+    |
+149 |         let mut metrics = ExecutorMetrics::new();
+    |             ----^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> tests/sqlite_diff.rs:380:29
+    |
+380 |                         let mut rows_after_group: Vec<Vec<Value>> = groups
+    |                             ----^^^^^^^^^^^^^^^^
+    |                             |
+    |                             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> tests/sqlite_diff.rs:1395:9
+     |
+1395 |     let mut sqlite = SqliteEngine::new();
+     |         ----^^^^^^
+     |         |
+     |         help: remove this `mut`
+
+warning: function `assert_query_eq` is never used
+    --> tests/sqlite_diff.rs:1418:8
+     |
+1418 | pub fn assert_query_eq(left: Vec<Row>, right: Vec<Row>) -> Result<(), String> {
+     |        ^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:31:18
+   |
+31 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:40:18
+   |
+40 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:49:18
+   |
+49 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:58:18
+   |
+58 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:67:18
+   |
+67 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:76:18
+   |
+76 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> tests/engine_expr_test.rs:85:18
+   |
+85 |     let (sqlite, mut rust) = setup_with_data();
+   |                  ----^^^^
+   |                  |
+   |                  help: remove this `mut`
+
+warning: `sqlrustgo` (test "e2e_observability_test") generated 1 warning (run `cargo fix --test "e2e_observability_test" -p sqlrustgo` to apply 1 suggestion)
+warning: `sqlrustgo` (test "engine_cross_join_test") generated 3 warnings (run `cargo fix --test "engine_cross_join_test" -p sqlrustgo` to apply 2 suggestions)
+warning: `sqlrustgo` (test "engine_expr_test") generated 10 warnings (3 duplicates) (run `cargo fix --test "engine_expr_test" -p sqlrustgo` to apply 7 suggestions)
+warning: unused imports: `RustEngine` and `SqliteEngine`
+ --> tests/engine_subquery_test.rs:2:34
+  |
+2 | use sqlite_diff::{assert_sql_eq, RustEngine, SqliteEngine};
+  |                                  ^^^^^^^^^^  ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `RustEngine` and `SqliteEngine`
+ --> tests/coverage_error_path_tests.rs:2:34
+  |
+2 | use sqlite_diff::{assert_sql_eq, RustEngine, SqliteEngine};
+  |                                  ^^^^^^^^^^  ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sqlrustgo` (test "engine_subquery_test") generated 4 warnings (3 duplicates) (run `cargo fix --test "engine_subquery_test" -p sqlrustgo` to apply 1 suggestion)
+warning: `sqlrustgo` (test "coverage_error_path_tests") generated 4 warnings (3 duplicates) (run `cargo fix --test "coverage_error_path_tests" -p sqlrustgo` to apply 1 suggestion)
+warning: variable does not need to be mutable
+  --> tests/page_io_benchmark_test.rs:55:9
+   |
+55 |     let mut file_for_sync = std::fs::OpenOptions::new()
+   |         ----^^^^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `JoinType`
+ --> tests/engine_physical_plan_test.rs:9:48
+  |
+9 | use sqlrustgo_planner::{DataType, Expr, Field, JoinType, LogicalPlan, Schema};
+  |                                                ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `normalize` is never used
+    --> tests/sqlite_diff.rs:1383:4
+     |
+1383 | fn normalize(rows: &mut Vec<Row>) {
+     |    ^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `assert_sql_eq` is never used
+    --> tests/sqlite_diff.rs:1394:8
+     |
+1394 | pub fn assert_sql_eq(sql: &str, setup: &[&str]) -> Result<(), String> {
+     |        ^^^^^^^^^^^^^
+
+warning: function `assert_query_eq` is never used
+    --> tests/sqlite_diff.rs:1418:8
+     |
+1418 | pub fn assert_query_eq(left: Vec<Row>, right: Vec<Row>) -> Result<(), String> {
+     |        ^^^^^^^^^^^^^^^
+
+warning: `sqlrustgo` (test "page_io_benchmark_test") generated 1 warning (run `cargo fix --test "page_io_benchmark_test" -p sqlrustgo` to apply 1 suggestion)
+warning: `sqlrustgo` (test "engine_physical_plan_test") generated 1 warning (run `cargo fix --test "engine_physical_plan_test" -p sqlrustgo` to apply 1 suggestion)
+warning: `sqlrustgo` (test "engine_fuzz_test") generated 5 warnings (2 duplicates)
+warning: unused import: `Expr`
+ --> tests/e2e/e2e_query_test.rs:3:27
+  |
+3 | use sqlrustgo::{DataType, Expr, Field, PhysicalPlan, Schema, SeqScanExec};
+  |                           ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MemoryStorage as MemStorage`
+ --> tests/engine/mod.rs:2:33
+  |
+2 | use sqlrustgo::{ExecutorResult, MemoryStorage as MemStorage};
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `assert_query_eq`
+ --> tests/engine_test.rs:5:19
+  |
+5 | use sqlite_diff::{assert_query_eq, assert_sql_eq, SqliteEngine};
+  |                   ^^^^^^^^^^^^^^^
+
+warning: unused imports: `RustEngine` and `SqliteEngine`
+ --> tests/coverage_null_matrix_tests.rs:2:34
+  |
+2 | use sqlite_diff::{assert_sql_eq, RustEngine, SqliteEngine};
+  |                                  ^^^^^^^^^^  ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sqlrustgo` (test "coverage_operator_matrix_tests") generated 3 warnings (3 duplicates)
+warning: `sqlrustgo` (test "e2e_query_test") generated 1 warning (run `cargo fix --test "e2e_query_test" -p sqlrustgo` to apply 1 suggestion)
+warning: `sqlrustgo` (test "sqlite_diff") generated 2 warnings (2 duplicates)
+warning: `sqlrustgo` (test "engine_test") generated 5 warnings (3 duplicates) (run `cargo fix --test "engine_test" -p sqlrustgo` to apply 2 suggestions)
+warning: `sqlrustgo` (test "coverage_null_matrix_tests") generated 4 warnings (3 duplicates) (run `cargo fix --test "coverage_null_matrix_tests" -p sqlrustgo` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+     Running unittests src/lib.rs (target/debug/deps/sqlrustgo-09c3bcc8bdb4dc56)
+
+running 12 tests
+test execution_engine::tests::test_cbo_disable ... ok
+test execution_engine::tests::test_estimate_row_count ... ok
+test execution_engine::tests::test_analyze_table_stats ... ok
+test execution_engine::tests::test_execution_stats_default ... ok
+test execution_engine::tests::test_memory_engine_with_cbo ... ok
+test execution_engine::tests::test_estimate_join_cost ... ok
+test execution_engine::tests::test_estimate_selectivity ... ok
+test execution_engine::tests::test_optimize_join_order_after_analyze ... ok
+test execution_engine::tests::test_table_statistics ... ok
+test execution_engine::tests::test_optimize_join_order ... ok
+test execution_engine::tests::test_estimate_index_benefit ... ok
+test execution_engine::tests::test_should_use_index ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running unittests src/main.rs (target/debug/deps/sqlrustgo-268b52b03beefbe3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/aggregate_functions_test.rs (target/debug/deps/aggregate_functions_test-43fa1c069008c71f)
+
+running 9 tests
+test test_parse_count_column ... ok
+test test_parse_avg ... ok
+test test_parse_count_distinct ... ok
+test test_parse_aggregate_in_having ... ok
+test test_parse_count_star ... ok
+test test_parse_min ... ok
+test test_parse_max ... ok
+test test_parse_sum ... ok
+test test_parse_multiple_aggregates ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/binary_format_test.rs (target/debug/deps/binary_format_test-77320273471bf1f8)
+
+running 11 tests
+test test_binary_format_error_debug ... ok
+test test_helpers_read_f64 ... ok
+test test_helpers_read_i64_insufficient_data ... ok
+test test_helpers_read_i64 ... ok
+test test_helpers_read_string ... ok
+test test_helpers_read_u64 ... ok
+test test_helpers_write_f64 ... ok
+test test_helpers_read_u64_insufficient_data ... ok
+test test_helpers_write_i64 ... ok
+test test_helpers_write_string ... ok
+test test_helpers_write_u64 ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/boundary_test.rs (target/debug/deps/boundary_test-cbe2fcd04a0a26aa)
+
+running 21 tests
+test test_deeply_nested_subquery ... ignored
+test test_bool_true_false ... ok
+test test_empty_string ... ok
+test test_hex_value ... ok
+test test_bit_value ... ok
+test test_large_integer_negative ... ignored
+test test_large_float ... ok
+test test_large_integer_positive ... ok
+test test_max_column_name_length ... ok
+test test_max_table_name_length ... ok
+test test_null_handling_in_select ... ok
+test test_null_handling_in_where ... ok
+test test_null_handling_in_join ... ok
+test test_special_characters_chinese ... ok
+test test_special_characters_emoji ... ok
+test test_tab_and_newline_in_string ... ok
+test test_special_characters_sql_injection_attempt ... ok
+test test_whitespace_handling ... ok
+test test_zero_division_parsing ... ignored
+test test_many_values_in_insert ... ok
+test test_many_columns_in_select ... ok
+
+test result: ok. 18 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/ci/buffer_pool_benchmark_test.rs (target/debug/deps/buffer_pool_benchmark_test-322a87ff69e6f447)
+
+running 7 tests
+test test_buffer_pool_eviction_tracking ... ok
+test test_buffer_pool_hit_rate_sequential_scan ... ok
+test test_buffer_pool_hit_rate_repeated_read ... ok
+test test_buffer_pool_stats_collection ... ok
+test test_buffer_pool_large_working_set ... ok
+test test_buffer_pool_hit_rate_mixed_workload ... ok
+test test_buffer_pool_hit_rate_random_access ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ci/buffer_pool_test.rs (target/debug/deps/buffer_pool_test-aa8e7c7c5f90694c)
+
+running 16 tests
+test test_buffer_pool_allocate ... ok
+test test_buffer_pool_get_not_found ... ok
+test test_buffer_pool_insert_and_get ... ok
+test test_buffer_pool_clear ... ok
+test test_buffer_pool_len ... ok
+test test_buffer_pool_lru_eviction ... ok
+test test_buffer_pool_new ... ok
+test test_buffer_pool_remove ... ok
+test test_buffer_pool_reset_stats ... ok
+test test_buffer_pool_stats ... ok
+test test_buffer_pool_stats_hit_rate ... ok
+test test_buffer_pool_stats_hits_and_misses ... ok
+test test_buffer_pool_with_prefetch ... ok
+test test_memory_pool_free ... ok
+test test_memory_pool_allocate ... ok
+test test_memory_pool_new ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/catalog_ddl_cache_test.rs (target/debug/deps/catalog_ddl_cache_test-04f243c130f369f0)
+
+running 4 tests
+test test_create_table_then_immediate_select ... ok
+test test_create_and_recreate_table ... ok
+test test_multiple_tables ... ok
+test test_drop_table_then_query ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cbo_integration_test.rs (target/debug/deps/cbo_integration_test-2ccf4f4257d0a62f)
+
+running 12 tests
+test test_cbo_enabled_by_default ... ok
+test test_cbo_can_be_disabled ... ok
+test test_call_statement_returns_error ... ok
+test test_create_procedure_statement_returns_error ... ok
+test test_analyze_collects_table_stats ... ok
+test test_estimate_row_count ... ok
+test test_estimate_join_cost ... ok
+test test_estimate_selectivity ... ok
+test test_optimize_join_order_respects_stats ... ok
+test test_optimize_join_order ... ok
+test test_estimate_index_benefit ... ok
+test test_should_use_index ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/ci_test.rs (target/debug/deps/ci_test-80d0194c2e5aeefd)
+
+running 5 tests
+test test_cargo_toolchain_exists ... ok
+test test_claude_config_exists ... ok
+test test_github_workflows_exists ... ok
+test test_ci_workflows_has_build_job ... ok
+test test_claude_config_valid_json ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/concurrency_stress_test.rs (target/debug/deps/concurrency_stress_test-2584fe0e8a69ed0b)
+
+running 9 tests
+test test_concurrent_writes ... ok
+test test_concurrent_reads ... ok
+test test_long_running_query_interruption ... ok
+test test_concurrent_table_creation ... ok
+test test_concurrent_mixed_operations ... ok
+test test_rapid_create_drop_table ... ok
+test test_repeated_same_query ... ok
+test test_sequential_operations ... ok
+test test_mixed_dml_operations ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/coverage_error_path_tests.rs (target/debug/deps/coverage_error_path_tests-487cbe51c14c7e5b)
+
+running 6 tests
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test test_subquery_empty_result ... ok
+test test_null_in_group_by ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/coverage_null_matrix_tests.rs (target/debug/deps/coverage_null_matrix_tests-173685f1f8e8bc18)
+
+running 12 tests
+test sqlite_diff::tests::test_sqlite_count ... ok
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test sqlite_diff::tests::test_sqlite_where ... ok
+test test_null_and_false ... ok
+test test_not_null ... ok
+test test_is_not_null ... ok
+test test_is_null ... ok
+test test_null_and_true ... ok
+test test_null_equals_null ... ok
+test test_null_or_true ... ok
+test test_null_or_false ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/coverage_operator_matrix_tests.rs (target/debug/deps/coverage_operator_matrix_tests-214c1bcdbe8cd632)
+
+running 15 tests
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test test_equals ... ok
+test test_divide_by_zero ... ok
+test test_divide ... ok
+test test_add ... ok
+test test_greater_than ... ok
+test test_less_than ... ok
+test test_less_than_or_equals ... ok
+test test_greater_than_or_equals ... ok
+test test_multiply ... ok
+test test_not_equals ... ok
+test test_subtract ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/crash_recovery_test.rs (target/debug/deps/crash_recovery_test-8208c9d4d0c01f58)
+
+running 8 tests
+test test_recovery_after_failed_transaction ... ok
+test test_concurrent_crash_simulation ... ok
+test test_partial_query_failure_isolation ... ok
+test test_memory_cleanup_after_drops ... ok
+test test_recovery_after_invalid_insert ... ok
+test test_recovery_after_parse_error ... ok
+test test_state_persistence_across_queries ... ok
+test test_rollback_simulation ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/data_loader.rs (target/debug/deps/data_loader-d170b83d08599562)
+
+running 1 test
+test tests::test_load_json ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/distinct_test.rs (target/debug/deps/distinct_test-93d7bdbc212d8698)
+
+running 6 tests
+test test_parse_select_distinct ... ok
+test test_parse_select_count_distinct ... ok
+test test_parse_select_distinct_multiple_columns ... ok
+test test_parse_select_distinct_with_group_by ... ok
+test test_parse_select_not_distinct ... ok
+test test_parse_select_distinct_with_where ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/e2e/monitoring_test.rs (target/debug/deps/e2e_monitoring_test-d2afaf1290fc741b)
+
+running 8 tests
+test tests::test_grafana_dashboard_json_exists ... ok
+test tests::test_grafana_dashboard_json_valid ... ok
+test tests::test_grafana_dashboard_has_required_fields ... ok
+test tests::test_grafana_dashboard_has_sqlrustgo_tag ... ok
+test tests::test_prometheus_alerts_yml_exists ... ok
+test tests::test_prometheus_alerts_yaml_valid ... ok
+test tests::test_prometheus_alerts_has_groups ... ok
+test tests::test_prometheus_alerts_structure ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/e2e/observability_test.rs (target/debug/deps/e2e_observability_test-85c3680204f0244a)
+
+running 34 tests
+test tests::test_default_metrics_cache ... ok
+test tests::test_default_metrics_bytes ... ok
+test tests::test_default_metrics ... ok
+test tests::test_default_metrics_by_type ... ok
+test tests::test_executor_metrics_creation ... ok
+test tests::test_executor_metrics_by_type ... ok
+test tests::test_executor_metrics_error ... ok
+test tests::test_executor_metrics_record_query ... ok
+test tests::test_executor_metrics_reset ... ok
+test tests::test_executor_metrics_rows ... ok
+test tests::test_executor_metrics_success_rate ... ok
+test tests::test_health_checker_comprehensive ... ok
+test tests::test_health_checker_live ... ok
+test tests::test_full_monitoring_pipeline ... ok
+test tests::test_health_checker_ready ... ok
+test tests::test_health_checker_uptime ... ok
+test tests::test_health_report_status_calculation ... ok
+test tests::test_health_status_strings ... ok
+test tests::test_metrics_aggregator_creation ... ok
+test tests::test_metrics_aggregator_multiple_sources ... ok
+test tests::test_metrics_aggregation_flow ... ok
+test tests::test_metrics_aggregator_custom_metric ... ok
+test tests::test_health_with_metrics_integration ... ok
+test tests::test_metrics_aggregator_prometheus_format ... ok
+test tests::test_metrics_aggregator_register_source ... ok
+test tests::test_metrics_registry_creation ... ok
+test tests::test_metrics_registry_custom_metric ... ok
+test tests::test_metrics_registry_prometheus_format ... ok
+test tests::test_network_metrics_bytes ... ok
+test tests::test_metrics_registry_with_default_metrics ... ok
+test tests::test_network_metrics_connection_lifecycle ... ok
+test tests::test_network_metrics_creation ... ok
+test tests::test_network_metrics_errors ... ok
+test tests::test_network_metrics_packets ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/e2e/e2e_query_test.rs (target/debug/deps/e2e_query_test-98c49a16e9ca538a)
+
+running 8 tests
+test test_different_data_types ... ok
+test test_empty_table_name ... ok
+test test_multiple_tables ... ok
+test test_large_schema ... ok
+test test_physical_plan_traits ... ok
+test test_seqscan_name ... ok
+test test_seqscan_schema ... ok
+test test_simple_seqscan ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine_cross_join_test.rs (target/debug/deps/engine_cross_join_test-d181cb9782e3325f)
+
+running 6 tests
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test test_cross_join_basic ... ok
+test test_cross_join_3_tables ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine_expr_test.rs (target/debug/deps/engine_expr_test-ea763832327fdd61)
+
+running 15 tests
+test sqlite_diff::tests::test_sqlite_count ... ok
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test sqlite_diff::tests::test_sqlite_where ... ok
+test test_basic_select ... ok
+test test_null_and_true ... ok
+test test_complex_where ... ok
+test test_arithmetic_expr ... ok
+test test_null_or_false ... ok
+test test_projection_arithmetic ... ok
+test test_projection_complex ... ok
+test test_null_not ... ok
+test test_projection_with_null ... ok
+test test_short_circuit_and ... ok
+test test_short_circuit_or ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/engine_fuzz_test.rs (target/debug/deps/engine_fuzz_test-17eac0f00f3c1017)
+
+running 6 tests
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test sqlite_diff::tests::test_sqlite_where ... ok
+test fuzz_random_data ... ok
+test fuzz_all_queries ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine_physical_plan_test.rs (target/debug/deps/engine_physical_plan_test-89db922e7ec388aa)
+
+running 8 tests
+test test_exists_subquery_logical_plan ... ok
+test test_exists_to_semi_join ... ok
+test test_in_subquery_logical_plan ... ok
+test test_in_subquery_to_semi_join ... ok
+test test_not_exists_subquery_logical_plan ... ok
+test test_not_exists_to_anti_join ... ok
+test test_not_in_subquery_logical_plan ... ok
+test test_not_in_subquery_to_anti_join ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine_subquery_test.rs (target/debug/deps/engine_subquery_test-ea83efbfddc7c6b5)
+
+running 15 tests
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test test_exists ... ok
+test test_exists_no_rows ... ok
+test test_in_empty_result ... ok
+test test_in_basic ... ok
+test test_in_value_list_with_null ... ok
+test test_in_value_list ... ok
+test test_not_exists ... ok
+test test_in_with_null ... ok
+test test_not_in_value_list ... ok
+test test_not_exists_no_rows ... ok
+test test_not_in_with_null ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine_test.rs (target/debug/deps/engine_test-e0bac36938cfffd2)
+
+running 32 tests
+test sqlite_diff::tests::test_sqlite_where ... ok
+test sqlite_diff::tests::test_sqlite_basic_query ... ok
+test sqlite_diff::tests::test_sqlite_count ... ok
+test sqlite_diff::tests::test_sqlite_aggregate ... ok
+test test_anti_join_multiplicity ... ok
+test test_anti_count_col_vs_star ... ok
+test test_anti_join_null_never_matches ... ok
+test test_anti_having_null ... ok
+test test_anti_left_join_group_null_fill ... ok
+test test_anti_join_then_group_order ... ok
+test test_anti_group_by_null_bucket ... ok
+test test_diff_count ... ok
+test test_diff_group_by ... ok
+test test_diff_null_filter ... ok
+test test_diff_join_inner ... ok
+test test_diff_join_no_match ... ok
+test test_diff_order_by_desc ... ok
+test test_diff_select_column ... ok
+test test_diff_sum ... ok
+test test_diff_select_star ... ok
+test test_diff_where_gt ... ok
+test test_differential_drop_nonexistent ... ok
+test test_diff_where_null ... ok
+test test_fuzz_idempotent_ddl ... ok
+test test_differential_ddl_state ... ok
+test test_sqlite_diff_aggregate ... ok
+test test_sqlite_diff_basic ... ok
+test test_sqlite_diff_count ... ok
+test test_fuzz_ddl_recreate_same_name ... ok
+test test_sqlite_diff_where ... ok
+test test_sqllogic_basic ... ok
+test test_fuzz_ddl_create_drop ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/executor_null_agg_test.rs (target/debug/deps/executor_null_agg_test-45df96bee311fdf4)
+
+running 12 tests
+test test_avg_empty_table ... ok
+test test_avg_all_null_column ... ok
+test test_count_all_null_column ... ok
+test test_aggregate_mixed_null_and_values ... ok
+test test_count_empty_table ... ok
+test test_count_distinct_null ... ok
+test test_count_star_vs_count_column ... ok
+test test_first_last_aggregates_with_nulls ... ok
+test test_min_all_null_column ... ok
+test test_max_all_null_column ... ok
+test test_sum_all_null_column ... ok
+test test_sum_empty_table ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/expression_operators_test.rs (target/debug/deps/expression_operators_test-c4af5523b6dd7a46)
+
+running 7 tests
+test test_parse_exists ... ok
+test test_parse_binary_or ... ok
+test test_parse_binary_and ... ok
+test test_parse_comparison_operators ... ok
+test test_parse_is_not_null ... ok
+test test_parse_is_null ... ok
+test test_parse_not_exists ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/in_value_list_test.rs (target/debug/deps/in_value_list_test-768e7dd798682250)
+
+running 7 tests
+test test_parse_in_list_single_value_in_where ... ok
+test test_parse_in_list_integers_in_where ... ok
+test test_parse_in_list_mixed_in_where ... ok
+test test_parse_in_list_in_having ... ok
+test test_parse_in_list_strings_in_where ... ok
+test test_parse_in_list_subquery_in_where ... ok
+test test_parse_not_in_list_in_where ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/limit_clause_test.rs (target/debug/deps/limit_clause_test-7859b7f4e7f28354)
+
+running 3 tests
+test test_select_limit_zero ... ok
+test test_select_limit ... ok
+test test_select_limit_offset ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/long_run_stability_72h_test.rs (target/debug/deps/long_run_stability_72h_test-99116f4ad512e9dc)
+
+running 4 tests
+test test_concurrent_read_write_72h ... ignored
+test test_sustained_read_72h ... ignored
+test test_sustained_write_72h ... ignored
+test test_sustained_write_concurrent_72h ... ignored
+
+test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/long_run_stability_test.rs (target/debug/deps/long_run_stability_test-5d8caa2036b97c5d)
+
+running 10 tests
+test test_concurrent_read_write_stability ... ignored
+test test_interleaved_read_write_consistency ... ignored
+test test_list_tables_stability ... ignored
+test test_memory_stability_under_load ... ignored
+test test_rapid_burst_writes ... ignored
+test test_repeated_create_drop_stability ... ignored
+test test_stress_table_operations ... ignored
+test test_sustained_read_load ... ignored
+test test_sustained_write_load ... ignored
+test test_table_info_consistency_under_load ... ignored
+
+test result: ok. 0 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mvcc_snapshot_isolation_test.rs (target/debug/deps/mvcc_snapshot_isolation_test-a3d25c3387883a5c)
+
+running 7 tests
+test test_concurrent_transactions_with_shared_storage ... ok
+test test_multiple_concurrent_readers ... ok
+test test_serializable_isolation ... ok
+test test_begin_commit_transaction ... ok
+test test_set_transaction_isolation ... ok
+test test_transaction_reads_initial_state ... ok
+test test_start_transaction ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mvcc_transaction_test.rs (target/debug/deps/mvcc_transaction_test-0438a3d5f41d1019)
+
+running 6 tests
+test test_begin_rollback_transaction ... ok
+test test_begin_serializable ... ok
+test test_begin_commit_transaction ... ok
+test test_set_transaction_isolation ... ok
+test test_start_transaction ... ok
+test test_start_transaction_serializable ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/network_tcp_smoke_test.rs (target/debug/deps/network_tcp_smoke_test-3e3188337f49881d)
+
+running 6 tests
+test test_tcp_connection_refused_on_closed_port ... ok
+test test_tcp_listener_bind_and_accept ... ok
+test test_tcp_set_options ... ok
+test test_tcp_stream_peer_addr ... ok
+test test_tcp_multiple_connections ... ok
+test test_tcp_stream_write_read ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/optimizer_cbo_accuracy_test.rs (target/debug/deps/optimizer_cbo_accuracy_test-f7553a0e42dc545c)
+
+running 11 tests
+test test_agg_cost_increases_with_group_by ... ok
+test test_custom_cost_model_parameters ... ok
+test test_all_costs_are_positive ... ok
+test test_hash_join_asymmetry ... ok
+test test_hash_join_cheaper_than_nested_loop ... ok
+test test_index_scan_cheaper_than_seq_scan_for_selective_query ... ok
+test test_seq_scan_cheaper_for_large_result_sets ... ok
+test test_seq_scan_cost_scales_linearly ... ok
+test test_seq_scan_cost_scales_with_pages ... ok
+test test_sort_cost_external_vs_internal ... ok
+test test_sort_merge_join_scales_linearly ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/page_io_benchmark_test.rs (target/debug/deps/page_io_benchmark_test-3959fb411d03968c)
+
+running 8 tests
+test test_page_throughput_buffered_sequential_write ... ok
+test test_page_throughput_random_read ... ok
+test test_page_throughput_random_write ... ok
+test test_page_throughput_sequential_write ... ok
+test test_page_throughput_small_io ... ok
+test test_page_throughput_buffered_sequential_read ... ok
+test test_page_throughput_sequential_read ... ok
+test test_page_throughput_sync_overhead ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.03s
+
+     Running tests/parser_token_test.rs (target/debug/deps/parser_token_test-3ec78d40cb179606)
+
+running 4 tests
+test test_is_keyword ... ok
+test test_from_keyword ... ok
+test test_token_display ... ok
+test test_token_variants ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/planner_multi_join_test.rs (target/debug/deps/planner_multi_join_test-73da4b025da9ee8b)
+
+running 4 tests
+test test_cross_join ... ok
+test test_left_join ... ok
+test test_right_join ... ok
+test test_three_table_join ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/qps_benchmark_test.rs (target/debug/deps/qps_benchmark_test-05356b512607b511)
+
+running 10 tests
+test test_qps_aggregation ... ignored
+test test_qps_complex_where ... ignored
+test test_qps_concurrent_mixed ... ignored
+test test_qps_concurrent_select ... ignored
+test test_qps_delete ... ignored
+test test_qps_insert ... ignored
+test test_qps_join ... ignored
+test test_qps_order_by ... ignored
+test test_qps_simple_select ... ignored
+test test_qps_update ... ignored
+
+test result: ok. 0 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/regression_test.rs (target/debug/deps/regression_test-347462a0ac5892c4)
+
+running 1 test
+test test_regression_suite ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.01s
+
+     Running crates/server/tests/scheduler_integration_test.rs (target/debug/deps/scheduler_integration_test-8b06ae66f7543dbb)
+
+running 22 tests
+test test_conditional_workflow_step ... ok
+test test_create_and_get_workflow ... ok
+test test_agent_serialization ... ok
+test test_create_and_get_task ... ok
+test test_create_task_with_priority ... ok
+test test_delete_workflow ... ok
+test test_delete_task ... ok
+test test_execution_history ... ok
+test test_list_agents ... ok
+test test_execute_workflow_request_deserialization ... ok
+test test_list_workflows ... ok
+test test_parallel_workflow_step ... ok
+test test_register_agent_request_deserialization ... ok
+test test_register_and_get_agent ... ok
+test test_list_tasks ... ok
+test test_request_deserialization ... ok
+test test_sequential_workflow_step ... ok
+test test_sync_agent_status_request_deserialization ... ok
+test test_update_agent_status ... ok
+test test_task_serialization ... ok
+test test_workflow_request_deserialization ... ok
+test test_workflow_serialization ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sqlite_diff.rs (target/debug/deps/sqlite_diff-be3623a3d4999a8b)
+
+running 4 tests
+test tests::test_sqlite_basic_query ... ok
+test tests::test_sqlite_aggregate ... ok
+test tests::test_sqlite_where ... ok
+test tests::test_sqlite_count ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stored_proc_catalog_test.rs (target/debug/deps/stored_proc_catalog_test-66366c34b182ca19)
+
+running 16 tests
+test test_after_insert_trigger_executes ... ok
+test test_after_update_trigger_executes ... ok
+test test_after_delete_trigger_executes ... ok
+test test_call_requires_catalog ... ok
+test test_before_delete_trigger_executes ... ok
+test test_before_insert_trigger_sets_column ... ok
+test test_create_procedure_requires_catalog ... ok
+test test_before_update_trigger_sets_column ... ok
+test test_create_and_call_procedure_with_catalog ... ok
+test test_duplicate_procedure_error ... ok
+test test_procedure_not_found ... ok
+test test_create_trigger_with_catalog ... ok
+test test_multiple_triggers_on_same_table ... ok
+test test_trigger_executes_update ... ok
+test test_trigger_executes_delete ... ok
+test test_trigger_executes_insert ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stored_procedure_parser_test.rs (target/debug/deps/stored_procedure_parser_test-9b418f060ae0729d)
+
+running 10 tests
+test test_parse_call_simple ... ok
+test test_parse_call_with_null ... ok
+test test_parse_call_with_args ... ok
+test test_parse_call_with_mixed_args ... ok
+test test_parse_create_procedure_simple ... ok
+test test_parse_create_procedure_with_in_param ... ok
+test test_parse_create_procedure_with_inout_param ... ok
+test test_parse_create_procedure_without_param_mode ... ok
+test test_parse_create_procedure_with_out_param ... ok
+test test_parse_create_procedure_with_multiple_params ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/wal_integration_test.rs (target/debug/deps/wal_integration_test-954be41611b8ae91)
+
+running 16 tests
+test test_wal_archive_metadata_empty_file ... ok
+test test_wal_entry_large_payload ... ok
+test test_wal_entry_serialization_roundtrip ... ok
+test test_wal_entry_with_null_data ... ok
+test test_wal_archive_metadata_roundtrip ... ok
+test test_wal_concurrent_transactions_isolation ... ok
+test test_wal_mixed_operations ... ok
+test test_wal_reader_empty_file ... ok
+test test_wal_multiple_transactions ... ok
+test test_wal_checkpoint_recovery ... ok
+test test_wal_recovery_after_crash ... ok
+test test_wal_rollback_recovery ... ok
+test test_wal_single_transaction ... ok
+test test_wal_recovery_with_pending_transaction ... ok
+test test_wal_writer_lsn_tracking ... ok
+test test_wal_writer_reader_sequential ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sqlrustgo
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
