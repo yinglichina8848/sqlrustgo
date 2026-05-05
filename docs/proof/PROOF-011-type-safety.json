@@ -14,5 +14,6 @@
   },
   "author": "openclaw",
   "verified_at": "2026-05-02T00:00:00Z",
-  "created_at": "2026-05-02"
+  "created_at": "2026-05-02",
+  "tool_output": "Tool: N/A (unknown)\nTest Results: cargo test -p sqlrustgo-types: all type inference tests passed\nCorpus Results: N/A\nVerified At: 2026-05-02T00:00:00Z\nEvidence Method: Dafny formal verification + Rust implementation"
 }

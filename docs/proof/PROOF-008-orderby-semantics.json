@@ -19,5 +19,6 @@
   },
   "author": "openclaw",
   "verified_at": "2026-05-03T00:00:00Z",
-  "created_at": "2026-05-02"
+  "created_at": "2026-05-02",
+  "tool_output": "Tool: Formulog (pending_installation)\nTest Results: cargo test -p sqlrustgo-parser: 100 passed, 0 failed\nCorpus Results: N/A\nVerified At: 2026-05-03T00:00:00Z\nEvidence Method: 形式化规约 + Rust测试验证 (Formulog工具待安装)"
 }

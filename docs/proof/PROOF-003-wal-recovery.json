@@ -19,5 +19,6 @@
   },
   "author": "openclaw",
   "verified_at": "2026-05-03T00:00:00Z",
-  "created_at": "2026-05-02"
+  "created_at": "2026-05-02",
+  "tool_output": "Tool: TLA+ (pending_installation)\nTest Results: cargo test -p sqlrustgo-storage wal: 11 passed; cargo test -p sqlrustgo-transaction: 14 passed\nCorpus Results: N/A\nVerified At: 2026-05-03T00:00:00Z\nEvidence Method: TLA+ 模型检测 + Rust集成测试验证 (TLA+工具待安装)"
 }

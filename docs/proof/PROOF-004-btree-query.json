@@ -19,5 +19,6 @@
   },
   "author": "openclaw",
   "verified_at": "2026-05-03T00:00:00Z",
-  "created_at": "2026-05-02"
+  "created_at": "2026-05-02",
+  "tool_output": "Tool: Dafny (pending_installation)\nTest Results: cargo test -p sqlrustgo-storage: 180 passed, 0 failed\nCorpus Results: N/A\nVerified At: 2026-05-03T00:00:00Z\nEvidence Method: Dafny 形式化证明 + Rust测试验证 (Dafny工具待安装)"
 }

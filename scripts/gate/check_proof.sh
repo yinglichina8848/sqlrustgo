@@ -25,7 +25,7 @@ fi
 
 echo "[2/3] Counting proof files..."
 
-PROOF_COUNT=$(find "$PROOF_DIR" -name "*.json" -type f 2>/dev/null | wc -l)
+PROOF_COUNT=$(find "$PROOF_DIR" -name "*.json" -type f 2>/dev/null | grep -v "REGISTRY_INDEX\|PROOF_SCHEMA" | wc -l)
 
 if [ "$PROOF_COUNT" -lt "$MIN_PROOFS" ]; then
     echo "Proof files found: $PROOF_COUNT"
@@ -39,7 +39,7 @@ fi
 echo "[3/3] Validating proof files..."
 
 INVALID=0
-for proof_file in $(find "$PROOF_DIR" -name "*.json" -type f 2>/dev/null); do
+for proof_file in $(find "$PROOF_DIR" -name "*.json" -type f 2>/dev/null | grep -v "REGISTRY_INDEX\|PROOF_SCHEMA"); do
     if ! python3 -c "import json; json.load(open('$proof_file'))" 2>/dev/null; then
         echo "  Invalid JSON: $proof_file"
         INVALID=$((INVALID + 1))
@@ -54,7 +54,31 @@ if [ "$INVALID" -gt 0 ]; then
 fi
 
 echo ""
+echo "[4/4] Checking tool_output field..."
+
+MISSING_TO=0
+for proof_file in $(find "$PROOF_DIR" -name "*.json" -type f 2>/dev/null | grep -v "REGISTRY_INDEX\|PROOF_SCHEMA"); do
+    if ! python3 -c "
+import json, sys
+d = json.load(open('$proof_file'))
+assert 'tool_output' in d and d['tool_output'], f\"Missing tool_output in {('$proof_file')}\"
+" 2>/dev/null; then
+        echo "  Missing tool_output: $proof_file"
+        MISSING_TO=$((MISSING_TO + 1))
+    fi
+done
+
+if [ "$MISSING_TO" -gt 0 ]; then
+    echo ""
+    echo "❌ R10: Formal Proof Check FAILED"
+    echo "   $MISSING_TO proof file(s) missing tool_output field"
+    echo "   Per gate_spec.md v1.2: all proofs must include tool_output"
+    exit 1
+fi
+
+echo ""
 echo "✅ R10: Formal Proof Check PASSED"
 echo "   Proof files: $PROOF_COUNT (>= $MIN_PROOFS required)"
 echo "   All files valid JSON"
+echo "   All files have tool_output field"
 exit 0

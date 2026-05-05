@@ -35,7 +35,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | R2 | Test | `cargo test --all-features` | `{command, passed, failed, exit_code}` |
 | R3 | Clippy | `cargo clippy --all-features -- -D warnings` | `{command, warnings, exit_code}` |
 | R4 | Format | `cargo fmt --all -- --check` | `{command, diff_count, exit_code}` |
-| R5 | Coverage | `cargo llvm-cov --all-features --lcov --output-path lcov.info` | `{command, total_pct, module_pcts, artifact_path}` |
+| R5 | Coverage | Per-module: `cargo llvm-cov -p <pkg> --all-features --lib --json` + `scripts/gate/aggregate_coverage.sh` | ≥75% | `{command, module_pcts, artifact_path}` |
 | R6 | Security | `cargo audit` | `{command, vulnerabilities, exit_code}` |
 | R7 | Docs | `check_docs_links.sh` + R7b + R7c + R7d | `{command, broken_links, missing_docs, version_mismatches}` |
 | R8 | SQL Compat | `cargo test -p sql-corpus` | `{command, passed, total, pct, exit_code}` |
@@ -90,7 +90,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | 全量测试 | `cargo test --all-features` | ≥90% 通过 |
 | Clippy 检查 | `cargo clippy --all-features -- -D warnings` | 零警告 |
 | 格式化 | `cargo fmt --all -- --check` | 无格式错误 |
-| 覆盖率 | `cargo llvm-cov --all-features --lcov --output-path lcov.info` | ≥75% |
+| 覆盖率 | `scripts/gate/check_coverage_parallel.sh --parallel 4 --wave all` | ≥75% |
 | 形式化证明 | TLA+/Dafny/Formulog | B3 通过 |
 | Proof Registry | - | 18/18 verified |
 
@@ -123,7 +123,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | R2 | Test | `cargo test --all-features` | 100% 通过 | `{command, passed, failed, exit_code}` |
 | R3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 | `{command, warnings, exit_code}` |
 | R4 | Format | `cargo fmt --all -- --check` | 无格式错误 | `{command, diff_count, exit_code}` |
-| R5 | Coverage | `cargo llvm-cov --all-features --lcov --output-path lcov.info` | ≥75% | `{command, total_pct, module_pcts, artifact_path}` |
+| R5 | Coverage | `scripts/gate/check_coverage_parallel.sh --parallel 4 --wave all` | ≥75% | `{command, module_pcts, artifact_path}` |
 | R6 | Security | `cargo audit` | 无漏洞 | `{command, vulnerabilities, exit_code}` |
 | R7 | Docs | `check_docs_links.sh` + R7b + R7c + R7d | 无死链/缺失/版本不一致 | `{command, broken_links, missing_docs, version_mismatches}` |
 | R8 | SQL Compat | `cargo test -p sql-corpus` | ≥80% | `{command, passed, total, pct, exit_code}` |
@@ -182,6 +182,24 @@ v2.9.0 必须执行性能回归检查，不能豁免。
 - 运行时间
 - 内存峰值（可选）
 
+#### R5 覆盖率检查（v2.9.0+）
+
+R5 使用 per-module llvm-cov + aggregate 聚合脚本。**不能使用 `--workspace`**（会混淆不同 crate 的覆盖率数据）。
+
+**检查流程**:
+1. `scripts/gate/check_coverage_parallel.sh --parallel 4 --wave all` — 按 wave 并行运行各模块
+2. 每个模块生成 `artifacts/coverage/<module>.json`
+3. `scripts/gate/aggregate_coverage.sh` — 聚合所有模块 JSON，输出加权平均
+
+**通过标准**: 整体加权平均 ≥75%（B-Gate）或 ≥85%（G-Gate），各模块最低不低于：
+- executor ≥75% (R-Gate), ≥80% (G-Gate)
+- optimizer ≥60% (R-Gate), ≥70% (G-Gate)
+- storage ≥30% (R-Gate), ≥40% (G-Gate)
+- catalog ≥70% (R-Gate), ≥75% (G-Gate)
+- parser ≥70% (R-Gate), ≥80% (G-Gate)
+
+**关键约束**: `--workspace` 模式覆盖率数据严重失真（不同 crate 数据混合），必须使用 per-module 模式。
+
 ### 4.4 覆盖率要求
 
 | 模块 | 覆盖率目标 |
@@ -211,7 +229,7 @@ v2.9.0 必须执行性能回归检查，不能豁免。
 | 全量测试 | `cargo test --all-features` | 100% 通过 |
 | Clippy 检查 | `cargo clippy --all-features -- -D warnings` | 零警告 |
 | 格式化 | `cargo fmt --all -- --check` | 无格式错误 |
-| 覆盖率 | `cargo llvm-cov --all-features --lcov --output-path lcov.info` | ≥85% |
+| 覆盖率 | `scripts/gate/check_coverage_parallel.sh --parallel 4 --wave all` | ≥85% |
 | 安全扫描 | `cargo audit` | 无漏洞 |
 | 性能基准 | `cargo bench` | 无性能回归 |
 
@@ -282,8 +300,7 @@ cargo fmt --all -- --check
 echo "✅ 格式化通过"
 
 echo "[5/6] 覆盖率检查..."
-rm -rf target/llvm-cov/
-cargo llvm-cov --all-features --lcov --output-path lcov.info
+bash scripts/gate/check_coverage_parallel.sh --parallel 4 --wave all
 echo "✅ 覆盖率检查完成"
 
 echo "[6/6] 形式化证明..."
@@ -318,8 +335,7 @@ cargo fmt --all -- --check
 echo "✅ R4 Format 通过"
 
 echo "[5/10] 覆盖率检查 (R5)..."
-rm -rf target/llvm-cov/
-cargo llvm-cov --all-features --lcov --output-path lcov.info
+bash scripts/gate/check_coverage_parallel.sh --parallel 4 --wave all
 echo "✅ R5 Coverage ≥75%"
 
 echo "[6/10] 安全扫描 (R6)..."
@@ -371,8 +387,7 @@ cargo fmt --all -- --check
 echo "✅ 格式化通过"
 
 echo "[5/7] 覆盖率检查..."
-rm -rf target/llvm-cov/
-cargo llvm-cov --all-features --lcov --output-path lcov.info
+bash scripts/gate/check_coverage_parallel.sh --parallel 4 --wave all
 echo "✅ 覆盖率 ≥85%"
 
 echo "[6/7] 安全扫描..."
