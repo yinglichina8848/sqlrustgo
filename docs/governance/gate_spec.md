@@ -36,7 +36,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | R3 | Clippy | `cargo clippy --all-features -- -D warnings` | `{command, warnings, exit_code}` |
 | R4 | Format | `cargo fmt --all -- --check` | `{command, diff_count, exit_code}` |
 | R5 | Coverage | Per-module: `cargo llvm-cov -p <pkg> --all-features --lib --json` + `scripts/gate/aggregate_coverage.sh` | ≥75% | `{command, module_pcts, artifact_path}` |
-| R6 | Security | `cargo audit` | `{command, vulnerabilities, exit_code}` |
+| R6 | Security | `cargo audit -d ~/.cargo/advisory-db --no-fetch` | `{command, vulnerabilities, exit_code}` |
 | R7 | Docs | `check_docs_links.sh` + R7b + R7c + R7d | `{command, broken_links, missing_docs, version_mismatches}` |
 | R8 | SQL Compat | `cargo test -p sql-corpus` | `{command, passed, total, pct, exit_code}` |
 | R9 | Performance | `cargo bench && scripts/gate/check_regression.sh` | `{command, baseline_path, delta_pct, pass}` |
@@ -124,7 +124,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | R3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 | `{command, warnings, exit_code}` |
 | R4 | Format | `cargo fmt --all -- --check` | 无格式错误 | `{command, diff_count, exit_code}` |
 | R5 | Coverage | `scripts/gate/check_coverage_parallel.sh --parallel 4 --wave all` | ≥75% | `{command, module_pcts, artifact_path}` |
-| R6 | Security | `cargo audit` | 无漏洞 | `{command, vulnerabilities, exit_code}` |
+| R6 | Security | `cargo audit -d ~/.cargo/advisory-db --no-fetch` | 无漏洞 | `{command, vulnerabilities, exit_code}` |
 | R7 | Docs | `check_docs_links.sh` + R7b + R7c + R7d | 无死链/缺失/版本不一致 | `{command, broken_links, missing_docs, version_mismatches}` |
 | R8 | SQL Compat | `cargo test -p sql-corpus` | ≥80% | `{command, passed, total, pct, exit_code}` |
 | R9 | Performance | `cargo bench && scripts/gate/check_regression.sh` | 无性能回归 | `{command, baseline_path, delta_pct, pass}` |
@@ -230,7 +230,7 @@ R5 使用 per-module llvm-cov + aggregate 聚合脚本。**不能使用 `--works
 | Clippy 检查 | `cargo clippy --all-features -- -D warnings` | 零警告 |
 | 格式化 | `cargo fmt --all -- --check` | 无格式错误 |
 | 覆盖率 | `scripts/gate/check_coverage_parallel.sh --parallel 4 --wave all` | ≥85% |
-| 安全扫描 | `cargo audit` | 无漏洞 |
+| 安全扫描 | `cargo audit -d ~/.cargo/advisory-db --no-fetch` | 无漏洞 |
 | 性能基准 | `cargo bench` | 无性能回归 |
 
 ### 5.3 覆盖率要求
@@ -339,7 +339,7 @@ bash scripts/gate/check_coverage_parallel.sh --parallel 4 --wave all
 echo "✅ R5 Coverage ≥75%"
 
 echo "[6/10] 安全扫描 (R6)..."
-cargo audit
+cargo audit -d ~/.cargo/advisory-db --no-fetch
 echo "✅ R6 Security 通过"
 
 echo "[7/10] 文档检查 (R7)..."
@@ -391,7 +391,7 @@ bash scripts/gate/check_coverage_parallel.sh --parallel 4 --wave all
 echo "✅ 覆盖率 ≥85%"
 
 echo "[6/7] 安全扫描..."
-cargo audit
+cargo audit -d ~/.cargo/advisory-db --no-fetch
 echo "✅ 安全扫描通过"
 
 echo "[7/7] 性能基准测试..."
