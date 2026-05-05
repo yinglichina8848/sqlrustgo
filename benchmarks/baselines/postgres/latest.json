@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-05-06T00:27:15.289974",
+  "db": "postgres",
+  "workload": "oltp_point_select",
+  "config": {
+    "scale": 5000,
+    "threads": 4,
+    "duration": 10
+  },
+  "metrics": {
+    "total_queries": 1487,
+    "total_time_ms": 10000,
+    "qps": 148.7,
+    "latency_avg_us": 5060
+  },
+  "queries": []
+}

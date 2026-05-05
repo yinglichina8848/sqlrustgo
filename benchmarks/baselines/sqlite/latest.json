@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-05-06T00:27:15.289789",
+  "db": "sqlite",
+  "workload": "oltp_point_select",
+  "config": {
+    "scale": 5000,
+    "threads": 4,
+    "duration": 10
+  },
+  "metrics": {
+    "total_queries": 1334,
+    "total_time_ms": 10000,
+    "qps": 133.4,
+    "latency_avg_us": 4270
+  },
+  "queries": []
+}

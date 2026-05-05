@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-05-06T00:27:52.398183",
+  "db": "postgres",
+  "workload": "pgbench",
+  "config": {
+    "scale": 10000,
+    "threads": 4,
+    "duration": 10
+  },
+  "metrics": {
+    "tps": 6187.381763,
+    "latency_p99_ms": 0.0
+  },
+  "queries": []
+}

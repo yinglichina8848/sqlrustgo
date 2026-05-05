@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-05-06T00:27:57.340878",
+  "db": "postgres_pgbench",
+  "workload": "tpcb",
+  "config": {
+    "scale": 10000,
+    "threads": 4,
+    "duration": 10
+  },
+  "metrics": {
+    "tps": 6187.38,
+    "latency_avg_ms": 0.67,
+    "qps": 6187
+  },
+  "queries": []
+}

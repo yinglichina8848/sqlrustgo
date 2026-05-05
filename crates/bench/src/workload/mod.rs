@@ -47,8 +47,8 @@ pub trait Workload: Send + Sync {
 /// Create a workload by name
 pub fn create_workload(name: &str, _scale: usize) -> Arc<dyn Workload> {
     match name.to_lowercase().as_str() {
+        "oltp" | "oltp_index_scan" => Arc::new(oltp_index_scan::OltpIndexScan::new()),
         "oltp_delete" => Arc::new(oltp_delete::OltpDelete::new()),
-        "oltp_index_scan" => Arc::new(oltp_index_scan::OltpIndexScan::new()),
         "oltp_mixed" => Arc::new(oltp_mixed::OltpMixed::new()),
         "oltp_point_select" => Arc::new(oltp_point_select::OltpPointSelect::new()),
         "oltp_read_only" => Arc::new(oltp_read_only::OltpReadOnly::new()),
@@ -58,7 +58,7 @@ pub fn create_workload(name: &str, _scale: usize) -> Arc<dyn Workload> {
         "oltp_insert" => Arc::new(oltp_insert::OltpInsert::new()),
         "oltp_range_scan" => Arc::new(oltp_range_scan::OltpRangeScan::new()),
         "oltp_write_only" => Arc::new(oltp_write_only::OltpWriteOnly::new()),
-        _ => panic!("Unknown workload: {}", name),
+        _ => panic!("Unknown workload: {} (available: oltp, oltp_index_scan, oltp_point_select, oltp_read_only, oltp_read_write, oltp_mixed, oltp_insert, oltp_update_index, oltp_update_non_index, oltp_delete, oltp_range_scan, oltp_write_only)", name),
     }
 }
 
