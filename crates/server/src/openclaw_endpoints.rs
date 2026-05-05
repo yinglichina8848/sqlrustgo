@@ -2245,45 +2245,33 @@ fn execute_sql(
                 .map(|info| info.columns.clone())
                 .unwrap_or_default();
 
-            let all_rows = storage.scan(&update.table).unwrap_or_default();
+            // Get mutable reference to records for in-place update (方案2: eliminate double scan)
+            let records = storage.get_table_records_mut(&update.table).map_err(|e| e.to_string())?;
 
-            let rows_to_update: Vec<(usize, Vec<sqlrustgo_storage::engine::Value>)> = all_rows
-                .iter()
-                .enumerate()
-                .filter(|(_, row)| {
-                    if let Some(ref where_clause) = update.where_clause {
-                        evaluate_where_clause(where_clause, row, &columns)
-                    } else {
-                        true
+            let mut updated_count = 0;
+            for row in records.iter_mut() {
+                // Check WHERE clause
+                if let Some(ref where_clause) = update.where_clause {
+                    if !evaluate_where_clause(where_clause, row, &columns) {
+                        continue;
                     }
-                })
-                .map(|(idx, row)| {
-                    let mut new_row = row.clone();
-                    for (col_name, expr) in &update.set_clauses {
-                        if let Some(col_idx) = columns
-                            .iter()
-                            .position(|c| c.name.eq_ignore_ascii_case(col_name))
-                        {
-                            new_row[col_idx] = evaluate_expr(expr, &new_row, &columns);
-                        }
-                    }
-                    let _ =
-                        execute_before_update_triggers(storage, &update.table, row, &mut new_row);
-                    (idx, new_row)
-                })
-                .collect();
-
-            let updated_count = rows_to_update.len();
-
-            if updated_count > 0 {
-                let mut final_rows = all_rows;
-                for (idx, new_row) in rows_to_update {
-                    final_rows[idx] = new_row;
                 }
-                let _ = storage.delete(&update.table, &[]);
-                storage
-                    .insert(&update.table, final_rows)
-                    .map_err(|e| e.to_string())?;
+
+                // Apply SET clauses
+                let mut new_row = row.clone();
+                for (col_name, expr) in &update.set_clauses {
+                    if let Some(col_idx) = columns
+                        .iter()
+                        .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                    {
+                        new_row[col_idx] = evaluate_expr(expr, &new_row, &columns);
+                    }
+                }
+                let _ = execute_before_update_triggers(storage, &update.table, row, &mut new_row);
+
+                // In-place update
+                *row = new_row;
+                updated_count += 1;
             }
 
             Ok(SqlExecResult {

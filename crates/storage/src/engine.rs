@@ -499,6 +499,10 @@ pub trait StorageEngine: Send + Sync {
         predicate: &str,
         assignments: &[(usize, Value)],
     ) -> SqlResult<usize>;
+
+    /// Get mutable access to table records for in-place updates
+    /// Returns the records (Vec<Record>) if table exists
+    fn get_table_records_mut(&mut self, table: &str) -> SqlResult<&mut Vec<Record>>;
 }
 
 /// In-memory storage implementation for testing and caching
@@ -606,6 +610,12 @@ impl StorageEngine for MemoryStorage {
         self.table_infos
             .get(table)
             .cloned()
+            .ok_or_else(|| SqlError::ExecutionError(format!("Table not found: {}", table)))
+    }
+
+    fn get_table_records_mut(&mut self, table: &str) -> SqlResult<&mut Vec<Record>> {
+        self.tables
+            .get_mut(table)
             .ok_or_else(|| SqlError::ExecutionError(format!("Table not found: {}", table)))
     }
 
