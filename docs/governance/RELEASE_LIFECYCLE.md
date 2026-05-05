@@ -1,8 +1,10 @@
 # SQLRustGo 版本生命周期
 
-> **版本**: 2.0
+> **版本**: 2.1
 > **更新日期**: 2026-05-05
-> **维护人**: macmini opencode
+> **维护人**: hermes-z6g4
+
+> **SSOT 声明**: 门禁定义以 `gate_spec.md` 为唯一权威。本文档的阶段门禁描述引用 gate_spec.md，不自行定义检查项。
 
 ---
 
@@ -107,18 +109,9 @@ v2.9.0-rc2
 
 **R1-R10 检查项**:
 
-| Gate | 检查项 | 命令 | 通过标准 |
-|------|--------|------|----------|
-| R1 | Build | `cargo build --release --workspace` | 无错误 |
-| R2 | Test | `cargo test --all-features` | 100% 通过 |
-| R3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 |
-| R4 | Format | `cargo fmt --all -- --check` | 无格式错误 |
-| R5 | Coverage | `cargo tarpaulin --workspace --all-features` | ≥75% |
-| R6 | Security | `cargo audit` | 无漏洞 |
-| R7 | Docs | `check_docs_links.sh` | 无死链 |
-| R8 | SQL Compat | SQL Corpus 测试 | ≥80% |
-| R9 | Performance | `cargo bench` | 无性能回归 |
-| R10 | Formal Proof | TLA+/Dafny/Formulog | ≥10 proof files |
+> **详见**: [gate_spec.md](./gate_spec.md) 第 28-41 行（唯一权威）
+
+R5 使用 `cargo llvm-cov`，R7 包含 R7a-R7d 子检查，R9 必须执行回归判定，R10 要求 proof 含 `tool_output`。
 
 **门禁要求**:
 - R1-R10 全部通过
@@ -241,9 +234,10 @@ PATCH: Bug 修复 (向后兼容)
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| 2.1 | 2026-05-05 | 对齐 v2.9.0: R1-R10 表替换为引用 gate_spec.md(唯一权威), 添加 SSOT 声明 |
 | 2.0 | 2026-05-05 | 替换 Draft/Alpha/Beta/RC/GA 为 A-Gate→B-Gate→R-Gate→G-Gate 模型 |
 | 1.0 | 2026-03-07 | 初始版本 |
 
 ---
 
-*本文档由 macmini opencode 维护*
+*本文档由 hermes-z6g4 维护。门禁权威来源: gate_spec.md*

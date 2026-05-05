@@ -1,9 +1,11 @@
 # v2.9.0 门禁规范 (Gate Specification)
 
-> **版本**: 1.1
+> **版本**: 1.2
 > **更新日期**: 2026-05-05
-> **维护人**: macmini opencode
+> **维护人**: hermes-z6g4
 > **适用版本**: v2.9.0+
+
+> **SSOT 声明**: `gate_spec.md` 是 SQLRustGo 门禁定义的唯一权威来源。`RELEASE_POLICY.md`、`RELEASE_LIFECYCLE.md`、`AI_COLLABORATION.md` 等文档中的门禁描述仅作引用，不得独立定义门禁检查项。
 
 ---
 
@@ -27,18 +29,18 @@ A-Gate → B-Gate → R-Gate → G-Gate
 
 ### R1-R10 内部检查项
 
-| Gate | 名称 | 说明 |
-|------|------|------|
-| R1 | Build | cargo build --release --workspace |
-| R2 | Test | cargo test --all-features |
-| R3 | Clippy | cargo clippy --all-features |
-| R4 | Format | cargo fmt --all -- --check |
-| R5 | Coverage | cargo tarpaulin ≥75% |
-| R6 | Security | cargo audit |
-| R7 | Docs | check_docs_links.sh |
-| R8 | SQL Compat | SQL Corpus ≥80% |
-| R9 | Performance | Performance baseline no regression |
-| R10 | Formal Proof | ≥10 proof files verified |
+| Gate | 名称 | 说明 | 证据格式 |
+|------|------|------|----------|
+| R1 | Build | `cargo build --release --workspace` | `{command, exit_code, artifact_path}` |
+| R2 | Test | `cargo test --all-features` | `{command, passed, failed, exit_code}` |
+| R3 | Clippy | `cargo clippy --all-features -- -D warnings` | `{command, warnings, exit_code}` |
+| R4 | Format | `cargo fmt --all -- --check` | `{command, diff_count, exit_code}` |
+| R5 | Coverage | `cargo llvm-cov --all-features --lcov --output-path lcov.info` | `{command, total_pct, module_pcts, artifact_path}` |
+| R6 | Security | `cargo audit` | `{command, vulnerabilities, exit_code}` |
+| R7 | Docs | `check_docs_links.sh` + R7b + R7c + R7d | `{command, broken_links, missing_docs, version_mismatches}` |
+| R8 | SQL Compat | `cargo test -p sql-corpus` | `{command, passed, total, pct, exit_code}` |
+| R9 | Performance | `cargo bench && scripts/gate/check_regression.sh` | `{command, baseline_path, delta_pct, pass}` |
+| R10 | Formal Proof | Proof Registry with `tool_output` field | `{command, verified_count, tool_output_summary}` |
 
 ---
 
@@ -67,6 +69,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | optimizer | ≥40% |
 | storage | ≥15% |
 | catalog | ≥50% |
+| parser | ≥50% |
 | **整体** | **≥50%** |
 
 ---
@@ -87,7 +90,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | 全量测试 | `cargo test --all-features` | ≥90% 通过 |
 | Clippy 检查 | `cargo clippy --all-features -- -D warnings` | 零警告 |
 | 格式化 | `cargo fmt --all -- --check` | 无格式错误 |
-| 覆盖率 | `cargo tarpaulin --workspace --all-features` | ≥75% |
+| 覆盖率 | `cargo llvm-cov --all-features --lcov --output-path lcov.info` | ≥75% |
 | 形式化证明 | TLA+/Dafny/Formulog | B3 通过 |
 | Proof Registry | - | 18/18 verified |
 
@@ -99,6 +102,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | optimizer | ≥50% |
 | storage | ≥20% |
 | catalog | ≥60% |
+| parser | ≥60% |
 | **整体** | **≥75%** |
 
 ---
@@ -113,20 +117,72 @@ A-Gate → B-Gate → R-Gate → G-Gate
 
 ### 4.2 R1-R10 检查清单
 
-| Gate | 检查项 | 命令 | 通过标准 |
-|------|--------|------|----------|
-| R1 | Build | `cargo build --release --workspace` | 无错误 |
-| R2 | Test | `cargo test --all-features` | 100% 通过 |
-| R3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 |
-| R4 | Format | `cargo fmt --all -- --check` | 无格式错误 |
-| R5 | Coverage | `cargo tarpaulin --workspace --all-features` | ≥75% |
-| R6 | Security | `cargo audit` | 无漏洞 |
-| R7 | Docs | `check_docs_links.sh` | 无死链 |
-| R8 | SQL Compat | SQL Corpus 测试 | ≥80% |
-| R9 | Performance | `cargo bench` | 无性能回归 |
-| R10 | Formal Proof | TLA+/Dafny/Formulog | ≥10 proof files |
+| Gate | 检查项 | 命令 | 通过标准 | 证据格式 |
+|------|--------|------|----------|----------|
+| R1 | Build | `cargo build --release --workspace` | 无错误 | `{command, exit_code, artifact_path}` |
+| R2 | Test | `cargo test --all-features` | 100% 通过 | `{command, passed, failed, exit_code}` |
+| R3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 | `{command, warnings, exit_code}` |
+| R4 | Format | `cargo fmt --all -- --check` | 无格式错误 | `{command, diff_count, exit_code}` |
+| R5 | Coverage | `cargo llvm-cov --all-features --lcov --output-path lcov.info` | ≥75% | `{command, total_pct, module_pcts, artifact_path}` |
+| R6 | Security | `cargo audit` | 无漏洞 | `{command, vulnerabilities, exit_code}` |
+| R7 | Docs | `check_docs_links.sh` + R7b + R7c + R7d | 无死链/缺失/版本不一致 | `{command, broken_links, missing_docs, version_mismatches}` |
+| R8 | SQL Compat | `cargo test -p sql-corpus` | ≥80% | `{command, passed, total, pct, exit_code}` |
+| R9 | Performance | `cargo bench && scripts/gate/check_regression.sh` | 无性能回归 | `{command, baseline_path, delta_pct, pass}` |
+| R10 | Formal Proof | Proof Registry with `tool_output` field | ≥10 proof files | `{command, verified_count, tool_output_summary}` |
 
-### 4.3 覆盖率要求
+### 4.3 R7/R9/R10 详细说明
+
+#### R7 文档门禁扩展（v2.9.0+）
+
+R7 包含四个子检查，全部通过才算 R7 通过：
+
+| 子项 | 检查内容 | 命令/方法 |
+|------|----------|-----------|
+| R7a | 死链检查 | `bash scripts/gate/check_docs_links.sh` |
+| R7b | 必选文档存在性 | 检查 `docs/governance/VERSION_DOCS_SPEC.md` 定义的最小文档集 |
+| R7c | 版本号一致性 | 所有文档头部版本号与当前版本一致，无遗留旧版本号 |
+| R7d | 文档与代码状态一致性 | 代码中标注的 feature 与文档描述匹配，Issue 引用有效 |
+
+#### R9 性能回归检查（v2.9.0+）
+
+v2.9.0 必须执行性能回归检查，不能豁免。
+
+**检查流程**:
+1. 运行 `cargo bench` 获取当前性能数据
+2. 对比 `perf_baselines/v2.9.0 baseline.json` 中的历史基准
+3. 执行 `scripts/gate/check_regression.sh` 自动判定
+4. 允许浮动范围: QPS 退化 ≤5% 视为 PASS；5%-20% 需人工解释；>20% FAIL
+
+**基线文件路径**: `perf_baselines/v2.9.0 baseline.json`
+**退化判定**: `scripts/gate/check_regression.sh`
+**证据要求**: 必须包含 `baseline_path`, `delta_pct`, `pass` 三个字段
+
+> **注意**: 若 `perf_baselines/v2.9.0 baseline.json` 不存在，须在 R-Gate 通过前建立。可使用首次 `cargo bench` 结果作为临时基准，但须标注 `(PROVISIONAL)`。
+
+#### R10 形式化证明 tool_output 要求（v2.9.0+）
+
+每个 Proof JSON 文件必须包含 `tool_output` 字段，记录验证工具的最后运行日志。现有 18 个 proof files 须在 v2.9.0 GA 前完成追溯补充。
+
+**Proof JSON 格式要求**:
+```json
+{
+  "proof_id": "EXE-001",
+  "title": "...",
+  "status": "verified",
+  "tool": "Coq / Lean / TLA+",
+  "tool_output": "<工具运行日志摘要，包含验证结果、运行时间、内存使用>",
+  "last_verified": "2026-05-05",
+  "file_path": "proofs/executor/EXE-001.json"
+}
+```
+
+**tool_output 最小内容**:
+- 验证工具名称和版本
+- 验证结果（PASS/FAIL）
+- 运行时间
+- 内存峰值（可选）
+
+### 4.4 覆盖率要求
 
 | 模块 | 覆盖率目标 |
 |------|-----------|
@@ -134,6 +190,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | optimizer | ≥60% |
 | storage | ≥30% |
 | catalog | ≥70% |
+| parser | ≥70% |
 | **整体** | **≥75%** |
 
 ---
@@ -154,7 +211,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | 全量测试 | `cargo test --all-features` | 100% 通过 |
 | Clippy 检查 | `cargo clippy --all-features -- -D warnings` | 零警告 |
 | 格式化 | `cargo fmt --all -- --check` | 无格式错误 |
-| 覆盖率 | `cargo tarpaulin --workspace --all-features` | ≥85% |
+| 覆盖率 | `cargo llvm-cov --all-features --lcov --output-path lcov.info` | ≥85% |
 | 安全扫描 | `cargo audit` | 无漏洞 |
 | 性能基准 | `cargo bench` | 无性能回归 |
 
@@ -166,6 +223,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | optimizer | ≥70% |
 | storage | ≥40% |
 | catalog | ≥75% |
+| parser | ≥80% |
 | **整体** | **≥85%** |
 
 ---
@@ -224,8 +282,8 @@ cargo fmt --all -- --check
 echo "✅ 格式化通过"
 
 echo "[5/6] 覆盖率检查..."
-rm -rf target/tarpaulin/
-cargo tarpaulin --workspace --all-features
+rm -rf target/llvm-cov/
+cargo llvm-cov --all-features --lcov --output-path lcov.info
 echo "✅ 覆盖率检查完成"
 
 echo "[6/6] 形式化证明..."
@@ -260,8 +318,8 @@ cargo fmt --all -- --check
 echo "✅ R4 Format 通过"
 
 echo "[5/10] 覆盖率检查 (R5)..."
-rm -rf target/tarpaulin/
-cargo tarpaulin --workspace --all-features
+rm -rf target/llvm-cov/
+cargo llvm-cov --all-features --lcov --output-path lcov.info
 echo "✅ R5 Coverage ≥75%"
 
 echo "[6/10] 安全扫描 (R6)..."
@@ -278,6 +336,7 @@ echo "✅ R8 SQL Compat ≥80%"
 
 echo "[9/10] 性能基准 (R9)..."
 cargo bench
+scripts/gate/check_regression.sh
 echo "✅ R9 Performance 通过"
 
 echo "[10/10] 形式化证明 (R10)..."
@@ -312,8 +371,8 @@ cargo fmt --all -- --check
 echo "✅ 格式化通过"
 
 echo "[5/7] 覆盖率检查..."
-rm -rf target/tarpaulin/
-cargo tarpaulin --workspace --all-features
+rm -rf target/llvm-cov/
+cargo llvm-cov --all-features --lcov --output-path lcov.info
 echo "✅ 覆盖率 ≥85%"
 
 echo "[6/7] 安全扫描..."
@@ -378,9 +437,10 @@ echo "=== G-Gate 检查完成 ==="
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| 1.2 | 2026-05-05 | v2.9.0 对齐: tarpaulin→llvm-cov, R-Gate模块阈值(含parser), R7扩展(R7a-d), R9规范(必须做+回归判定), R10 tool_output要求, 证据格式, SSOT声明 |
 | 1.1 | 2026-05-05 | v2.9.0 更新：B-Gate≥75%, R-Gate≥75%, R1-R10 定义 |
 | 1.0 | 2026-05-01 | 初始版本，定义 A/B/R/G 四级门禁 |
 
 ---
 
-*本文档由 macmini opencode 维护*
+*本文档由 hermes-z6g4 维护。SSOT: gate_spec.md 是门禁唯一权威来源。*

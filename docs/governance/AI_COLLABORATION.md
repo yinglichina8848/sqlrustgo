@@ -1,8 +1,10 @@
 # SQLRustGo AI 协作规则
 
-> **版本**: 2.0
+> **版本**: 2.1
 > **更新日期**: 2026-05-05
-> **维护人**: openclaw
+> **维护人**: hermes-z6g4
+
+> **SSOT 声明**: 门禁定义以 `gate_spec.md` 为唯一权威。本文档的 R1-R10 描述仅供参考，不自行定义检查命令和阈值。
 
 ---
 
@@ -232,20 +234,20 @@ PR 必须包含:
 
 Release Gate 是代码合并到主分支前必须通过的质量检查点。**AI 不可绕过**。
 
-v2.9.0 采用 R1-R10 + G-Gate 门禁体系：
+v2.9.0 采用 R1-R10 + G-Gate 门禁体系。详细命令、阈值、证据格式见 [gate_spec.md](./gate_spec.md)。
 
 | Gate | 检查项 | 执行者 |
 |------|--------|--------|
-| **R1** | Build: cargo build --all-features | CI |
-| **R2** | Test: cargo test --all-features | CI |
-| **R3** | Clippy: cargo clippy --all-features | CI |
-| **R4** | Format: cargo fmt --check --all | CI |
-| **R5** | Coverage: ≥75% 行覆盖 | CI |
-| **R6** | Security: cargo audit | CI |
-| **R7** | Docs: check_docs_links.sh | CI |
-| **R8** | SQL Compat: SQL Corpus ≥85% | CI |
-| **R9** | Performance: 性能基准测试 | CI |
-| **R10** | Formal Proof: TLA+/Dafny/Formulog | CI |
+| **R1** | Build | CI |
+| **R2** | Test | CI |
+| **R3** | Clippy | CI |
+| **R4** | Format | CI |
+| **R5** | Coverage | CI |
+| **R6** | Security | CI |
+| **R7** | Docs (R7a-R7d) | CI |
+| **R8** | SQL Compat | CI |
+| **R9** | Performance (回归判定) | CI |
+| **R10** | Formal Proof (tool_output) | CI |
 | **G-Gate** | GA 门禁: 全部 R1-R10 通过 | Human |
 
 ### 6.2 门禁失败处理
@@ -357,9 +359,10 @@ Human Architect 对以下事项负责:
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| 1.0 | 2026-03-07 | 初始版本 |
+| 2.1 | 2026-05-05 | 对齐 v2.9.0: R1-R10 引用 gate_spec.md(唯一权威), 添加 SSOT 声明 |
 | 2.0 | 2026-05-05 | 更新为 Hermes+Gitea 架构, R1-R10 门禁体系, Gitea 替换 GitHub |
+| 1.0 | 2026-03-07 | 初始版本 |
 
 ---
 
-*本文档由 openclaw 维护*
+*本文档由 hermes-z6g4 维护。门禁权威来源: gate_spec.md*
