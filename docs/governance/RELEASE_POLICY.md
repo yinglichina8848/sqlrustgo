@@ -1,8 +1,10 @@
 # SQLRustGo 发布策略
 
-> **版本**: 2.0
+> **版本**: 2.1
 > **更新日期**: 2026-05-05
-> **维护人**: macmini opencode
+> **维护人**: hermes-z6g4
+
+> **SSOT 声明**: 门禁定义以 `gate_spec.md` 为唯一权威。本文档的阶段/门禁概述引用 gate_spec.md，不自行定义检查项。
 
 ---
 
@@ -64,18 +66,9 @@ A-Gate → B-Gate → R-Gate → G-Gate
 
 ### 2.3 R-Gate 内部检查项 (R1-R10)
 
-|| Gate | 名称 | 说明 |
-||------|------|------|
-|| R1 | Build | cargo build --release --workspace |
-|| R2 | Test | cargo test --all-features |
-|| R3 | Clippy | cargo clippy --all-features |
-|| R4 | Format | cargo fmt --all -- --check |
-|| R5 | Coverage | cargo tarpaulin ≥75% |
-|| R6 | Security | cargo audit |
-|| R7 | Docs | check_docs_links.sh |
-|| R8 | SQL Compat | SQL Corpus ≥80% |
-|| R9 | Performance | Performance baseline no regression |
-|| R10 | Formal Proof | ≥10 proof files verified |
+> **详见**: [gate_spec.md](./gate_spec.md) — 第 28-41 行 R1-R10 定义（唯一权威）
+
+本文档不重复定义 R1-R10 的具体命令和阈值。R5 使用 `cargo llvm-cov`，R7 包含 R7a-R7d 子检查，R9 必须执行性能回归判定，R10 要求 proof 文件含 `tool_output` 字段。
 
 ### 2.4 阶段转换规则
 
@@ -105,22 +98,17 @@ Draft → Alpha → Beta → RC → GA
 
 ### 3.2 门禁检查清单
 
-#### G-Gate 检查项:
+G-Gate 检查项详见 [gate_spec.md](./gate_spec.md) 第五章 G-Gate。
 
-- [ ] R1: cargo build --release --workspace 通过
-- [ ] R2: cargo test --all-features 100% 通过
-- [ ] R3: cargo clippy --all-features 零警告
-- [ ] R4: cargo fmt --all -- --check 通过
-- [ ] R5: cargo tarpaulin ≥85% 覆盖率
-- [ ] R6: cargo audit 无漏洞
-- [ ] R7: check_docs_links.sh 无死链
-- [ ] R8: SQL Corpus ≥80% 兼容性
-- [ ] R9: cargo bench 无性能回归
-- [ ] R10: 形式化证明 ≥10 proof files
-- [ ] 所有 CI 检查通过
-- [ ] 文档齐全 (API, CHANGELOG)
-- [ ] 版本号已更新
-- [ ] CHANGELOG.md 已更新
+除 gate_spec.md 定义的门禁外，GA 发布还需满足：
+
+- [ ] 所有 R1-R10 检查通过（证据见 `artifacts/gate/vX.Y.Z/`）
+- [ ] 门禁豁免/延期记录已录入 [GATE_EXEMPTIONS.md](./GATE_EXEMPTIONS.md)
+- [ ] 文档齐全：API 文档、CHANGELOG、RELEASE_NOTES
+- [ ] 版本号已在 `Cargo.toml` 和所有文档中更新
+- [ ] Proof files 全部包含 `tool_output` 字段
+- [ ] 性能基准 `perf_baselines/vX.Y.Z_baseline.json` 已建立（标注 PROVISIONAL 如适用）
+- [ ] CI 检查通过且产物归档至 `artifacts/`
 
 ### 3.3 发布执行步骤
 
@@ -220,11 +208,12 @@ git checkout v2.9.0
 
 ## 七、变更历史
 
-|| 版本 | 日期 | 说明 |
-||------|------|------|
-|| 2.0 | 2026-05-05 | 对齐 v2.9.0 门禁模型：A/B/R/G 四级门禁，R1-R10 检查项 |
-|| 1.0 | 2026-03-07 | 初始版本 |
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| 2.1 | 2026-05-05 | 对齐 v2.9.0: 移除 R1-R10 重复定义(引用 gate_spec.md), 消除 tarpaulin 引用, G-Gate 检查项引用 gate_spec.md |
+| 2.0 | 2026-05-05 | 对齐 v2.9.0 门禁模型：A/B/R/G 四级门禁，R1-R10 检查项 |
+| 1.0 | 2026-03-07 | 初始版本 |
 
 ---
 
-*本文档由 macmini opencode 维护*
+*本文档由 hermes-z6g4 维护。门禁权威来源: gate_spec.md*
