@@ -1325,6 +1325,50 @@ impl StorageEngine for FileStorage {
             .ok_or_else(|| SqlError::TableNotFound(table.to_string()))
     }
 
+    fn delete_by_indices(&mut self, table: &str, indices: &[usize]) -> SqlResult<usize> {
+        let Some(table_data) = self.tables.get_mut(table) else {
+            return Ok(0);
+        };
+
+        let indices_to_delete: std::collections::HashSet<usize> = indices.iter().cloned().collect();
+        let count = indices_to_delete.len();
+
+        if count == 0 {
+            return Ok(0);
+        }
+
+        // Build new vector keeping only rows not in delete set (single pass)
+        let remaining: Vec<_> = table_data
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| !indices_to_delete.contains(idx))
+            .map(|(_, row)| row.clone())
+            .collect();
+
+        table_data.rows = remaining;
+
+        Ok(count)
+    }
+
+    fn find_by_index(&self, table: &str, column_index: usize, key: i64) -> Option<Vec<usize>> {
+        // FileStorage uses B+Tree indexes, not HashMap
+        // For simplicity, return None - full index scan would be needed
+        let _ = (table, column_index, key);
+        None
+    }
+
+    fn get_row(&self, table: &str, index: usize) -> SqlResult<Option<Vec<Value>>> {
+        match self.tables.get(table) {
+            Some(data) if index < data.rows.len() => Ok(Some(data.rows[index].clone())),
+            Some(_) => Ok(None),
+            None => Err(SqlError::ExecutionError(format!(
+                "Table not found: {}",
+                table
+            ))),
+        }
+    }
+
     fn has_table(&self, table: &str) -> bool {
         self.tables.contains_key(table)
     }

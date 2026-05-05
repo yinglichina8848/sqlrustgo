@@ -1336,8 +1336,83 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         let where_clause = update.where_clause.as_ref().unwrap();
 
-        // Optimized path: no triggers, use single-scan update with AST-based evaluation
+        // Optimized path: no triggers, try index lookup first
         if !has_update_triggers {
+            // Try index lookup for simple equality WHERE clauses
+            if let Some(index_info) = try_extract_index_lookup(where_clause, &table_info.columns) {
+                let indices = {
+                    let storage = self.storage.read().unwrap();
+                    storage.find_by_index(
+                        &table_name,
+                        index_info.column_index,
+                        index_info.key_value,
+                    )
+                };
+
+                if let Some(indices) = indices {
+                    if !indices.is_empty() {
+                        // In-place update using get_table_records_mut
+                        let count = {
+                            let mut records = self.storage.write().unwrap();
+                            let records = records.get_table_records_mut(&table_name)?;
+
+                            let indices_set: std::collections::HashSet<usize> =
+                                indices.iter().cloned().collect();
+                            let mut count = 0;
+
+                            for &idx in &indices {
+                                if let Some(row) = records.get_mut(idx) {
+                                    // Apply SET expressions
+                                    for &(col_idx, ref set_expr) in &set_col_indices {
+                                        let new_val =
+                                            evaluate_expression(set_expr, row, &table_info)
+                                                .unwrap_or(Value::Null);
+                                        if col_idx < row.len() {
+                                            row[col_idx] = new_val;
+                                        }
+                                    }
+
+                                    // Validate CHECK constraints
+                                    if !table_info.check_constraints.is_empty() {
+                                        let col_names: Vec<String> = table_info
+                                            .columns
+                                            .iter()
+                                            .map(|c| c.name.clone())
+                                            .collect();
+                                        for constraint in &table_info.check_constraints {
+                                            let valid =
+                                                sqlrustgo_storage::evaluate_check_constraint(
+                                                    constraint, &col_names, row,
+                                                )?;
+                                            if !valid {
+                                                return Err(format!(
+                                                    "CHECK constraint '{}' violated: {}",
+                                                    constraint.name.as_deref().unwrap_or("unnamed"),
+                                                    constraint.expression
+                                                )
+                                                .into());
+                                            }
+                                        }
+                                    }
+                                    count += 1;
+                                }
+                            }
+
+                            count
+                        };
+
+                        self.query_cache
+                            .write()
+                            .unwrap()
+                            .invalidate_table(&table_name);
+                        return Ok(ExecutorResult::new(vec![], count));
+                    }
+                    return Ok(ExecutorResult::new(vec![], 0));
+                }
+                // Index lookup returned None - fall through to full scan
+            }
+
+            // Fallback: scan all rows and evaluate predicate
             // Scan all rows
             let all_rows = {
                 let storage = self.storage.read().unwrap();
@@ -1551,16 +1626,62 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         // If no triggers and we have a WHERE clause, use optimized single-scan delete
         // Use AST-based evaluation directly to avoid string parsing overhead
         if !has_delete_triggers {
-            // Scan all rows from the table
-            let all_rows = {
-                let storage = self.storage.read().unwrap();
-                storage.scan(&table_name)?
-            };
-
-            // Get table info for AST-based predicate evaluation
+            // Get table info for index lookup check and AST-based predicate evaluation
             let table_info = {
                 let storage = self.storage.read().unwrap();
                 storage.get_table_info(&table_name)?.clone()
+            };
+
+            // Try index lookup first for simple equality WHERE clauses
+            if let Some(index_info) = try_extract_index_lookup(where_clause, &table_info.columns) {
+                let indices = {
+                    let storage = self.storage.read().unwrap();
+                    storage.find_by_index(
+                        &table_name,
+                        index_info.column_index,
+                        index_info.key_value,
+                    )
+                };
+
+                if let Some(indices) = indices {
+                    if !indices.is_empty() {
+                        // Verify rows match before deletion (index entries may be stale after prior deletions)
+                        let rows_to_delete: Vec<usize> = {
+                            let storage = self.storage.read().unwrap();
+                            indices
+                                .into_iter()
+                                .filter(|&idx| {
+                                    if let Ok(Some(row)) = storage.get_row(&table_name, idx) {
+                                        evaluate_where_clause(where_clause, &row, &table_info)
+                                    } else {
+                                        false
+                                    }
+                                })
+                                .collect()
+                        };
+
+                        if !rows_to_delete.is_empty() {
+                            let count = {
+                                let mut storage = self.storage.write().unwrap();
+                                storage.delete_by_indices(&table_name, &rows_to_delete)?
+                            };
+
+                            self.query_cache
+                                .write()
+                                .unwrap()
+                                .invalidate_table(&table_name);
+                            return Ok(ExecutorResult::new(vec![], count));
+                        }
+                        return Ok(ExecutorResult::new(vec![], 0));
+                    }
+                    return Ok(ExecutorResult::new(vec![], 0));
+                }
+            }
+
+            // Fallback: full scan with AST-based evaluation
+            let all_rows = {
+                let storage = self.storage.read().unwrap();
+                storage.scan(&table_name)?
             };
 
             // Partition rows using AST-based evaluation (no string parsing)
@@ -2744,6 +2865,56 @@ fn find_column_index(col_name: &str, table_info: &TableInfo) -> Option<usize> {
             .iter()
             .position(|c| c.name.eq_ignore_ascii_case(col_name))
     }
+}
+
+/// Index lookup info extracted from a simple equality WHERE clause
+struct IndexLookupInfo {
+    column_index: usize,
+    key_value: i64,
+}
+
+/// Try to extract index lookup info from a simple equality WHERE clause
+/// Returns Some(IndexLookupInfo) if WHERE is of form: column = integer_literal
+fn try_extract_index_lookup(
+    where_clause: &Expression,
+    columns: &[ColumnDefinition],
+) -> Option<IndexLookupInfo> {
+    match where_clause {
+        Expression::BinaryOp(left, op, right) if op == "=" || op == "==" => {
+            try_extract_index_from_binary_op(left, right, columns)
+                .or_else(|| try_extract_index_from_binary_op(right, left, columns))
+        }
+        _ => None,
+    }
+}
+
+/// Try to extract index info from a binary operation where one side is a column and other is a literal
+fn try_extract_index_from_binary_op(
+    col_expr: &Expression,
+    val_expr: &Expression,
+    columns: &[ColumnDefinition],
+) -> Option<IndexLookupInfo> {
+    // Check if left is a column identifier
+    let col_name = match col_expr {
+        Expression::Identifier(name) => name,
+        _ => return None,
+    };
+
+    // Check if right is a literal integer
+    let key_value = match val_expr {
+        Expression::Literal(val) => val.parse::<i64>().ok()?,
+        _ => return None,
+    };
+
+    // Find column index
+    let col_idx = columns
+        .iter()
+        .position(|c| c.name.eq_ignore_ascii_case(col_name))?;
+
+    Some(IndexLookupInfo {
+        column_index: col_idx,
+        key_value,
+    })
 }
 
 fn build_combined_schema(
