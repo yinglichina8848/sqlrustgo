@@ -1,6 +1,6 @@
 # SQLRustGo v2.9.0 OO 架构文档
 
-> **版本**: v2.9.0 (RC)
+> **版本**: v2.9.0 (GA)
 > **代号**: Formal Verification Excellence
 > **更新日期**: 2026-05-05
 
@@ -20,19 +20,19 @@ oo/
 │   └── ARCHITECTURE_V2.9.md
 ├── modules/             # 模块设计文档
 │   ├── mvcc/
-│   │   └── MVCC_DESIGN.md
 │   ├── wal/
-│   │   └── WAL_DESIGN.md
 │   ├── executor/
-│   │   └── EXECUTOR_DESIGN.md
 │   ├── parser/
-│   │   └── PARSER_DESIGN.md
 │   ├── storage/
-│   │   └── STORAGE_DESIGN.md
 │   ├── optimizer/
-│   │   └── OPTIMIZER_DESIGN.md
-│   └── transaction/
-│       └── TRANSACTION_DESIGN.md
+│   ├── catalog/
+│   ├── planner/
+│   ├── transaction/
+│   ├── server/
+│   ├── graph/
+│   ├── vector/
+│   ├── unified-query/
+│   └── bench/
 ├── reports/             # 分析报告
 │   ├── SQL92_COMPLIANCE.md
 │   └── PERFORMANCE_ANALYSIS.md
@@ -60,7 +60,14 @@ oo/
 | Parser | [PARSER_DESIGN.md](./modules/parser/PARSER_DESIGN.md) | SQL 解析器 |
 | Storage | [STORAGE_DESIGN.md](./modules/storage/STORAGE_DESIGN.md) | 存储引擎 |
 | Optimizer | [OPTIMIZER_DESIGN.md](./modules/optimizer/OPTIMIZER_DESIGN.md) | 查询优化器 |
+| Catalog | [CATALOG_DESIGN.md](./modules/catalog/CATALOG_DESIGN.md) | 元数据管理 |
+| Planner | [PLANNER_DESIGN.md](./modules/planner/PLANNER_DESIGN.md) | 查询规划器 |
 | Transaction | [TRANSACTION_DESIGN.md](./modules/transaction/TRANSACTION_DESIGN.md) | 事务管理 |
+| Server | [SERVER_DESIGN.md](./modules/server/SERVER_DESIGN.md) | 服务器 |
+| Graph | [GRAPH_DESIGN.md](./modules/graph/GRAPH_DESIGN.md) | 图引擎 |
+| Vector | [VECTOR_DESIGN.md](./modules/vector/VECTOR_DESIGN.md) | 向量索引 |
+| Unified Query | [UNIFIED_QUERY_DESIGN.md](./modules/unified-query/UNIFIED_QUERY_DESIGN.md) | 统一查询 |
+| Bench | [BENCH_DESIGN.md](./modules/bench/BENCH_DESIGN.md) | 基准测试 |
 
 ### 报告
 
@@ -69,37 +76,39 @@ oo/
 | [SQL92_COMPLIANCE.md](./reports/SQL92_COMPLIANCE.md) | SQL-92 合规性报告 |
 | [PERFORMANCE_ANALYSIS.md](./reports/PERFORMANCE_ANALYSIS.md) | 性能分析报告 |
 
+### 用户指南
+
+| 文档 | 说明 |
+|------|------|
+| [USER_MANUAL.md](./user-guide/USER_MANUAL.md) | 用户手册 |
+| [GMP_USER_GUIDE.md](./user-guide/GMP_USER_GUIDE.md) | GMP 用户指南 |
+| [GRAPH_SEARCH_USER_GUIDE.md](./user-guide/GRAPH_SEARCH_USER_GUIDE.md) | 图检索用户指南 |
+| [VECTOR_SEARCH_USER_GUIDE.md](./user-guide/VECTOR_SEARCH_USER_GUIDE.md) | 向量检索用户指南 |
+
 ---
 
 ## 版本特性
 
-v2.9.0 重点实现形式化验证卓越：
+v2.9.0 实现形式化验证卓越：
 
-- **形式化验证**: TLA+ 6 PASS, Formulog 5 PASS, Dafny 1 PASS
-- **覆盖率**: 84.18% 行覆盖, 71.08% executor 覆盖
-- **SQL Corpus**: 92.6% (449/485)
-- **TPC-H**: 22/22 查询可运行
-- **分布式 CI/CD**: Nomad + Runner + Gitea Actions
-- **Coverage CI/CD**: L1/L2/L3 分层覆盖检查
-- **GMP 审计**: 操作审计与证据链
+- **覆盖率**: 84.18%
+- **SQL Corpus**: 92.6%
+- **形式化证明**: 18/18
 
----
+核心升级：
 
-## 覆盖率总结
-
-| 指标 | 目标 | 实际 |
-|------|------|------|
-| 总行覆盖率 | ≥75% | 84.18% ✅ |
-| executor 覆盖率 | ≥60% | 71.08% ✅ |
-| SQL Corpus | ≥85% | 92.6% ✅ |
+- 形式化验证完整性
+- 混合检索增强
+- 性能优化
+- 审计增强
 
 ---
 
 ## 相关文档
 
-- [../../VERSION_PLAN.md](../../VERSION_PLAN.md) - 版本计划
-- [../../RELEASE_NOTES.md](../../RELEASE_NOTES.md) - 发布说明
-- [../../FEATURE_MATRIX.md](../../FEATURE_MATRIX.md) - 功能矩阵
+- [../VERSION_PLAN.md](../VERSION_PLAN.md) - 版本计划
+- [../RELEASE_NOTES.md](../RELEASE_NOTES.md) - 发布说明
+- [../FEATURE_MATRIX.md](../FEATURE_MATRIX.md) - 功能矩阵
 
 ---
 

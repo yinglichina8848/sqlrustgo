@@ -1,6 +1,6 @@
 # SQLRustGo v2.9.0 用户手册
 
-> **版本**: v2.9.0 (RC)
+> **版本**: v2.9.0 (GA)
 > **更新日期**: 2026-05-05
 
 ---
@@ -98,107 +98,161 @@ RIGHT JOIN orders o ON u.id = o.user_id;
 
 ---
 
-## 3. 配置
+## 3. 企业级特性
 
-### 3.1 存储配置
+### 3.1 WAL 崩溃恢复
 
-```sql
--- 设置存储引擎
-SET storage.engine = 'memory';  -- 或 'disk'
-```
-
-### 3.2 事务配置
+WAL (预写日志) 自动启用，确保崩溃后数据可恢复：
 
 ```sql
--- 设置隔离级别
-SET transaction.isolation = 'read_committed';  -- 或 'serializable'
-```
-
----
-
-## 4. 索引
-
-### 4.1 创建索引
-
-```sql
--- 创建 B+ 树索引
-CREATE INDEX idx_users_email ON users(email);
-
--- 创建向量索引
-CREATE VECTOR INDEX idx_embeddings ON embeddings USING hnsw(dimension=128);
-```
-
-### 4.2 索引类型
-
-| 类型 | 说明 |
-|------|------|
-| BTree | B+ 树索引，适用于范围查询 |
-| Hash | 哈希索引，适用于等值查询 |
-| Vector | 向量索引，适用于相似性搜索 |
-
----
-
-## 5. 事务
-
-### 5.1 事务控制
-
-```sql
--- 开始事务
+-- 事务操作会自动记录到 WAL
 BEGIN;
-
--- 提交事务
+INSERT INTO users (id, name) VALUES (1, 'Alice');
 COMMIT;
-
--- 回滚事务
-ROLLBACK;
+-- 如果系统崩溃，重启后会从 WAL 恢复
 ```
 
-### 5.2 保存点
+### 3.2 外键约束
 
 ```sql
--- 创建保存点
-SAVEPOINT sp1;
+-- 创建带外键的表
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    amount DECIMAL(10,2)
+);
 
--- 回滚到保存点
-ROLLBACK TO SAVEPOINT sp1;
+-- 级联删除
+CREATE TABLE orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+### 3.3 备份恢复
+
+```bash
+# 备份
+./target/release/sqlrustgo backup --output backup.db
+
+# 恢复
+./target/release/sqlrustgo restore --input backup.db
 ```
 
 ---
 
-## 6. 错误处理
+## 4. 检索功能
 
-### 6.1 错误代码
+详细用户指南请参考：
+- [GMP 用户指南](./GMP_USER_GUIDE.md) - GMP 审计与合规
+- [图检索用户指南](./GRAPH_SEARCH_USER_GUIDE.md) - 图引擎与 Cypher
+- [向量检索用户指南](./VECTOR_SEARCH_USER_GUIDE.md) - 向量索引与混合检索
 
-| 错误代码 | 说明 |
-|----------|------|
-| E0001 | 语法错误 |
-| E0002 | 表不存在 |
-| E0003 | 列不存在 |
-| E0004 | 约束违反 |
-| E0005 | 事务冲突 |
-
----
-
-## 7. 性能优化
-
-### 7.1 查询优化
-
-- 使用 EXPLAIN 分析查询计划
-- 创建适当的索引
-- 避免 SELECT *
-- 使用 LIMIT 限制结果集
-
-### 7.2 配置优化
+### 4.1 全文检索 (lex)
 
 ```sql
--- 设置查询超时（毫秒）
-SET query.timeout = 30000;
+-- 全文搜索
+SELECT * FROM documents
+WHERE MATCH(content, 'keywords');
+```
 
--- 设置最大连接数
-SET connection.max = 100;
+### 4.2 向量检索 (vec)
+
+```sql
+-- 语义搜索
+SELECT * FROM documents
+WHERE VECTOR_SEARCH(content, embedding, top_k=10);
+```
+
+### 4.3 图检索 (graph)
+
+```sql
+-- 关系查询
+SELECT * FROM graph
+WHERE PATH(start_id, end_id, hops=3);
+```
+
+### 4.4 混合检索 (hybrid)
+
+```sql
+-- 混合搜索 (RRF)
+SELECT * FROM documents
+WHERE HYBRID_SEARCH(
+    content,
+    embedding,
+    strategy='RRF',
+    weights=[0.3, 0.7]
+);
 ```
 
 ---
 
-*本文档由 Hermes Agent 维护*
-*更新日期: 2026-05-05*
+## 5. GMP 审计支持
+
+详细 GMP 用户指南请参考：[GMP 用户指南](./GMP_USER_GUIDE.md)
+
+### 5.1 审计查询
+
+```sql
+-- GMP Top 10 审核查询
+SELECT * FROM gmp_audit_log
+WHERE action_type = 'SENSITIVE_ACCESS'
+ORDER BY timestamp DESC
+LIMIT 10;
+```
+
+### 5.2 证据链查询
+
+```sql
+-- 查看证据链
+SELECT * FROM evidence_chain
+WHERE tx_id = 12345;
+```
+
+---
+
+## 6. 配置
+
+### 6.1 配置文件
+
+```toml
+# sqlrustgo.toml
+[database]
+path = "./data"
+
+[wal]
+enabled = true
+checkpoint_interval = 300
+
+[search]
+default_mode = "hybrid"
+```
+
+---
+
+## 7. 故障排查
+
+### 7.1 崩溃恢复
+
+如果系统异常关闭，重启时会自动进行 WAL 重放：
+
+```
+=== WAL Recovery ===
+Loading WAL file...
+Found 150 uncommitted transactions
+Recovering... 150/150 done
+Database recovered successfully
+```
+
+### 7.2 常见问题
+
+| 问题 | 解决方案 |
+|------|----------|
+| 启动失败 | 检查 WAL 文件完整性 |
+| 性能下降 | 运行 `VACUUM` 清理 |
+| 索引失效 | 重建索引 `REINDEX` |
+
+---
+
+*用户手册 v2.9.0*
+*最后更新: 2026-05-05*
