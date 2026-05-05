@@ -51,7 +51,7 @@ pub fn evaluate_check_constraint(
 
 /// Evaluate a SQL expression against a record
 /// Supports: comparisons (=, !=, <, >, <=, >=), boolean ops (AND, OR, NOT), IS NULL/IS NOT NULL
-fn evaluate_sql_expression(expr: &str, columns: &[String], record: &[Value]) -> SqlResult<bool> {
+pub(crate) fn evaluate_sql_expression(expr: &str, columns: &[String], record: &[Value]) -> SqlResult<bool> {
     let expr = expr.trim();
 
     // Handle AND/OR
@@ -485,6 +485,20 @@ pub trait StorageEngine: Send + Sync {
 
     /// Check if a view exists
     fn has_view(&self, name: &str) -> bool;
+
+    /// Delete rows matching a predicate (SQL expression string)
+    /// Returns the number of rows deleted
+    fn delete_by_predicate(&mut self, table: &str, predicate: &str) -> SqlResult<usize>;
+
+    /// Update rows matching a predicate with assignments
+    /// assignments: Vec of (column_index, new_value)
+    /// Returns the number of rows updated
+    fn update_by_predicate(
+        &mut self,
+        table: &str,
+        predicate: &str,
+        assignments: &[(usize, Value)],
+    ) -> SqlResult<usize>;
 }
 
 /// In-memory storage implementation for testing and caching
@@ -670,6 +684,50 @@ impl StorageEngine for MemoryStorage {
 
     fn list_indexes(&self, _table: &str) -> Vec<(String, String)> {
         Vec::new()
+    }
+
+    fn delete_by_predicate(&mut self, table: &str, predicate: &str) -> SqlResult<usize> {
+        let Some(records) = self.tables.get_mut(table) else {
+            return Ok(0);
+        };
+        let columns: Vec<String> = self
+            .table_infos
+            .get(table)
+            .map(|info| info.columns.iter().map(|c| c.name.clone()).collect())
+            .unwrap_or_default();
+        let original_len = records.len();
+        records.retain(|row| {
+            !evaluate_sql_expression(predicate, &columns, row).unwrap_or(false)
+        });
+        Ok(original_len - records.len())
+    }
+
+    fn update_by_predicate(
+        &mut self,
+        table: &str,
+        predicate: &str,
+        assignments: &[(usize, Value)],
+    ) -> SqlResult<usize> {
+        let Some(records) = self.tables.get_mut(table) else {
+            return Ok(0);
+        };
+        let columns: Vec<String> = self
+            .table_infos
+            .get(table)
+            .map(|info| info.columns.iter().map(|c| c.name.clone()).collect())
+            .unwrap_or_default();
+        let mut count = 0;
+        for record in records.iter_mut() {
+            if evaluate_sql_expression(predicate, &columns, record).unwrap_or(false) {
+                for &(col_idx, ref new_val) in assignments {
+                    if col_idx < record.len() {
+                        record[col_idx] = new_val.clone();
+                    }
+                }
+                count += 1;
+            }
+        }
+        Ok(count)
     }
 }
 

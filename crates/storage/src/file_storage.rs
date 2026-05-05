@@ -1456,4 +1456,56 @@ impl StorageEngine for FileStorage {
             .map(|((t, c), _idx)| (c.clone(), format!("{}_idx_{}", t, c)))
             .collect()
     }
+
+    fn delete_by_predicate(&mut self, table: &str, predicate: &str) -> SqlResult<usize> {
+        use crate::engine::evaluate_sql_expression;
+
+        let table_data = self.tables.get_mut(table);
+        let Some(data) = table_data else {
+            return Ok(0);
+        };
+        let columns: Vec<String> = data
+            .info
+            .columns
+            .iter()
+            .map(|c| c.name.clone())
+            .collect();
+        let original_len = data.rows.len();
+        data.rows.retain(|row| {
+            !evaluate_sql_expression(predicate, &columns, row).unwrap_or(false)
+        });
+        Ok(original_len - data.rows.len())
+    }
+
+    fn update_by_predicate(
+        &mut self,
+        table: &str,
+        predicate: &str,
+        assignments: &[(usize, Value)],
+    ) -> SqlResult<usize> {
+        use crate::engine::evaluate_sql_expression;
+
+        let table_data = self.tables.get_mut(table);
+        let Some(data) = table_data else {
+            return Ok(0);
+        };
+        let columns: Vec<String> = data
+            .info
+            .columns
+            .iter()
+            .map(|c| c.name.clone())
+            .collect();
+        let mut count = 0;
+        for record in data.rows.iter_mut() {
+            if evaluate_sql_expression(predicate, &columns, record).unwrap_or(false) {
+                for &(col_idx, ref new_val) in assignments {
+                    if col_idx < record.len() {
+                        record[col_idx] = new_val.clone();
+                    }
+                }
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
 }
