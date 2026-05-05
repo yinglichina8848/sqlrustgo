@@ -11,8 +11,7 @@ fn test_tcp_listener_bind_and_accept() {
         let _ = listener.accept();
     });
 
-    let stream =
-        TcpStream::connect_timeout(&addr, Duration::from_secs(5)).expect("Failed to connect");
+    let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5)).expect("Failed to connect");
     assert!(stream.peer_addr().is_ok());
     let _ = handle.join();
 }
@@ -26,11 +25,8 @@ fn test_tcp_stream_peer_addr() {
         let _ = listener.accept();
     });
 
-    let stream =
-        TcpStream::connect_timeout(&addr, Duration::from_secs(5)).expect("Failed to connect");
-    stream
-        .set_read_timeout(Some(Duration::from_secs(1)))
-        .unwrap();
+    let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5)).expect("Failed to connect");
+    stream.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
 
     assert!(stream.peer_addr().is_ok());
     assert!(stream.local_addr().is_ok());
@@ -53,8 +49,7 @@ fn test_tcp_multiple_connections() {
     });
 
     for _ in 0..3 {
-        let stream =
-            TcpStream::connect_timeout(&addr, Duration::from_secs(5)).expect("Failed to connect");
+        let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5)).expect("Failed to connect");
         assert!(stream.peer_addr().is_ok());
     }
 
@@ -80,14 +75,9 @@ fn test_tcp_set_options() {
         let _ = listener.accept();
     });
 
-    let stream =
-        TcpStream::connect_timeout(&addr, Duration::from_secs(5)).expect("Failed to connect");
-    stream
-        .set_read_timeout(Some(Duration::from_secs(1)))
-        .unwrap();
-    stream
-        .set_write_timeout(Some(Duration::from_secs(1)))
-        .unwrap();
+    let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5)).expect("Failed to connect");
+    stream.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+    stream.set_write_timeout(Some(Duration::from_secs(1))).unwrap();
     stream.set_nodelay(true).unwrap();
 
     let _ = handle.join();
@@ -106,8 +96,7 @@ fn test_tcp_stream_write_read() {
         }
     });
 
-    let mut stream =
-        TcpStream::connect_timeout(&addr, Duration::from_secs(5)).expect("Failed to connect");
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5)).expect("Failed to connect");
 
     let data = b"hello!\n";
     stream.write_all(data).expect("Failed to write");
