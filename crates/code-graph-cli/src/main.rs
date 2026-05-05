@@ -6,12 +6,12 @@
 //!   code-graph query <graph.json> file <file_path>
 //!   code-graph query <graph.json> neighbors <node_id>
 
+use clap::{Parser, Subcommand};
 use sqlrustgo_code_graph::ast::Indexer;
 use sqlrustgo_code_graph::graph::builder::build_graph;
 use sqlrustgo_code_graph::graph::NodeType;
 use sqlrustgo_code_graph::runtime::GraphRuntime;
 use sqlrustgo_code_graph::store;
-use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "code-graph")]
@@ -67,7 +67,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             store::save_graph(&graph, &output)?;
             println!("Saved to: {}", output);
         }
-        Commands::Query { graph_path, subcommand } => {
+        Commands::Query {
+            graph_path,
+            subcommand,
+        } => {
             let graph = store::load_graph(&graph_path)?;
             let runtime = GraphRuntime::new(graph);
 

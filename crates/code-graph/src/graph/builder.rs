@@ -50,7 +50,8 @@ pub fn build_graph(nodes: Vec<Node>) -> CodeGraph {
 
 /// Group node IDs by their file path
 fn group_nodes_by_file(nodes: &[Node]) -> std::collections::HashMap<String, Vec<String>> {
-    let mut groups: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut groups: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
     for node in nodes {
         groups
             .entry(node.file_path.clone())

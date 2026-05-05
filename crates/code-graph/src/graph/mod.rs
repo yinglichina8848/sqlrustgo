@@ -1,12 +1,12 @@
 //! Graph data structures for Code Intelligence Graph
 
-pub mod node;
-pub mod edge;
 pub mod builder;
+pub mod edge;
+pub mod node;
 
-pub use node::{Node, NodeType};
-pub use edge::{Edge, EdgeType};
 pub use builder::build_graph;
+pub use edge::{Edge, EdgeType};
+pub use node::{Node, NodeType};
 
 use serde::{Deserialize, Serialize};
 
@@ -35,10 +35,16 @@ impl CodeGraph {
         }
     }
 
-    pub fn node_count(&self) -> usize { self.nodes.len() }
-    pub fn edge_count(&self) -> usize { self.edges.len() }
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+    pub fn edge_count(&self) -> usize {
+        self.edges.len()
+    }
 }
 
 impl Default for CodeGraph {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

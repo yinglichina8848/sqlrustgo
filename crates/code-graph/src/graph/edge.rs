@@ -46,6 +46,10 @@ pub struct Edge {
 
 impl Edge {
     pub fn new(from: String, to: String, edge_type: EdgeType) -> Self {
-        Self { from, to, edge_type }
+        Self {
+            from,
+            to,
+            edge_type,
+        }
     }
 }

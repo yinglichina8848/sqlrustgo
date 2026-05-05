@@ -52,7 +52,10 @@ impl GraphRuntime {
 
         // Index edges
         for (idx, edge) in self.graph.edges.iter().enumerate() {
-            self.edges_from.entry(edge.from.clone()).or_default().push(idx);
+            self.edges_from
+                .entry(edge.from.clone())
+                .or_default()
+                .push(idx);
             self.edges_to.entry(edge.to.clone()).or_default().push(idx);
         }
     }
@@ -88,7 +91,10 @@ impl GraphRuntime {
 
         neighbor_indices.sort();
         neighbor_indices.dedup();
-        neighbor_indices.into_iter().map(|idx| &self.graph.nodes[idx]).collect()
+        neighbor_indices
+            .into_iter()
+            .map(|idx| &self.graph.nodes[idx])
+            .collect()
     }
 
     /// API 3: Locate all nodes in a file — O(k) where k = nodes in file
@@ -130,19 +136,48 @@ pub struct RuntimeStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{CodeGraph, Node, NodeType, Edge, EdgeType};
+    use crate::graph::{CodeGraph, Edge, EdgeType, Node, NodeType};
 
     fn make_test_graph() -> GraphRuntime {
         let nodes = vec![
-            Node::new("add".to_string(), NodeType::Function, "src/lib.rs".to_string(), 10, 15, None),
-            Node::new("User".to_string(), NodeType::Struct, "src/lib.rs".to_string(), 1, 9, None),
-            Node::new("main".to_string(), NodeType::Function, "src/main.rs".to_string(), 1, 20, None),
+            Node::new(
+                "add".to_string(),
+                NodeType::Function,
+                "src/lib.rs".to_string(),
+                10,
+                15,
+                None,
+            ),
+            Node::new(
+                "User".to_string(),
+                NodeType::Struct,
+                "src/lib.rs".to_string(),
+                1,
+                9,
+                None,
+            ),
+            Node::new(
+                "main".to_string(),
+                NodeType::Function,
+                "src/main.rs".to_string(),
+                1,
+                20,
+                None,
+            ),
         ];
         let mut graph = CodeGraph::new();
         graph.nodes = nodes;
         graph.edges = vec![
-            Edge::new("mod:src/lib.rs".to_string(), Node::compute_id("add", "src/lib.rs"), EdgeType::Contains),
-            Edge::new("mod:src/lib.rs".to_string(), Node::compute_id("User", "src/lib.rs"), EdgeType::Contains),
+            Edge::new(
+                "mod:src/lib.rs".to_string(),
+                Node::compute_id("add", "src/lib.rs"),
+                EdgeType::Contains,
+            ),
+            Edge::new(
+                "mod:src/lib.rs".to_string(),
+                Node::compute_id("User", "src/lib.rs"),
+                EdgeType::Contains,
+            ),
         ];
         GraphRuntime::new(graph)
     }

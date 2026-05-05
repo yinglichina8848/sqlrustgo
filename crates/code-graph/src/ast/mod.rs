@@ -6,10 +6,10 @@
 
 pub mod symbol_extractor;
 
+use crate::ast::symbol_extractor::extract_symbols_from_file;
+use crate::graph::{Node, NodeType};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
-use crate::graph::{Node, NodeType};
-use crate::ast::symbol_extractor::extract_symbols_from_file;
 
 pub use symbol_extractor::Symbol;
 
@@ -67,7 +67,8 @@ impl Indexer {
             }
         }
 
-        tracing::info!("Indexed {} nodes from {}",
+        tracing::info!(
+            "Indexed {} nodes from {}",
             nodes.len(),
             self.repo_root.display()
         );

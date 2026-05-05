@@ -2,10 +2,10 @@
 //!
 //! Parses Rust source files and extracts structural symbols
 
-use std::path::Path;
-use std::fs;
 use std::cell::Cell;
-use syn::{parse_file, Item, ItemFn, ItemStruct, ItemTrait, ItemEnum, ItemImpl};
+use std::fs;
+use std::path::Path;
+use syn::{parse_file, Item, ItemEnum, ItemFn, ItemImpl, ItemStruct, ItemTrait};
 
 /// Maximum function complexity we track
 const MAX_COMPLEXITY: f32 = 100.0;
@@ -14,7 +14,7 @@ const MAX_COMPLEXITY: f32 = 100.0;
 #[derive(Debug, Clone)]
 pub struct Symbol {
     pub name: String,
-    pub kind: String,  // fn, struct, trait, enum, impl, mod, test
+    pub kind: String, // fn, struct, trait, enum, impl, mod, test
     pub file_path: String,
     pub line_start: usize,
     pub line_end: usize,
@@ -39,7 +39,14 @@ pub fn extract_symbols_from_file(
 
     for item in &file.items {
         let _item_start = offset.get();
-        extract_item(item, &file_path_str, module_path, &line_offsets, &mut symbols, &offset);
+        extract_item(
+            item,
+            &file_path_str,
+            module_path,
+            &line_offsets,
+            &mut symbols,
+            &offset,
+        );
     }
 
     Ok(symbols)
@@ -74,7 +81,14 @@ pub fn extract_symbols_from_ast(
     let offset = Cell::new(0usize);
 
     for item in &file.items {
-        extract_item(item, file_path, module_path, &line_offsets, &mut symbols, &offset);
+        extract_item(
+            item,
+            file_path,
+            module_path,
+            &line_offsets,
+            &mut symbols,
+            &offset,
+        );
     }
 
     Ok(symbols)
@@ -93,23 +107,43 @@ fn extract_item(
             symbols.push(extract_fn(fn_item, file_path, module_path, line_offsets));
         }
         Item::Struct(struct_item) => {
-            symbols.push(extract_struct(struct_item, file_path, module_path, line_offsets));
+            symbols.push(extract_struct(
+                struct_item,
+                file_path,
+                module_path,
+                line_offsets,
+            ));
         }
         Item::Trait(trait_item) => {
-            symbols.push(extract_trait(trait_item, file_path, module_path, line_offsets));
+            symbols.push(extract_trait(
+                trait_item,
+                file_path,
+                module_path,
+                line_offsets,
+            ));
         }
         Item::Enum(enum_item) => {
-            symbols.push(extract_enum(enum_item, file_path, module_path, line_offsets));
+            symbols.push(extract_enum(
+                enum_item,
+                file_path,
+                module_path,
+                line_offsets,
+            ));
         }
         Item::Impl(impl_item) => {
-            symbols.push(extract_impl(impl_item, file_path, module_path, line_offsets));
+            symbols.push(extract_impl(
+                impl_item,
+                file_path,
+                module_path,
+                line_offsets,
+            ));
         }
         Item::Mod(mod_item) => {
             let mut new_mod_path = module_path.to_vec();
             let ident = &mod_item.ident;
             new_mod_path.push(ident.to_string());
 
-            let line_start = 1;  // syn doesn't give us byte offsets without extra deps
+            let line_start = 1; // syn doesn't give us byte offsets without extra deps
             let line_end = line_start + 1;
             let is_public = matches!(mod_item.vis, syn::Visibility::Public(_));
 
@@ -129,7 +163,14 @@ fn extract_item(
             // Inline module content
             if let Some((_, items)) = &mod_item.content {
                 for item in items {
-                    extract_item(item, file_path, &new_mod_path, line_offsets, symbols, _offset);
+                    extract_item(
+                        item,
+                        file_path,
+                        &new_mod_path,
+                        line_offsets,
+                        symbols,
+                        _offset,
+                    );
                 }
             }
         }
@@ -254,7 +295,11 @@ fn extract_impl(
     let name = if let Some((_, path, _)) = &item.trait_ {
         format!(
             "impl_{}",
-            path.segments.iter().map(|s| s.ident.to_string()).collect::<Vec<_>>().join("_")
+            path.segments
+                .iter()
+                .map(|s| s.ident.to_string())
+                .collect::<Vec<_>>()
+                .join("_")
         )
     } else {
         format!("impl_{}", "self")

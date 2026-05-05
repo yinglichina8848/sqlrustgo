@@ -834,13 +834,21 @@ mod tests {
 
     #[test]
     fn test_version_info_display() {
-        let v = VersionInfo { major: 1, minor: 2, patch: 3 };
+        let v = VersionInfo {
+            major: 1,
+            minor: 2,
+            patch: 3,
+        };
         assert_eq!(format!("{}", v), "1.2.3");
     }
 
     #[test]
     fn test_version_info_debug() {
-        let v = VersionInfo { major: 1, minor: 2, patch: 3 };
+        let v = VersionInfo {
+            major: 1,
+            minor: 2,
+            patch: 3,
+        };
         let debug = format!("{:?}", v);
         assert!(debug.contains("1"));
         assert!(debug.contains("2"));

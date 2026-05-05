@@ -1471,16 +1471,10 @@ impl StorageEngine for FileStorage {
         let Some(data) = table_data else {
             return Ok(0);
         };
-        let columns: Vec<String> = data
-            .info
-            .columns
-            .iter()
-            .map(|c| c.name.clone())
-            .collect();
+        let columns: Vec<String> = data.info.columns.iter().map(|c| c.name.clone()).collect();
         let original_len = data.rows.len();
-        data.rows.retain(|row| {
-            !evaluate_sql_expression(predicate, &columns, row).unwrap_or(false)
-        });
+        data.rows
+            .retain(|row| !evaluate_sql_expression(predicate, &columns, row).unwrap_or(false));
         Ok(original_len - data.rows.len())
     }
 
@@ -1496,12 +1490,7 @@ impl StorageEngine for FileStorage {
         let Some(data) = table_data else {
             return Ok(0);
         };
-        let columns: Vec<String> = data
-            .info
-            .columns
-            .iter()
-            .map(|c| c.name.clone())
-            .collect();
+        let columns: Vec<String> = data.info.columns.iter().map(|c| c.name.clone()).collect();
         let mut count = 0;
         for record in data.rows.iter_mut() {
             if evaluate_sql_expression(predicate, &columns, record).unwrap_or(false) {
