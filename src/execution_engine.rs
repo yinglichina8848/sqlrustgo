@@ -1305,20 +1305,122 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             return Ok(ExecutorResult::new(vec![], count));
         }
 
-        // Get table info and scan rows
+        // Check for UPDATE triggers
+        let trigger_executor = TriggerExecutor::new(self.storage.clone());
+        let before_triggers = trigger_executor.get_triggers_for_operation(
+            &table_name,
+            ExecTriggerTiming::Before,
+            ExecTriggerEvent::Update,
+        );
+        let after_triggers = trigger_executor.get_triggers_for_operation(
+            &table_name,
+            ExecTriggerTiming::After,
+            ExecTriggerEvent::Update,
+        );
+        let has_update_triggers = !before_triggers.is_empty() || !after_triggers.is_empty();
+
+        // Get table info
         let table_info = {
             let storage = self.storage.read().unwrap();
             storage.get_table_info(&table_name)?.clone()
         };
 
+        // Build column index map for SET clauses
+        let set_col_indices: Vec<(usize, Expression)> = update
+            .set_clauses
+            .iter()
+            .filter_map(|(col_name, expr)| {
+                find_column_index(col_name, &table_info).map(|idx| (idx, expr.clone()))
+            })
+            .collect();
+
+        let where_clause = update.where_clause.as_ref().unwrap();
+
+        // Optimized path: no triggers, use single-scan update with AST-based evaluation
+        if !has_update_triggers {
+            // Scan all rows
+            let all_rows = {
+                let storage = self.storage.read().unwrap();
+                storage.scan(&table_name)?
+            };
+
+            // Build updated rows - apply SET expressions to matching rows
+            let mut updated_rows: Vec<Vec<Value>> = Vec::new();
+            let mut count = 0;
+
+            for row in &all_rows {
+                if evaluate_where_clause(where_clause, row, &table_info) {
+                    count += 1;
+                    let mut new_row = row.clone();
+                    for &(col_idx, ref set_expr) in &set_col_indices {
+                        let new_val =
+                            evaluate_expression(set_expr, row, &table_info).unwrap_or(Value::Null);
+                        if col_idx < new_row.len() {
+                            new_row[col_idx] = new_val;
+                        }
+                    }
+
+                    // Validate CHECK constraints on updated row
+                    if !table_info.check_constraints.is_empty() {
+                        let col_names: Vec<String> =
+                            table_info.columns.iter().map(|c| c.name.clone()).collect();
+                        for constraint in &table_info.check_constraints {
+                            let valid = sqlrustgo_storage::evaluate_check_constraint(
+                                constraint,
+                                &col_names,
+                                &new_row,
+                            )?;
+                            if !valid {
+                                return Err(format!(
+                                    "CHECK constraint '{}' violated: {}",
+                                    constraint.name.as_deref().unwrap_or("unnamed"),
+                                    constraint.expression
+                                )
+                                .into());
+                            }
+                        }
+                    }
+                    updated_rows.push(new_row);
+                }
+            }
+
+            if count == 0 {
+                return Ok(ExecutorResult::new(vec![], 0));
+            }
+
+            // Write back: delete all and insert updated + non-matching rows
+            let mut storage = self.storage.write().unwrap();
+            storage.delete(&table_name, &[])?; // Delete all
+
+            // Collect non-matching rows to keep
+            let rows_to_keep: Vec<Vec<Value>> = all_rows
+                .into_iter()
+                .filter(|row| !evaluate_where_clause(where_clause, row, &table_info))
+                .collect();
+
+            // Insert non-matching rows
+            if !rows_to_keep.is_empty() {
+                storage.insert(&table_name, rows_to_keep)?;
+            }
+            // Insert updated rows
+            if !updated_rows.is_empty() {
+                storage.insert(&table_name, updated_rows)?;
+            }
+
+            self.query_cache
+                .write()
+                .unwrap()
+                .invalidate_table(&table_name);
+            return Ok(ExecutorResult::new(vec![], count));
+        }
+
+        // Original path: needed when there are triggers
+        // Scan all rows and filter
         let all_rows = {
             let storage = self.storage.read().unwrap();
             storage.scan(&table_name)?
         };
 
-        let where_clause = update.where_clause.as_ref().unwrap();
-
-        // Filter rows that match the WHERE clause
         let rows_to_update: Vec<Vec<Value>> = all_rows
             .into_iter()
             .filter(|row| evaluate_where_clause(where_clause, row, &table_info))
@@ -1329,15 +1431,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         if count == 0 {
             return Ok(ExecutorResult::new(vec![], 0));
         }
-
-        // Build column index map for SET clauses
-        let set_col_indices: Vec<(usize, &Expression)> = update
-            .set_clauses
-            .iter()
-            .filter_map(|(col_name, expr)| {
-                find_column_index(col_name, &table_info).map(|idx| (idx, expr))
-            })
-            .collect();
 
         // Apply SET expressions to each matching row
         let updated_rows: Vec<Vec<Value>> = rows_to_update
@@ -1354,14 +1447,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 new_row
             })
             .collect();
-
-        // Execute BEFORE UPDATE triggers
-        let trigger_executor = TriggerExecutor::new(self.storage.clone());
-        let before_triggers = trigger_executor.get_triggers_for_operation(
-            &table_name,
-            ExecTriggerTiming::Before,
-            ExecTriggerEvent::Update,
-        );
 
         let trigger_modified_rows: Vec<Vec<Value>> = if !before_triggers.is_empty() {
             let mut modified = Vec::new();
@@ -1421,12 +1506,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
 
         // Execute AFTER UPDATE triggers
-        let after_triggers = trigger_executor.get_triggers_for_operation(
-            &table_name,
-            ExecTriggerTiming::After,
-            ExecTriggerEvent::Update,
-        );
-
         if !after_triggers.is_empty() {
             for (i, updated_row) in updated_rows.iter().enumerate() {
                 let old_row = &rows_to_update[i];
@@ -1455,6 +1534,63 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             return Ok(ExecutorResult::new(vec![], count));
         }
 
+        // Check for DELETE triggers
+        let trigger_executor = TriggerExecutor::new(self.storage.clone());
+        let before_triggers = trigger_executor.get_triggers_for_operation(
+            &table_name,
+            ExecTriggerTiming::Before,
+            ExecTriggerEvent::Delete,
+        );
+        let after_triggers = trigger_executor.get_triggers_for_operation(
+            &table_name,
+            ExecTriggerTiming::After,
+            ExecTriggerEvent::Delete,
+        );
+        let has_delete_triggers = !before_triggers.is_empty() || !after_triggers.is_empty();
+
+        let where_clause = delete.where_clause.as_ref().unwrap();
+
+        // If no triggers and we have a WHERE clause, use optimized single-scan delete
+        // Use AST-based evaluation directly to avoid string parsing overhead
+        if !has_delete_triggers {
+            // Scan all rows from the table
+            let all_rows = {
+                let storage = self.storage.read().unwrap();
+                storage.scan(&table_name)?
+            };
+
+            // Get table info for AST-based predicate evaluation
+            let table_info = {
+                let storage = self.storage.read().unwrap();
+                storage.get_table_info(&table_name)?.clone()
+            };
+
+            // Partition rows using AST-based evaluation (no string parsing)
+            let (rows_to_delete, rows_to_keep): (Vec<_>, Vec<_>) = all_rows
+                .into_iter()
+                .partition(|row| evaluate_where_clause(where_clause, row, &table_info));
+
+            let count = rows_to_delete.len();
+
+            if count == 0 {
+                return Ok(ExecutorResult::new(vec![], 0));
+            }
+
+            // Delete all rows and reinsert non-deleted ones
+            let mut storage = self.storage.write().unwrap();
+            storage.delete(&table_name, &[])?;
+            if !rows_to_keep.is_empty() {
+                storage.insert(&table_name, rows_to_keep)?;
+            }
+
+            self.query_cache
+                .write()
+                .unwrap()
+                .invalidate_table(&table_name);
+            return Ok(ExecutorResult::new(vec![], count));
+        }
+
+        // Original path: needed when there are triggers
         // Scan all rows from the table
         let all_rows = {
             let storage = self.storage.read().unwrap();
@@ -1468,7 +1604,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         };
 
         // Filter rows based on WHERE clause
-        let where_clause = delete.where_clause.as_ref().unwrap();
         let rows_to_delete: Vec<Vec<Value>> = all_rows
             .into_iter()
             .filter(|row| evaluate_where_clause(where_clause, row, &table_info))
@@ -1481,13 +1616,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
 
         // Execute BEFORE DELETE triggers
-        let trigger_executor = TriggerExecutor::new(self.storage.clone());
-        let before_triggers = trigger_executor.get_triggers_for_operation(
-            &table_name,
-            ExecTriggerTiming::Before,
-            ExecTriggerEvent::Delete,
-        );
-
         if !before_triggers.is_empty() {
             for row in &rows_to_delete {
                 trigger_executor.execute_before_delete(&table_name, row)?;
@@ -1513,12 +1641,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
 
         // Execute AFTER DELETE triggers
-        let after_triggers = trigger_executor.get_triggers_for_operation(
-            &table_name,
-            ExecTriggerTiming::After,
-            ExecTriggerEvent::Delete,
-        );
-
         if !after_triggers.is_empty() {
             for row in &rows_to_delete {
                 trigger_executor.execute_after_delete(&table_name, row)?;
@@ -1529,7 +1651,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .write()
             .unwrap()
             .invalidate_table(&table_name);
-        Ok(ExecutorResult::new(vec![], count))
+        return Ok(ExecutorResult::new(vec![], count));
     }
 
     fn execute_create_table(&self, create: &CreateTableStatement) -> SqlResult<ExecutorResult> {

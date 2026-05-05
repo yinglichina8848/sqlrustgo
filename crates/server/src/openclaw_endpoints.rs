@@ -2156,6 +2156,29 @@ fn execute_sql(
                 return Err(format!("Table '{}' not found", delete.table));
             }
 
+            // Check for DELETE triggers - if none and we have a WHERE clause, use optimized path
+            let triggers = storage.list_triggers(&delete.table);
+            let has_delete_triggers = triggers.iter().any(|t| {
+                matches!(t.event, sqlrustgo_storage::engine::TriggerEvent::Delete)
+            });
+
+            if let Some(ref where_clause) = delete.where_clause {
+                if !has_delete_triggers {
+                    // Optimized path: use delete_by_predicate for single-scan delete
+                    let predicate_str = expression_to_sql_string(where_clause);
+                    let deleted_count = storage
+                        .delete_by_predicate(&delete.table, &predicate_str)
+                        .map_err(|e| e.to_string())?;
+
+                    return Ok(SqlExecResult {
+                        columns: vec![],
+                        rows: vec![],
+                        affected_rows: deleted_count,
+                    });
+                }
+            }
+
+            // Original path: needed when there are triggers or no WHERE clause
             let table_info = storage.get_table_info(&delete.table).ok();
             let columns = table_info
                 .map(|info| info.columns.clone())
@@ -2456,6 +2479,71 @@ fn evaluate_expr(
             }
         }
         _ => sqlrustgo_storage::engine::Value::Null,
+    }
+}
+
+/// Convert an Expression AST back to a SQL string for storage engine predicate evaluation
+fn expression_to_sql_string(expr: &sqlrustgo_parser::Expression) -> String {
+    match expr {
+        sqlrustgo_parser::Expression::Literal(s) => {
+            if s.eq_ignore_ascii_case("true") || s.eq_ignore_ascii_case("false") {
+                s.clone()
+            } else if s.parse::<i64>().is_ok() || s.parse::<f64>().is_ok() {
+                s.clone()
+            } else {
+                format!("'{}'", s)
+            }
+        }
+        sqlrustgo_parser::Expression::Identifier(name) => name.clone(),
+        sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+            let left_sql = expression_to_sql_string(left);
+            let right_sql = expression_to_sql_string(right);
+            let sql_op = match op.to_uppercase().as_str() {
+                "AND" => "AND",
+                "OR" => "OR",
+                "=" | "==" | "EQ" => "=",
+                "!=" | "<>" | "NE" => "<>",
+                ">" | "GT" => ">",
+                "<" | "LT" => "<",
+                ">=" | "GE" => ">=",
+                "<=" | "LE" => "<=",
+                _ => op,
+            };
+            format!("{} {} {}", left_sql, sql_op, right_sql)
+        }
+        sqlrustgo_parser::Expression::UnaryOp(op, inner) => {
+            let inner_sql = expression_to_sql_string(inner);
+            format!("{} {}", op, inner_sql)
+        }
+        sqlrustgo_parser::Expression::IsNull(inner) => {
+            format!("{} IS NULL", expression_to_sql_string(inner))
+        }
+        sqlrustgo_parser::Expression::IsNotNull(inner) => {
+            format!("{} IS NOT NULL", expression_to_sql_string(inner))
+        }
+        sqlrustgo_parser::Expression::Like(left, right, _) => {
+            format!("{} LIKE {}", expression_to_sql_string(left), expression_to_sql_string(right))
+        }
+        sqlrustgo_parser::Expression::NotLike(left, right, _) => {
+            format!("{} NOT LIKE {}", expression_to_sql_string(left), expression_to_sql_string(right))
+        }
+        sqlrustgo_parser::Expression::Between(expr, low, high) => {
+            format!(
+                "{} BETWEEN {} AND {}",
+                expression_to_sql_string(expr),
+                expression_to_sql_string(low),
+                expression_to_sql_string(high)
+            )
+        }
+        sqlrustgo_parser::Expression::NotBetween(expr, low, high) => {
+            format!(
+                "{} NOT BETWEEN {} AND {}",
+                expression_to_sql_string(expr),
+                expression_to_sql_string(low),
+                expression_to_sql_string(high)
+            )
+        }
+        _ => String::new(),
     }
 }
 
