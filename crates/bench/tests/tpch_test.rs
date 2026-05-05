@@ -182,7 +182,13 @@ fn setup_engine() -> MemoryExecutionEngine {
     // Insert part data (100 rows)
     for i in 0..100 {
         let brand = format!("Brand#{}", (i % 5) as i64 + 1);
-        let ptype = if i % 3 == 0 { "ECONOMY" } else if i % 3 == 1 { "MEDIUM" } else { "SMALL" };
+        let ptype = if i % 3 == 0 {
+            "ECONOMY"
+        } else if i % 3 == 1 {
+            "MEDIUM"
+        } else {
+            "SMALL"
+        };
         let container = if i % 2 == 0 { "SM BOX" } else { "MED BOX" };
         engine
             .execute(&format!(
@@ -232,7 +238,13 @@ fn setup_engine() -> MemoryExecutionEngine {
     }
 
     // Insert nation data (5 nations for SF0.1)
-    let nations = [("GERMANY", 0), ("FRANCE", 0), ("EGYPT", 1), ("JAPAN", 1), ("CHINA", 1)];
+    let nations = [
+        ("GERMANY", 0),
+        ("FRANCE", 0),
+        ("EGYPT", 1),
+        ("JAPAN", 1),
+        ("CHINA", 1),
+    ];
     for (i, (name, region)) in nations.iter().enumerate() {
         engine
             .execute(&format!(
@@ -605,7 +617,7 @@ fn tpch_q7_shipping_profitability() {
          WHERE s_suppkey = l_suppkey AND o_orderkey = l_orderkey
            AND c_custkey = o_custkey AND s_nationkey = n1.n_nationkey
            AND c_nationkey = n2.n_nationkey
-         GROUP BY n1.n_name, n2.n_name"
+         GROUP BY n1.n_name, n2.n_name",
     );
     assert!(result.is_ok(), "Q7 should execute successfully");
 }
@@ -627,7 +639,7 @@ fn tpch_q8_national_market_share() {
            AND r_name = 'EUROPE' AND s_nationkey = n2.n_nationkey
            AND o_orderdate >= 87600 AND o_orderdate <= 88000
            AND p_type = 'ECONOMY POLISHED'
-         GROUP BY o_orderdate"
+         GROUP BY o_orderdate",
     );
     assert!(result.is_ok(), "Q8 should execute successfully");
 }
@@ -647,7 +659,7 @@ fn tpch_q9_product_type_profit() {
            AND ps_partkey = l_partkey AND p_partkey = l_partkey
            AND o_orderkey = l_orderkey AND s_nationkey = n_nationkey
            AND p_name LIKE '%Part%'
-         GROUP BY n_name, o_orderdate"
+         GROUP BY n_name, o_orderdate",
     );
     assert!(result.is_ok(), "Q9 should execute successfully");
 }
@@ -664,7 +676,7 @@ fn tpch_q11_important_stock() {
          FROM partsupp, supplier, nation
          WHERE ps_suppkey = s_suppkey AND s_nationkey = n_nationkey
            AND n_name = 'GERMANY'
-         GROUP BY ps_partkey"
+         GROUP BY ps_partkey",
     );
     assert!(result.is_ok(), "Q11 should execute successfully");
 }
@@ -683,7 +695,7 @@ fn tpch_q12_shipping_mode() {
            AND l_shipmode IN ('MAIL', 'SHIP')
            AND l_commitdate < l_receiptdate AND l_shipdate < l_commitdate
            AND o_orderdate >= '1993-01-01' AND o_orderdate < '1994-01-01'
-         GROUP BY l_shipmode"
+         GROUP BY l_shipmode",
     );
     assert!(result.is_ok(), "Q12 should execute successfully");
 }
@@ -701,7 +713,7 @@ fn tpch_q15_create_view() {
          FROM supplier, lineitem
          WHERE l_suppkey = s_suppkey
            AND l_shipdate >= 87600 AND l_shipdate < 88000
-         GROUP BY s_suppkey, s_name, s_address, s_phone"
+         GROUP BY s_suppkey, s_name, s_address, s_phone",
     );
     assert!(result.is_ok(), "Q15 should execute successfully");
 }
@@ -721,7 +733,7 @@ fn tpch_q16_parts_supplier() {
            AND p_brand <> 'Brand#45'
            AND p_type NOT LIKE 'MEDIUM POLISHED%'
            AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)
-         GROUP BY p_brand, p_type, p_size"
+         GROUP BY p_brand, p_type, p_size",
     );
     assert!(result.is_ok(), "Q16 should execute successfully");
 }
@@ -738,7 +750,7 @@ fn tpch_q17_small_quantity_order() {
          FROM lineitem, part
          WHERE p_partkey = l_partkey
            AND p_brand = 'Brand#1'
-           AND p_container = 'MED BOX'"
+           AND p_container = 'MED BOX'",
     );
     assert!(result.is_ok(), "Q17 should execute successfully");
 }
@@ -757,7 +769,7 @@ fn tpch_q19_discounted_revenue() {
            AND p_brand = 'Brand#12'
            AND p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
            AND l_quantity >= 1 AND l_quantity <= 11
-           AND p_size BETWEEN 1 AND 5"
+           AND p_size BETWEEN 1 AND 5",
     );
     assert!(result.is_ok(), "Q19 should execute successfully");
 }

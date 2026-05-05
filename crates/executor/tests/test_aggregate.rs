@@ -112,9 +112,7 @@ fn test_aggregate_sum_with_null() {
 #[test]
 fn test_aggregate_count_distinct() {
     let mut engine = create_engine();
-    engine
-        .execute("CREATE TABLE t (a INTEGER)")
-        .unwrap();
+    engine.execute("CREATE TABLE t (a INTEGER)").unwrap();
     engine
         .execute("INSERT INTO t VALUES (1), (1), (2), (2), (3)")
         .unwrap();

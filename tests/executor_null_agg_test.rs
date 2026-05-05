@@ -12,7 +12,9 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 fn test_count_all_null_column() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (v INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)")
+        .unwrap();
 
     let result = engine.execute("SELECT COUNT(v) FROM t").unwrap();
     assert_eq!(result.rows[0][0], Value::Integer(0));
@@ -22,7 +24,9 @@ fn test_count_all_null_column() {
 fn test_count_star_vs_count_column() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (v INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (1), (NULL), (2)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1), (NULL), (2)")
+        .unwrap();
 
     let result_star = engine.execute("SELECT COUNT(*) FROM t").unwrap();
     let result_col = engine.execute("SELECT COUNT(v) FROM t").unwrap();
@@ -35,7 +39,9 @@ fn test_count_star_vs_count_column() {
 fn test_sum_all_null_column() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (v INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)")
+        .unwrap();
 
     let result = engine.execute("SELECT SUM(v) FROM t").unwrap();
     assert_eq!(result.rows[0][0], Value::Null);
@@ -54,7 +60,9 @@ fn test_sum_empty_table() {
 fn test_avg_all_null_column() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (v INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)")
+        .unwrap();
 
     let result = engine.execute("SELECT AVG(v) FROM t").unwrap();
     assert_eq!(result.rows[0][0], Value::Null);
@@ -64,7 +72,9 @@ fn test_avg_all_null_column() {
 fn test_min_all_null_column() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (v INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)")
+        .unwrap();
 
     let result = engine.execute("SELECT MIN(v) FROM t").unwrap();
     assert_eq!(result.rows[0][0], Value::Null);
@@ -74,7 +84,9 @@ fn test_min_all_null_column() {
 fn test_max_all_null_column() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (v INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)")
+        .unwrap();
 
     let result = engine.execute("SELECT MAX(v) FROM t").unwrap();
     assert_eq!(result.rows[0][0], Value::Null);
@@ -84,7 +96,9 @@ fn test_max_all_null_column() {
 fn test_count_distinct_null() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (v INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (NULL), (NULL), (NULL)")
+        .unwrap();
 
     let result = engine.execute("SELECT COUNT(DISTINCT v) FROM t").unwrap();
     assert_eq!(result.rows[0][0], Value::Integer(0));
@@ -94,7 +108,9 @@ fn test_count_distinct_null() {
 fn test_aggregate_mixed_null_and_values() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (v INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (NULL), (1), (NULL), (2), (NULL)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (NULL), (1), (NULL), (2), (NULL)")
+        .unwrap();
 
     let cnt = engine.execute("SELECT COUNT(v) FROM t").unwrap();
     assert_eq!(cnt.rows[0][0], Value::Integer(2));
@@ -103,14 +119,19 @@ fn test_aggregate_mixed_null_and_values() {
     assert_eq!(sum.rows[0][0], Value::Integer(3));
 
     let avg = engine.execute("SELECT AVG(v) FROM t").unwrap();
-    assert!(matches!(avg.rows[0][0], Value::Integer(1) | Value::Float(_)));
+    assert!(matches!(
+        avg.rows[0][0],
+        Value::Integer(1) | Value::Float(_)
+    ));
 }
 
 #[test]
 fn test_first_last_aggregates_with_nulls() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (v INTEGER)").unwrap();
-    engine.execute("INSERT INTO t VALUES (NULL), (5), (NULL), (3), (NULL)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (NULL), (5), (NULL), (3), (NULL)")
+        .unwrap();
 
     let min = engine.execute("SELECT MIN(v) FROM t").unwrap();
     assert_eq!(min.rows[0][0], Value::Integer(3));
