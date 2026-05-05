@@ -964,6 +964,89 @@ fn cartesian_product(left: &[Vec<Value>], right: &[Vec<Value>]) -> Vec<Vec<Value
     result
 }
 
+/// Find column index in schema by name, returns None if not found
+fn find_column_index(schema: &sqlrustgo_planner::Schema, col_name: &str) -> Option<usize> {
+    schema
+        .fields
+        .iter()
+        .position(|f| f.name == col_name)
+}
+
+/// Extract join key columns from an equality condition like `left.col = right.col`
+/// Returns (left_col_name, right_col_name) if the condition is a simple column equality
+fn extract_join_key_columns(
+    condition: &sqlrustgo_planner::Expr,
+) -> Option<(String, String)> {
+    match condition {
+        sqlrustgo_planner::Expr::BinaryExpr { left, op, right }
+            if *op == sqlrustgo_planner::Operator::Eq =>
+        {
+            match ((left.as_ref()), (right.as_ref())) {
+                (
+                    sqlrustgo_planner::Expr::Column(left_col),
+                    sqlrustgo_planner::Expr::Column(right_col),
+                ) => {
+                    // Use relation qualifier if available to determine left/right
+                    // For now, assume left.col = right.col format
+                    Some((left_col.name.clone(), right_col.name.clone()))
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Get value from row at column index
+fn get_row_value(row: &[Value], col_index: usize) -> Option<&Value> {
+    row.get(col_index)
+}
+
+/// Build hash map from rows for hash join
+/// Returns (hash_map, left_col_index, right_col_index) or None if can't build
+fn try_build_hash_join(
+    left: &[Vec<Value>],
+    right: &[Vec<Value>],
+    condition: &sqlrustgo_planner::Expr,
+    left_schema: &sqlrustgo_planner::Schema,
+    right_schema: &sqlrustgo_planner::Schema,
+) -> Option<(
+    std::collections::HashMap<Vec<Value>, Vec<&[Value]>>,
+    usize,
+    usize,
+)> {
+    // Try to extract simple join key columns
+    let (left_col_name, right_col_name) = extract_join_key_columns(condition)?;
+
+    // Find column indices
+    let left_col_idx = find_column_index(left_schema, &left_col_name)?;
+    let right_col_idx = find_column_index(right_schema, &right_col_name)?;
+
+    // Choose smaller table as build side to reduce hash collisions
+    let (build, probe, build_col_idx, probe_col_idx, is_swapped) =
+        if left.len() <= right.len() {
+            (left, right, left_col_idx, right_col_idx, false)
+        } else {
+            (right, left, right_col_idx, left_col_idx, true)
+        };
+
+    // Build hash map
+    let mut hash: std::collections::HashMap<Vec<Value>, Vec<&[Value]>> =
+        std::collections::HashMap::new();
+
+    for row in build {
+        if let Some(val) = get_row_value(row, build_col_idx) {
+            // NULL keys don't match in SQL (NULL = anything is UNKNOWN)
+            if !matches!(val, Value::Null) {
+                let key = vec![val.clone()];
+                hash.entry(key).or_default().push(row);
+            }
+        }
+    }
+
+    Some((hash, probe_col_idx, is_swapped))
+}
+
 fn hash_inner_join(
     left: &[Vec<Value>],
     right: &[Vec<Value>],
@@ -971,6 +1054,41 @@ fn hash_inner_join(
     left_schema: &sqlrustgo_planner::Schema,
     right_schema: &sqlrustgo_planner::Schema,
 ) -> Vec<Vec<Value>> {
+    // Try to use hash join optimization for simple equality conditions
+    if let Some((hash, probe_col_idx, is_swapped)) =
+        try_build_hash_join(left, right, condition, left_schema, right_schema)
+    {
+        let left_len = left_schema.fields.len();
+        let right_len = right_schema.fields.len();
+        let mut results = Vec::new();
+
+        // Probe phase
+        for probe_row in right {
+            if let Some(probe_val) = get_row_value(probe_row, probe_col_idx) {
+                // NULL doesn't match
+                if matches!(probe_val, Value::Null) {
+                    continue;
+                }
+                let key = vec![probe_val.clone()];
+                if let Some(matches) = hash.get(&key) {
+                    for &build_row in matches {
+                        let (left_row, right_row) = if is_swapped {
+                            (probe_row, build_row)
+                        } else {
+                            (build_row, probe_row)
+                        };
+                        let mut combined = left_row.to_vec();
+                        combined.extend(right_row.to_vec());
+                        results.push(combined);
+                    }
+                }
+            }
+        }
+
+        return results;
+    }
+
+    // Fall back to nested loop for complex conditions
     let mut results = Vec::new();
 
     let full_schema = sqlrustgo_planner::Schema::new(
