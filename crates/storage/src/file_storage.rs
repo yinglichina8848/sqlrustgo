@@ -1318,6 +1318,13 @@ impl StorageEngine for FileStorage {
             .ok_or_else(|| SqlError::TableNotFound(table.to_string()))
     }
 
+    fn get_table_records_mut(&mut self, table: &str) -> SqlResult<&mut Vec<Record>> {
+        self.tables
+            .get_mut(table)
+            .map(|t| &mut t.rows)
+            .ok_or_else(|| SqlError::TableNotFound(table.to_string()))
+    }
+
     fn has_table(&self, table: &str) -> bool {
         self.tables.contains_key(table)
     }
