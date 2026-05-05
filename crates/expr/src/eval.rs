@@ -504,11 +504,7 @@ mod tests {
 
     #[test]
     fn test_minus() {
-        let e = Expr::binary(
-            Expr::column("a"),
-            BinaryOp::Minus,
-            Expr::column("b"),
-        );
+        let e = Expr::binary(Expr::column("a"), BinaryOp::Minus, Expr::column("b"));
         assert_eq!(
             e.eval(&EvalContext::new(HashMap::from([
                 ("a".to_string(), Value::Integer(10)),
@@ -520,11 +516,7 @@ mod tests {
 
     #[test]
     fn test_multiply() {
-        let e = Expr::binary(
-            Expr::column("a"),
-            BinaryOp::Multiply,
-            Expr::column("b"),
-        );
+        let e = Expr::binary(Expr::column("a"), BinaryOp::Multiply, Expr::column("b"));
         assert_eq!(
             e.eval(&EvalContext::new(HashMap::from([
                 ("a".to_string(), Value::Integer(5)),
@@ -568,11 +560,7 @@ mod tests {
 
     #[test]
     fn test_null_in_binary_comparison() {
-        let e = Expr::binary(
-            Expr::column("x"),
-            BinaryOp::Eq,
-            Expr::literal(Value::Null),
-        );
+        let e = Expr::binary(Expr::column("x"), BinaryOp::Eq, Expr::literal(Value::Null));
         assert_eq!(e.eval(&ctx(&[("x", 10)])), Value::Null);
     }
 
@@ -705,7 +693,10 @@ mod tests {
         ];
         let ctx = EvalContext::from_row_vec(&row, &columns);
         assert_eq!(ctx.values.get("id"), Some(&Value::Integer(1)));
-        assert_eq!(ctx.values.get("name"), Some(&Value::Text("hello".to_string())));
+        assert_eq!(
+            ctx.values.get("name"),
+            Some(&Value::Text("hello".to_string()))
+        );
     }
 
     #[test]

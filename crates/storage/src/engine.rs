@@ -51,7 +51,11 @@ pub fn evaluate_check_constraint(
 
 /// Evaluate a SQL expression against a record
 /// Supports: comparisons (=, !=, <, >, <=, >=), boolean ops (AND, OR, NOT), IS NULL/IS NOT NULL
-pub(crate) fn evaluate_sql_expression(expr: &str, columns: &[String], record: &[Value]) -> SqlResult<bool> {
+pub(crate) fn evaluate_sql_expression(
+    expr: &str,
+    columns: &[String],
+    record: &[Value],
+) -> SqlResult<bool> {
     let expr = expr.trim();
 
     // Handle AND/OR
@@ -706,9 +710,7 @@ impl StorageEngine for MemoryStorage {
             .map(|info| info.columns.iter().map(|c| c.name.clone()).collect())
             .unwrap_or_default();
         let original_len = records.len();
-        records.retain(|row| {
-            !evaluate_sql_expression(predicate, &columns, row).unwrap_or(false)
-        });
+        records.retain(|row| !evaluate_sql_expression(predicate, &columns, row).unwrap_or(false));
         Ok(original_len - records.len())
     }
 

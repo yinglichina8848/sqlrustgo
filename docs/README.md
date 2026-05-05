@@ -55,6 +55,10 @@ docs/
 | [分布式设计](releases/v2.9.0/DISTRIBUTED_DESIGN.md) | 分布式架构设计 |
 | [编排文档](releases/v2.9.0/ORCHESTRATION.md) | 多平台编排 |
 | [工具链 CI/CD](releases/v2.9.0/TOOLCHAIN_CICD_GUIDE.md) | CI/CD 指南 |
+| [快速开始](releases/v2.9.0/QUICK_START.md) | 快速入门指南 |
+| [用户手册](releases/v2.9.0/USER_MANUAL.md) | SQL 语法与功能详解 |
+| [客户端连接](releases/v2.9.0/CLIENT_CONNECTION.md) | 连接方式详解 |
+| [迁移指南](releases/v2.9.0/MIGRATION_GUIDE.md) | 从 v2.8.0 升级 |
 
 ### v2.8.0 (已发布: GA)
 

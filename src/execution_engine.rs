@@ -1366,9 +1366,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             table_info.columns.iter().map(|c| c.name.clone()).collect();
                         for constraint in &table_info.check_constraints {
                             let valid = sqlrustgo_storage::evaluate_check_constraint(
-                                constraint,
-                                &col_names,
-                                &new_row,
+                                constraint, &col_names, &new_row,
                             )?;
                             if !valid {
                                 return Err(format!(
@@ -1651,7 +1649,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .write()
             .unwrap()
             .invalidate_table(&table_name);
-        return Ok(ExecutorResult::new(vec![], count));
+        Ok(ExecutorResult::new(vec![], count))
     }
 
     fn execute_create_table(&self, create: &CreateTableStatement) -> SqlResult<ExecutorResult> {

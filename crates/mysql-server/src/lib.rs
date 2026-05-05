@@ -720,7 +720,10 @@ mod tests {
     // Test extract_table_name
     #[test]
     fn test_extract_table_name_simple() {
-        assert_eq!(extract_table_name("SELECT * FROM users"), Some("users".to_string()));
+        assert_eq!(
+            extract_table_name("SELECT * FROM users"),
+            Some("users".to_string())
+        );
     }
 
     #[test]
@@ -733,13 +736,17 @@ mod tests {
 
     #[test]
     fn test_extract_table_name_with_join() {
-        let result = extract_table_name("SELECT * FROM users JOIN orders ON users.id = orders.user_id");
+        let result =
+            extract_table_name("SELECT * FROM users JOIN orders ON users.id = orders.user_id");
         assert_eq!(result, Some("users".to_string()));
     }
 
     #[test]
     fn test_extract_table_name_lowercase() {
-        assert_eq!(extract_table_name("select * from users"), Some("users".to_string()));
+        assert_eq!(
+            extract_table_name("select * from users"),
+            Some("users".to_string())
+        );
     }
 
     #[test]

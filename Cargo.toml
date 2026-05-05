@@ -31,6 +31,8 @@ members = [
     "crates/vector",
     "crates/rag",
     "crates/graph",
+    "crates/code-graph",
+    "crates/code-graph-cli",
     "crates/distributed",
     "crates/unified-storage",
     "crates/unified-query",

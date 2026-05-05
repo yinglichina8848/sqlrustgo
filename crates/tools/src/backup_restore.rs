@@ -601,21 +601,27 @@ mod tests {
 
         let tables1 = {
             let mut t = HashMap::new();
-            t.insert("t1".to_string(), vec![{
-                let mut row = HashMap::new();
-                row.insert("c1".to_string(), "v1".to_string());
-                row
-            }]);
+            t.insert(
+                "t1".to_string(),
+                vec![{
+                    let mut row = HashMap::new();
+                    row.insert("c1".to_string(), "v1".to_string());
+                    row
+                }],
+            );
             t
         };
 
         let tables2 = {
             let mut t = HashMap::new();
-            t.insert("t2".to_string(), vec![{
-                let mut row = HashMap::new();
-                row.insert("c2".to_string(), "v2".to_string());
-                row
-            }]);
+            t.insert(
+                "t2".to_string(),
+                vec![{
+                    let mut row = HashMap::new();
+                    row.insert("c2".to_string(), "v2".to_string());
+                    row
+                }],
+            );
             t
         };
 
