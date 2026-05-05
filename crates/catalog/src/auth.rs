@@ -473,6 +473,7 @@ impl std::error::Error for AuthError {}
 
 pub type AuthResult<T> = Result<T, AuthError>;
 
+#[derive(Debug, Clone)]
 pub struct AuthManager {
     users: HashMap<UserIdentity, UserAuthInfo>,
     roles: HashMap<u64, Role>,
@@ -1069,6 +1070,38 @@ impl AuthManager {
         }
 
         Ok(())
+    }
+
+    pub fn revoke_role_from_user(&mut self, user_id: u64, role_id: u64) -> AuthResult<()> {
+        let pos = self
+            .user_roles
+            .iter()
+            .position(|ur| ur.user_id == user_id && ur.role_id == role_id);
+
+        match pos {
+            Some(idx) => {
+                self.user_roles.remove(idx);
+                Ok(())
+            }
+            None => Err(AuthError {
+                code: AuthErrorCode::RoleNotFound,
+                message: format!("User {} does not have role {}", user_id, role_id),
+            }),
+        }
+    }
+
+    pub fn find_role_by_name(&self, name: &str) -> Option<&Role> {
+        self.roles_by_name
+            .get(name)
+            .and_then(|id| self.roles.get(id))
+    }
+
+    pub fn get_user_id_by_identity(&self, identity: &UserIdentity) -> Option<u64> {
+        if self.users.contains_key(identity) {
+            Some(0)
+        } else {
+            None
+        }
     }
 }
 

@@ -9,6 +9,7 @@
 //! - Consensus-based replica management
 //! - Failover and health checking
 //! - Replica synchronization
+//! - Semi-synchronous replication (AFTER_SYNC/AFTER_COMMIT modes)
 
 pub mod consensus;
 pub mod cross_shard_query;
@@ -23,9 +24,11 @@ pub mod raft;
 pub mod read_write_splitter;
 pub mod replica_sync;
 pub mod replication;
+pub mod semisync;
 pub mod shard_manager;
 pub mod shard_router;
 pub mod two_phase_commit;
+pub mod xa_coordinator;
 
 pub use consensus::{Operation, ShardReplicaManager};
 pub use cross_shard_query::{CrossShardQueryExecutor, QueryRouter};
@@ -45,6 +48,10 @@ pub use replication::{
     GtidSet, MasterStatus, ReplicationConfig, ReplicationRole, ReplicationState, SemiSyncError,
     SemiSyncManager, SemiSyncReplica, SemiSyncState, SlaveStatus,
 };
+pub use semisync::{
+    SemiSyncMaster, SemiSyncMasterStatus, SemiSyncMode, SemiSyncSlave, SemiSyncSlaveStatus,
+    SemiSyncTimeoutError,
+};
 pub use shard_manager::{NodeId, ShardId, ShardInfo, ShardManager, ShardStatus};
 pub use shard_router::{
     ConsistencyLevel, ReadWriteShardRouter, RoutedPlan, RoutedQuery, RouterError, ShardReadQuery,
@@ -53,3 +60,4 @@ pub use shard_router::{
 pub use two_phase_commit::{
     DistributedTransaction, Participant, TransactionState, TwoPhaseCommit, Vote,
 };
+pub use xa_coordinator::{XaCoordinator, XaError, XaState, XaTransaction, Xid};

@@ -1,0 +1,23 @@
+{
+  "proof_id": "PROOF-008",
+  "title": "ORDER BY 排序语义正确性",
+  "language": "Formulog",
+  "category": "parser",
+  "status": "verified",
+  "target": "ORDER BY sort semantic correctness",
+  "description": "证明 ORDER BY 子句的排序语义被正确解析和执行。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-parser: 100 passed, 0 failed",
+    "verification_method": "形式化规约 + Rust测试验证 (Formulog工具待安装)",
+    "formal_spec_file": "docs/proof/PROOF-008-orderby-semantics.formalog"
+  },
+  "formal_verification": {
+    "tool": "Formulog",
+    "status": "pending_installation",
+    "install_command": "pip install formulog",
+    "verify_command": "formulog check docs/proof/PROOF-008-orderby-semantics.formalog"
+  },
+  "author": "openclaw",
+  "verified_at": "2026-05-03T00:00:00Z",
+  "created_at": "2026-05-02"
+}

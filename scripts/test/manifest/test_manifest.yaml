@@ -1,0 +1,61 @@
+- name: planner_multi_join
+  type: integration
+  component: planner
+  dimension: correctness
+  command: cargo test --test planner_multi_join_test --all-features
+  description: Multi-table JOIN planning tests (3-table, Left, Right, Cross join)
+- name: optimizer_cbo_accuracy
+  type: integration
+  component: optimizer
+  dimension: correctness
+  command: cargo test --test optimizer_cbo_accuracy_test --all-features
+  description: CBO cost model accuracy tests - validates relative cost relationships
+- name: network_tcp_smoke
+  type: integration
+  component: network
+  dimension: correctness
+  command: cargo test --test network_tcp_smoke_test --all-features
+  description: TCP connection smoke tests - bind, connect, read/write, options
+- name: catalog_ddl_cache
+  type: integration
+  component: catalog
+  dimension: correctness
+  command: cargo test --test catalog_ddl_cache_test --all-features
+  description: DDL operations (CREATE/DROP TABLE) and cache invalidation tests
+- name: executor_null_agg
+  type: integration
+  component: executor
+  dimension: correctness
+  command: cargo test --test executor_null_agg_test --all-features
+  description: NULL handling in aggregate functions - COUNT/SUM/AVG/MIN/MAX with NULLs
+- name: mvcc_snapshot_isolation
+  type: integration
+  component: transaction
+  dimension: correctness
+  command: cargo test --test mvcc_snapshot_isolation_test --all-features
+  description: MVCC snapshot isolation tests - BEGIN/COMMIT/serializable isolation
+known_failures:
+  - test_begin_rollback: ROLLBACK does not undo changes (known bug in execution engine)
+groups:
+groups:
+  correctness:
+    - planner_multi_join
+    - optimizer_cbo_accuracy
+    - network_tcp_smoke
+    - catalog_ddl_cache
+    - executor_null_agg
+    - mvcc_snapshot_isolation
+  full:
+    - planner_multi_join
+    - optimizer_cbo_accuracy
+    - network_tcp_smoke
+    - catalog_ddl_cache
+    - executor_null_agg
+    - mvcc_snapshot_isolation
+  quick:
+    - planner_multi_join
+    - optimizer_cbo_accuracy
+    - network_tcp_smoke
+    - catalog_ddl_cache
+    - executor_null_agg
+    - mvcc_snapshot_isolation

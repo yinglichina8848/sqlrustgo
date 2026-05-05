@@ -5,7 +5,9 @@
 
 use crate::{parse, SqlError, SqlResult, Value};
 use sqlrustgo_catalog::stored_proc::{ParamMode, StoredProcParam, StoredProcStatement};
-use sqlrustgo_catalog::{Catalog, StoredProcedure};
+use sqlrustgo_catalog::{auth::UserIdentity, Catalog, StoredProcedure};
+use sqlrustgo_executor::query_cache::{should_cache, QueryCache};
+use sqlrustgo_executor::query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 use sqlrustgo_executor::stored_proc::StoredProcExecutor;
 use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
@@ -13,10 +15,12 @@ use sqlrustgo_executor::trigger::{
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
-    CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, DropTableStatement,
-    InsertStatement, SelectStatement, StoredProcParam as ParserStoredProcParam,
-    StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
-    TruncateStatement,
+    CreateProcedureStatement, CreateRoleStatement, CreateTableStatement, CreateTriggerStatement,
+    DropRoleStatement, DropTableStatement, GrantRoleStatement, GrantStatement, InsertStatement,
+    ObjectType as ParserObjectType, OrderByExpression, Privilege as ParserPrivilege,
+    RevokeRoleStatement, RevokeStatement, SelectStatement, SetRoleStatement,
+    StoredProcParam as ParserStoredProcParam, StoredProcParamMode as ParserParamMode,
+    StoredProcStatement as ParserStatement, TruncateStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::JoinType; // For join type matching
@@ -35,9 +39,13 @@ pub struct ExecutionEngine<S: StorageEngine> {
     catalog: Option<Arc<RwLock<Catalog>>>,
     stats: Arc<RwLock<ExecutionStats>>,
     cbo_enabled: bool,
+    stats_enabled: bool,
     transaction_manager: TransactionManager,
     current_tx_id: Option<TxId>,
     default_isolation: TmIsolationLevel,
+    current_role: Option<String>,
+    query_cache: Arc<RwLock<QueryCache>>,
+    cache_config: QueryCacheConfig,
 }
 
 /// Execution statistics for CBO
@@ -73,9 +81,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            current_role: None,
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: QueryCacheConfig::default(),
         }
     }
 
@@ -86,9 +98,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            current_role: None,
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: QueryCacheConfig::default(),
         }
     }
 
@@ -99,9 +115,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             catalog: Some(catalog),
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            current_role: None,
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: QueryCacheConfig::default(),
         }
     }
 
@@ -113,6 +133,16 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     /// Enable or disable CBO
     pub fn set_cbo_enabled(&mut self, enabled: bool) {
         self.cbo_enabled = enabled;
+    }
+
+    /// Check if statistics collection is enabled
+    pub fn is_stats_enabled(&self) -> bool {
+        self.stats_enabled
+    }
+
+    /// Enable or disable statistics collection
+    pub fn set_stats_enabled(&mut self, enabled: bool) {
+        self.stats_enabled = enabled;
     }
 
     /// Get table statistics for CBO
@@ -326,10 +356,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         })
     }
 
-    /// Execute a SQL statement and return results
-    pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
-        let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
-
+    /// Execute a pre-parsed SQL statement and return results
+    /// This avoids re-parsing on every execute for prepared statements
+    pub fn execute_statement(&mut self, statement: Statement) -> SqlResult<ExecutorResult> {
         match statement {
             Statement::Select(ref select) => self.execute_select(select),
             Statement::Insert(ref insert) => self.execute_insert(insert),
@@ -355,7 +384,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 ))
             }
             Statement::Union(ref union_stmt) => {
-                // Extract left and right SelectStatements from the Union
                 let left_select = match union_stmt.left.as_ref() {
                     Statement::Select(s) => s,
                     _ => {
@@ -376,10 +404,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 let mut left_result = self.execute_select(left_select)?;
                 let right_result = self.execute_select(right_select)?;
 
-                // Append rows from right to left
                 left_result.rows.extend(right_result.rows);
 
-                // If not UNION ALL, deduplicate
                 if !union_stmt.union_all {
                     left_result.rows.sort();
                     left_result.rows.dedup();
@@ -396,9 +422,58 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 self.execute_create_procedure(create_proc)
             }
             Statement::Transaction(ref txn) => self.execute_transaction(txn),
-            _ => Err(SqlError::ExecutionError(
-                "Unsupported statement type".to_string(),
-            )),
+            Statement::Grant(ref grant) => self.execute_grant(grant),
+            Statement::Revoke(ref revoke) => self.execute_revoke(revoke),
+            Statement::CreateRole(ref stmt) => self.execute_create_role(stmt),
+            Statement::DropRole(ref stmt) => self.execute_drop_role(stmt),
+            Statement::GrantRole(ref stmt) => self.execute_grant_role(stmt),
+            Statement::RevokeRole(ref stmt) => self.execute_revoke_role(stmt),
+            Statement::SetRole(ref stmt) => self.execute_set_role(stmt),
+            Statement::ShowRoles => self.execute_show_roles(),
+            Statement::ShowGrantsFor(ref user) => self.execute_show_grants_for(user),
+            _ => Err(SqlError::ExecutionError(format!(
+                "Unsupported statement type: {:?}",
+                std::mem::discriminant(&statement)
+            ))),
+        }
+    }
+
+    /// Execute a SQL statement and return results
+    pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
+        if !sql.trim().is_empty() && self.cache_config.enabled {
+            let cache_key = self.get_cache_key(sql);
+            if let Some(result) = self.query_cache.write().unwrap().get(&cache_key) {
+                return Ok(result);
+            }
+
+            let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+            let result = self.execute_statement(statement)?;
+
+            if should_cache(&result) {
+                let entry = CacheEntry {
+                    result: result.clone(),
+                    tables: vec![],
+                    created_at: std::time::Instant::now(),
+                    size_bytes: result.rows.iter().map(|r| r.len()).sum(),
+                    last_access: 0,
+                };
+                self.query_cache
+                    .write()
+                    .unwrap()
+                    .put(cache_key, entry, vec![]);
+            }
+
+            return Ok(result);
+        }
+
+        let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+        self.execute_statement(statement)
+    }
+
+    fn get_cache_key(&self, sql: &str) -> CacheKey {
+        CacheKey {
+            normalized_sql: sql.trim().to_lowercase(),
+            params_hash: 0,
         }
     }
 
@@ -482,19 +557,84 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
-        // Step 4: LIMIT / OFFSET
+        // Step 4: PROJECTION — apply SELECT columns (projection)
+        // "SELECT *" means no projection (return full rows)
+        // Otherwise project only the specified columns
+        // NOTE: DISTINCT operates on projected rows, so projection must come first
+        let needs_projection =
+            !select.columns.is_empty() && !select.columns.iter().any(|c| c.name == "*");
+
+        let projected_rows: Vec<Vec<Value>> = if needs_projection {
+            rows.into_iter()
+                .map(|row| {
+                    select
+                        .columns
+                        .iter()
+                        .map(|col| {
+                            evaluate_expression(
+                                &col.expression
+                                    .as_ref()
+                                    .unwrap_or(&Expression::Identifier(col.name.clone())),
+                                &row,
+                                &table_info,
+                            )
+                            .unwrap_or(Value::Null)
+                        })
+                        .collect()
+                })
+                .collect()
+        } else {
+            rows
+        };
+
+        // Step 5: DISTINCT — deduplicate after projection
+        let deduped_rows: Vec<Vec<Value>> = if select.distinct {
+            let mut seen: std::collections::HashSet<Vec<Value>> = std::collections::HashSet::new();
+            projected_rows
+                .into_iter()
+                .filter(|row| seen.insert(row.clone()))
+                .collect()
+        } else {
+            projected_rows
+        };
+
+        // Step 6: ORDER BY — sort using original row values
+        let ordered_rows = if !select.order_by.is_empty() {
+            let order_by_exprs = &select.order_by;
+            let mut rows_with_idx: Vec<(Vec<Value>, usize)> = deduped_rows
+                .into_iter()
+                .enumerate()
+                .map(|(idx, row)| (row, idx))
+                .collect();
+
+            rows_with_idx.sort_by(|(row_a, idx_a), (row_b, idx_b)| {
+                let cmp = compare_order_by(row_a, row_b, order_by_exprs, &table_info);
+                if cmp != std::cmp::Ordering::Equal {
+                    cmp
+                } else {
+                    // Stable tie-break by original index
+                    idx_a.cmp(idx_b)
+                }
+            });
+            rows_with_idx.into_iter().map(|(row, _)| row).collect()
+        } else {
+            deduped_rows
+        };
+
+        // Step 7: LIMIT / OFFSET
         let limited_rows = if let Some(limit) = select.limit {
             let offset = select.offset.unwrap_or(0);
-            if offset as usize >= rows.len() {
+            if offset as usize >= ordered_rows.len() {
                 vec![]
             } else {
-                rows.into_iter()
+                ordered_rows
+                    .into_iter()
                     .skip(offset as usize)
                     .take(limit as usize)
                     .collect()
             }
         } else {
-            rows
+            ordered_rows
         };
 
         let row_count = limited_rows.len();
@@ -601,124 +741,358 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
     /// Execute JOIN and return (rows, combined_schema)
     /// This function only generates joined rows, does NOT apply WHERE/AGG/HAVING
+    /// Collect all table names from a SELECT statement (FROM clause + JOIN clause)
+    fn collect_all_tables(select: &SelectStatement) -> Vec<String> {
+        let mut tables = Vec::new();
+        if let Some(ref from) = select.from {
+            for t in &from.tables {
+                tables.push(t.name.clone());
+            }
+        }
+        if let Some(ref jc) = select.join_clause {
+            tables.push(jc.table.clone());
+        }
+        if tables.is_empty() && !select.table.is_empty() {
+            tables.push(select.table.clone());
+        }
+        tables
+    }
+
+    /// Extract (table, column) from a column reference expression
+    fn extract_table_col(expr: &Expression) -> Option<(String, String)> {
+        match expr {
+            Expression::Identifier(name) => {
+                if let Some((tbl, col)) = name.split_once('.') {
+                    Some((tbl.to_string(), col.to_string()))
+                } else {
+                    Some((String::new(), name.clone()))
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Build an Identifier expression from a string
+    fn make_identifier(name: &str) -> Expression {
+        Expression::Identifier(name.to_string())
+    }
+
+    /// Collect all cross-table equality predicates from WHERE clause
+    /// Returns (left_table, right_table, predicate_string)
+    fn collect_join_predicates(&self, select: &SelectStatement) -> Vec<(String, String, String)> {
+        let mut predicates = Vec::new();
+
+        // Extract from ON clause (for JOIN ... ON t1.id = t2.id)
+        if let Some(ref jc) = select.join_clause {
+            fn extract_equi_joins(
+                expr: &Expression,
+                predicates: &mut Vec<(String, String, String)>,
+                extract_fn: fn(&Expression) -> Option<(String, String)>,
+            ) {
+                match expr {
+                    Expression::BinaryOp(left, op, right)
+                        if op.to_uppercase() == "=" || op == "==" =>
+                    {
+                        let (lt, lc, rt, rc) = {
+                            let (t1, c1) = match extract_fn(left) {
+                                Some(x) => x,
+                                None => return,
+                            };
+                            let (t2, c2) = match extract_fn(right) {
+                                Some(x) => x,
+                                None => return,
+                            };
+                            (t1, c1, t2, c2)
+                        };
+                        if !lt.is_empty() && !rt.is_empty() && lt != rt {
+                            let left_ref = if lt.is_empty() {
+                                lc.clone()
+                            } else {
+                                format!("{}.{}", lt, lc)
+                            };
+                            let right_ref = if rt.is_empty() {
+                                rc.clone()
+                            } else {
+                                format!("{}.{}", rt, rc)
+                            };
+                            predicates.push((lt, rt, format!("{} = {}", left_ref, right_ref)));
+                        }
+                    }
+                    Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
+                        extract_equi_joins(left, predicates, extract_fn);
+                        extract_equi_joins(right, predicates, extract_fn);
+                    }
+                    _ => {}
+                }
+            }
+            extract_equi_joins(&jc.on_clause, &mut predicates, |e| {
+                Self::extract_table_col(e)
+            });
+        }
+
+        // Also extract from WHERE clause
+        if let Some(where_expr) = &select.where_clause {
+            fn extract_equi_joins(
+                expr: &Expression,
+                predicates: &mut Vec<(String, String, String)>,
+                extract_fn: fn(&Expression) -> Option<(String, String)>,
+            ) {
+                match expr {
+                    Expression::BinaryOp(left, op, right)
+                        if op.to_uppercase() == "=" || op == "==" =>
+                    {
+                        let (lt, lc, rt, rc) = {
+                            let (t1, c1) = match extract_fn(left) {
+                                Some(x) => x,
+                                None => return,
+                            };
+                            let (t2, c2) = match extract_fn(right) {
+                                Some(x) => x,
+                                None => return,
+                            };
+                            (t1, c1, t2, c2)
+                        };
+                        if !lt.is_empty() && !rt.is_empty() && lt != rt {
+                            let left_ref = if lt.is_empty() {
+                                lc.clone()
+                            } else {
+                                format!("{}.{}", lt, lc)
+                            };
+                            let right_ref = if rt.is_empty() {
+                                rc.clone()
+                            } else {
+                                format!("{}.{}", rt, rc)
+                            };
+                            predicates.push((lt, rt, format!("{} = {}", left_ref, right_ref)));
+                        }
+                    }
+                    Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
+                        extract_equi_joins(left, predicates, extract_fn);
+                        extract_equi_joins(right, predicates, extract_fn);
+                    }
+                    _ => {}
+                }
+            }
+            extract_equi_joins(where_expr, &mut predicates, |e| Self::extract_table_col(e));
+        }
+
+        predicates
+    }
+
+    /// Find the join predicate connecting built_tables and candidate table
+    fn find_predicate_for_tables(
+        &self,
+        predicates: &[(String, String, String)],
+        built_tables: &std::collections::HashSet<String>,
+        candidate: &str,
+    ) -> Option<String> {
+        for (lt, rt, cond) in predicates {
+            if built_tables.contains(lt) && rt == candidate {
+                return Some(cond.clone());
+            }
+            if built_tables.contains(rt) && lt == candidate {
+                return Some(cond.clone());
+            }
+        }
+        None
+    }
+
+    /// Perform hash inner join on two row sets
+    fn hash_inner_join_rows(
+        left_rows: &[Vec<Value>],
+        right_rows: &[Vec<Value>],
+        left_key_idx: usize,
+        right_key_idx: usize,
+        left_col_count: usize,
+        right_col_count: usize,
+        join_type: JoinType,
+    ) -> SqlResult<Vec<Vec<Value>>> {
+        use std::collections::{HashMap, HashSet};
+
+        let mut right_hash: HashMap<String, Vec<(usize, Vec<Value>)>> = HashMap::new();
+        for (ri, right_row) in right_rows.iter().enumerate() {
+            if matches!(right_row[right_key_idx], Value::Null) {
+                continue;
+            }
+            let key = format!("{:?}", right_row[right_key_idx]);
+            right_hash
+                .entry(key)
+                .or_default()
+                .push((ri, right_row.clone()));
+        }
+
+        let mut matched: Vec<Vec<Value>> = Vec::new();
+        let mut left_matched: HashSet<usize> = HashSet::new();
+        let mut right_matched: HashSet<usize> = HashSet::new();
+
+        for (li, left_row) in left_rows.iter().enumerate() {
+            if matches!(left_row[left_key_idx], Value::Null) {
+                continue;
+            }
+            let key = format!("{:?}", left_row[left_key_idx]);
+            if let Some(right_match_rows) = right_hash.get(&key) {
+                left_matched.insert(li);
+                for (ri, right_row) in right_match_rows {
+                    right_matched.insert(*ri);
+                    let mut combined = left_row.clone();
+                    combined.extend(right_row.clone());
+                    matched.push(combined);
+                }
+            }
+        }
+
+        // LEFT: emit unmatched left rows with NULL-padded right
+        if matches!(join_type, JoinType::Left | JoinType::Full) {
+            for (li, left_row) in left_rows.iter().enumerate() {
+                if !left_matched.contains(&li) {
+                    let mut combined = left_row.clone();
+                    combined.extend(vec![Value::Null; right_col_count]);
+                    matched.push(combined);
+                }
+            }
+        }
+
+        // RIGHT: emit unmatched right rows with NULL-padded left
+        if matches!(join_type, JoinType::Right | JoinType::Full) {
+            for (ri, right_row) in right_rows.iter().enumerate() {
+                if !right_matched.contains(&ri) {
+                    let mut combined = vec![Value::Null; left_col_count];
+                    combined.extend(right_row.clone());
+                    matched.push(combined);
+                }
+            }
+        }
+
+        Ok(matched)
+    }
+
+    /// Execute multi-table JOIN with CBO-optimized order
+    /// Replaces the old 2-table-only execute_join
     fn execute_join(&self, select: &SelectStatement) -> SqlResult<(Vec<Vec<Value>>, TableInfo)> {
         use sqlrustgo_parser::JoinType as ParserJoinType;
-        use std::collections::HashMap;
-
-        let join_clause = select.join_clause.as_ref().unwrap();
-        let left_table_name = select.table.clone();
-        let right_table_name = join_clause.table.clone();
+        use std::collections::HashSet;
 
         let storage = self.storage.read().unwrap();
 
-        // Scan both tables
-        let left_rows = storage.scan(&left_table_name)?;
-        let right_rows = storage.scan(&right_table_name)?;
+        // Step 1: Collect all tables
+        let all_tables = Self::collect_all_tables(select);
+        if all_tables.is_empty() {
+            return Ok((
+                vec![],
+                TableInfo {
+                    name: String::new(),
+                    columns: vec![],
+                    foreign_keys: vec![],
+                    unique_constraints: vec![],
+                    check_constraints: vec![],
+                    partition_info: None,
+                },
+            ));
+        }
+        if all_tables.len() == 1 {
+            let rows = storage.scan(&all_tables[0])?;
+            let info = storage.get_table_info(&all_tables[0])?;
+            return Ok((rows, info));
+        }
 
-        // Get table info for column indices
-        let left_table_info = storage.get_table_info(&left_table_name)?;
-        let right_table_info = storage.get_table_info(&right_table_name)?;
+        // Step 2: CBO - get optimal join order
+        let table_refs: Vec<&str> = all_tables.iter().map(|s| s.as_str()).collect();
+        let ordered_tables = self.optimize_join_order(&table_refs);
 
-        // Extract join key column index from ON clause
-        // For "t1.id = t2.id", we need to find which column "id" refers to in each table
-        let left_key_idx =
-            self.find_join_key_index(&join_clause.on_clause, &left_table_info, &select.table)?;
-        let right_key_idx =
-            self.find_join_key_index(&join_clause.on_clause, &right_table_info, &right_table_name)?;
+        // Step 3: Collect join predicates from WHERE clause
+        let join_preds = self.collect_join_predicates(select);
 
-        // Determine join type
-        let join_type = match join_clause.join_type {
-            ParserJoinType::Inner => JoinType::Inner,
-            ParserJoinType::Left => JoinType::Left,
-            ParserJoinType::Right => JoinType::Right,
-            ParserJoinType::Full => JoinType::Full,
-            ParserJoinType::Cross => JoinType::Cross,
-        };
+        eprintln!(
+            "[EXEC] join order = {:?}  (all_tables={:?})",
+            ordered_tables, all_tables
+        );
 
-        let left_col_count = left_table_info.columns.len();
-        let right_col_count = right_table_info.columns.len();
+        // Step 4: Chain hash joins in optimal order
+        let mut iter = ordered_tables.iter();
+        let first_table = iter.next().unwrap();
 
-        let mut matched_results = match join_type {
-            JoinType::Inner | JoinType::Left | JoinType::Right | JoinType::Full => {
-                // Hash-based matching
-                // SQL semantics: NULL = NULL is UNKNOWN (not a match), so skip NULL keys
-                let mut right_hash: HashMap<String, Vec<Vec<Value>>> = HashMap::new();
-                for right_row in &right_rows {
-                    if matches!(right_row[right_key_idx], Value::Null) {
-                        // NULL keys can never match in a join
-                        continue;
-                    }
-                    let key = format!("{:?}", right_row[right_key_idx]);
-                    right_hash.entry(key).or_default().push(right_row.clone());
+        let mut result_rows = storage.scan(first_table)?;
+        let mut result_info = storage.get_table_info(first_table)?;
+        let mut built_tables: HashSet<String> = HashSet::new();
+        built_tables.insert(first_table.to_string());
+
+        let explicit_join_type = select
+            .join_clause
+            .as_ref()
+            .map(|jc| match jc.join_type {
+                ParserJoinType::Inner => JoinType::Inner,
+                ParserJoinType::Left => JoinType::Left,
+                ParserJoinType::Right => JoinType::Right,
+                ParserJoinType::Full => JoinType::Full,
+                ParserJoinType::Cross => JoinType::Cross,
+            })
+            .unwrap_or(JoinType::Inner);
+
+        for next_table in iter {
+            let next_table_name = next_table.to_string();
+
+            let on_clause = if let Some(pred) =
+                self.find_predicate_for_tables(&join_preds, &built_tables, &next_table_name)
+            {
+                let parts: Vec<&str> = pred.split(" = ").collect();
+                if parts.len() == 2 {
+                    Expression::BinaryOp(
+                        Box::new(Self::make_identifier(parts[0].trim())),
+                        "=".to_string(),
+                        Box::new(Self::make_identifier(parts[1].trim())),
+                    )
+                } else {
+                    return Err(SqlError::ExecutionError(format!(
+                        "Cannot parse join predicate: {}",
+                        pred
+                    )));
                 }
-
-                let mut matched: Vec<Vec<Value>> = Vec::new();
-                let mut left_matched: std::collections::HashSet<usize> =
-                    std::collections::HashSet::new();
-                let mut right_matched: std::collections::HashSet<usize> =
-                    std::collections::HashSet::new();
-
-                // Match left rows to right
-                for (li, left_row) in left_rows.iter().enumerate() {
-                    // SQL semantics: NULL keys never match
-                    if matches!(left_row[left_key_idx], Value::Null) {
-                        // For LEFT JOIN, this row will be added as unmatched later
-                        continue;
-                    }
-                    let key = format!("{:?}", left_row[left_key_idx]);
-                    if let Some(right_match_rows) = right_hash.get(&key) {
-                        left_matched.insert(li);
-                        for right_row in right_match_rows {
-                            // Find the original right row index
-                            if let Some(ri) = right_rows.iter().position(|r| r == right_row) {
-                                right_matched.insert(ri);
-                            }
-                            let mut combined = left_row.clone();
-                            combined.extend(right_row.clone());
-                            matched.push(combined);
-                        }
-                    }
-                }
-
-                // For LEFT/RIGHT/FULL, add unmatched rows
-                if matches!(join_type, JoinType::Left | JoinType::Full) {
-                    for (li, left_row) in left_rows.iter().enumerate() {
-                        if !left_matched.contains(&li) {
-                            let mut combined = left_row.clone();
-                            combined.extend(vec![Value::Null; right_col_count]);
-                            matched.push(combined);
-                        }
-                    }
-                }
-
-                if matches!(join_type, JoinType::Right | JoinType::Full) {
-                    for (ri, right_row) in right_rows.iter().enumerate() {
-                        if !right_matched.contains(&ri) {
-                            let mut combined = vec![Value::Null; left_col_count];
-                            combined.extend(right_row.clone());
-                            matched.push(combined);
-                        }
+            } else {
+                // Fallback: cross join if no predicate found
+                let right_rows = storage.scan(&next_table_name)?;
+                let right_info = storage.get_table_info(&next_table_name)?;
+                let left_col_count = result_info.columns.len();
+                let right_col_count = right_info.columns.len();
+                let mut cross = Vec::new();
+                for lr in &result_rows {
+                    for rr in &right_rows {
+                        let mut combined = lr.clone();
+                        combined.extend(rr.clone());
+                        cross.push(combined);
                     }
                 }
+                result_rows = cross;
+                result_info = build_combined_schema(&result_info, &next_table_name, &right_info)?;
+                built_tables.insert(next_table_name.clone());
+                continue;
+            };
 
-                matched
-            }
-            JoinType::Cross => {
-                let mut results = Vec::new();
-                for left_row in &left_rows {
-                    for right_row in &right_rows {
-                        let mut combined = left_row.clone();
-                        combined.extend(right_row.clone());
-                        results.push(combined);
-                    }
-                }
-                results
-            }
-        };
+            let right_rows = storage.scan(&next_table_name)?;
+            let right_info = storage.get_table_info(&next_table_name)?;
+            let left_key_idx =
+                self.find_join_key_index(&on_clause, &result_info, &result_info.name)?;
+            let right_key_idx =
+                self.find_join_key_index(&on_clause, &right_info, &next_table_name)?;
+            let join_type = explicit_join_type.clone();
+            let left_col_count = result_info.columns.len();
+            let right_col_count = right_info.columns.len();
 
-        let combined_schema =
-            build_combined_schema(&left_table_info, &right_table_name, &right_table_info)?;
-        Ok((matched_results, combined_schema))
+            let joined = Self::hash_inner_join_rows(
+                &result_rows,
+                &right_rows,
+                left_key_idx,
+                right_key_idx,
+                left_col_count,
+                right_col_count,
+                join_type,
+            )?;
+
+            result_rows = joined;
+            result_info = build_combined_schema(&result_info, &next_table_name, &right_info)?;
+            built_tables.insert(next_table_name);
+        }
+
+        Ok((result_rows, result_info))
     }
 
     /// Find the column index for a join key in a table
@@ -879,6 +1253,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 trigger_executor.execute_after_insert(&table_name, record)?;
             }
         }
+
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&table_name);
 
         Ok(ExecutorResult::new(vec![], insert.values.len()))
     }
@@ -1045,6 +1424,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&table_name);
         Ok(ExecutorResult::new(vec![], count))
     }
 
@@ -1055,6 +1438,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         if delete.where_clause.is_none() {
             let mut storage = self.storage.write().unwrap();
             let count = storage.delete(&table_name, &[])?;
+            self.query_cache
+                .write()
+                .unwrap()
+                .invalidate_table(&table_name);
             return Ok(ExecutorResult::new(vec![], count));
         }
 
@@ -1128,6 +1515,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&table_name);
         Ok(ExecutorResult::new(vec![], count))
     }
 
@@ -1152,12 +1543,20 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             partition_info: None,
         };
         storage.create_table(&info)?;
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&create.name);
         Ok(ExecutorResult::empty())
     }
 
     fn execute_drop_table(&self, drop: &DropTableStatement) -> SqlResult<ExecutorResult> {
         let mut storage = self.storage.write().unwrap();
         storage.drop_table(&drop.name)?;
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&drop.name);
         Ok(ExecutorResult::empty())
     }
 
@@ -1400,6 +1799,330 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         self.current_tx_id = None;
         Ok(ExecutorResult::empty())
     }
+
+    fn execute_grant(&mut self, grant: &GrantStatement) -> SqlResult<ExecutorResult> {
+        let catalog_guard = self.catalog.as_ref().ok_or_else(|| {
+            SqlError::ExecutionError("Catalog not available for GRANT".to_string())
+        })?;
+        let mut catalog = catalog_guard.write().unwrap();
+
+        for privilege in &grant.privileges {
+            let priv_str = match privilege {
+                ParserPrivilege::Select => "SELECT",
+                ParserPrivilege::Insert => "INSERT",
+                ParserPrivilege::Update => "UPDATE",
+                ParserPrivilege::Delete => "DELETE",
+                ParserPrivilege::Read => "READ",
+                ParserPrivilege::Write => "WRITE",
+                ParserPrivilege::Execute => "EXECUTE",
+                ParserPrivilege::Usage => "USAGE",
+                ParserPrivilege::All => "ALL",
+            };
+            let priv_obj =
+                sqlrustgo_catalog::auth::Privilege::from_str(priv_str).ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Unknown privilege: {}", priv_str))
+                })?;
+
+            let obj_type = match &grant.object_type {
+                ParserObjectType::Table => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Database => sqlrustgo_catalog::auth::ObjectType::Database,
+                ParserObjectType::Column => sqlrustgo_catalog::auth::ObjectType::Column,
+                ParserObjectType::Procedure => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Function => sqlrustgo_catalog::auth::ObjectType::Table,
+            };
+
+            for recipient in &grant.recipients {
+                let identity = sqlrustgo_catalog::auth::UserIdentity::new(recipient, "%");
+                if grant.object_type == ParserObjectType::Column {
+                    for column in &grant.columns {
+                        catalog
+                            .grant_column_privilege(&identity, priv_obj, &grant.object_name, column)
+                            .map_err(|e| {
+                                SqlError::ExecutionError(format!("GRANT failed: {}", e))
+                            })?;
+                    }
+                } else {
+                    catalog
+                        .grant_privilege(
+                            &identity,
+                            priv_obj,
+                            obj_type,
+                            &grant.object_name,
+                            grant.with_grant_option,
+                        )
+                        .map_err(|e| SqlError::ExecutionError(format!("GRANT failed: {}", e)))?;
+                }
+            }
+        }
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Integer(grant.recipients.len() as i64)]],
+            1,
+        ))
+    }
+
+    fn execute_revoke(&mut self, revoke: &RevokeStatement) -> SqlResult<ExecutorResult> {
+        let catalog_guard = self.catalog.as_ref().ok_or_else(|| {
+            SqlError::ExecutionError("Catalog not available for REVOKE".to_string())
+        })?;
+        let mut catalog = catalog_guard.write().unwrap();
+
+        for privilege in &revoke.privileges {
+            let priv_str = match privilege {
+                ParserPrivilege::Select => "SELECT",
+                ParserPrivilege::Insert => "INSERT",
+                ParserPrivilege::Update => "UPDATE",
+                ParserPrivilege::Delete => "DELETE",
+                ParserPrivilege::Read => "READ",
+                ParserPrivilege::Write => "WRITE",
+                ParserPrivilege::Execute => "EXECUTE",
+                ParserPrivilege::Usage => "USAGE",
+                ParserPrivilege::All => "ALL",
+            };
+            let priv_obj =
+                sqlrustgo_catalog::auth::Privilege::from_str(priv_str).ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Unknown privilege: {}", priv_str))
+                })?;
+
+            let obj_type = match &revoke.object_type {
+                ParserObjectType::Table => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Database => sqlrustgo_catalog::auth::ObjectType::Database,
+                ParserObjectType::Column => sqlrustgo_catalog::auth::ObjectType::Column,
+                ParserObjectType::Procedure => sqlrustgo_catalog::auth::ObjectType::Table,
+                ParserObjectType::Function => sqlrustgo_catalog::auth::ObjectType::Table,
+            };
+
+            for user in &revoke.from_users {
+                let identity = sqlrustgo_catalog::auth::UserIdentity::new(user, "%");
+                catalog
+                    .revoke_privilege(&identity, priv_obj, obj_type, &revoke.object_name)
+                    .map_err(|e| SqlError::ExecutionError(format!("REVOKE failed: {}", e)))?;
+            }
+        }
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Integer(revoke.from_users.len() as i64)]],
+            1,
+        ))
+    }
+
+    fn execute_create_role(&mut self, stmt: &CreateRoleStatement) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let mut catalog_guard = catalog.write().unwrap();
+
+        let parent_role_id = if let Some(ref parent_name) = stmt.parent_role {
+            let parent_role = catalog_guard
+                .auth_manager()
+                .find_role_by_name(parent_name)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Parent role '{}' not found", parent_name))
+                })?;
+            Some(parent_role.id)
+        } else {
+            None
+        };
+
+        catalog_guard
+            .create_role(&stmt.name, parent_role_id)
+            .map_err(|e| SqlError::ExecutionError(format!("CREATE ROLE failed: {}", e)))?;
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Text(format!("Role {} created", stmt.name))]],
+            1,
+        ))
+    }
+
+    fn execute_drop_role(&mut self, stmt: &DropRoleStatement) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let mut catalog_guard = catalog.write().unwrap();
+
+        let role_id = {
+            let role = catalog_guard
+                .auth_manager()
+                .find_role_by_name(&stmt.name)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Role '{}' not found", stmt.name))
+                })?;
+            role.id
+        };
+
+        catalog_guard
+            .drop_role(role_id)
+            .map_err(|e| SqlError::ExecutionError(format!("DROP ROLE failed: {}", e)))?;
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Text(format!("Role {} dropped", stmt.name))]],
+            1,
+        ))
+    }
+
+    fn execute_grant_role(&mut self, stmt: &GrantRoleStatement) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let mut catalog_guard = catalog.write().unwrap();
+
+        let role_id = {
+            let role = catalog_guard
+                .auth_manager()
+                .find_role_by_name(&stmt.role_name)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Role '{}' not found", stmt.role_name))
+                })?;
+            role.id
+        };
+
+        let user_identity = UserIdentity::new(&stmt.user_name, stmt.host.as_deref().unwrap_or("%"));
+
+        let user_id = {
+            catalog_guard
+                .auth_manager()
+                .get_user_id_by_identity(&user_identity)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("User '{}' not found", stmt.user_name))
+                })?
+        };
+
+        catalog_guard
+            .grant_role_to_user(user_id, role_id, 0)
+            .map_err(|e| SqlError::ExecutionError(format!("GRANT ROLE failed: {}", e)))?;
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Text(format!(
+                "Grant {} to {}",
+                stmt.role_name, stmt.user_name
+            ))]],
+            1,
+        ))
+    }
+
+    fn execute_revoke_role(&mut self, stmt: &RevokeRoleStatement) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let mut catalog_guard = catalog.write().unwrap();
+
+        let role_id = {
+            let role = catalog_guard
+                .auth_manager()
+                .find_role_by_name(&stmt.role_name)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Role '{}' not found", stmt.role_name))
+                })?;
+            role.id
+        };
+
+        let user_identity = UserIdentity::new(&stmt.user_name, stmt.host.as_deref().unwrap_or("%"));
+
+        let user_id = {
+            catalog_guard
+                .auth_manager()
+                .get_user_id_by_identity(&user_identity)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("User '{}' not found", stmt.user_name))
+                })?
+        };
+
+        catalog_guard
+            .revoke_role_from_user(user_id, role_id)
+            .map_err(|e| SqlError::ExecutionError(format!("REVOKE ROLE failed: {}", e)))?;
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Text(format!(
+                "Revoke {} from {}",
+                stmt.role_name, stmt.user_name
+            ))]],
+            1,
+        ))
+    }
+
+    fn execute_set_role(&mut self, stmt: &SetRoleStatement) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+
+        let role_name = {
+            let catalog_guard = catalog.read().unwrap();
+            let role = catalog_guard
+                .auth_manager()
+                .find_role_by_name(&stmt.role_name)
+                .ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Role '{}' not found", stmt.role_name))
+                })?;
+            role.name.clone()
+        };
+
+        self.current_role = Some(stmt.role_name.clone());
+
+        Ok(ExecutorResult::new(
+            vec![vec![Value::Text(format!("SET ROLE to {}", role_name))]],
+            1,
+        ))
+    }
+
+    fn execute_show_roles(&self) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let catalog_guard = catalog.read().unwrap();
+
+        let roles = catalog_guard.auth_manager().list_roles();
+        let rows: Vec<Vec<Value>> = roles
+            .iter()
+            .map(|r| {
+                vec![
+                    Value::Integer(r.id as i64),
+                    Value::Text(r.name.clone()),
+                    r.parent_role_id
+                        .map(|id| Value::Integer(id as i64))
+                        .unwrap_or(Value::Null),
+                ]
+            })
+            .collect();
+
+        Ok(ExecutorResult::new(rows, 3))
+    }
+
+    fn execute_show_grants_for(&self, user_spec: &str) -> SqlResult<ExecutorResult> {
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No catalog available".to_string()))?;
+        let catalog_guard = catalog.read().unwrap();
+
+        let parts: Vec<&str> = user_spec.split('@').collect();
+        let username = parts[0];
+        let host = parts.get(1).unwrap_or(&"%");
+
+        let identity = UserIdentity::new(username, host);
+        let grants = catalog_guard
+            .auth_manager()
+            .get_all_grants_for_user(&identity);
+
+        let rows: Vec<Vec<Value>> = grants
+            .iter()
+            .map(|g| {
+                vec![
+                    Value::Text(format!("{}@{}", g.user.username, g.user.host)),
+                    Value::Text(g.privilege.to_string()),
+                    Value::Text(format!("{:?}", g.object.object_type)),
+                    Value::Text(g.object.object_name.clone()),
+                ]
+            })
+            .collect();
+
+        Ok(ExecutorResult::new(rows, 4))
+    }
 }
 
 impl ExecutionEngine<MemoryStorage> {
@@ -1410,9 +2133,13 @@ impl ExecutionEngine<MemoryStorage> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            current_role: None,
+            cache_config: QueryCacheConfig::default(),
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
     }
 
@@ -1423,9 +2150,13 @@ impl ExecutionEngine<MemoryStorage> {
             catalog: None,
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            current_role: None,
+            cache_config: QueryCacheConfig::default(),
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
     }
 
@@ -1436,9 +2167,13 @@ impl ExecutionEngine<MemoryStorage> {
             catalog: Some(catalog),
             stats: Arc::new(RwLock::new(ExecutionStats::default())),
             cbo_enabled: true,
+            stats_enabled: true,
             transaction_manager: TransactionManager::new(),
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
+            current_role: None,
+            cache_config: QueryCacheConfig::default(),
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
     }
 }
@@ -1789,6 +2524,59 @@ fn compare_values(left: &Value, right: &Value) -> i32 {
         (Value::Null, _) => -1,
         (_, Value::Null) => 1,
         _ => 0,
+    }
+}
+
+/// Compare two rows for ORDER BY using the given expressions
+fn compare_order_by(
+    a: &[Value],
+    b: &[Value],
+    order_by_exprs: &[OrderByExpression],
+    table_info: &TableInfo,
+) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    for expr in order_by_exprs {
+        let val_a = evaluate_expression(&expr.expression, a, table_info).unwrap_or(Value::Null);
+        let val_b = evaluate_expression(&expr.expression, b, table_info).unwrap_or(Value::Null);
+
+        let cmp = compare_values_for_order(&val_a, &val_b);
+        let cmp = if expr.nulls_first.unwrap_or(false) {
+            // NULLS FIRST: nulls compare less
+            match (&val_a, &val_b) {
+                (Value::Null, Value::Null) => Ordering::Equal,
+                (Value::Null, _) => Ordering::Less,
+                (_, Value::Null) => Ordering::Greater,
+                _ => cmp,
+            }
+        } else {
+            // NULLS LAST (default for ASC in most DBs)
+            match (&val_a, &val_b) {
+                (Value::Null, Value::Null) => Ordering::Equal,
+                (Value::Null, _) => Ordering::Greater,
+                (_, Value::Null) => Ordering::Less,
+                _ => cmp,
+            }
+        };
+
+        if cmp != Ordering::Equal {
+            return if expr.ascending { cmp } else { cmp.reverse() };
+        }
+    }
+    Ordering::Equal
+}
+
+/// Compare two values for ORDER BY (null-aware)
+fn compare_values_for_order(left: &Value, right: &Value) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    match (left, right) {
+        (Value::Integer(l), Value::Integer(r)) => l.cmp(r),
+        (Value::Float(l), Value::Float(r)) => l.partial_cmp(r).unwrap_or(Ordering::Equal),
+        (Value::Text(l), Value::Text(r)) => l.cmp(r),
+        (Value::Boolean(l), Value::Boolean(r)) => l.cmp(r),
+        (Value::Null, Value::Null) => Ordering::Equal,
+        (Value::Null, _) => Ordering::Greater, // NULL sorts last in default ASC
+        (_, Value::Null) => Ordering::Less,
+        _ => Ordering::Equal,
     }
 }
 

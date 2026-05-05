@@ -1,0 +1,279 @@
+{
+  "version": "2.0",
+  "generated": "2026-05-03",
+  "description": "Machine-readable formal invariant coverage with risk weighting. Tracks TLA+ invariant → Rust assertion → test → CI coverage with severity scoring.",
+
+  "schema": {
+    "criticality": "0.0-1.0: how catastrophic is failure (1.0 = data corruption/deadlock)",
+    "confidence": "0.0-1.0: how well do we understand this invariant (1.0 = fully proven, 0.5 = partially modeled)",
+    "coverage_weight": "0.0-1.0: what fraction of risk is mitigated by tests (1.0 = fully tested, 0.0 = no tests)",
+    "risk_score": "criticality × confidence × coverage_weight"
+  },
+
+  "ci_gates": {
+    "risk_score_min": 0.70,
+    "criticality_min": 0.90,
+    "warn_risk_score": 0.50
+  },
+
+  "invariants": [
+    {
+      "id": "INV_NO_CYCLE",
+      "proof": "PROOF_023",
+      "proof_file": "PROOF_023_deadlock_v4",
+      "tla_invariant": "NoCycle",
+      "rust_api": "DeadlockDetector::try_wait_edge()",
+      "rust_enforcement": "Atomic pre-check + add_edge inside Mutex. debug_assert_no_cycle in debug.",
+      "failure_severity": "total deadlock — system completely unresponsive",
+      "tests": [
+        "test_concurrent_mutual_deadlock_prevention",
+        "test_try_wait_edge_rejects_cycle",
+        "test_detect_two_node_cycle",
+        "test_prevent_3_cycle_via_precheck",
+        "test_no_cycle_linear_chain",
+        "test_would_create_cycle_unsafe_detects_cycle"
+      ],
+      "files": [
+        "crates/transaction/src/deadlock.rs",
+        "crates/transaction/src/lock.rs"
+      ],
+      "level": "critical",
+      "criticality": 1.0,
+      "confidence": 1.0,
+      "coverage_weight": 1.0,
+      "risk_score": 1.0,
+      "ci_layer": "PR Gate",
+      "status": "active"
+    },
+    {
+      "id": "INV_NO_SELF_WAIT",
+      "proof": "PROOF_023",
+      "proof_file": "PROOF_023_deadlock_v4",
+      "tla_invariant": "NoSelfWait",
+      "rust_api": "DeadlockDetector::try_wait_edge()",
+      "rust_enforcement": "holders.contains(&tx_id) check returns LockError::SelfWait",
+      "failure_severity": "self-deadlock — transaction waits for itself",
+      "tests": [
+        "test_no_self_wait",
+        "test_try_wait_edge_rejects_cycle"
+      ],
+      "files": [
+        "crates/transaction/src/deadlock.rs",
+        "crates/transaction/src/lock.rs"
+      ],
+      "level": "critical",
+      "criticality": 0.9,
+      "confidence": 1.0,
+      "coverage_weight": 1.0,
+      "risk_score": 0.9,
+      "ci_layer": "PR Gate",
+      "status": "active"
+    },
+    {
+      "id": "INV_NO_DEADLOCK_TOCTOU",
+      "proof": "PROOF_023",
+      "proof_file": "PROOF_023_deadlock_toctou",
+      "tla_invariant": "NoCycle",
+      "tla_expected": "VIOLATED",
+      "tla_note": "Model proves separate check+commit creates cycle. VIOLATED=expected.",
+      "rust_api": "DeadlockDetector::try_wait_edge()",
+      "rust_enforcement": "Atomic pre-check + add_edge inside single Mutex critical section",
+      "failure_severity": "TOCTOU deadlock — race condition between check and commit",
+      "tests": [
+        "test_concurrent_mutual_deadlock_prevention",
+        "test_concurrent_no_false_positive"
+      ],
+      "files": [
+        "crates/transaction/src/deadlock.rs"
+      ],
+      "level": "critical",
+      "criticality": 1.0,
+      "confidence": 0.95,
+      "coverage_weight": 1.0,
+      "risk_score": 0.95,
+      "ci_layer": "PR Gate",
+      "status": "active",
+      "note": "confidence 0.95: TLA+ proves TOCTOU exists, Rust proves atomicity fixes it"
+    },
+    {
+      "id": "INV_MVCC_ATOMIC",
+      "proof": "PROOF_016",
+      "proof_file": "PROOF_016_023_mvcc_atomic",
+      "tla_invariant": "NoCycle + NoWriteConflict",
+      "tla_note": "Unified MVCC + Wait-For, atomic check+commit, no write conflicts",
+      "rust_api": "TransactionManager::commit",
+      "rust_enforcement": "try_wait_edge for all lock acquisitions during transaction commit",
+      "failure_severity": "data corruption — lost writes or inconsistent reads",
+      "tests": [
+        "test_vote_serialization"
+      ],
+      "files": [
+        "crates/transaction/src/deadlock.rs",
+        "crates/transaction/src/dtc.rs",
+        "crates/transaction/src/mvcc_storage.rs"
+      ],
+      "level": "critical",
+      "criticality": 1.0,
+      "confidence": 0.8,
+      "coverage_weight": 0.5,
+      "risk_score": 0.4,
+      "ci_layer": "PR Gate",
+      "status": "active",
+      "note": "confidence 0.8: TLA+ model may not fully capture commit ordering. coverage_weight 0.5: only 1 of several paths tested"
+    },
+    {
+      "id": "INV_MVCC_TOCTOU",
+      "proof": "PROOF_016",
+      "proof_file": "PROOF_016_023_mvcc_toctou",
+      "tla_invariant": "NoCycle",
+      "tla_expected": "VIOLATED",
+      "tla_note": "Model proves separate commit-check + commit-write creates TOCTOU window. VIOLATED=expected.",
+      "rust_api": "TransactionManager::commit",
+      "rust_enforcement": "Guarded by try_wait_edge atomicity (Rust impl is atomic)",
+      "failure_severity": "MVCC TOCTOU deadlock — concurrent commits create cycle",
+      "tests": [
+        "test_concurrent_mutual_deadlock_prevention"
+      ],
+      "files": [
+        "crates/transaction/src/dtc.rs"
+      ],
+      "level": "info",
+      "criticality": 0.8,
+      "confidence": 0.95,
+      "coverage_weight": 0.5,
+      "risk_score": 0.38,
+      "ci_layer": "Nightly",
+      "status": "active",
+      "note": "risk_score ≈ 0: Rust atomicity is validated by INV_NO_DEADLOCK_TOCTOU"
+    },
+    {
+      "id": "INV_WRITE_SKEW",
+      "proof": "PROOF_026",
+      "proof_file": "PROOF_026_write_skew",
+      "tla_invariant": "NoWriteSkew",
+      "tla_expected": "VIOLATED",
+      "tla_note": "Write skew counterexample exists. Current MVCC allows it.",
+      "rust_api": "SerializationGraph",
+      "rust_enforcement": "NOT IMPLEMENTED",
+      "failure_severity": "data inconsistency — two transactions read overlapping data, write different values, commit both (serializability violation)",
+      "tests": [],
+      "files": [
+        "crates/transaction/src/dtc.rs",
+        "execution_engine/src/execution"
+      ],
+      "level": "critical",
+      "criticality": 0.95,
+      "confidence": 1.0,
+      "coverage_weight": 0.0,
+      "risk_score": 0.0,
+      "ci_layer": "Smoke",
+      "status": "frozen",
+      "note": "FROZEN — known unsafe area. Deferred to Phase C. risk_score = 0 because coverage_weight = 0."
+    },
+    {
+      "id": "INV_SNAPSHOT_ISOLATION",
+      "proof": "PROOF_016",
+      "proof_file": "PROOF_016_mvcc_ssi",
+      "tla_invariant": "SnapshotIsolation",
+      "tla_note": "SSI model — commitTs ordering enforcement",
+      "rust_api": "MvccStorage",
+      "rust_enforcement": "Version chain read snapshot isolation (partial — no commitTs ordering)",
+      "failure_severity": "non-serializable reads — stale/mixed data from concurrent txns",
+      "tests": [
+        "test_snapshot_visibility",
+        "test_row_version_is_visible_committed_before_snapshot",
+        "test_row_version_is_visible_committed_after_snapshot"
+      ],
+      "files": [
+        "crates/transaction/src/mvcc_storage.rs",
+        "crates/transaction/src/version_chain.rs",
+        "crates/transaction/src/mvcc.rs"
+      ],
+      "level": "info",
+      "criticality": 0.7,
+      "confidence": 0.7,
+      "coverage_weight": 0.8,
+      "risk_score": 0.39,
+      "ci_layer": "PR Gate",
+      "status": "active",
+      "note": "confidence 0.7: SSI model exists but commitTs semantics incomplete"
+    },
+    {
+      "id": "INV_NO_WRITE_CONFLICT",
+      "proof": "PROOF_016",
+      "proof_file": "PROOF_016_023_mvcc_atomic",
+      "tla_invariant": "NoWriteConflict",
+      "tla_note": "No two transactions can commit writes to the same key at overlapping times",
+      "rust_api": "TransactionManager::commit",
+      "rust_enforcement": "Write-write conflict detection in CommitTxn path (NOT fully tested)",
+      "failure_severity": "lost update — concurrent writes to same key, last commit wins",
+      "tests": [],
+      "files": [
+        "crates/transaction/src/dtc.rs"
+      ],
+      "level": "warning",
+      "criticality": 0.85,
+      "confidence": 0.6,
+      "coverage_weight": 0.0,
+      "risk_score": 0.0,
+      "ci_layer": "PR Gate",
+      "status": "active",
+      "note": "CRITICAL GAP: no tests exercise CommitTxn write-write validation"
+    },
+    {
+      "id": "INV_BTREE_STRUCTURAL",
+      "proof": "PROOF_004",
+      "proof_file": "btree_invariants",
+      "tla_invariant": "BTreeInvariants",
+      "tla_note": "Dafny-verified B+Tree structural invariants (balance, search, range)",
+      "rust_api": "BTreeMap",
+      "rust_enforcement": "Dafny proof — no runtime Rust assertion. Rust std BTreeMap used.",
+      "failure_severity": "index corruption — wrong data returned or panic on corrupt tree",
+      "tests": [],
+      "files": [
+        "crates/index/src/btree.rs"
+      ],
+      "level": "critical",
+      "criticality": 0.95,
+      "confidence": 0.9,
+      "coverage_weight": 0.0,
+      "risk_score": 0.0,
+      "ci_layer": "Nightly",
+      "status": "active",
+      "note": "Dafny proof validates model, not Rust implementation. Rust std library assumed correct."
+    }
+  ],
+
+  "proof_files": {
+    "PROOF_023_deadlock_v4": {
+      "spec": "DeadlockFree",
+      "invariants": ["NoCycle", "NoSelfWait"],
+      "expected": "PASS",
+      "ci_cost": "S"
+    },
+    "PROOF_023_deadlock_toctou": {
+      "spec": "DeadlockTOCTOU",
+      "invariants": ["NoCycle"],
+      "expected": "VIOLATED",
+      "ci_cost": "S"
+    },
+    "PROOF_016_023_mvcc_atomic": {
+      "spec": "MVCCAtomic",
+      "invariants": ["NoCycle", "NoWriteConflict"],
+      "expected": "PASS",
+      "ci_cost": "M"
+    },
+    "PROOF_016_023_mvcc_toctou": {
+      "spec": "MVCCToctou",
+      "invariants": ["NoCycle"],
+      "expected": "VIOLATED",
+      "ci_cost": "M"
+    },
+    "PROOF_026_write_skew": {
+      "spec": "WriteSkew",
+      "invariants": ["NoWriteSkew"],
+      "expected": "VIOLATED",
+      "ci_cost": "S"
+    }
+  }
+}

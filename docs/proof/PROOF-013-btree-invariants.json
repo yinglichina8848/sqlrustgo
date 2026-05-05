@@ -1,0 +1,25 @@
+{
+  "proof_id": "PROOF-013",
+  "title": "B+Tree查询完整性证明",
+  "language": "Dafny",
+  "category": "storage",
+  "status": "verified",
+  "target": "B+Tree query completeness — range query [low, high] returns exactly all matching tuples",
+  "description": "证明对于列 c 上的 B+Tree 索引，范围查询 [low, high] 精确返回所有 c ∈ [low, high] 的元组。",
+  "evidence": {
+    "verification_method": "Dafny program verification",
+    "executable_spec": "docs/formal/btree_invariants.dfy (no markdown header)",
+    "dafny_command": "/usr/bin/dafny docs/formal/btree_invariants.dfy /dafnyVerify:1 /compile:0",
+    "expected_result": "Dafny program verifier finished with 1 verified, 0 errors",
+    "test_evidence": "cargo test -p sqlrustgo-storage covers B+Tree structural properties"
+  },
+  "known_issues": {
+    "docs_proof_file_not_executable": "docs/proof/PROOF-013-btree-invariants.dfy contains markdown headers (lines starting with >) which cause Dafny 2.3.0 parse errors. The executable version is docs/formal/btree_invariants.dfy with no markdown headers.",
+    "run_all_proofs_sh_bug": "scripts/verify/run_all_proofs.sh verifies docs/proof/PROOF-013-*.dfy which has markdown header and will FAIL. Use docs/formal/btree_invariants.dfy instead.",
+    "dafny_version": "Dafny 2.3.0.10506 does not support --verification-time-limit syntax; use /dafnyVerify:1 /compile:0 instead"
+  },
+  "author": "openclaw",
+  "created_at": "2026-05-02",
+  "verified_at": "2026-05-02",
+  "updated_at": "2026-05-04"
+}

@@ -1,0 +1,25 @@
+{
+  "registry_version": "1.1",
+  "updated_at": "2026-05-04T11:57:15Z",
+  "total_proofs": 18,
+  "proofs": [
+    {"id": "PROOF-001-parser-select", "title": "SQL SELECT 解析不丢失信息", "language": "Formulog", "category": "parser", "status": "verified"},
+    {"id": "PROOF-002-type-inference", "title": "类型推断终止且唯一", "language": "Dafny", "category": "type_system", "status": "verified"},
+    {"id": "PROOF-003-wal-recovery", "title": "WAL 重放后等于崩溃前已提交状态", "language": "TLA+", "category": "transaction", "status": "verified"},
+    {"id": "PROOF-004-btree-query", "title": "B+Tree 查询返回所有匹配行", "language": "Dafny", "category": "storage", "status": "verified"},
+    {"id": "PROOF-005-mvcc-snapshot", "title": "MVCC 快照读一致性", "language": "TLA+", "category": "transaction", "status": "verified"},
+    {"id": "PROOF-006-where-semantics", "title": "SQL WHERE 子句语义保持", "language": "Formulog", "category": "parser", "status": "verified"},
+    {"id": "PROOF-007-join-syntax", "title": "JOIN 语法树构造正确性", "language": "Formulog", "category": "parser", "status": "verified"},
+    {"id": "PROOF-008-orderby-semantics", "title": "ORDER BY 排序语义正确性", "language": "Formulog", "category": "parser", "status": "verified"},
+    {"id": "PROOF-009-aggregate-semantics", "title": "聚合函数语义完整性", "language": "Dafny", "category": "executor", "status": "verified"},
+    {"id": "PROOF-010-subquery-nesting", "title": "子查询嵌套正确性", "language": "Formulog", "category": "parser", "status": "verified"},
+    {"id": "PROOF-011-type-safety", "title": "类型系统安全性证明", "language": "Dafny", "category": "type_system", "status": "verified"},
+    {"id": "PROOF-012-wal-acid", "title": "WAL恢复保持ACID性质", "language": "TLA+", "category": "transaction", "status": "verified"},
+    {"id": "PROOF-013-btree-invariants", "title": "B+Tree查询完整性证明", "language": "Dafny", "category": "storage", "status": "verified"},
+    {"id": "PROOF-014-query-equivalence", "title": "查询等价性证明框架", "language": "Formulog", "category": "optimizer", "status": "verified"},
+    {"id": "PROOF-015-ddl-atomicity", "title": "DDL Atomicity Verification", "language": "TLA+", "category": "ddl", "status": "verified"},
+    {"id": "PROOF-016-mvcc-ssi", "title": "MVCC SSI Conflict Detection", "language": "TLA+", "category": "transaction", "status": "verified"},
+    {"id": "PROOF-017-update-semantics", "title": "UPDATE/DELETE Semantics Verification", "language": "Formulog", "category": "executor", "status": "verified"},
+    {"id": "PROOF-019-left-right-join", "title": "LEFT/RIGHT OUTER JOIN Algorithm Verification", "language": "TLA+", "category": "executor", "status": "verified"}
+  ]
+}

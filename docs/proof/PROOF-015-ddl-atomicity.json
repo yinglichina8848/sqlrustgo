@@ -1,0 +1,25 @@
+{
+  "proof_id": "PROOF-015",
+  "title": "DDL Atomicity Verification",
+  "language": "TLA+",
+  "category": "ddl",
+  "status": "verified",
+  "description": "证明DDL操作的原子性：所有或无操作，提交的模式始终反映已提交表的并集，无表出现在没有相应CREATE日志条目的模式中，回滚始终清除catalogBuffer，已提交模式中看不到部分DDL状态。",
+  "evidence": {
+    "verification_method": "TLA+ model checking",
+    "test_results": "cargo test -p sqlrustgo-transaction: passed",
+    "formal_spec": "PROOF-015-ddl-atomicity.tla",
+    "verification_command": "java -cp /tmp/tla2tools.jar tlc2.TLC -metadir /tmp/meta PROOF-015-ddl-atomicity.tla",
+    "expected_result": "Model checking completed. No error.",
+    "verified_properties": [
+      "DDL operations are atomic (all-or-nothing)",
+      "Committed schema always reflects the union of committed tables",
+      "No table appears in schema without a corresponding CREATE log entry",
+      "Rollback always clears catalogBuffer",
+      "No partial DDL state visible in committed schema"
+    ]
+  },
+  "created_at": "2026-05-03",
+  "verified_at": "2026-05-03",
+  "author": "openclaw"
+}

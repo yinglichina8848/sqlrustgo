@@ -4,6 +4,7 @@ pub mod executor;
 pub mod executor_metrics;
 pub mod query_cache;
 pub mod query_cache_config;
+pub mod scan;
 pub mod stored_proc;
 pub mod trigger;
 pub mod trigger_eval;

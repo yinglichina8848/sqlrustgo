@@ -129,17 +129,30 @@ impl LockManager {
 
             Ok(LockGrantMode::Granted)
         } else {
-            lock.add_waiter(tx_id, mode);
+            // TLA+ v4 Wait(t,k): add edge only if ~Reachable(h,t) for ALL holders.
+            // This is pre-check (prevention) — illegal states are unreachable.
+            // TOCTOU-safe via DeadlockDetector.try_wait_edge() (atomic Mutex).
+            let holders: HashSet<TxId> = lock.holders.clone();
 
-            if let Some(holders) = self.locks.get(&key).map(|l| &l.holders) {
-                for holder in holders {
-                    self.deadlock_detector.add_edge(tx_id, *holder);
-                }
-            }
-
-            if let Some(_cycle) = self.deadlock_detector.detect_cycle(tx_id) {
+            // NoSelfWait: if tx_id already holds this lock, self-wait is a deadlock.
+            // (can_grant returning false means we need to wait, but self-wait is
+            // never valid — a transaction cannot wait for its own lock.)
+            if holders.contains(&tx_id) {
                 return Err(LockError::Deadlock);
             }
+
+            // PROOF-023 atomicity requirement: would_create_cycle + add_edge
+            // must happen in the same locked region (no TOCTOU window).
+            if self
+                .deadlock_detector
+                .try_wait_edge(tx_id, holders)
+                .is_err()
+            {
+                return Err(LockError::Deadlock);
+            }
+
+            // Only add waiter after atomic pre-check passes.
+            lock.add_waiter(tx_id, mode);
 
             Ok(LockGrantMode::Waiting)
         }
@@ -424,5 +437,203 @@ mod tests {
         assert!(matches!(result, Ok(LockGrantMode::Waiting)));
 
         let _ = manager.detect_deadlock(TxId::new(2));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PROOF-023 v4 TLA+ refinement tests
+    // These verify the Rust implementation aligns with TLA+ v4 Wait-For Graph
+    // semantics: pre-check prevents cycles (deadlock-free by construction).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// TLA+ v4: Classic 3-cycle (T1→T2→T3→T1).
+    /// With pre-check, T3's wait on k1 must be REJECTED before edge is added.
+    /// This is the key refinement: illegal state is unreachable, not detected.
+    #[test]
+    fn test_prevent_3_cycle_via_precheck() {
+        let mut manager = LockManager::new();
+        let k1 = vec![1];
+        let k2 = vec![2];
+        let k3 = vec![3];
+
+        // T1 holds k1, T2 holds k2, T3 holds k3
+        manager
+            .acquire_lock(TxId::new(1), k1.clone(), LockMode::Exclusive)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(2), k2.clone(), LockMode::Exclusive)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(3), k3.clone(), LockMode::Exclusive)
+            .unwrap();
+
+        // T1 waits k2 (T1→{T2})
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(1), k2.clone(), LockMode::Exclusive),
+            Ok(LockGrantMode::Waiting)
+        ));
+
+        // T2 waits k3 (T2→{T3})
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(2), k3.clone(), LockMode::Exclusive),
+            Ok(LockGrantMode::Waiting)
+        ));
+
+        // T3 waits k1 — T3→{T1} would create 3-cycle.
+        // TLA+ v4 pre-check: Reachable(T1, T3) via T1→T2→T3→T1.
+        // Wait(T3,k1) requires ~Reachable(T1,T3), but T1→T2→T3 exists.
+        // PRE-CHECK must reject, not post-detect.
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(3), k1.clone(), LockMode::Exclusive),
+            Err(LockError::Deadlock)
+        ));
+    }
+
+    /// TLA+ v4: Multi-resource deadlock (T1→{T2,T3}, T2→{T4}, T4→{T1}).
+    /// T1 waits on MULTIPLE resources simultaneously.
+    #[test]
+    fn test_multi_resource_wait_for_graph_v4() {
+        let mut manager = LockManager::new();
+        let k1 = vec![1];
+        let k2 = vec![2];
+        let k3 = vec![3];
+        let k4 = vec![4];
+
+        // T1 holds k1; T2 holds k2; T3 holds k3; T4 holds k4
+        manager
+            .acquire_lock(TxId::new(1), k1.clone(), LockMode::Exclusive)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(2), k2.clone(), LockMode::Exclusive)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(3), k3.clone(), LockMode::Exclusive)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(4), k4.clone(), LockMode::Exclusive)
+            .unwrap();
+
+        // T1 waits on k2 and k3 → T1→{T2,T3}
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(1), k2.clone(), LockMode::Exclusive),
+            Ok(LockGrantMode::Waiting)
+        ));
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(1), k3.clone(), LockMode::Exclusive),
+            Ok(LockGrantMode::Waiting)
+        ));
+
+        // T2 waits on k4 → T2→{T4}
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(2), k4.clone(), LockMode::Exclusive),
+            Ok(LockGrantMode::Waiting)
+        ));
+
+        // T4 waits on k1 → T4→{T1}
+        // Reachable(T1, T4) via T1→T2→T4 exists.
+        // Wait(T4, k1) requires ~Reachable(T1, T4), but T1→T2→T4 path exists.
+        // PRE-CHECK must reject.
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(4), k1.clone(), LockMode::Exclusive),
+            Err(LockError::Deadlock)
+        ));
+    }
+
+    /// TLA+ v4: NoSelfWait — a transaction cannot wait for itself.
+    /// This is a trivial cycle that must be prevented at pre-check.
+    #[test]
+    fn test_no_self_wait() {
+        let mut manager = LockManager::new();
+        let k1 = vec![1];
+
+        // T1 holds k1
+        manager
+            .acquire_lock(TxId::new(1), k1.clone(), LockMode::Exclusive)
+            .unwrap();
+
+        // T1 tries to wait on k1 — NoSelfWait violation.
+        // Self-loop is a trivial cycle of length 1.
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(1), k1.clone(), LockMode::Exclusive),
+            Err(LockError::Deadlock)
+        ));
+    }
+
+    /// TLA+ v4: After release, deadlock-free paths must be allowed again.
+    #[test]
+    fn test_release_restores_wait_path() {
+        let mut manager = LockManager::new();
+        let k1 = vec![1];
+        let k2 = vec![2];
+
+        // T1 holds k1; T2 holds k2
+        manager
+            .acquire_lock(TxId::new(1), k1.clone(), LockMode::Exclusive)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(2), k2.clone(), LockMode::Exclusive)
+            .unwrap();
+
+        // T1 waits k2 → T1→{T2}
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(1), k2.clone(), LockMode::Exclusive),
+            Ok(LockGrantMode::Waiting)
+        ));
+
+        // T2 releases all locks → T1 promoted to holder of k2
+        manager.release_all_locks(TxId::new(2)).unwrap();
+
+        // T1 now holds k2. Re-acquiring k2 is a self-dependency → Deadlock.
+        // (NoSelfWait: a txn cannot wait for its own held lock.)
+        let result = manager.acquire_lock(TxId::new(1), k2.clone(), LockMode::Exclusive);
+        assert!(matches!(result, Err(LockError::Deadlock)));
+    }
+
+    /// TLA+ v4: Linear chain must NOT be flagged as deadlock.
+    /// T1→T2→T3 is a valid wait-for chain (no cycle).
+    #[test]
+    fn test_linear_chain_no_deadlock() {
+        let mut manager = LockManager::new();
+        let k1 = vec![1];
+        let k2 = vec![2];
+        let k3 = vec![3];
+        let k4 = vec![4];
+
+        manager
+            .acquire_lock(TxId::new(1), k1.clone(), LockMode::Exclusive)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(2), k2.clone(), LockMode::Exclusive)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(3), k3.clone(), LockMode::Exclusive)
+            .unwrap();
+        manager
+            .acquire_lock(TxId::new(4), k4.clone(), LockMode::Exclusive)
+            .unwrap();
+
+        // T1 waits k2 → T1→{T2} ✓ (no cycle)
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(1), k2.clone(), LockMode::Exclusive),
+            Ok(LockGrantMode::Waiting)
+        ));
+
+        // T2 waits k3 → T2→{T3} ✓ (no cycle, T2→T3, T3 reaches T2? No)
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(2), k3.clone(), LockMode::Exclusive),
+            Ok(LockGrantMode::Waiting)
+        ));
+
+        // T3 waits k4 → T3→{T4} ✓ (no cycle)
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(3), k4.clone(), LockMode::Exclusive),
+            Ok(LockGrantMode::Waiting)
+        ));
+
+        // T4 tries to wait k1 — T4→{T1} would form T1→T2→T3→T4→T1 cycle.
+        // Deadlock pre-check must reject.
+        assert!(matches!(
+            manager.acquire_lock(TxId::new(4), k1.clone(), LockMode::Exclusive),
+            Err(LockError::Deadlock)
+        ));
     }
 }

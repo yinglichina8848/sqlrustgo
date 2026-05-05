@@ -1,0 +1,59 @@
+name: Chaos Test (Weekly)
+
+# 每周验证 CI gate 真的有约束力
+# 原理: 人为注入 bug，验证 CI 能否检测出来
+# 如果检测不出来 → 可信系统是假的
+
+on:
+  schedule:
+    # 每周一 03:00 UTC
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  chaos-deadlock:
+    name: Chaos Test - Deadlock Bug Injection
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Inject deadlock bug
+        run: |
+          echo "=== Injecting bug: commenting out would_create_cycle ==="
+          sed -i 's/if inner.would_create_cycle(tx_id, &holders)/if false \&\& inner.would_create_cycle(tx_id, \&holders)/' \
+            crates/transaction/src/deadlock.rs
+          grep -n "if false && inner.would_create_cycle" crates/transaction/src/deadlock.rs || {
+            echo "FAIL: Bug injection failed"
+            exit 1
+          }
+          echo "Bug injected"
+
+      - name: Verify CI detects bug
+        run: |
+          echo "=== Verifying CI detects the injected bug ==="
+          set +e
+          output=$(cargo test -p sqlrustgo-transaction deadlock -- --nocapture 2>&1)
+          set -e
+
+          if echo "$output" | grep -q "test result: FAILED\|failures:"; then
+            echo ""
+            echo "PASS: CI correctly detected the bug"
+            exit 0
+          else
+            echo ""
+            echo "FAIL: CI did NOT detect the bug"
+            echo "Correctness system is BROKEN"
+            exit 1
+          fi
+
+      - name: Restore
+        if: always()
+        run: |
+          echo "=== Restoring original code ==="
+          git checkout crates/transaction/src/deadlock.rs

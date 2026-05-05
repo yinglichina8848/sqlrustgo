@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    parse, AlterTableOperation, Expression, InsertStatement, SelectStatement, Statement,
+    parse, AlterTableOperation, Expression, InsertStatement, SelectStatement, Statement, WithSelect,
 };
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
@@ -192,10 +192,40 @@ impl SimpleExecutor {
                             .rename_table(&alter.table_name, new_name)
                             .map_err(|e| format!("Rename table error: {:?}", e))?;
                     }
+                    AlterTableOperation::DropColumn { name } => {
+                        return Err(format!(
+                            "DROP COLUMN '{}' not yet implemented in sql-corpus executor",
+                            name
+                        ));
+                    }
+                    AlterTableOperation::ModifyColumn {
+                        name, data_type, ..
+                    } => {
+                        return Err(format!(
+                            "MODIFY COLUMN '{} {}' not yet implemented in sql-corpus executor",
+                            name, data_type
+                        ));
+                    }
                 }
                 Ok(ExecutorResult::new(vec![], 0))
             }
             Statement::CreateIndex(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::WithSelect(with_select) => {
+                self.execute_with_select(&with_select)?;
+                Ok(ExecutorResult::new(vec![], 0))
+            }
+            Statement::Union(union_stmt) => {
+                let left_rows = self.execute_statement(&union_stmt.left)?;
+                let right_rows = self.execute_statement(&union_stmt.right)?;
+                let mut combined: Vec<Vec<Value>> = left_rows;
+                combined.extend(right_rows);
+                if !union_stmt.union_all {
+                    combined.sort();
+                    combined.dedup();
+                }
+                let count = combined.len();
+                Ok(ExecutorResult::new(combined, count))
+            }
             _ => Err("Unsupported statement type".to_string()),
         }
     }
@@ -236,20 +266,42 @@ impl SimpleExecutor {
     }
 
     fn execute_select(&self, select: &SelectStatement) -> Result<Vec<Vec<Value>>, String> {
+        // Use first_table() for backward compat: from.tables[0] or select.table
+        let table_name = select.first_table();
         let mut rows = self
             .storage
-            .scan(&select.table)
+            .scan(&table_name)
             .map_err(|e| format!("Scan error: {:?}", e))?;
 
         if let Some(ref where_clause) = select.where_clause {
             let table_info = self
                 .storage
-                .get_table_info(&select.table)
+                .get_table_info(&table_name)
                 .map_err(|e| format!("Get table info error: {:?}", e))?;
             rows.retain(|row| self.evaluate_where(where_clause, row, &table_info));
         }
 
         Ok(rows)
+    }
+
+    fn execute_statement(&self, stmt: &Statement) -> Result<Vec<Vec<Value>>, String> {
+        match stmt {
+            Statement::Select(select) => self.execute_select(select),
+            Statement::Union(union_stmt) => {
+                let left_rows = self.execute_statement(&union_stmt.left)?;
+                let right_rows = self.execute_statement(&union_stmt.right)?;
+                if union_stmt.union_all {
+                    Ok(left_rows.into_iter().chain(right_rows).collect())
+                } else {
+                    let mut combined = left_rows;
+                    combined.extend(right_rows);
+                    combined.sort();
+                    combined.dedup();
+                    Ok(combined)
+                }
+            }
+            _ => Err(format!("Unsupported statement type: {:?}", stmt)),
+        }
     }
 
     fn evaluate_where(&self, expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
@@ -410,6 +462,53 @@ impl SimpleExecutor {
             .columns
             .iter()
             .position(|c| c.name.eq_ignore_ascii_case(col_name))
+    }
+
+    fn execute_with_select(&mut self, with_select: &WithSelect) -> Result<(), String> {
+        if let Some(ref with_clause) = with_select.with_clause {
+            for cte in &with_clause.ctes {
+                let cte_rows = self.execute_statement(&cte.subquery)?;
+                let column_count = if cte.columns.is_empty() {
+                    if cte_rows.is_empty() {
+                        0
+                    } else {
+                        cte_rows[0].len()
+                    }
+                } else {
+                    cte.columns.len()
+                };
+                let columns: Vec<ColumnDefinition> = (0..column_count)
+                    .map(|i| ColumnDefinition {
+                        name: if cte.columns.is_empty() {
+                            format!("col_{}", i)
+                        } else {
+                            cte.columns[i].clone()
+                        },
+                        data_type: "TEXT".to_string(),
+                        nullable: true,
+                        primary_key: false,
+                    })
+                    .collect();
+                let table_info = TableInfo {
+                    name: cte.name.clone(),
+                    columns,
+                    foreign_keys: vec![],
+                    unique_constraints: vec![],
+                    check_constraints: vec![],
+                    partition_info: None,
+                };
+                self.storage
+                    .create_table(&table_info)
+                    .map_err(|e| format!("Create CTE table error: {:?}", e))?;
+                if !cte_rows.is_empty() {
+                    self.storage
+                        .insert(&cte.name, cte_rows)
+                        .map_err(|e| format!("Insert CTE rows error: {:?}", e))?;
+                }
+            }
+        }
+        self.execute_select(&with_select.select)?;
+        Ok(())
     }
 }
 

@@ -1,4 +1,4 @@
-# SQLRustGo 协同开发规范 (v2.8.0)
+# SQLRustGo 协同开发规范 (v2.9.0)
 
 ## 项目概览
 
@@ -50,6 +50,9 @@ PR 必须满足以下规则：
 - **R5**: Baseline 验证 — 合入前必须验证 baseline（当前: 226 PASS, 0 FAIL, 0 IGNORED）未被破坏
 - **R6**: 测试数量单调性 — 总测试数只能增加或不变，不能减少
 - **R7**: CI 完整性 — CI 流水线必须全绿才能合入
+- **R8**: SQL兼容性 — SQL Corpus 通过率必须 ≥80% (`cargo test -p sql-corpus`)
+- **R9**: 性能基线 — 性能基准测试无显著退化 (benchmark 结果在 baseline ±10% 范围内)
+- **R10**: 形式化证明 — proof 目录下必须包含有效的证明文件 (.json 包含实际证据)
 
 ## 内存约束
 

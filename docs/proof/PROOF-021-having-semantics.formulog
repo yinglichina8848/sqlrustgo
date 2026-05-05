@@ -1,0 +1,65 @@
+// PROOF-021: HAVING Clause Semantics
+// Tool: Formulog 0.8.0
+// Status: in_progress
+// Category: P1-sql-semantics
+//
+// HAVING clause semantics in SQL:
+// - Evaluated AFTER GROUP BY aggregation
+// - Can reference aggregate functions
+// - Groups not satisfying HAVING condition are eliminated
+// - NULL handling follows 3VL (UNKNOWN evaluated as NOT TRUE)
+//
+// Approach: Model aggregation results as EDB facts (pre-computed).
+// Formulog verifies the logical filtering properties of HAVING conditions.
+
+@edb rel emp_group(dept:string, min_sal:int, max_sal:int, cnt:int, sum_sal:int)
+@edb rel dept_threshold(dept:string, threshold:int)
+
+// HAVING condition: groups where cnt > 2
+// Verifies: HAVING filters groups post-aggregation
+rel having_count_gt2(dept:string, min_sal:int, max_sal:int, cnt:int)
+having_count_gt2(DEPT, MIN_SAL, MAX_SAL, CNT) :-
+  emp_group(DEPT, MIN_SAL, MAX_SAL, CNT, _),
+  CNT > 2.
+
+// HAVING condition: groups where sum_sal > 100000
+rel having_sum_gt100k(dept:string, cnt:int, sum_sal:int)
+having_sum_gt100k(DEPT, CNT, SUM_SAL) :-
+  emp_group(DEPT, _, _, CNT, SUM_SAL),
+  SUM_SAL > 100000.
+
+// HAVING with external threshold (non-correlated subquery pattern)
+rel having_dynamic_threshold(dept:string, cnt:int)
+having_dynamic_threshold(DEPT, CNT) :-
+  emp_group(DEPT, _, _, CNT, _),
+  dept_threshold(DEPT, THRESHOLD),
+  CNT > THRESHOLD.
+
+// NULL handling in HAVING: UNKNOWN (NULL) comparisons yield NOT TRUE
+// dept_threshold may have NULL values - these should be excluded
+rel having_null_excluded(dept:string)
+having_null_excluded(DEPT) :-
+  dept_threshold(DEPT, THRESHOLD),
+  THRESHOLD > 2.
+
+// Semantic correctness: HAVING is applied to GROUP results, not raw rows
+// This is verified by checking that dept_threshold JOIN happens after grouping
+rel having_semantic_property(dept:string, property:string)
+having_semantic_property(DEPT, "post-aggregation") :-
+  emp_group(DEPT, _, _, _, _).
+
+// Verification: groups with cnt>2 should have smaller result set than total groups
+rel count_before_after(before:int, after:int)
+count_before_after(TOTAL, FILTERED) :-
+  emp_group(DEPT, _, _, CNT, _),
+  TOTAL := COUNT(CNT),
+  having_count_gt2(DEPT, _, _, _),
+  FILTERED := COUNT(DEPT).
+
+// HAVING condition evaluation order: WHERE cannot reference aggregates, HAVING can
+// This distinction is modeled by separate predicates
+rel where_cannot_aggregate(dept:string)
+where_cannot_aggregate(DEPT) :- emp_group(DEPT, _, _, CNT, _), CNT > 0.
+
+rel having_can_aggregate(dept:string, ok:string)
+having_can_aggregate(DEPT, "aggregate-ok") :- having_sum_gt100k(DEPT, _, _).

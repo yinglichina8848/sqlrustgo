@@ -252,8 +252,11 @@ impl<'a> Lexer<'a> {
                     "DEFAULT" => Token::Default,
                     "AUTO_INCREMENT" => Token::AutoIncrement,
                     "INTEGER" | "INT" => Token::Integer,
-                    "TEXT" | "VARCHAR" | "CHAR" => Token::Text,
-                    "FLOAT" | "DOUBLE" | "REAL" => Token::Float,
+                    "TEXT" => Token::Text,
+                    "VARCHAR" | "CHAR" => Token::Identifier("VARCHAR".to_string()),
+                    "FLOAT" | "DOUBLE" | "REAL" | "DECIMAL" | "NUMERIC" => {
+                        Token::Identifier("FLOAT".to_string())
+                    }
                     "BOOLEAN" | "BOOL" => Token::Boolean,
                     "BLOB" => Token::Blob,
                     "NULL" => Token::Null,
@@ -273,6 +276,7 @@ impl<'a> Lexer<'a> {
                     "ALL" => Token::All,
                     "ANY" => Token::Any,
                     "SOME" => Token::Some,
+                    "AS" => Token::As,
                     "WITH" => Token::With,
                     "RECURSIVE" => Token::Recursive,
                     "COUNT" => Token::Count,
@@ -317,9 +321,10 @@ impl<'a> Lexer<'a> {
                     "DESCRIBE" => Token::Describe,
                     "DESC" => Token::Desc,
                     "TRIGGER" => Token::Trigger,
+                    "VIEW" => Token::View,
                     "BEFORE" => Token::Before,
                     "AFTER" => Token::After,
-                    "FOR" => Token::ForEach,
+                    "FOR" => Token::For,
                     "EACH" => Token::Each,
                     "UNBOUNDED" => Token::Unbounded,
                     "PRECEDING" => Token::Preceding,

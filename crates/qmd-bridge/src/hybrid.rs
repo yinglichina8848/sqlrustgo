@@ -1,6 +1,5 @@
 //! Hybrid search implementation
 
-
 use crate::types::{Filter, QmdData, SearchResult};
 
 /// Configuration for hybrid search
@@ -203,6 +202,7 @@ impl Default for HybridSearcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::QmdDataType;
 
     fn create_test_qmd_data(id: &str, vector: Vec<f32>) -> QmdData {
         QmdData {

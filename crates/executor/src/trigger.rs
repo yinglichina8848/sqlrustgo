@@ -546,7 +546,7 @@ impl TriggerExecutor {
         if let sqlrustgo_parser::Statement::Select(select) = statement {
             #[allow(clippy::match_result_ok)]
             let storage = self.storage.read().unwrap();
-            let table_info = storage.get_table_info(&select.table).ok();
+            let table_info = storage.get_table_info(&select.first_table()).ok();
 
             for col in &select.columns {
                 if let Some(expr) = &col.expression {

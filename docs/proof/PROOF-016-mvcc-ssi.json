@@ -1,0 +1,22 @@
+{
+  "proof_id": "PROOF-016",
+  "title": "MVCC SSI Conflict Detection",
+  "language": "TLA+",
+  "category": "transaction",
+  "status": "verified",
+  "description": "证明MVCC SSI冲突检测的正确性：所有中止的事务都有RW冲突被检测到，没有事务在没有真正冲突的情况下被中止。",
+  "evidence": {
+    "verification_method": "TLA+ model checking",
+    "test_results": "cargo test -p sqlrustgo-transaction: passed",
+    "formal_spec": "PROOF_016_mvcc_ssi.tla",
+    "verification_command": "java -cp /tmp/tla2tools.jar tlc2.TLC -metadir /tmp/meta_proof016 PROOF_016_mvcc_ssi.tla",
+    "expected_result": "Model checking completed. No error.",
+    "verified_properties": [
+      "All aborted transactions have RW conflicts detected",
+      "No transaction is aborted without a real conflict"
+    ]
+  },
+  "created_at": "2026-05-03",
+  "verified_at": "2026-05-03",
+  "author": "openclaw"
+}

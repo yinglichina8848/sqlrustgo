@@ -3,6 +3,7 @@
 //! Catalog -> Schema -> Table
 //! Catalog -> StoredProcedure
 
+use crate::auth::{AuthManager, ObjectType, Privilege, Role, UserIdentity};
 use crate::error::{CatalogError, CatalogResult};
 use crate::schema::Schema;
 use crate::stored_proc::StoredProcedure;
@@ -20,6 +21,8 @@ pub struct Catalog {
     default_schema: String,
     /// Stored procedures (name -> StoredProcedure)
     stored_procedures: HashMap<String, StoredProcedure>,
+    #[serde(skip)]
+    auth_manager: AuthManager,
 }
 
 impl Catalog {
@@ -31,6 +34,7 @@ impl Catalog {
             schemas: HashMap::new(),
             default_schema: "public".to_string(),
             stored_procedures: HashMap::new(),
+            auth_manager: AuthManager::new(),
         }
     }
 
@@ -142,6 +146,96 @@ impl Catalog {
     /// List all stored procedures
     pub fn stored_procedures(&self) -> Vec<&StoredProcedure> {
         self.stored_procedures.values().collect()
+    }
+
+    /// Grant a privilege to a user
+    pub fn grant_privilege(
+        &mut self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        object_type: ObjectType,
+        object_name: &str,
+        grant_option: bool,
+    ) -> CatalogResult<u64> {
+        self.auth_manager
+            .grant_privilege(
+                identity,
+                privilege,
+                object_type,
+                object_name,
+                &UserIdentity::new("root", "%"),
+                grant_option,
+            )
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Grant a column-level privilege to a user
+    pub fn grant_column_privilege(
+        &mut self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        table_name: &str,
+        column_name: &str,
+    ) -> CatalogResult<u64> {
+        self.auth_manager
+            .grant_column_privilege(identity, privilege, table_name, column_name, 0)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Revoke a privilege from a user
+    pub fn revoke_privilege(
+        &mut self,
+        identity: &UserIdentity,
+        privilege: Privilege,
+        object_type: ObjectType,
+        object_name: &str,
+    ) -> CatalogResult<()> {
+        self.auth_manager
+            .revoke_privilege(identity, privilege, object_type, object_name)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Get the auth manager for direct access
+    pub fn auth_manager(&self) -> &AuthManager {
+        &self.auth_manager
+    }
+
+    /// Create a new role
+    pub fn create_role(&mut self, name: &str, parent_role_id: Option<u64>) -> CatalogResult<u64> {
+        self.auth_manager
+            .create_role(name, parent_role_id)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Drop a role
+    pub fn drop_role(&mut self, role_id: u64) -> CatalogResult<()> {
+        self.auth_manager
+            .drop_role(role_id)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Grant a role to a user
+    pub fn grant_role_to_user(
+        &mut self,
+        user_id: u64,
+        role_id: u64,
+        granted_by: u64,
+    ) -> CatalogResult<()> {
+        self.auth_manager
+            .grant_role_to_user(user_id, role_id, granted_by)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Revoke a role from a user
+    pub fn revoke_role_from_user(&mut self, user_id: u64, role_id: u64) -> CatalogResult<()> {
+        self.auth_manager
+            .revoke_role_from_user(user_id, role_id)
+            .map_err(|e| CatalogError::ExecutionError(e.to_string()))
+    }
+
+    /// Find a role by name
+    pub fn find_role_by_name(&self, name: &str) -> Option<&Role> {
+        self.auth_manager.find_role_by_name(name)
     }
 }
 

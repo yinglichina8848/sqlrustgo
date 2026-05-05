@@ -797,7 +797,7 @@ impl StoredProcExecutor {
                 if let sqlrustgo_parser::Statement::Select(select) = statement {
                     let storage = self.storage.read().unwrap();
                     let records = storage
-                        .scan(&select.table)
+                        .scan(&select.first_table())
                         .map_err(|e| format!("Failed to scan table: {}", e))?;
                     ctx.set_cursor_records(name, records);
                     ctx.open_cursor(name)?;
@@ -874,7 +874,7 @@ impl StoredProcExecutor {
                     }
                 }
                 let select = &with_select.select;
-                let table_name = &select.table;
+                let table_name = &select.first_table();
 
                 let records = if ctx.cte_tables.contains_key(table_name) {
                     ctx.cte_tables.get(table_name).cloned().unwrap_or_default()
@@ -909,7 +909,7 @@ impl StoredProcExecutor {
                 Ok(())
             }
             sqlrustgo_parser::Statement::Select(select) => {
-                let table_name = &select.table;
+                let table_name = &select.first_table();
 
                 // Handle SELECT without FROM (e.g., SELECT 1, SELECT 'hello', SELECT NULL)
                 let records = if table_name.is_empty() {
@@ -965,7 +965,7 @@ impl StoredProcExecutor {
                 if let Some(ref select) = insert.select {
                     let storage = self.storage.read().unwrap();
                     let records = storage
-                        .scan(&select.table)
+                        .scan(&select.first_table())
                         .map_err(|e| format!("Failed to scan table: {}", e))?;
 
                     let selected_rows: Vec<Vec<Value>> =
@@ -1158,6 +1158,25 @@ impl StoredProcExecutor {
                             .rename_table(table_name, new_name)
                             .map_err(|e| format!("Failed to rename table: {}", e))?;
                     }
+                    sqlrustgo_parser::AlterTableOperation::DropColumn { name } => {
+                        // Storage interface doesn't support drop_column yet
+                        // For now, return an error indicating feature not implemented
+                        return Err(format!(
+                            "DROP COLUMN '{}' not yet implemented in storage layer",
+                            name
+                        ));
+                    }
+                    sqlrustgo_parser::AlterTableOperation::ModifyColumn {
+                        name,
+                        data_type,
+                        nullable: _,
+                    } => {
+                        // Storage interface doesn't support modify_column yet
+                        return Err(format!(
+                            "MODIFY COLUMN '{} {}' not yet implemented in storage layer",
+                            name, data_type
+                        ));
+                    }
                 }
                 Ok(())
             }
@@ -1330,6 +1349,40 @@ impl StoredProcExecutor {
                 }
             }
             sqlrustgo_parser::Expression::Aggregate(_) => Value::Null,
+            sqlrustgo_parser::Expression::FunctionCall(_, _) => Value::Null,
+            sqlrustgo_parser::Expression::WindowCall(_) => Value::Null,
+            sqlrustgo_parser::Expression::Position(_, _) => Value::Null,
+            sqlrustgo_parser::Expression::Insert(_, _, _, _) => Value::Null,
+            sqlrustgo_parser::Expression::Extract(field, inner) => {
+                let val = self.expression_to_value(inner, ctx);
+                match (field.as_str(), &val) {
+                    ("YEAR", Value::Integer(n)) => Value::Integer(*n / 10000),
+                    ("MONTH", Value::Integer(n)) => Value::Integer((*n / 100) % 100),
+                    ("DAY", Value::Integer(n)) => Value::Integer(*n % 100),
+                    ("YEAR", Value::Text(s)) => {
+                        if s.len() >= 4 {
+                            s[..4].parse().map(Value::Integer).unwrap_or(Value::Null)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    ("MONTH", Value::Text(s)) => {
+                        if s.len() >= 7 {
+                            s[5..7].parse().map(Value::Integer).unwrap_or(Value::Null)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    ("DAY", Value::Text(s)) => {
+                        if s.len() >= 10 {
+                            s[8..10].parse().map(Value::Integer).unwrap_or(Value::Null)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    _ => Value::Null,
+                }
+            }
         }
     }
 
@@ -1339,7 +1392,7 @@ impl StoredProcExecutor {
             Ok(s) => s,
             Err(_) => return Vec::new(),
         };
-        let records = match storage.scan(&select.table) {
+        let records = match storage.scan(&select.first_table()) {
             Ok(r) => r,
             Err(_) => return Vec::new(),
         };
@@ -1363,30 +1416,51 @@ impl StoredProcExecutor {
     /// Execute CTE subquery and return rows
     fn execute_cte_subquery(
         &self,
-        select: &sqlrustgo_parser::SelectStatement,
+        statement: &sqlrustgo_parser::Statement,
         ctx: &mut ProcedureContext,
     ) -> Result<Vec<Vec<Value>>, String> {
-        let table_name = &select.table;
-        let storage = self.storage.read().unwrap();
-        let records = storage
-            .scan(table_name)
-            .map_err(|e| format!("Failed to scan CTE table: {}", e))?;
+        match statement {
+            sqlrustgo_parser::Statement::Select(select) => {
+                let table_name = &select.first_table();
+                let storage = self.storage.read().unwrap();
+                let records = storage
+                    .scan(table_name)
+                    .map_err(|e| format!("Failed to scan CTE table: {}", e))?;
 
-        if let Some(ref where_expr) = select.where_clause {
-            let filtered: Vec<Vec<Value>> = records
-                .into_iter()
-                .filter(|_row| {
-                    let where_val = self.expression_to_value(where_expr, ctx);
-                    if let Value::Boolean(b) = where_val {
-                        b
-                    } else {
-                        where_val != Value::Null
-                    }
-                })
-                .collect();
-            Ok(filtered)
-        } else {
-            Ok(records)
+                if let Some(ref where_expr) = select.where_clause {
+                    let filtered: Vec<Vec<Value>> = records
+                        .into_iter()
+                        .filter(|_row| {
+                            let where_val = self.expression_to_value(where_expr, ctx);
+                            if let Value::Boolean(b) = where_val {
+                                b
+                            } else {
+                                where_val != Value::Null
+                            }
+                        })
+                        .collect();
+                    Ok(filtered)
+                } else {
+                    Ok(records)
+                }
+            }
+            sqlrustgo_parser::Statement::Union(union_stmt) => {
+                let left_records = self.execute_cte_subquery(&union_stmt.left, ctx)?;
+                let right_records = self.execute_cte_subquery(&union_stmt.right, ctx)?;
+                if union_stmt.union_all {
+                    Ok(left_records.into_iter().chain(right_records).collect())
+                } else {
+                    let mut combined = left_records;
+                    combined.extend(right_records);
+                    combined.sort();
+                    combined.dedup();
+                    Ok(combined)
+                }
+            }
+            _ => Err(format!(
+                "Unsupported statement type in CTE: {:?}",
+                statement
+            )),
         }
     }
 
@@ -1614,7 +1688,13 @@ impl StoredProcExecutor {
     }
 
     /// Evaluate a binary operation and return a boolean Value
+    /// SQL NULL semantics: any comparison with NULL returns NULL (not TRUE or FALSE)
     fn evaluate_binary_op(&self, left: &Value, right: &Value, op: &str) -> Value {
+        // SQL NULL semantics: any comparison with NULL returns NULL
+        if matches!(left, Value::Null) || matches!(right, Value::Null) {
+            return Value::Null;
+        }
+
         match op {
             "=" | "==" | "IS" => Value::Boolean(left == right),
             "!=" | "<>" => Value::Boolean(left != right),
@@ -1663,15 +1743,35 @@ impl StoredProcExecutor {
                 }
             }
             "AND" | "&&" => {
+                // SQL three-valued logic: TRUE AND NULL = NULL, FALSE AND NULL = FALSE
                 if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
                     Value::Boolean(*l && *r)
+                } else if matches!(left, Value::Null) || matches!(right, Value::Null) {
+                    // If either is NULL
+                    if let Value::Boolean(false) = left {
+                        Value::Boolean(false) // FALSE AND NULL = FALSE
+                    } else if let Value::Boolean(false) = right {
+                        Value::Boolean(false) // NULL AND FALSE = FALSE
+                    } else {
+                        Value::Null // TRUE AND NULL = NULL
+                    }
                 } else {
                     Value::Boolean(false)
                 }
             }
             "OR" | "||" => {
+                // SQL three-valued logic: TRUE OR NULL = TRUE, FALSE OR NULL = NULL
                 if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
                     Value::Boolean(*l || *r)
+                } else if matches!(left, Value::Null) || matches!(right, Value::Null) {
+                    // If either is NULL
+                    if let Value::Boolean(true) = left {
+                        Value::Boolean(true) // TRUE OR NULL = TRUE
+                    } else if let Value::Boolean(true) = right {
+                        Value::Boolean(true) // NULL OR TRUE = TRUE
+                    } else {
+                        Value::Null // FALSE OR NULL = NULL
+                    }
                 } else {
                     Value::Boolean(false)
                 }

@@ -1,0 +1,11 @@
+statement ok
+CREATE TABLE t(a INT);
+
+statement ok
+DROP TABLE t;
+
+statement ok
+CREATE TABLE users(id INT, name TEXT);
+
+statement ok
+DROP TABLE users;

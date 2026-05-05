@@ -3,9 +3,7 @@ name: CI (Optimized)
 on:
   pull_request:
     branches:
-      - develop/v2.8.0
-      - develop/v2.7.0
-      - main
+      - develop/v2.9.0
     paths-ignore:
       - 'docs/**'
       - '*.md'
@@ -161,6 +159,30 @@ jobs:
         run: cargo audit || true
 
   # ----------------------------------------
+  # SQLite Differential Testing
+  # ----------------------------------------
+  sqlite-diff:
+    name: SQLite Differential
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install sqlite3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3
+
+      - name: Run SQLite differential tests
+        run: |
+          cargo test -p sqlrustgo-executor --test sqlite_diff
+
+  # ----------------------------------------
   # Verification gate
   # ----------------------------------------
   verify:
@@ -177,8 +199,8 @@ jobs:
       # -----------------------------
       - name: Detect test file changes
         run: |
-          git fetch origin main
-          CHANGED=$(git diff --name-only origin/main...HEAD | grep "^tests/" || true)
+          git fetch origin develop/v2.9.0
+          CHANGED=$(git diff --name-only origin/develop/v2.9.0...HEAD | grep "^tests/" || true)
           if [ ! -z "$CHANGED" ]; then
             echo "❌ Tests modified:"
             echo "$CHANGED"
@@ -190,8 +212,8 @@ jobs:
       # -----------------------------
       - name: Detect NEW #[ignore] additions
         run: |
-          git fetch origin main
-          NEW_IGNORES=$(git diff origin/main...HEAD -- "*.rs" | grep "^+.*#\[ignore\]" || true)
+          git fetch origin develop/v2.9.0
+          NEW_IGNORES=$(git diff origin/develop/v2.9.0...HEAD -- "*.rs" | grep "^+.*#\[ignore\]" || true)
           if [ ! -z "$NEW_IGNORES" ]; then
             echo "❌ NEW #[ignore] detected in PR:"
             echo "$NEW_IGNORES"
@@ -229,7 +251,7 @@ jobs:
 
       - name: Prevent proof tampering
         run: |
-          if git diff --name-only origin/main...HEAD | grep "verification_report.json"; then
+          if git diff --name-only origin/develop/v2.9.0...HEAD | grep "verification_report.json"; then
             echo "❌ Proof file modified in PR"
             exit 1
           fi

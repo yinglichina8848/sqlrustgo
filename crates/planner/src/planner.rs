@@ -9,6 +9,7 @@ use crate::physical_plan::{
     ProjectionExec, SeqScanExec, SortExec,
 };
 use crate::Schema;
+use crate::{Expr, JoinType};
 use sqlrustgo_optimizer::SimpleCostModel;
 use sqlrustgo_storage::StorageEngine;
 use std::sync::{Arc, RwLock};
@@ -125,8 +126,67 @@ impl DefaultPlanner {
                 )))
             }
             LogicalPlan::Filter { predicate, input } => {
-                let input_plan = self.create_physical_plan_internal(input)?;
-                Ok(Box::new(FilterExec::new(input_plan, predicate.clone())))
+                // Check if predicate is a subquery expression that needs rewrite to semi/anti join
+                match predicate {
+                    Expr::In { expr: _, subquery } => {
+                        // IN → LeftSemi JOIN with condition: left_expr = subquery_column
+                        let _subquery_plan = self.create_physical_plan_internal(subquery)?;
+                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                        let semi_join_plan = LogicalPlan::Join {
+                            left: input.clone(),
+                            right: subquery.clone(),
+                            join_type: JoinType::LeftSemi,
+                            condition: Some(join_condition),
+                        };
+                        self.create_physical_plan_internal(&semi_join_plan)
+                    }
+                    Expr::NotIn { expr: _, subquery } => {
+                        // NOT IN → LeftAnti JOIN
+                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                        let anti_join_plan = LogicalPlan::Join {
+                            left: input.clone(),
+                            right: subquery.clone(),
+                            join_type: JoinType::LeftAnti,
+                            condition: Some(join_condition),
+                        };
+                        self.create_physical_plan_internal(&anti_join_plan)
+                    }
+                    Expr::Exists(subquery) => {
+                        // EXISTS → LeftSemi JOIN with TRUE condition
+                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                        let semi_join_plan = LogicalPlan::Join {
+                            left: input.clone(),
+                            right: subquery.clone(),
+                            join_type: JoinType::LeftSemi,
+                            condition: Some(join_condition),
+                        };
+                        self.create_physical_plan_internal(&semi_join_plan)
+                    }
+                    Expr::NotExists(subquery) => {
+                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                        let anti_join_plan = LogicalPlan::Join {
+                            left: input.clone(),
+                            right: subquery.clone(),
+                            join_type: JoinType::LeftAnti,
+                            condition: Some(join_condition),
+                        };
+                        self.create_physical_plan_internal(&anti_join_plan)
+                    }
+                    Expr::InList { .. }
+                    | Expr::CaseWhen { .. }
+                    | Expr::Extract { .. }
+                    | Expr::Column(_)
+                    | Expr::Literal(_)
+                    | Expr::BinaryExpr { .. }
+                    | Expr::UnaryExpr { .. }
+                    | Expr::AggregateFunction { .. }
+                    | Expr::Alias { .. }
+                    | Expr::Wildcard
+                    | Expr::QualifiedWildcard { .. } => {
+                        let input_plan = self.create_physical_plan_internal(input)?;
+                        Ok(Box::new(FilterExec::new(input_plan, predicate.clone())))
+                    }
+                }
             }
             LogicalPlan::Aggregate {
                 input,

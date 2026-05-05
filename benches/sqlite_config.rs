@@ -16,7 +16,7 @@ impl Default for SQLiteConfig {
             cache_size: 2000,
             page_size: 4096,
             wal_mode: false,
-            synchronous: "OFF",
+            synchronous: "OFF".to_string(),
         }
     }
 }
@@ -45,7 +45,7 @@ impl SQLiteConfig {
             cache_size: 10000,
             page_size: 4096,
             wal_mode: false,
-            synchronous: "OFF",
+            synchronous: "OFF".to_string(),
         }
     }
 
@@ -55,7 +55,7 @@ impl SQLiteConfig {
             cache_size: 10000,
             page_size: 4096,
             wal_mode: true,
-            synchronous: "FULL",
+            synchronous: "FULL".to_string(),
         }
     }
 }

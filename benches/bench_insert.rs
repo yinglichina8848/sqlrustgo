@@ -22,8 +22,9 @@ fn create_table_info() -> TableInfo {
             primary_key: false,
         }],
         foreign_keys: vec![],
-        partition_info: None,
         unique_constraints: vec![],
+        check_constraints: vec![],
+        partition_info: None,
     }
 }
 
@@ -105,8 +106,9 @@ fn bench_insert_multi_column(c: &mut Criterion) {
             },
         ],
         foreign_keys: vec![],
-        partition_info: None,
         unique_constraints: vec![],
+        check_constraints: vec![],
+        partition_info: None,
     };
 
     for size in [1_000, 10_000] {

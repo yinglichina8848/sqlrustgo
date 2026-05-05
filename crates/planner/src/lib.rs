@@ -143,33 +143,62 @@ impl fmt::Display for Column {
     }
 }
 
+/// WHEN clause in CASE expression
+#[derive(Debug, Clone, PartialEq)]
+pub struct WhenClause {
+    pub condition: Box<Expr>,
+    pub result: Box<Expr>,
+}
+
 /// Expression in query (column reference, literal, computation, etc.)
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    /// Column reference
     Column(Column),
-    /// Literal value
     Literal(Value),
-    /// Binary expression (left op right)
     BinaryExpr {
         left: Box<Expr>,
         op: Operator,
         right: Box<Expr>,
     },
-    /// Unary expression (op expr)
-    UnaryExpr { op: Operator, expr: Box<Expr> },
-    /// Aggregate function call
+    UnaryExpr {
+        op: Operator,
+        expr: Box<Expr>,
+    },
     AggregateFunction {
         func: AggregateFunction,
         args: Vec<Expr>,
         distinct: bool,
     },
-    /// Alias expression (expr AS name)
-    Alias { expr: Box<Expr>, name: String },
-    /// Wildcard (*) select
+    Alias {
+        expr: Box<Expr>,
+        name: String,
+    },
     Wildcard,
-    /// Qualified wildcard (table.*)
-    QualifiedWildcard { qualifier: String },
+    QualifiedWildcard {
+        qualifier: String,
+    },
+    In {
+        expr: Box<Expr>,
+        subquery: Box<LogicalPlan>,
+    },
+    NotIn {
+        expr: Box<Expr>,
+        subquery: Box<LogicalPlan>,
+    },
+    InList {
+        expr: Box<Expr>,
+        values: Vec<Expr>,
+    },
+    Exists(Box<LogicalPlan>),
+    NotExists(Box<LogicalPlan>),
+    CaseWhen {
+        conditions: Vec<WhenClause>,
+        else_result: Option<Box<Expr>>,
+    },
+    Extract {
+        field: String,
+        expr: Box<Expr>,
+    },
 }
 
 /// Schema containing field definitions
@@ -253,6 +282,35 @@ impl fmt::Display for Expr {
             Expr::Alias { expr, name } => write!(f, "{} AS {}", expr, name),
             Expr::Wildcard => write!(f, "*"),
             Expr::QualifiedWildcard { qualifier } => write!(f, "{}.*", qualifier),
+            Expr::In { expr, subquery: _ } => write!(f, "{} IN (subquery)", expr),
+            Expr::NotIn { expr, subquery: _ } => write!(f, "{} NOT IN (subquery)", expr),
+            Expr::InList { expr, values } => {
+                let values_str: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+                write!(f, "{} IN ({})", expr, values_str.join(", "))
+            }
+            Expr::Exists(_) => write!(f, "EXISTS (subquery)"),
+            Expr::NotExists(_) => write!(f, "NOT EXISTS (subquery)"),
+            Expr::CaseWhen {
+                conditions,
+                else_result,
+            } => {
+                let mut result = String::from("CASE ");
+                for WhenClause {
+                    condition,
+                    result: then_result,
+                } in conditions
+                {
+                    result.push_str(&format!("WHEN {} THEN {} ", condition, then_result));
+                }
+                if let Some(else_expr) = else_result {
+                    result.push_str(&format!("ELSE {} ", else_expr));
+                }
+                result.push_str("END");
+                write!(f, "{}", result)
+            }
+            Expr::Extract { field, expr } => {
+                write!(f, "EXTRACT({} FROM {})", field, expr)
+            }
         }
     }
 }

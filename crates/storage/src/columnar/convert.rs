@@ -3,7 +3,7 @@
 //! This module provides utilities to convert between storage columnar formats.
 //! For integration with the executor, use the executor's conversion utilities.
 
-use crate::ColumnChunk;
+use super::ColumnChunk;
 use sqlrustgo_types::Value;
 
 /// Represents columnar data for vectorized operations

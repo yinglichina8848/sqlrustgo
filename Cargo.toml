@@ -7,6 +7,7 @@ members = [
     "crates/planner",
     "crates/optimizer",
     "crates/executor",
+    "crates/expr",
     "crates/storage",
     "crates/catalog",
     "crates/transaction",
@@ -52,6 +53,7 @@ sqlrustgo-parser = { path = "crates/parser" }
 sqlrustgo-planner = { path = "crates/planner" }
 sqlrustgo-optimizer = { path = "crates/optimizer" }
 sqlrustgo-executor = { path = "crates/executor" }
+sqlrustgo-expr = { path = "crates/expr" }
 sqlrustgo-storage = { path = "crates/storage" }
 sqlrustgo-catalog = { path = "crates/catalog" }
 sqlrustgo-transaction = { path = "crates/transaction" }
@@ -83,6 +85,8 @@ criterion = "0.5"
 miniz_oxide = "0.7"
 memmap2 = "0.9"
 lz4_flex = "0.11"
+snap = "1.1"
+zstd = "0.13"
 rand = "0.8"
 sha2 = "0.10"
 hmac = "0.12"
@@ -194,6 +198,9 @@ features = ["bundled"]
 
 [dev-dependencies.mysql]
 version = "25"
+
+[dev-dependencies.sqllogictest]
+version = "0.17"
 
 [[test]]
 name = "buffer_pool_test"
