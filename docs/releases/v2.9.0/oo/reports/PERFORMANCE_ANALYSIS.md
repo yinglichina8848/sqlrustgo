@@ -224,9 +224,9 @@ Status: ✅ ALL PASS
 
 ## 10. 相关文档
 
-- [../VERSION_PLAN.md](../VERSION_PLAN.md) - 版本计划
+- [../../VERSION_PLAN.md](../../VERSION_PLAN.md) - 版本计划
 - [../architecture/ARCHITECTURE_V2.9.md](../architecture/ARCHITECTURE_V2.9.md) - 架构设计
-- [../reports/SQL92_COMPLIANCE.md](SQL92_COMPLIANCE.md) - SQL-92 合规性
+- [SQL92_COMPLIANCE.md](./SQL92_COMPLIANCE.md) - SQL-92 合规性
 
 ---
 

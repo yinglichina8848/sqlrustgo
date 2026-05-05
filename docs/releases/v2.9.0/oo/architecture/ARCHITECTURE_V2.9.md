@@ -298,10 +298,10 @@ Index Update (BTree/Vector/Graph)
 
 ## 8. 相关文档
 
-- [../VERSION_PLAN.md](../VERSION_PLAN.md) - 版本计划
-- [../RELEASE_NOTES.md](../RELEASE_NOTES.md) - 发布说明
-- [../FEATURE_MATRIX.md](../FEATURE_MATRIX.md) - 功能矩阵
-- [../RELEASE_GATE_CHECKLIST.md](../RELEASE_GATE_CHECKLIST.md) - 门禁清单
+- [../../VERSION_PLAN.md](../../VERSION_PLAN.md) - 版本计划
+- [../../RELEASE_NOTES.md](../../RELEASE_NOTES.md) - 发布说明
+- [../../FEATURE_MATRIX.md](../../FEATURE_MATRIX.md) - 功能矩阵
+- [../../RELEASE_GATE_CHECKLIST.md](../../RELEASE_GATE_CHECKLIST.md) - 门禁清单
 
 ---
 

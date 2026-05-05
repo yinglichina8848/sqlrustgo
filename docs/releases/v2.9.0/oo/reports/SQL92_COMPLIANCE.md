@@ -235,9 +235,9 @@
 
 ## 8. 相关文档
 
-- [../VERSION_PLAN.md](../VERSION_PLAN.md) - 版本计划
+- [../../VERSION_PLAN.md](../../VERSION_PLAN.md) - 版本计划
 - [../architecture/ARCHITECTURE_V2.9.md](../architecture/ARCHITECTURE_V2.9.md) - 架构设计
-- [../RELEASE_NOTES.md](../RELEASE_NOTES.md) - 发布说明
+- [../../RELEASE_NOTES.md](../../RELEASE_NOTES.md) - 发布说明
 
 ---
 
