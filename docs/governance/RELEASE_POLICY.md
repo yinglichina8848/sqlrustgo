@@ -1,8 +1,8 @@
 # SQLRustGo 发布策略
 
-> **版本**: 1.0
-> **更新日期**: 2026-03-07
-> **维护人**: yinglichina8848
+> **版本**: 2.0
+> **更新日期**: 2026-05-05
+> **维护人**: macmini opencode
 
 ---
 
@@ -34,55 +34,91 @@ version = "1.2.0"
 
 ---
 
-## 二、版本阶段
+## 二、版本阶段与门禁模型
 
-### 2.1 阶段定义
+### 2.1 四级门禁模型 (A/B/R/G)
 
-| 阶段 | 状态 | 目标用户 | 稳定性 |
-|------|------|----------|--------|
-| **Draft** | 架构设计 | 开发团队 | 无保证 |
-| **Alpha** | 功能开发 | 早期测试者 | 低 |
-| **Beta** | Bug 修复 | 测试用户 | 中 |
-| **RC** | 候选发布 | 预览用户 | 高 |
-| **GA** | 正式发布 | 生产用户 | 100% |
+v2.9.0+ 采用四级门禁模型，确保每个发布阶段的质量：
 
-### 2.2 阶段转换规则
+```
+A-Gate → B-Gate → R-Gate → G-Gate
+ (α入口)  (β入口)  (RC入口)  (GA入口)
+```
+
+|| 门禁 | 名称 | 目标 | 覆盖率目标 |
+||------|------|------|-----------|
+|| **A-Gate** | Alpha Gate | 开发完成 | ≥50% |
+|| **B-Gate** | Beta Gate | 功能冻结 | ≥75% |
+|| **R-Gate** | RC Gate | 发布候选 | ≥75% |
+|| **G-Gate** | GA Gate | 正式发布 | ≥85% |
+
+### 2.2 阶段与门禁对应
+
+|| 阶段 | 状态 | 门禁 | 目标用户 |
+||------|------|------|----------|
+|| **Draft** | 架构设计 | 无 | 开发团队 |
+|| **Alpha** | 功能开发 | A-Gate | 早期测试者 |
+|| **Beta** | Bug 修复 | B-Gate | 测试用户 |
+|| **RC** | 候选发布 | R-Gate (R1-R10) | 预览用户 |
+|| **GA** | 正式发布 | G-Gate | 生产用户 |
+
+### 2.3 R-Gate 内部检查项 (R1-R10)
+
+|| Gate | 名称 | 说明 |
+||------|------|------|
+|| R1 | Build | cargo build --release --workspace |
+|| R2 | Test | cargo test --all-features |
+|| R3 | Clippy | cargo clippy --all-features |
+|| R4 | Format | cargo fmt --all -- --check |
+|| R5 | Coverage | cargo tarpaulin ≥75% |
+|| R6 | Security | cargo audit |
+|| R7 | Docs | check_docs_links.sh |
+|| R8 | SQL Compat | SQL Corpus ≥80% |
+|| R9 | Performance | Performance baseline no regression |
+|| R10 | Formal Proof | ≥10 proof files verified |
+
+### 2.4 阶段转换规则
 
 ```
 Draft → Alpha → Beta → RC → GA
   │       │       │      │
-  │       │       │      └─ 需通过 Release Gate
-  │       │       └──────── 需通过 Beta Gate
-  │       └──────────────── 需通过 Alpha Gate
-  └───────────────────────── 架构评审通过
+  │       │       │      └─ 需通过 G-Gate
+  │       │       └──────── 需通过 R-Gate (R1-R10)
+  │       └──────────────── 需通过 B-Gate
+  └───────────────────────── 需通过 A-Gate
 ```
 
-详见: [RELEASE_LIFECYCLE.md](./RELEASE_LIFECYCLE.md)
+详见: [gate_spec.md](./gate_spec.md) | [RELEASE_LIFECYCLE.md](./RELEASE_LIFECYCLE.md)
 
 ---
 
 ## 三、发布流程
 
-### 3.1 发布检查点
+### 3.1 发布检查点 (门禁)
 
-| 检查点 | 触发条件 | 审核人 |
-|--------|----------|--------|
-|**吃水门**| 进入 Alpha 前 | 架构委员会 |
-|**阿尔法门**| 进入 Beta 前 |维护者|
-|**贝塔门**| 进入 RC 前 |维护者 + 1 审阅者|
-|**释放门**| 进入 GA 前 | 完整评审 |
+|| 检查点 | 触发条件 | 审核人 |
+||--------|----------|--------|
+|| **A-Gate** | 进入 Alpha 前 | 架构委员会 |
+|| **B-Gate** | 进入 Beta 前 | 维护者 |
+|| **R-Gate** | 进入 RC 前 | 维护者 + 1 审阅者 |
+|| **G-Gate** | 进入 GA 前 | 完整评审 |
 
-### 3.2 发布前检查清单
+### 3.2 门禁检查清单
 
-#### Release Gate 检查项:
+#### G-Gate 检查项:
 
+- [ ] R1: cargo build --release --workspace 通过
+- [ ] R2: cargo test --all-features 100% 通过
+- [ ] R3: cargo clippy --all-features 零警告
+- [ ] R4: cargo fmt --all -- --check 通过
+- [ ] R5: cargo tarpaulin ≥85% 覆盖率
+- [ ] R6: cargo audit 无漏洞
+- [ ] R7: check_docs_links.sh 无死链
+- [ ] R8: SQL Corpus ≥80% 兼容性
+- [ ] R9: cargo bench 无性能回归
+- [ ] R10: 形式化证明 ≥10 proof files
 - [ ] 所有 CI 检查通过
-- [ ] 单元测试覆盖率 ≥ 80%
-- [ ] 集成测试全部通过
 - [ ] 文档齐全 (API, CHANGELOG)
-- [ ] 安全扫描无高危漏洞
-- [ ] 性能基准测试达标
-- [ ] 向后兼容性检查通过
 - [ ] 版本号已更新
 - [ ] CHANGELOG.md 已更新
 
@@ -90,24 +126,24 @@ Draft → Alpha → Beta → RC → GA
 
 ```
 1. 创建 Tag
-   git tag -a v1.2.0 -m "Release v1.2.0"
+   git tag -a v2.9.0 -m "Release v2.9.0"
 
 2. 推送 Tag
-   git push origin v1.2.0
+   git push gitea v2.9.0
 
-3. 创建 GitHub Release
+3. 创建 Gitea Release
    - 填写 Release Notes
    - 附加构建产物
    - 标记为 Pre-release (非 GA)
 
 4. 合并到 main
    git checkout main
-   git merge release/1.2
-   git push origin main
+   git merge release/2.9
+   git push gitea main
 
 5. 创建维护分支
-   git checkout -b release/1.2
-   git push origin release/1.2
+   git checkout -b release/2.9
+   git push gitea release/2.9
 ```
 
 ---
@@ -162,31 +198,33 @@ Draft → Alpha → Beta → RC → GA
 ```bash
 # 回滚到上一个 Tag
 git revert HEAD
-git push origin main --force
+git push gitea main --force
 
 # 或者切换到上一个稳定版本
-git checkout v1.1.0
+git checkout v2.9.0
 ```
 
 ---
 
 ## 六、相关文档
 
-| 文档 | 说明 |
-|------|------|
-| [BRANCH_GOVERNANCE.md](../BRANCH_GOVERNANCE.md) | 分支治理 |
-| [RELEASE_LIFECYCLE.md](./RELEASE_LIFECYCLE.md) | 版本生命周期 |
-| 贡献指南 | (待创建) |
-| [AI_COLLABORATION.md](./AI_COLLABORATION.md) | AI 协作规则 |
+|| 文档 | 说明 |
+||------|------|
+|| [gate_spec.md](./gate_spec.md) | A/B/R/G 门禁规范详细说明 |
+|| [RELEASE_LIFECYCLE.md](./RELEASE_LIFECYCLE.md) | 版本生命周期 |
+|| [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md) | 门禁检查清单 |
+|| [GATE_CI_CD.md](./GATE_CI_CD.md) | CI/CD 自动化 |
+|| [AI_COLLABORATION.md](./AI_COLLABORATION.md) | AI 协作规则 |
 
 ---
 
 ## 七、变更历史
 
-| 版本 | 日期 | 说明 |
-|------|------|------|
-| 1.0 | 2026-03-07 | 初始版本 |
+|| 版本 | 日期 | 说明 |
+||------|------|------|
+|| 2.0 | 2026-05-05 | 对齐 v2.9.0 门禁模型：A/B/R/G 四级门禁，R1-R10 检查项 |
+|| 1.0 | 2026-03-07 | 初始版本 |
 
 ---
 
-*本文档由 yinglichina8848 维护*
+*本文档由 macmini opencode 维护*

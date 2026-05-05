@@ -1,152 +1,157 @@
 # SQLRustGo 版本生命周期
 
-> **版本**: 1.0
-> **更新日期**: 2026-03-07
-> **维护人**: yinglichina8848
+> **版本**: 2.0
+> **更新日期**: 2026-05-05
+> **维护人**: macmini opencode
 
 ---
 
 ## 一、版本阶段模型
 
-SQLRustGo 使用标准的软件发布生命周期：
+SQLRustGo 使用四级门禁发布生命周期：
 
 ```
-Draft → Alpha → Beta → RC → GA
+A-Gate → B-Gate → R-Gate → G-Gate
+ (α入口)  (β入口)  (RC入口)  (GA入口)
 ```
 
-该模型适用于 SOLO Coder + AI 协作开发环境。
+该模型适用于 SOLO Coder + AI 协作开发环境，确保每个发布阶段的质量门槛。
 
 ---
 
 ## 二、阶段详解
 
-### 2.1 Draft 阶段
+### 2.1 A-Gate (Alpha Gate)
 
-**阶段说明**: 设计与架构阶段
+**阶段说明**: 开发完成阶段
 
 **特点**:
-- 架构设计
-- 文档设计
-- 技术验证
-- 原型实现
+- 核心功能实现
+- 架构设计完成
+- 技术验证通过
+- 原型可运行
 
 **规则**:
-- 主要工作在 `develop-vX.Y.Z`
-- 不发布 Release
-- 不产生稳定 API
+- 主要工作在 `develop/vX.Y.Z`
+- 不发布正式 Release
+- API 可能变化
 
-**Git 实现**:
+**分支示例**:
 ```
-develop/v1.2.0
+develop/v2.9.0
 ```
 
 **产出**:
 - 设计文档
 - 架构图
-- 原型代码
-
-**门禁要求**:
-- 编译通过
-
----
-
-### 2.2 Alpha 阶段
-
-**阶段说明**: 功能开发阶段
-
-**特点**:
-- 核心功能实现
-- API 可能变化
-- 功能不完整
-
-**规则**:
-- 继续在 `develop-vX.Y.Z` 开发
-- 使用 Tag 标记版本
-
-**Tag 示例**:
-```
-v1.2.0-alpha1
-v1.2.0-alpha2
-v1.2.0-alpha3
-```
+- 可运行原型
 
 **门禁要求**:
 - 编译通过
 - 测试通过率 ≥ 80%
+- 格式化检查通过
 
 ---
 
-### 2.3 Beta 阶段
+### 2.2 B-Gate (Beta Gate)
 
-**阶段说明**: 功能基本完成
+**阶段说明**: 功能冻结阶段
 
 **特点**:
-- 功能冻结
+- 功能开发完成
+- 进入冻结期
 - API 基本稳定
 - 重点修复 Bug
 
 **规则**:
 - 不再接受新功能
 - 只允许 Bug Fix
+- 使用 Tag 标记版本
 
-**Tag 示例**:
+**分支/Tag 示例**:
 ```
-v1.2.0-beta1
-v1.2.0-beta2
+alpha/v2.9.0
+v2.9.0-alpha1
+v2.9.0-alpha2
 ```
 
 **门禁要求**:
-- 编译通过
-- 测试通过率 ≥ 95%
+- 编译通过 (release 模式)
+- 测试通过率 ≥ 90%
 - Clippy 零警告
+- 覆盖率 ≥ 75%
 
 ---
 
-### 2.4 RC 阶段 (Release Candidate)
+### 2.3 R-Gate (RC Gate)
 
-**阶段说明**: 候选发布版本
+**阶段说明**: 发布候选阶段
 
 **特点**:
 - 只允许严重 Bug 修复
 - 文档完善
 - 性能优化
+- 功能完全冻结
 
 **规则**:
 - 禁止新功能
 - CI 必须全部通过
+- R1-R10 十项检查全部通过
 
-**Tag 示例**:
+**分支/Tag 示例**:
 ```
-v1.2.0-rc1
-v1.2.0-rc2
+beta/v2.9.0
+v2.9.0-rc1
+v2.9.0-rc2
 ```
+
+**R1-R10 检查项**:
+
+| Gate | 检查项 | 命令 | 通过标准 |
+|------|--------|------|----------|
+| R1 | Build | `cargo build --release --workspace` | 无错误 |
+| R2 | Test | `cargo test --all-features` | 100% 通过 |
+| R3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 |
+| R4 | Format | `cargo fmt --all -- --check` | 无格式错误 |
+| R5 | Coverage | `cargo tarpaulin --workspace --all-features` | ≥75% |
+| R6 | Security | `cargo audit` | 无漏洞 |
+| R7 | Docs | `check_docs_links.sh` | 无死链 |
+| R8 | SQL Compat | SQL Corpus 测试 | ≥80% |
+| R9 | Performance | `cargo bench` | 无性能回归 |
+| R10 | Formal Proof | TLA+/Dafny/Formulog | ≥10 proof files |
 
 **门禁要求**:
+- R1-R10 全部通过
 - 测试 100% 通过
 - CI 全绿
+- 覆盖率 ≥ 75%
 
 ---
 
-### 2.5 GA 阶段 (General Availability)
+### 2.4 G-Gate (GA Gate)
 
 **正式发布版本**
 
+**阶段说明**: 正式发布阶段
+
 **Tag**:
 ```
-v1.2.0
+v2.9.0
 ```
 
 **流程**:
 ```
-develop/v1.2.0
+develop/v2.9.0
     │
-    └── GA
-        ├── Tag v1.2.0
+    └── G-Gate
+        ├── Tag v2.9.0
         ├── Merge → main
-        └── Create release/1.2
+        └── Create release/2.9
 ```
 
 **门禁要求**:
+- 所有 R1-R10 检查通过
+- 覆盖率 ≥ 85%
 - 所有问题关闭
 - 发布审批通过
 
@@ -154,36 +159,33 @@ develop/v1.2.0
 
 ## 三、阶段转换检查点
 
-### 3.1 草案 → 阿尔法
+### 3.1 A-Gate → B-Gate
 
 | 检查项 | 要求 | 状态 |
 |--------|------|------|
 | 架构设计完成 | ✅ | |
 | 接口定义完整 | ✅ | |
 | 编译通过 | ✅ | |
+| 测试通过率 ≥ 80% | ✅ | |
 
-### 3.2 阿尔法 → 贝塔
-
-| 检查项 | 要求 | 状态 |
-|--------|------|------|
-| 核心功能完成 | 测试 ≥ 80% | |
-| 无 P0 Bug | ✅ | |
-| 功能评审通过 | ✅ | |
-
-### 3.3 测试版 → RC
+### 3.2 B-Gate → R-Gate
 
 | 检查项 | 要求 | 状态 |
 |--------|------|------|
 | 功能冻结 | ✅ | |
-| 测试 ≥ 95% | ✅ | |
+| 无 P0/P1 Bug | ✅ | |
+| 测试通过率 ≥ 90% | ✅ | |
 | Clippy 零警告 | ✅ | |
+| 覆盖率 ≥ 75% | ✅ | |
 
-### 3.4 RC → GA
+### 3.3 R-Gate → G-Gate
 
 | 检查项 | 要求 | 状态 |
 |--------|------|------|
+| R1-R10 全部通过 | ✅ | |
 | 测试 100% | ✅ | |
 | CI 全绿 | ✅ | |
+| 覆盖率 ≥ 85% | ✅ | |
 | 无开放 Bug | ✅ | |
 | 发布审批 | ✅ | |
 
@@ -201,41 +203,21 @@ v{MAJOR}.{MINOR}.{PATCH}-{phase}{number}
 
 | 阶段 | Tag 格式 | 示例 |
 |------|----------|------|
-| Alpha |vX.Y.Z-alpha{N}|v1.2.0-alpha1|
-| Beta |vX.Y.Z-beta{N}| v1.2.0-beta1 |
-| RC |vX.Y.Z-rc{N}| v1.2.0-rc1 |
-| GA | vX.Y.Z | v1.2.0 |
-| Patch |vX.Y.Z-补丁{N}|v1.2.1-补丁1|
+| Alpha | vX.Y.Z-alpha{N} | v2.9.0-alpha1 |
+| Beta | vX.Y.Z-alpha{N} | v2.9.0-alpha3 |
+| RC | vX.Y.Z-rc{N} | v2.9.0-rc1 |
+| GA | vX.Y.Z | v2.9.0 |
+| Patch | vX.Y.Z-patch{N} | v2.9.1-patch1 |
 
 ---
 
-## 五、Milestone 使用
-
-每个版本使用 GitHub Milestone 管理:
-
-```
-v1.2.0 Milestone
-    │
-    ├── Issues
-    │   ├── Feature Request
-    │   ├── Bug Report
-    │   └── Documentation
-    │
-    └── Pull Requests
-        ├── PR for Feature A
-        ├── PR for Feature B
-        └── PR for Bug Fix
-```
-
----
-
-## 六、版本号规则
+## 五、版本号规则
 
 遵循语义化版本 (Semantic Versioning):
 
 ```
 MAJOR.MINOR.PATCH
-1  . 2  . 0
+2  . 9  . 0
 
 MAJOR: 破坏性变更
 MINOR: 新功能 (向后兼容)
@@ -244,22 +226,24 @@ PATCH: Bug 修复 (向后兼容)
 
 ---
 
-## 七、相关文档
+## 六、相关文档
 
 | 文档 | 说明 |
 |------|------|
-| [BRANCH_GOVERNANCE.md](../BRANCH_GOVERNANCE.md) | 分支治理 |
+| [gate_spec.md](./gate_spec.md) | 门禁规范详细说明 |
 | [RELEASE_POLICY.md](./RELEASE_POLICY.md) | 发布策略 |
-| 贡献指南 | (待创建) |
+| [RELEASE_GATE_CHECKLIST.md](./RELEASE_GATE_CHECKLIST.md) | 门禁检查清单 |
+| [GA_RELEASE_TIMELINE.md](./GA_RELEASE_TIMELINE.md) | GA 发布 timeline |
 
 ---
 
-## 八、变更历史
+## 七、变更历史
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| 2.0 | 2026-05-05 | 替换 Draft/Alpha/Beta/RC/GA 为 A-Gate→B-Gate→R-Gate→G-Gate 模型 |
 | 1.0 | 2026-03-07 | 初始版本 |
 
 ---
 
-*本文档由 yinglichina8848 维护*
+*本文档由 macmini opencode 维护*
