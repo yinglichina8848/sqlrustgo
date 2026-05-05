@@ -1,7 +1,9 @@
 //! Optimizer Rules Integration Tests
 
 use sqlrustgo_optimizer::{
-    rules::{ConstantFolding, PredicatePushdown, ProjectionPruning, JoinType, Expr, BinaryOperator},
+    rules::{
+        BinaryOperator, ConstantFolding, Expr, JoinType, PredicatePushdown, ProjectionPruning,
+    },
     Rule,
 };
 
@@ -12,13 +14,19 @@ mod predicate_pushdown_tests {
     #[test]
     fn test_predicate_pushdown_name() {
         let rule = PredicatePushdown::new();
-        assert_eq!(<PredicatePushdown as Rule<i32>>::name(&rule), "PredicatePushdown");
+        assert_eq!(
+            <PredicatePushdown as Rule<i32>>::name(&rule),
+            "PredicatePushdown"
+        );
     }
 
     #[test]
     fn test_predicate_pushdown_default() {
         let rule = PredicatePushdown::default();
-        assert_eq!(<PredicatePushdown as Rule<i32>>::name(&rule), "PredicatePushdown");
+        assert_eq!(
+            <PredicatePushdown as Rule<i32>>::name(&rule),
+            "PredicatePushdown"
+        );
     }
 
     #[test]
@@ -37,13 +45,19 @@ mod projection_pruning_tests {
     #[test]
     fn test_projection_pruning_name() {
         let rule = ProjectionPruning::new();
-        assert_eq!(<ProjectionPruning as Rule<i32>>::name(&rule), "ProjectionPruning");
+        assert_eq!(
+            <ProjectionPruning as Rule<i32>>::name(&rule),
+            "ProjectionPruning"
+        );
     }
 
     #[test]
     fn test_projection_pruning_default() {
         let rule = ProjectionPruning::default();
-        assert_eq!(<ProjectionPruning as Rule<i32>>::name(&rule), "ProjectionPruning");
+        assert_eq!(
+            <ProjectionPruning as Rule<i32>>::name(&rule),
+            "ProjectionPruning"
+        );
     }
 
     #[test]
@@ -62,13 +76,19 @@ mod constant_folding_tests {
     #[test]
     fn test_constant_folding_name() {
         let rule = ConstantFolding::new();
-        assert_eq!(<ConstantFolding as Rule<i32>>::name(&rule), "ConstantFolding");
+        assert_eq!(
+            <ConstantFolding as Rule<i32>>::name(&rule),
+            "ConstantFolding"
+        );
     }
 
     #[test]
     fn test_constant_folding_default() {
         let rule = ConstantFolding::default();
-        assert_eq!(<ConstantFolding as Rule<i32>>::name(&rule), "ConstantFolding");
+        assert_eq!(
+            <ConstantFolding as Rule<i32>>::name(&rule),
+            "ConstantFolding"
+        );
     }
 
     #[test]
@@ -102,7 +122,9 @@ mod rule_trait_tests {
     fn test_rule_trait_apply_changes_plan() {
         struct IncrementRule;
         impl Rule<i32> for IncrementRule {
-            fn name(&self) -> &str { "IncrementRule" }
+            fn name(&self) -> &str {
+                "IncrementRule"
+            }
             fn apply(&self, plan: &mut i32) -> bool {
                 *plan += 1;
                 true
@@ -118,7 +140,9 @@ mod rule_trait_tests {
     fn test_rule_trait_apply_no_change() {
         struct NoChangeRule;
         impl Rule<String> for NoChangeRule {
-            fn name(&self) -> &str { "NoChangeRule" }
+            fn name(&self) -> &str {
+                "NoChangeRule"
+            }
             fn apply(&self, _plan: &mut String) -> bool {
                 false
             }

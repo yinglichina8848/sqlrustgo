@@ -1,6 +1,8 @@
 //! Optimizer Statistics Integration Tests
 
-use sqlrustgo_optimizer::stats::{ColumnStats, TableStats, StatisticsProvider, InMemoryStatisticsProvider};
+use sqlrustgo_optimizer::stats::{
+    ColumnStats, InMemoryStatisticsProvider, StatisticsProvider, TableStats,
+};
 
 mod column_stats_tests {
     use super::*;

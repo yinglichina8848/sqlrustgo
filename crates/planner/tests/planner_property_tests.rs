@@ -1,6 +1,6 @@
-use sqlrustgo_planner::{LogicalPlan, PhysicalPlan, JoinType, AggregateFunction, Operator, Schema};
-use sqlrustgo_types::Value;
 use sqlrustgo_planner::Expr;
+use sqlrustgo_planner::{AggregateFunction, JoinType, LogicalPlan, Operator, PhysicalPlan, Schema};
+use sqlrustgo_types::Value;
 
 #[cfg(test)]
 mod logical_plan_tests {
@@ -104,7 +104,14 @@ mod logical_plan_tests {
             limit: 100,
             offset: Some(10),
         };
-        assert!(matches!(plan, LogicalPlan::Limit { limit: 100, offset: Some(10), .. }));
+        assert!(matches!(
+            plan,
+            LogicalPlan::Limit {
+                limit: 100,
+                offset: Some(10),
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -125,7 +132,13 @@ mod logical_plan_tests {
             join_type: JoinType::Inner,
             condition: None,
         };
-        assert!(matches!(plan, LogicalPlan::Join { join_type: JoinType::Inner, .. }));
+        assert!(matches!(
+            plan,
+            LogicalPlan::Join {
+                join_type: JoinType::Inner,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -146,7 +159,13 @@ mod logical_plan_tests {
             join_type: JoinType::Left,
             condition: None,
         };
-        assert!(matches!(plan, LogicalPlan::Join { join_type: JoinType::Left, .. }));
+        assert!(matches!(
+            plan,
+            LogicalPlan::Join {
+                join_type: JoinType::Left,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -167,7 +186,13 @@ mod logical_plan_tests {
             join_type: JoinType::Right,
             condition: None,
         };
-        assert!(matches!(plan, LogicalPlan::Join { join_type: JoinType::Right, .. }));
+        assert!(matches!(
+            plan,
+            LogicalPlan::Join {
+                join_type: JoinType::Right,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -188,7 +213,13 @@ mod logical_plan_tests {
             join_type: JoinType::Full,
             condition: None,
         };
-        assert!(matches!(plan, LogicalPlan::Join { join_type: JoinType::Full, .. }));
+        assert!(matches!(
+            plan,
+            LogicalPlan::Join {
+                join_type: JoinType::Full,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -411,7 +442,13 @@ mod expr_tests {
         let left = Expr::Column(sqlrustgo_planner::Column::new("a".to_string()));
         let right = Expr::Literal(Value::Integer(1));
         let expr = Expr::binary_expr(left, Operator::Plus, right);
-        assert!(matches!(expr, Expr::BinaryExpr { op: Operator::Plus, .. }));
+        assert!(matches!(
+            expr,
+            Expr::BinaryExpr {
+                op: Operator::Plus,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -420,6 +457,12 @@ mod expr_tests {
             op: Operator::Minus,
             expr: Box::new(Expr::Literal(Value::Integer(42))),
         };
-        assert!(matches!(expr, Expr::UnaryExpr { op: Operator::Minus, .. }));
+        assert!(matches!(
+            expr,
+            Expr::UnaryExpr {
+                op: Operator::Minus,
+                ..
+            }
+        ));
     }
 }
