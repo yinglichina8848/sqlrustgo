@@ -151,6 +151,7 @@ impl ReadWriteSplitter {
             sqlrustgo_parser::Statement::SetRole(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::ShowRoles => QueryClass::Read,
             sqlrustgo_parser::Statement::ShowGrantsFor(_) => QueryClass::Read,
+            sqlrustgo_parser::Statement::Explain(_) => QueryClass::Read,
         }
     }
 

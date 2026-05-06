@@ -242,22 +242,23 @@ mod public_exports_tests {
     use sqlrustgo_optimizer::{
         ConstantFolding, PredicatePushdown, ProjectionPruning, Rule,
     };
+    use sqlrustgo_optimizer::unified_plan::UnifiedPlan;
 
     #[test]
     fn test_constant_folding_is_rule() {
         let rule = ConstantFolding::new();
-        assert_eq!(<ConstantFolding as Rule<i32>>::name(&rule), "ConstantFolding");
+        assert_eq!(<ConstantFolding as Rule<UnifiedPlan>>::name(&rule), "ConstantFolding");
     }
 
     #[test]
     fn test_predicate_pushdown_is_rule() {
         let rule = PredicatePushdown::new();
-        assert_eq!(<PredicatePushdown as Rule<i32>>::name(&rule), "PredicatePushdown");
+        assert_eq!(<PredicatePushdown as Rule<UnifiedPlan>>::name(&rule), "PredicatePushdown");
     }
 
     #[test]
     fn test_projection_pruning_is_rule() {
         let rule = ProjectionPruning::new();
-        assert_eq!(<ProjectionPruning as Rule<i32>>::name(&rule), "ProjectionPruning");
+        assert_eq!(<ProjectionPruning as Rule<UnifiedPlan>>::name(&rule), "ProjectionPruning");
     }
 }
