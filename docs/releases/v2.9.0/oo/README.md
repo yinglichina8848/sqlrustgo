@@ -1,6 +1,6 @@
 # SQLRustGo v2.9.0 OO 架构文档
 
-> **版本**: v2.9.0 (GA)
+> **版本**: v2.9.0 (RC)
 > **代号**: Formal Verification Excellence
 > **更新日期**: 2026-05-05
 
