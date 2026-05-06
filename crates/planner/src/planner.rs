@@ -271,6 +271,10 @@ impl DefaultPlanner {
                 // Union - use left plan as base (simplified)
                 self.create_physical_plan_internal(left)
             }
+            LogicalPlan::With { input, .. } => {
+                // CTE handling: delegate to input plan (CTEs are resolved at execution layer)
+                self.create_physical_plan_internal(input)
+            }
         }
     }
 }
