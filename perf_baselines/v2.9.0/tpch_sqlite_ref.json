@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-05-06T03:51:26Z",
+  "system": "sqlite",
+  "sf": 0.1,
+  "queries": [
+   {"name": "Q1", "duration_ms": 1018.99, "rows": 4}
+   ,
+   {"name": "Q2", "duration_ms": 97.53, "rows": 44}
+   ,
+   {"name": "Q3", "duration_ms": 232.28, "rows": 10}
+   ,
+   {"name": "Q4", "duration_ms": 51.19, "rows": 5}
+   ,
+   {"name": "Q5", "duration_ms": 100.45, "rows": 5}
+   ,
+   {"name": "Q6", "duration_ms": 141.12, "rows": 1}
+   ,
+   {"name": "Q7", "duration_ms": 149.28, "rows": 4}
+   ,
+   {"name": "Q8", "duration_ms": 331.68, "rows": 1}
+   ,
+   {"name": "Q9", "duration_ms": 374.15, "rows": 175}
+   ,
+   {"name": "Q10", "duration_ms": 64.28, "rows": 20}
+   ,
+   {"name": "Q11", "duration_ms": 65.28, "rows": 22}
+   ,
+   {"name": "Q12", "duration_ms": 78.97, "rows": 2}
+   ,
+   {"name": "Q13", "duration_ms": 23.05, "rows": 10}
+   ,
+   {"name": "Q14", "duration_ms": 40.69, "rows": 1}
+   ,
+   {"name": "Q15", "duration_ms": 210.73, "rows": 1}
+   ,
+   {"name": "Q16", "duration_ms": 39.54, "rows": 2862}
+   ,
+   {"name": "Q17", "duration_ms": 29.77, "rows": 1}
+   ,
+   {"name": "Q18", "duration_ms": 865.55, "rows": 5}
+   ,
+   {"name": "Q19", "duration_ms": 168.63, "rows": 1}
+   ,
+   {"name": "Q20", "duration_ms": 630.97, "rows": 9}
+   ,
+   {"name": "Q21", "duration_ms": 139.42, "rows": 10}
+   ,
+   {"name": "Q22", "duration_ms": 25.6, "rows": 1}
+  ]
+}

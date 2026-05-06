@@ -28,6 +28,9 @@ check "A1: SQL Corpus >=85%" "cargo test -p sqlrustgo-sql-corpus --quiet"
 check "R9: E-09 QPS regression" "bash scripts/gate/check_regression.sh --skip-run 2>&1 | grep -q 'R9: PASSED'"
 check "R9: baseline exists" "test -f perf_baselines/v2.9.0/baseline.json"
 
+# === R10: TPC-H Performance (optional, non-blocking) ===
+check "R10: TPC-H gate script exists" "test -f scripts/gate/check_tpch.sh"
+
 # === Documentation (Beta docs) ===
 check "Docs: VERSION_PLAN.md" "test -f docs/releases/v2.9.0/VERSION_PLAN.md"
 check "Docs: RELEASE_NOTES.md" "test -f docs/releases/v2.9.0/RELEASE_NOTES.md"
