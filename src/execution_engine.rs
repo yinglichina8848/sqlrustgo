@@ -639,7 +639,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
                 if let Some(ref having_expr) = select.having {
                     let having_schema = build_aggregate_schema(group_exprs, &select.aggregates)?;
-                    agg_result_rows.retain(|row| self.eval_predicate(having_expr, row, &having_schema));
+                    agg_result_rows
+                        .retain(|row| self.eval_predicate(having_expr, row, &having_schema));
                 }
 
                 let row_count = agg_result_rows.len();
@@ -2974,11 +2975,13 @@ impl<S: StorageEngine> ExecutionEngine<S> {
         match expr {
             // AND short-circuits on false
             Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
-                self.eval_predicate(left, row, table_info) && self.eval_predicate(right, row, table_info)
+                self.eval_predicate(left, row, table_info)
+                    && self.eval_predicate(right, row, table_info)
             }
             // OR short-circuits on true
             Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
-                self.eval_predicate(left, row, table_info) || self.eval_predicate(right, row, table_info)
+                self.eval_predicate(left, row, table_info)
+                    || self.eval_predicate(right, row, table_info)
             }
             // IS NULL - always goes through evaluate_expression for value extraction
             Expression::IsNull(inner) => match evaluate_expression(inner, row, table_info) {
@@ -3021,9 +3024,9 @@ impl<S: StorageEngine> ExecutionEngine<S> {
                     false
                 } else {
                     let subquery_values = self.execute_subquery(subquery, row, table_info);
-                    subquery_values.iter().any(|sq_row| {
-                        sq_row.first().map(|v| *v == left_val).unwrap_or(false)
-                    })
+                    subquery_values
+                        .iter()
+                        .any(|sq_row| sq_row.first().map(|v| *v == left_val).unwrap_or(false))
                 }
             }
             // NOT IN subquery predicate: col NOT IN (SELECT col FROM ...)
@@ -3038,9 +3041,9 @@ impl<S: StorageEngine> ExecutionEngine<S> {
                     if subquery_values.is_empty() {
                         true
                     } else {
-                        !subquery_values.iter().any(|sq_row| {
-                            sq_row.first().map(|v| *v == left_val).unwrap_or(false)
-                        })
+                        !subquery_values
+                            .iter()
+                            .any(|sq_row| sq_row.first().map(|v| *v == left_val).unwrap_or(false))
                     }
                 }
             }
@@ -3118,7 +3121,13 @@ impl<S: StorageEngine> ExecutionEngine<S> {
         let filtered: Vec<Vec<Value>> = if let Some(ref where_expr) = select.where_clause {
             let folded_where = where_expr.fold_constants();
             // Use version with outer context for correlated subqueries
-            filtered_records_with_outer(&folded_where, records, &table_info, outer_row, outer_table_info)
+            filtered_records_with_outer(
+                &folded_where,
+                records,
+                &table_info,
+                outer_row,
+                outer_table_info,
+            )
         } else {
             records
         };
@@ -3148,7 +3157,12 @@ impl<S: StorageEngine> ExecutionEngine<S> {
 }
 
 /// Filter records based on WHERE expression (used by subqueries)
-fn filtered_records(where_expr: &Expression, records: Vec<Vec<Value>>, table_info: &TableInfo) -> Vec<Vec<Value>> {
+#[allow(dead_code)]
+fn filtered_records(
+    where_expr: &Expression,
+    records: Vec<Vec<Value>>,
+    table_info: &TableInfo,
+) -> Vec<Vec<Value>> {
     records
         .into_iter()
         .filter(|row| eval_predicate_standalone(where_expr, row, table_info))
@@ -3165,21 +3179,30 @@ fn filtered_records_with_outer(
 ) -> Vec<Vec<Value>> {
     records
         .into_iter()
-        .filter(|row| eval_predicate_with_outer(where_expr, row, table_info, outer_row, outer_table_info))
+        .filter(|row| {
+            eval_predicate_with_outer(where_expr, row, table_info, outer_row, outer_table_info)
+        })
         .collect()
 }
 
 /// Standalone eval_predicate for use in filtered_records (no subquery support needed)
+#[allow(dead_code)]
 fn eval_predicate_standalone(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
     match expr {
         Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
-            eval_predicate_standalone(left, row, table_info) && eval_predicate_standalone(right, row, table_info)
+            eval_predicate_standalone(left, row, table_info)
+                && eval_predicate_standalone(right, row, table_info)
         }
         Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
-            eval_predicate_standalone(left, row, table_info) || eval_predicate_standalone(right, row, table_info)
+            eval_predicate_standalone(left, row, table_info)
+                || eval_predicate_standalone(right, row, table_info)
         }
-        Expression::IsNull(inner) => matches!(evaluate_expression(inner, row, table_info), Ok(val) if matches!(val, Value::Null)),
-        Expression::IsNotNull(inner) => !matches!(evaluate_expression(inner, row, table_info), Ok(val) if matches!(val, Value::Null)),
+        Expression::IsNull(inner) => {
+            matches!(evaluate_expression(inner, row, table_info), Ok(val) if matches!(val, Value::Null))
+        }
+        Expression::IsNotNull(inner) => {
+            !matches!(evaluate_expression(inner, row, table_info), Ok(val) if matches!(val, Value::Null))
+        }
         Expression::InList(left, values) => {
             let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
             if matches!(left_val, Value::Null) {
@@ -3219,7 +3242,9 @@ fn eval_predicate_standalone(expr: &Expression, row: &[Value], table_info: &Tabl
             let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
             sql_compare(op, &left_val, &right_val)
         }
-        _ => matches!(evaluate_expression(expr, row, table_info), Ok(val) if matches!(val, Value::Boolean(true))),
+        _ => {
+            matches!(evaluate_expression(expr, row, table_info), Ok(val) if matches!(val, Value::Boolean(true)))
+        }
     }
 }
 
@@ -3260,7 +3285,7 @@ fn evaluate_expression_with_outer(
             // Column not found in inner table - try outer table
             // For qualified names like "t.a", extract just the column name
             let col_name = if name.contains('.') {
-                name.split('.').last().unwrap_or(name)
+                name.split('.').next_back().unwrap_or(name)
             } else {
                 name
             };
@@ -3313,12 +3338,10 @@ fn eval_predicate_with_outer(
                 Ok(val) if matches!(val, Value::Null)
             )
         }
-        Expression::IsNotNull(inner) => {
-            !matches!(
-                evaluate_expression_with_outer(inner, row, table_info, outer_row, outer_table_info),
-                Ok(val) if matches!(val, Value::Null)
-            )
-        }
+        Expression::IsNotNull(inner) => !matches!(
+            evaluate_expression_with_outer(inner, row, table_info, outer_row, outer_table_info),
+            Ok(val) if matches!(val, Value::Null)
+        ),
         Expression::InList(left, values) => {
             let left_val =
                 evaluate_expression_with_outer(left, row, table_info, outer_row, outer_table_info)
@@ -3327,8 +3350,14 @@ fn eval_predicate_with_outer(
                 false
             } else {
                 values.iter().any(|v| {
-                    let val = evaluate_expression_with_outer(v, row, table_info, outer_row, outer_table_info)
-                        .unwrap_or(Value::Null);
+                    let val = evaluate_expression_with_outer(
+                        v,
+                        row,
+                        table_info,
+                        outer_row,
+                        outer_table_info,
+                    )
+                    .unwrap_or(Value::Null);
                     left_val == val
                 })
             }
@@ -3341,8 +3370,14 @@ fn eval_predicate_with_outer(
                 false
             } else {
                 !values.iter().any(|v| {
-                    let val = evaluate_expression_with_outer(v, row, table_info, outer_row, outer_table_info)
-                        .unwrap_or(Value::Null);
+                    let val = evaluate_expression_with_outer(
+                        v,
+                        row,
+                        table_info,
+                        outer_row,
+                        outer_table_info,
+                    )
+                    .unwrap_or(Value::Null);
                     left_val == val
                 })
             }
@@ -3372,10 +3407,12 @@ fn eval_predicate_with_outer(
             )
         }
         Expression::BinaryOp(left, op, right) => {
-            let left_val = evaluate_expression_with_outer(left, row, table_info, outer_row, outer_table_info)
-                .unwrap_or(Value::Null);
-            let right_val = evaluate_expression_with_outer(right, row, table_info, outer_row, outer_table_info)
-                .unwrap_or(Value::Null);
+            let left_val =
+                evaluate_expression_with_outer(left, row, table_info, outer_row, outer_table_info)
+                    .unwrap_or(Value::Null);
+            let right_val =
+                evaluate_expression_with_outer(right, row, table_info, outer_row, outer_table_info)
+                    .unwrap_or(Value::Null);
             sql_compare(op, &left_val, &right_val)
         }
         _ => matches!(

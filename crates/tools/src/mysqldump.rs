@@ -11,11 +11,11 @@
 use anyhow::{Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use sqlrustgo_storage::engine::StorageEngine;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
-use sqlrustgo_storage::engine::StorageEngine;
 use std::path::Path;
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -975,40 +975,68 @@ pub fn run_export(cmd: ExportCommand) -> Result<()> {
             writeln!(out)?;
 
             for table_name in &tables {
-                if verbose { println!("  Exporting: {}", table_name); }
+                if verbose {
+                    println!("  Exporting: {}", table_name);
+                }
                 let info = storage.get_table_info(table_name)?;
                 let rows = storage.scan(table_name)?;
                 writeln!(out, "DROP TABLE IF EXISTS `{}`;", table_name)?;
                 write!(out, "CREATE TABLE `{}` (", table_name)?;
-                let col_defs: Vec<String> = info.columns.iter().map(|c| {
-                    let nullable = if !c.nullable { " NOT NULL" } else { "" };
-                    let pk = if c.primary_key { " PRIMARY KEY" } else { "" };
-                    format!("`{}` {}{}{}", c.name, c.data_type, nullable, pk)
-                }).collect();
+                let col_defs: Vec<String> = info
+                    .columns
+                    .iter()
+                    .map(|c| {
+                        let nullable = if !c.nullable { " NOT NULL" } else { "" };
+                        let pk = if c.primary_key { " PRIMARY KEY" } else { "" };
+                        format!("`{}` {}{}{}", c.name, c.data_type, nullable, pk)
+                    })
+                    .collect();
                 writeln!(out, "{});", col_defs.join(", "))?;
                 writeln!(out)?;
 
                 if !rows.is_empty() {
                     for row_chunk in rows.chunks(100) {
-                        let values: Vec<String> = row_chunk.iter().map(|row: &Vec<sqlrustgo_types::Value>| {
-                            let vals: Vec<String> = row.iter().enumerate().map(|(j, v)| {
-                                let ct = &info.columns[j].data_type;
-                                if ct == "TEXT" || ct == "VARCHAR" || ct == "CHAR" {
-                                    if let sqlrustgo_types::Value::Text(s) = v {
-                                        format!("'{}'", s.replace("'", "''"))
-                                    } else { "NULL".to_string() }
-                                } else if let sqlrustgo_types::Value::Integer(n) = v { n.to_string() }
-                                else if let sqlrustgo_types::Value::Float(f) = v { f.to_string() }
-                                else { "NULL".to_string() }
-                            }).collect();
-                            format!("({})", vals.join(", "))
-                        }).collect();
-                        writeln!(out, "INSERT INTO `{}` VALUES {};", table_name, values.join(", "))?;
+                        let values: Vec<String> = row_chunk
+                            .iter()
+                            .map(|row: &Vec<sqlrustgo_types::Value>| {
+                                let vals: Vec<String> = row
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(j, v)| {
+                                        let ct = &info.columns[j].data_type;
+                                        if ct == "TEXT" || ct == "VARCHAR" || ct == "CHAR" {
+                                            if let sqlrustgo_types::Value::Text(s) = v {
+                                                format!("'{}'", s.replace("'", "''"))
+                                            } else {
+                                                "NULL".to_string()
+                                            }
+                                        } else if let sqlrustgo_types::Value::Integer(n) = v {
+                                            n.to_string()
+                                        } else if let sqlrustgo_types::Value::Float(f) = v {
+                                            f.to_string()
+                                        } else {
+                                            "NULL".to_string()
+                                        }
+                                    })
+                                    .collect();
+                                format!("({})", vals.join(", "))
+                            })
+                            .collect();
+                        writeln!(
+                            out,
+                            "INSERT INTO `{}` VALUES {};",
+                            table_name,
+                            values.join(", ")
+                        )?;
                     }
                     writeln!(out)?;
                 }
             }
-            println!("Export complete: {} tables -> {}", tables.len(), output.display());
+            println!(
+                "Export complete: {} tables -> {}",
+                tables.len(),
+                output.display()
+            );
             Ok(())
         }
     }

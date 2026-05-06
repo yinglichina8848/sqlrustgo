@@ -706,11 +706,7 @@ impl MemoryStorage {
     }
 
     /// Get or parse predicate, using cache if available (returns owned Predicate)
-    fn get_or_parse_predicate(
-        &mut self,
-        table: &str,
-        predicate: &str,
-    ) -> SqlResult<Predicate> {
+    fn get_or_parse_predicate(&mut self, table: &str, predicate: &str) -> SqlResult<Predicate> {
         let cache_key = format!("{}:{}", table, predicate);
 
         // If cached, return cloned version
@@ -725,13 +721,15 @@ impl MemoryStorage {
             .unwrap_or_default();
 
         let parsed = parse_predicate(predicate, &columns)?;
-        self.predicate_cache.insert(cache_key, (columns, parsed.clone()));
+        self.predicate_cache
+            .insert(cache_key, (columns, parsed.clone()));
         Ok(parsed)
     }
 
     /// Clear predicate cache for a table (call after insert/delete/update)
     pub fn clear_predicate_cache(&mut self, table: &str) {
-        self.predicate_cache.retain(|key, _| !key.starts_with(&format!("{}:", table)));
+        self.predicate_cache
+            .retain(|key, _| !key.starts_with(&format!("{}:", table)));
     }
 }
 
@@ -1002,9 +1000,7 @@ impl StorageEngine for MemoryStorage {
             return Ok(0);
         };
         let original_len = records.len();
-        records.retain(|row| {
-            !evaluate_predicate(&parsed_predicate, row).unwrap_or(false)
-        });
+        records.retain(|row| !evaluate_predicate(&parsed_predicate, row).unwrap_or(false));
         let deleted = original_len - records.len();
         if deleted > 0 {
             self.clear_predicate_cache(table);
