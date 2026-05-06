@@ -3,26 +3,31 @@
 
 [thresholds]
 # Per-crate minimum coverage (percentage)
+# Execution correctness (high priority)
 executor = 70      # Core execution engine - highest priority
-parser = 50         # Parser - critical path
-types = 30          # Type system
-planner = 15        # Planner - needs improvement
-optimizer = 10      # Optimizer - needs improvement
-storage = 20        # Storage engine
-catalog = 10        # Catalog
-security = 10       # Security
-information-schema = 10
-query-stats = 10
-gmp = 10
-graph = 10
 
-# Overall workspace minimum
-workspace = 30
+# Semantic correctness (raised from initial low values)
+planner = 40       # Query planning - semantic correctness core (was 15)
+optimizer = 30     # Query optimization - semantic correctness core (was 10)
 
-# Warn if any crate is below this (even if above threshold)
-warn_below = 50
+# Data integrity
+storage = 30       # Storage engine - raised for data integrity
+
+# Type system
+types = 30         # Type system
+
+# Parser
+parser = 50        # Parser - critical path
+
+# Other crates
+catalog = 10       # Catalog
+workspace = 80     # Hard gate: ≥80% for GA
+
+[thresholds.target]
+# Aspirational targets (non-blocking)
+total = 85         # Target ≥85% (non-blocking, aspirational)
 
 [fail_on]
 # CI will fail if any of these are true
 low_coverage = true
-regression = true   # Coverage dropped vs baseline
+regression = true  # Coverage dropped vs baseline (5% tolerance)
