@@ -2,6 +2,11 @@
 
 -- === JSON Functions Test Suite ===
 
+CREATE TABLE IF NOT EXISTS users (id INTEGER, name TEXT, email TEXT);
+INSERT INTO users VALUES (1, 'Alice', 'alice@test.com');
+INSERT INTO users VALUES (2, 'Bob', 'bob@test.com');
+INSERT INTO users VALUES (3, 'Charlie', 'charlie@test.com');
+
 -- === CASE: JSON function ===
 -- EXPECT: 1 row
 SELECT JSON('{"key": "value"}') as json_val;
