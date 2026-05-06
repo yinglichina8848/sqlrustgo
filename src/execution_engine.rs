@@ -814,7 +814,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             };
                             (t1, c1, t2, c2)
                         };
-                        if !lt.is_empty() && !rt.is_empty() && lt != rt {
+                        if lt != rt && !lc.is_empty() && !rc.is_empty() {
                             let left_ref = if lt.is_empty() {
                                 lc.clone()
                             } else {
@@ -862,7 +862,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             };
                             (t1, c1, t2, c2)
                         };
-                        if !lt.is_empty() && !rt.is_empty() && lt != rt {
+                        if lt != rt && !lc.is_empty() && !rc.is_empty() {
                             let left_ref = if lt.is_empty() {
                                 lc.clone()
                             } else {
