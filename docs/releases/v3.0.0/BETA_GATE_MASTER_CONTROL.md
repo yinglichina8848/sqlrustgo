@@ -67,15 +67,15 @@ Beta Gate 检查前必须满足：
 | #381 | Planner 测试扩展 | claude | 覆盖率 ≥80% | B5 |
 | #382 | TPC-H SF=1 CI Gate | TBD | check_tpch.sh --sf1 可运行 | B8 |
 
-### 3.2 测试任务（对应测试文件）
+### 3.2 稳定性测试任务（对应 Issue #394-398）
 
-| 测试文件 | 测试数 | 对应门禁 | 验收条件 |
-|---------|--------|---------|---------|
-| `concurrency_stress_test.rs` | - | B-S1 | 并发读/写/死锁检测全部 PASS |
-| `crash_recovery_test.rs` | 9 | B-S2 | 9/9 PASS，WAL 正确恢复 |
-| `long_run_stability_test.rs` | 10 | B-S3 | 10/10 PASS，内存增长 <10MB |
-| `wal_integration_test.rs` | - | B-S4 | 崩溃后零数据丢失 |
-| `network_tcp_smoke_test.rs` | - | B-S5 | KILL 后无连接泄漏 |
+| Issue | 测试文件 | 对应门禁 | 验收条件 |
+|-------|---------|---------|---------|
+| #394 | `concurrency_stress_test.rs` | B-S1 | 并发读/写/死锁检测全部 PASS |
+| #395 | `crash_recovery_test.rs` | B-S2 | 9/9 PASS，WAL 正确恢复 |
+| #396 | `long_run_stability_test.rs` | B-S3 | 10/10 PASS，内存增长 <10MB |
+| #397 | `wal_integration_test.rs` | B-S4 | 崩溃后零数据丢失 |
+| #398 | `network_tcp_smoke_test.rs` | B-S5 | KILL 后无连接泄漏 |
 
 ---
 
