@@ -170,3 +170,70 @@ fn test_where_true_all_rows() {
     let r = e.execute("SELECT * FROM t WHERE 1=1").unwrap();
     assert_eq!(r.rows.len(), 1);
 }
+
+// ===== IN operator tests =====
+
+#[test]
+fn test_in_integer_list() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a INTEGER)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(2),(3),(4),(5)").unwrap();
+    let r = e.execute("SELECT * FROM t WHERE a IN (1, 3, 5)").unwrap();
+    assert_eq!(r.rows.len(), 3);
+}
+
+#[test]
+fn test_in_text_list() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a TEXT)").unwrap();
+    e.execute("INSERT INTO t VALUES ('apple'),('banana'),('cherry')").unwrap();
+    let r = e.execute("SELECT * FROM t WHERE a IN ('apple', 'cherry')").unwrap();
+    assert_eq!(r.rows.len(), 2);
+}
+
+#[test]
+fn test_in_no_match() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a INTEGER)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(2),(3)").unwrap();
+    let r = e.execute("SELECT * FROM t WHERE a IN (10, 20, 30)").unwrap();
+    assert_eq!(r.rows.len(), 0);
+}
+
+#[test]
+fn test_not_in() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a INTEGER)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(2),(3),(4),(5)").unwrap();
+    let r = e.execute("SELECT * FROM t WHERE a NOT IN (2, 4)").unwrap();
+    assert_eq!(r.rows.len(), 3);
+}
+
+// ===== DISTINCT tests =====
+
+#[test]
+fn test_distinct_basic() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a INTEGER)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(1),(2),(2),(3)").unwrap();
+    let r = e.execute("SELECT DISTINCT a FROM t").unwrap();
+    assert_eq!(r.rows.len(), 3);
+}
+
+#[test]
+fn test_distinct_multiple_columns() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a INTEGER, b TEXT)").unwrap();
+    e.execute("INSERT INTO t VALUES (1,'x'),(1,'x'),(1,'y'),(2,'x')").unwrap();
+    let r = e.execute("SELECT DISTINCT a, b FROM t").unwrap();
+    assert_eq!(r.rows.len(), 3);
+}
+
+#[test]
+fn test_distinct_with_null() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a INTEGER)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(NULL),(NULL),(2)").unwrap();
+    let r = e.execute("SELECT DISTINCT a FROM t").unwrap();
+    assert_eq!(r.rows.len(), 3); // 1, NULL, 2
+}

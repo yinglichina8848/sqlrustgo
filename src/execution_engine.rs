@@ -2860,6 +2860,10 @@ fn expression_to_value(expr: &sqlrustgo_parser::Expression) -> Value {
             let s = s.trim();
             if s.eq_ignore_ascii_case("NULL") {
                 Value::Null
+            } else if s.eq_ignore_ascii_case("TRUE") {
+                Value::Boolean(true)
+            } else if s.eq_ignore_ascii_case("FALSE") {
+                Value::Boolean(false)
             } else if let Ok(n) = s.parse::<i64>() {
                 Value::Integer(n)
             } else if let Ok(f) = s.parse::<f64>() {
@@ -2985,6 +2989,30 @@ fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> b
             Ok(val) => !matches!(val, Value::Null),
             Err(_) => false,
         },
+        // IN list predicate: col IN (val1, val2, ...)
+        Expression::InList(left, values) => {
+            let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+            if matches!(left_val, Value::Null) {
+                false
+            } else {
+                values.iter().any(|v| {
+                    let val = evaluate_expression(v, row, table_info).unwrap_or(Value::Null);
+                    left_val == val
+                })
+            }
+        }
+        // NOT IN list predicate: col NOT IN (val1, val2, ...)
+        Expression::NotInList(left, values) => {
+            let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+            if matches!(left_val, Value::Null) {
+                false
+            } else {
+                !values.iter().any(|v| {
+                    let val = evaluate_expression(v, row, table_info).unwrap_or(Value::Null);
+                    left_val == val
+                })
+            }
+        }
         // Legacy IS NULL (col IS NULL) - now uses new Expression::IsNull
         Expression::BinaryOp(left, op, right)
             if op.to_uppercase() == "IS"
