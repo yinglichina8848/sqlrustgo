@@ -21,11 +21,14 @@ fn create_engine() -> MemoryExecutionEngine {
 }
 
 fn setup_tables(engine: &mut MemoryExecutionEngine) {
-    let _ = engine.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER, name TEXT, age INTEGER)");
+    let _ = engine.execute(
+        "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+    );
     let _ = engine
-        .execute("CREATE TABLE IF NOT EXISTS orders (id INTEGER, user_id INTEGER, amount INTEGER)");
-    let _ = engine
-        .execute("CREATE TABLE IF NOT EXISTS products (id INTEGER, name TEXT, price INTEGER)");
+        .execute("CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY, user_id INTEGER, amount INTEGER)");
+    let _ = engine.execute(
+        "CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, name TEXT, price INTEGER)",
+    );
 }
 
 fn cleanup_tables(engine: &mut MemoryExecutionEngine) {
