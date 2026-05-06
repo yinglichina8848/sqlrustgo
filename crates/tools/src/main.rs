@@ -16,6 +16,7 @@ enum Command {
     Upgrade(upgrade::UpgradeCommand),
     /// Import mysqldump format SQL files
     Import(mysqldump::ImportCommand),
+    Export(mysqldump::ExportCommand),
     /// Backup database
     Backup(backup_restore::BackupCommand),
     /// Restore database
@@ -31,6 +32,7 @@ fn main() -> Result<()> {
     match cmd {
         Command::Upgrade(upgrade_cmd) => upgrade::run_with_opt(upgrade_cmd),
         Command::Import(import_cmd) => mysqldump::run_import(import_cmd),
+        Command::Export(export_cmd) => mysqldump::run_export(export_cmd),
         Command::Backup(backup_cmd) => backup_restore::run_backup(backup_cmd),
         Command::Restore(restore_cmd) => backup_restore::run_restore(restore_cmd),
     }
