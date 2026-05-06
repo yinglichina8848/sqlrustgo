@@ -16,81 +16,81 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: R1: Build Check
+      - name: "R1: Build Check"
         run: cargo build --all-features
 
-      - name: R2: Test Suite
+      - name: "R2: Test Suite"
         run: cargo test --all-features
 
-      - name: R3: Clippy Lint
+      - name: "R3: Clippy Lint"
         run: cargo clippy --all-features -- -D warnings
 
-      - name: R4: Format Check
+      - name: "R4: Format Check"
         run: cargo fmt --all -- --check
 
-      - name: R5: Coverage Check
+      - name: "R5: Coverage Check"
         run: bash scripts/gate/check_coverage.sh
 
-      - name: R6: Security Audit
+      - name: "R6: Security Audit"
         run: bash scripts/gate/check_security.sh
 
-      - name: R7: Documentation Links
+      - name: "R7: Documentation Links"
         run: bash scripts/gate/check_docs_links.sh
 
   gate-r8-sql-compat:
-    name: R8: SQL Compatibility
+    name: "R8: SQL Compatibility"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: R8: SQL Corpus Check
+      - name: "R8: SQL Corpus Check"
         run: bash scripts/gate/check_sql_compat.sh
 
   gate-r9-tpch-sf1:
-    name: R9: TPC-H SF=1
+    name: "R9: TPC-H SF=1"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: R9: TPC-H SF=1 Check
+      - name: "R9: TPC-H SF=1 Check"
         run: bash scripts/gate/check_tpch.sh sf=1
 
   gate-r10-performance:
-    name: R10: Performance Baseline
+    name: "R10: Performance Baseline"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: R10: Performance Check
+      - name: "R10: Performance Check"
         run: bash scripts/gate/check_perf_baseline.sh
 
   gate-r11-sysbench:
-    name: R11: Sysbench Gate
+    name: "R11: Sysbench Gate"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: R11: Sysbench Check
+      - name: "R11: Sysbench Check"
         run: bash scripts/gate/check_sysbench.sh || true
 
   gate-r12-proof:
-    name: R12: Formal Proof
+    name: "R12: Formal Proof"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: R12: Proof Registry Check
+      - name: "R12: Proof Registry Check"
         run: bash scripts/gate/check_proof.sh
 
   gate-attack-surface:
-    name: G-Gate: Attack Surface
+    name: "G-Gate: Attack Surface"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: G-Gate: Attack Surface Check
+      - name: "G-Gate: Attack Surface Check"
         run: bash scripts/gate/check_attack_surface.sh
 
   merge-gate:

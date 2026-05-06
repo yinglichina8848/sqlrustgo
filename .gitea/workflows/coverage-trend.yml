@@ -6,7 +6,7 @@ name: Coverage Trend
 
 on:
   schedule:
-    - cron: "0 4 * * *"  # Daily 04:00 UTC
+    - cron: "0 4 * * *"
   workflow_dispatch:
 
 env:
@@ -27,15 +27,17 @@ jobs:
         run: |
           cd repo
           cargo tarpaulin --all-features --out Json --out-dir ./coverage --timeout 300 2>&1 | tail -5
+
+      - name: Extract Coverage
+        run: |
+          cd repo
           DATE=$(date +%Y%m%d)
           mkdir -p coverage_history
           if [ -f coverage/tarpaulin_report.json ]; then
-            python3 -c "
-import json, shutil
-with open('coverage/tarpaulin_report.json') as f:
-    d = json.load(f)
-print(f'Coverage: {d.get(\"coverage\",0):.2f}%')
-" | tee coverage_history/${DATE}_coverage.txt
+            COVERAGE=$(python3 scripts/gate/extract_coverage.py coverage/tarpaulin_report.json)
+            echo "$COVERAGE" | tee "coverage_history/${DATE}_coverage.txt"
+          else
+            echo "No coverage report found"
           fi
 
       - name: Store History (30 days)
