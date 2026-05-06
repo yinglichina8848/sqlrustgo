@@ -1,0 +1,74 @@
+{
+  "version": "v2.9.0",
+  "date": "2026-05-06",
+  "description": "R9 Performance Baseline — QPS benchmarks after E-09 optimization",
+  "storage": "MemoryStorage",
+  "test_binary": "qps_benchmark_test",
+  "iterations": {
+    "standard": 10000,
+    "join": 1000,
+    "order_by": 1000,
+    "concurrent": 10000
+  },
+  "benchmarks": {
+    "aggregation": {
+      "qps": 1643824,
+      "unit": "ops/sec",
+      "target": null,
+      "status": "baseline"
+    },
+    "order_by": {
+      "qps": 81988,
+      "unit": "ops/sec",
+      "target": null,
+      "status": "baseline"
+    },
+    "delete": {
+      "qps": 63568,
+      "unit": "ops/sec",
+      "target": 10000,
+      "status": "pass"
+    },
+    "join": {
+      "qps": 57388,
+      "unit": "ops/sec",
+      "target": 10000,
+      "status": "pass"
+    },
+    "update": {
+      "qps": 43224,
+      "unit": "ops/sec",
+      "target": 10000,
+      "status": "pass"
+    },
+    "insert": {
+      "qps": 33377,
+      "unit": "ops/sec",
+      "target": 10000,
+      "status": "pass"
+    },
+    "simple_select": {
+      "qps": 24516,
+      "unit": "ops/sec",
+      "target": 10000,
+      "status": "pass"
+    },
+    "concurrent_select_8t": {
+      "qps": 11995,
+      "unit": "ops/sec",
+      "target": null,
+      "status": "baseline"
+    },
+    "complex_where": {
+      "qps": 1226,
+      "unit": "ops/sec",
+      "target": null,
+      "status": "baseline"
+    }
+  },
+  "thresholds": {
+    "pass_pct": 5,
+    "warn_pct": 20,
+    "fail_pct": 20
+  }
+}
