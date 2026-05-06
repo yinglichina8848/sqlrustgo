@@ -1,0 +1,14 @@
+{
+  "date": "2026-05-06T00:00:00Z",
+  "benchmarks": {
+    "aggregation": 1643824,
+    "order_by": 81988,
+    "delete": 63568,
+    "join": 57388,
+    "update": 43224,
+    "insert": 33377,
+    "simple_select": 24516,
+    "concurrent_select_8t": 11995,
+    "complex_where": 1226
+  }
+}

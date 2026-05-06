@@ -1,63 +1,77 @@
-# E-08 QPS 基准测试结果报告
+# E-08/E-09 QPS 基准测试结果报告
 
 ## 测试日期
-2026-05-05
+- 初始 (E-08): 2026-05-05
+- 更新 (E-09 后): 2026-05-06
 
 ## 测试环境
 - 平台: macOS (Darwin 25.4.0)
 - 存储: MemoryStorage
 - 数据规模: 1,000 users, 5,000 orders, 100 products
+- Rust: 1.85+
 
-## QPS 基准测试结果
+## QPS 基准测试结果（E-09 优化后）
 
-| 操作 | 目标 QPS | 实际 QPS | 达成率 | 状态 |
-|------|----------|----------|--------|------|
-| Aggregation | - | **195,921** | - | 极佳 |
-| ORDER BY | - | **53,539** | - | 良好 |
-| **JOIN** | ≥10,000 | **12,617** | 126% | ✅ 达标 |
-| **INSERT** | ≥10,000 | **11,545** | 115% | ✅ 达标 |
-| Concurrent SELECT | - | **7,620** | - | 良好 |
-| Simple SELECT | ≥10,000 | **9,559** | 96% | ⚠️ 接近 |
-| Concurrent mixed | - | **3,429** | - | 中等 |
-| Complex WHERE | - | **924** | - | 差 |
-| **UPDATE** | ≥10,000 | **950** | 9.5% | ❌ 严重不达标 |
-| **DELETE** | ≥10,000 | **206** | 2% | ❌ 严重不达标 |
+| 操作 | 目标 QPS | 优化前 QPS | **优化后 QPS** | 达成率 | 状态 |
+|------|----------|-----------|-------------|--------|------|
+| Aggregation | - | 195,921 | **1,643,824** | - | 极佳 |
+| ORDER BY | - | 53,539 | **81,988** | - | 良好 |
+| **DELETE** | ≥10,000 | 206 | **63,568** | 636% | ✅ 超标 6.4x |
+| **JOIN** | ≥10,000 | 12,617 | **57,388** | 574% | ✅ 超标 5.7x |
+| **UPDATE** | ≥10,000 | 950 | **43,224** | 432% | ✅ 超标 4.3x |
+| **INSERT** | ≥10,000 | 11,545 | **33,377** | 334% | ✅ 超标 3.3x |
+| **Simple SELECT** | ≥10,000 | 9,559 | **24,516** | 245% | ✅ 达标 |
+| Concurrent SELECT (8t) | - | 7,620 | **11,995** | - | 良好 |
+| Complex WHERE | - | 924 | **1,226** | - | 中等 |
 
-## JOIN QPS 优化效果
+## E-09 优化效果
 
-Hash Join 优化后：
-- **JOIN QPS: 12,617** (目标 ≥10,000) ✅
-- 优化前: O(n×m) 嵌套循环
-- 优化后: O(n+m) HashMap 查找
+### DELETE/UPDATE 关键突破
 
-## UPDATE/DELETE 问题确认
+E-09 通过 PR #313/#317/#322 实现了**基于索引的原位操作路径**：
 
-UPDATE/DELETE 带 WHERE 子句时严重不达标：
+**DELETE 优化路径**：
+```
+WHERE id = ? (id 有主键索引):
+  ① try_extract_index_lookup → find_by_index（索引查找）
+  ② 验证行匹配
+  ③ delete_by_indices（原位删除，无全表扫描）
+  结果: 206 → 63,568 QPS (+30,758%)
+```
 
-| 问题 | 说明 |
-|------|------|
-| **UPDATE QPS** | 950 (目标 ≥10,000) |
-| **DELETE QPS** | 206 (目标 ≥10,000) |
-| **根因** | scan-filter-delete-all-reinsert 反模式 |
-| **ISSUE** | E-09 (待实施) |
+**UPDATE 优化路径**：
+```
+WHERE id = ? (id 有主键索引):
+  ① try_extract_index_lookup → find_by_index（索引查找）
+  ② get_table_records_mut → 直接修改 Vec 中的行（原位更新）
+  ③ 无 delete-all-reinsert
+  结果: 950 → 43,224 QPS (+4,450%)
+```
 
-### 详细分析
+### 全局性能提升
 
-当前实现的问题：
+表达式缓存优化（#313, E-09 方案4）对 SELECT/INSERT/JOIN 也产生了额外加速：
+- JOIN: 12,617 → 57,388 (+355%)
+- INSERT: 11,545 → 33,377 (+189%)
+- Simple SELECT: 9,559 → 24,516 (+156%)
 
-1. **三倍表扫描**: 找匹配行 → 找保留行 → 实际操作
-2. **删除所有行 + 重建**: 效率极低
-3. **多次锁获取**: UPDATE 7次, DELETE 6次
-4. **未使用 StorageEngine API**: `update/delete` 方法存在但 WHERE 场景未使用
+### 已知局限
 
-## 下一步
+- 非索引 WHERE 条件（如 `WHERE age > 30 AND name LIKE '%x%'`）仍走 fallback 全扫描路径
+- FileStorage 的 delete_by_indices 仅支持 MemoryStorage
+- Complex WHERE (LIKE) 因无倒排索引仍较慢（1,226 QPS）
 
-1. **E-09**: 优化 UPDATE/DELETE QPS (Issue #296)
-2. 解决 Complex WHERE QPS (924) 问题
-3. 提升 Simple SELECT QPS 到 ≥10,000
+## R9 性能基线
+
+已建立 R9 性能回归检测：
+- 基线文件: `perf_baselines/v2.9.0/baseline.json`
+- 检测脚本: `scripts/gate/check_regression.sh`
+- 阈值: ≤5% PASS, 5-20% WARN, >20% FAIL
 
 ## 相关文档
 
-- Issue #298: E-08 Step 2 Hash Join 优化
-- Issue #296: E-09 UPDATE/DELETE QPS 优化
-- PR #299: Hash Join 优化代码
+- Issue #296: E-09 UPDATE/DELETE QPS 优化 ✅ 已完成
+- Issue #298: E-08 Step 2 Hash Join 优化 ✅ 已完成
+- PR #313: 表达式缓存优化
+- PR #317/#322: 双重扫描消除
+- R9 性能基线指南: `docs/releases/v2.9.0/R9_PERFORMANCE_BASELINE_GUIDE.md`
