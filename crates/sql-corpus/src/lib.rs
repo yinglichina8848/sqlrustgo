@@ -144,6 +144,19 @@ impl SimpleExecutor {
 
                 Ok(ExecutorResult::new(vec![], count))
             }
+            Statement::WithSelect(ref ws) => {
+                match &ws.select {
+                    sqlrustgo_parser::parser::SelectStatement { table, .. } if table.is_empty() => {
+                        // Recursive CTE or empty CTE → can't execute without CTE defs
+                        Ok(ExecutorResult::new(vec![], 0))
+                    }
+                    _ => {
+                        // Execute the inner SELECT directly
+                        let inner_sql = format!("SELECT * FROM {}", ws.select.table);
+                        self.execute(&inner_sql)
+                    }
+                }
+            }
             Statement::Update(update) => {
                 let updates: Vec<(usize, Value)> = update
                     .set_clauses

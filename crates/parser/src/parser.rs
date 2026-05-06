@@ -1477,27 +1477,49 @@ impl Parser {
 
                     if func_name == "SUBSTRING" {
                         // Parse SUBSTRING(str FROM start FOR length) syntax
+                        // OR SUBSTRING(str, start, length) syntax
                         let expr = self.parse_expression()?;
-                        self.expect(Token::From)?;
-                        let start = self.parse_expression()?;
-                        let mut length: Option<Expression> = None;
-                        if matches!(self.current(), Some(Token::For)) {
+                        if self.current() == Some(&Token::From) {
                             self.next();
-                            length = Some(self.parse_expression()?);
+                            let start = self.parse_expression()?;
+                            let mut length: Option<Expression> = None;
+                            if matches!(self.current(), Some(Token::For)) {
+                                self.next();
+                                length = Some(self.parse_expression()?);
+                            }
+                            self.expect(Token::RParen)?;
+                            let mut args = vec![expr];
+                            args.push(start);
+                            if let Some(len) = length {
+                                args.push(len);
+                            }
+                            columns.push(SelectColumn {
+                                name: func_name.clone(),
+                                alias: None,
+                                expression: Some(Expression::FunctionCall(func_name, args)),
+                            });
+                        } else {
+                            // Comma-separated: SUBSTRING(str, start, length)
+                            // Parse remaining args and closing paren via general expression
+                            let mut args = vec![expr];
+                            loop {
+                                if self.current() == Some(&Token::RParen) {
+                                    self.next();
+                                    break;
+                                }
+                                if self.current() == Some(&Token::Comma) {
+                                    self.next();
+                                    args.push(self.parse_expression()?);
+                                } else {
+                                    return Err(format!("Expected ',' or ')' after expression in SUBSTRING, got {:?}", self.current()));
+                                }
+                            }
+                            columns.push(SelectColumn {
+                                name: func_name.clone(),
+                                alias: None,
+                                expression: Some(Expression::FunctionCall(func_name, args)),
+                            });
                         }
-                        self.expect(Token::RParen)?;
-
-                        let mut args = vec![expr];
-                        args.push(start);
-                        if let Some(len) = length {
-                            args.push(len);
-                        }
-
-                        columns.push(SelectColumn {
-                            name: func_name.clone(),
-                            alias: None,
-                            expression: Some(Expression::FunctionCall(func_name, args)),
-                        });
                     } else {
                         // Skip all content until RParen for other special functions
                         let mut depth = 1;

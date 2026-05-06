@@ -9,6 +9,8 @@ pub struct QueryCache {
     table_index: HashMap<String, HashSet<CacheKey>>,
     current_memory_bytes: usize,
     access_counter: u64,
+    hits: u64,
+    misses: u64,
 }
 
 impl QueryCache {
@@ -19,6 +21,8 @@ impl QueryCache {
             table_index: HashMap::new(),
             current_memory_bytes: 0,
             access_counter: 0,
+            hits: 0,
+            misses: 0,
         }
     }
 
@@ -30,18 +34,23 @@ impl QueryCache {
         let ttl = Duration::from_secs(self.config.ttl_seconds);
         let access_order = self.next_access_order();
 
-        let result = {
-            let entry = self.cache.get_mut(key)?;
-            if entry.is_expired(ttl) {
-                let _ = entry;
-                self.remove(key);
+        let entry = match self.cache.get_mut(key) {
+            Some(e) => e,
+            None => {
+                self.misses += 1;
                 return None;
             }
-            entry.last_access = access_order;
-            entry.result.clone()
         };
 
-        Some(result)
+        if entry.is_expired(ttl) {
+            self.remove(key);
+            self.misses += 1;
+            return None;
+        }
+
+        entry.last_access = access_order;
+        self.hits += 1;
+        Some(entry.result.clone())
     }
 
     pub fn put(&mut self, key: CacheKey, mut entry: CacheEntry, tables: Vec<String>) {
@@ -98,13 +107,24 @@ impl QueryCache {
         self.table_index.clear();
         self.current_memory_bytes = 0;
         self.access_counter = 0;
+        self.hits = 0;
+        self.misses = 0;
     }
 
     pub fn stats(&self) -> QueryCacheStats {
+        let total = self.hits.saturating_add(self.misses);
+        let hit_rate = if total > 0 {
+            (self.hits as f64 / total as f64) * 100.0
+        } else {
+            0.0
+        };
         QueryCacheStats {
             entries: self.cache.len(),
             memory_bytes: self.current_memory_bytes,
             table_count: self.table_index.len(),
+            hits: self.hits,
+            misses: self.misses,
+            hit_rate,
         }
     }
 
@@ -166,6 +186,9 @@ pub struct QueryCacheStats {
     pub entries: usize,
     pub memory_bytes: usize,
     pub table_count: usize,
+    pub hits: u64,
+    pub misses: u64,
+    pub hit_rate: f64,
 }
 
 unsafe impl Send for QueryCache {}

@@ -153,11 +153,16 @@ impl<'a> LocalExecutor<'a> {
 
             if should_cache(&result) {
                 let tables = self.extract_tables(plan);
+                let size_bytes = result.rows.iter()
+                    .flat_map(|r| r.iter())
+                    .map(|v| v.estimate_memory_size())
+                    .sum::<usize>()
+                    .max(64); // Minimum entry size
                 let entry = CacheEntry {
                     result: result.clone(),
                     tables,
                     created_at: Instant::now(),
-                    size_bytes: result.rows.iter().map(|r| r.len()).sum(),
+                    size_bytes,
                     last_access: 0,
                 };
                 self.cache.write().put(cache_key, entry, vec![]);
