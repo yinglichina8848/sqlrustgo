@@ -455,6 +455,9 @@ pub enum ShowStatement {
     CreateTable {
         table: String,
     },
+    Variables {
+        like: Option<String>,
+    },
 }
 
 /// DESCRIBE statement (aliased as DESC)
@@ -3695,6 +3698,19 @@ impl Parser {
             Some(Token::Roles) => {
                 self.next();
                 Ok(Statement::ShowRoles)
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "VARIABLES" => {
+                self.next();
+                let like = if self.current() == Some(&Token::Like) {
+                    self.next();
+                    match self.next() {
+                        Some(Token::StringLiteral(s)) => Some(s),
+                        _ => return Err("Expected pattern after LIKE".to_string()),
+                    }
+                } else {
+                    None
+                };
+                Ok(Statement::Show(ShowStatement::Variables { like }))
             }
             Some(t) => Err(format!("Unexpected token after SHOW: {:?}", t)),
             None => Err("Unexpected end of input after SHOW".to_string()),
