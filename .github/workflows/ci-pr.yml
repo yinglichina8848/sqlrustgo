@@ -156,7 +156,34 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Run security audit
-        run: cargo audit || true
+        run: cargo audit
+
+  # ----------------------------------------
+  # Coverage gate
+  # ----------------------------------------
+  coverage:
+    name: Coverage Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "coverage"
+          cache-targets: false
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Run coverage gate
+        run: bash scripts/gate/check_coverage.sh
 
   # ----------------------------------------
   # SQLite Differential Testing

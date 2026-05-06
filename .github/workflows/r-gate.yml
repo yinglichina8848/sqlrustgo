@@ -75,7 +75,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: "R11: Sysbench Check"
-        run: bash scripts/gate/check_sysbench.sh || true
+        run: bash scripts/gate/check_sysbench.sh
 
   gate-r12-proof:
     name: "R12: Formal Proof"

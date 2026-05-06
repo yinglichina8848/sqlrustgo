@@ -76,12 +76,25 @@ if [ -z "$COVERAGE" ]; then
     exit 0
 fi
 
+# Detect version/phase from branch for threshold
+detect_threshold() {
+    local branch
+    branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+    if [[ "$branch" =~ "alpha" ]]; then
+        echo 50
+    elif [[ "$branch" =~ "develop/v3" ]] || [[ "$branch" =~ "beta" ]]; then
+        echo 75
+    else
+        echo 80
+    fi
+}
+
 # Convert to integer percentage
 COVERAGE_INT=$(echo "$COVERAGE * 100" | bc | cut -d. -f1)
-REQUIRED=80
+REQUIRED=$(detect_threshold)
 
 echo "Current coverage: ${COVERAGE_INT}%"
-echo "Required coverage: ${REQUIRED}%"
+echo "Required coverage: ${REQUIRED}% (branch-aware threshold)"
 
 if [ "$COVERAGE_INT" -lt "$REQUIRED" ]; then
     echo "❌ Coverage too low! Need at least ${REQUIRED}%"

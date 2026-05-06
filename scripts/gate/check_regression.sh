@@ -5,6 +5,11 @@
 # Runs QPS benchmark tests and compares against baseline.
 # Also enforces E-09 minimum thresholds for DELETE/UPDATE.
 #
+# Version auto-detection:
+#   develop/v3.0.0 -> perf_baselines/v3.0.0/
+#   develop/v2.9.0 -> perf_baselines/v2.9.0/
+#   otherwise       -> perf_baselines/v2.9.0/ (default)
+#
 # Thresholds:
 #   ≤5%  regression = PASS (within noise)
 #   5-20% regression = WARN (needs explanation in PR)
@@ -13,19 +18,34 @@
 # E-09 hard floor (absolute minimum, regardless of baseline):
 #   DELETE ≥ 10,000 QPS
 #   UPDATE ≥ 10,000 QPS
+#   NOTE: E-09 floor is ALWAYS enforced, even with --skip-run
 #
 # Usage:
 #   bash scripts/gate/check_regression.sh             (full run)
-#   bash scripts/gate/check_regression.sh --skip-run  (use existing current.json)
+#   bash scripts/gate/check_regression.sh --skip-run  (use existing current.json, still checks E-09)
 # ============================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-BASELINE_FILE="$PROJECT_ROOT/perf_baselines/v2.9.0/baseline.json"
-RESULT_FILE="$PROJECT_ROOT/perf_baselines/v2.9.0/current.json"
-
 cd "$PROJECT_ROOT"
+
+# ---------- Version / Baseline detection ----------
+detect_version() {
+    local branch
+    branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+    if [[ "$branch" =~ "develop/v3" ]] || [[ "$branch" =~ "v3.0" ]]; then
+        echo "v3.0.0"
+    elif [[ "$branch" =~ "develop/v2.9" ]] || [[ "$branch" =~ "v2.9" ]]; then
+        echo "v2.9.0"
+    else
+        echo "v2.9.0"  # default fallback
+    fi
+}
+
+VERSION=$(detect_version)
+BASELINE_FILE="$PROJECT_ROOT/perf_baselines/$VERSION/baseline.json"
+RESULT_FILE="$PROJECT_ROOT/perf_baselines/$VERSION/current.json"
 
 SKIP_RUN=false
 if [[ "${1:-}" == "--skip-run" ]]; then
@@ -34,14 +54,16 @@ fi
 
 echo "=== R9: Performance Regression Check ==="
 echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "Detected version: $VERSION"
 echo "Baseline: $BASELINE_FILE"
+echo "Result:   $RESULT_FILE"
 echo ""
 
 # ---------- Step 1: Baseline existence ----------
 if [ ! -f "$BASELINE_FILE" ]; then
     echo "❌ R9: FAILED — baseline file not found at $BASELINE_FILE"
     echo "   Run: cargo test --test qps_benchmark_test -- --ignored"
-    echo "   Then create perf_baselines/v2.9.0/baseline.json"
+    echo "   Then create perf_baselines/$VERSION/baseline.json"
     exit 1
 fi
 echo "[✓] Baseline file found"
@@ -89,6 +111,7 @@ if [ "$SKIP_RUN" = false ]; then
     cat > "$RESULT_FILE" << JSONEOF
 {
   "date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "version": "$VERSION",
   "benchmarks": {
     "simple_select": ${SIMPLE_SELECT:-0},
     "insert": ${INSERT:-0},
@@ -102,14 +125,17 @@ if [ "$SKIP_RUN" = false ]; then
   }
 }
 JSONEOF
+    echo "[✓] Results written to $RESULT_FILE"
 else
     echo ""
-    echo "[skip] Using existing results from $RESULT_FILE"
+    echo "[skip] Benchmark run skipped (using existing $RESULT_FILE)"
 fi
 
-# ---------- Step 3: E-09 Hard Floor ----------
+# ---------- Step 3: E-09 Hard Floor (ALWAYS checked, even with --skip-run) ----------
 echo ""
 echo "=== E-09 Minimum Threshold Check ==="
+echo "NOTE: This check is always enforced, even with --skip-run"
+echo ""
 
 check_e09_floor() {
     local name="$1"
@@ -133,6 +159,7 @@ check_e09_floor() {
 }
 
 E09_FAIL=0
+
 UPDATE_VAL=$(python3 -c "import json; d=json.load(open('$RESULT_FILE')); print(d['benchmarks']['update'])" 2>/dev/null || echo "0")
 check_e09_floor "UPDATE" "$UPDATE_VAL" 10000 || E09_FAIL=1
 
@@ -141,7 +168,7 @@ check_e09_floor "DELETE" "$DELETE_VAL" 10000 || E09_FAIL=1
 
 # ---------- Step 4: Compare against baseline ----------
 echo ""
-echo "=== Regression Analysis (vs baseline) ==="
+echo "=== Regression Analysis (vs $VERSION baseline) ==="
 printf "%-25s %12s %12s %8s %s\n" "Benchmark" "Baseline" "Current" "Δ%" "Status"
 printf "%-25s %12s %12s %8s %s\n" "-------------------------" "------------" "------------" "--------" "------"
 

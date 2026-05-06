@@ -1,0 +1,19 @@
+{
+  "import_rows": 866602,
+  "import_time_ms": 5951.08325,
+  "queries": [
+    {
+      "avg_ms": 1542.913334,
+      "name": "Q1",
+      "rows": 3,
+      "sql": "SELECT l_returnflag, SUM(l_quantity) FROM lineitem GROUP BY l_returnflag"
+    },
+    {
+      "avg_ms": 913.686458,
+      "name": "Q6",
+      "rows": 1,
+      "sql": "SELECT SUM(l_extendedprice) FROM lineitem WHERE l_quantity < 24 AND l_shipdate >= '1994-01-01'"
+    }
+  ],
+  "scale": "sf0.1"
+}
