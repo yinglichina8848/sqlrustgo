@@ -932,7 +932,7 @@ impl StorageEngine for MemoryStorage {
                     .sum::<u64>()
                     .div_ceil(records.len() as u64);
                 let total_bytes = avg_row_size * records.len() as u64;
-                Ok(total_bytes.divCeil(PAGE_SIZE).max(1))
+                Ok(total_bytes.div_ceil(PAGE_SIZE).max(1))
             }
             Some(_) => Ok(0),
             None => Err(SqlError::ExecutionError(format!(
