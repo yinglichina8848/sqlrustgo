@@ -3,8 +3,8 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::thread;
 use std::sync::Barrier;
+use std::thread;
 
 #[cfg(test)]
 mod connection_pool_tests {
@@ -58,7 +58,10 @@ mod connection_pool_tests {
         }
 
         fn stats(&self) -> (usize, usize) {
-            (self.available.load(Ordering::SeqCst), self.in_use.load(Ordering::SeqCst))
+            (
+                self.available.load(Ordering::SeqCst),
+                self.in_use.load(Ordering::SeqCst),
+            )
         }
     }
 
@@ -331,7 +334,10 @@ mod connection_pool_tests {
 
         let total = success_count.load(Ordering::SeqCst);
         // Should complete many operations under high contention
-        assert!(total >= 500, "Should complete at least 500 operations under contention");
+        assert!(
+            total >= 500,
+            "Should complete at least 500 operations under contention"
+        );
         assert_eq!(pool.stats(), (3, 0));
     }
 

@@ -83,8 +83,14 @@ impl DefaultPlanner {
                 let page_count = storage.get_page_count(table_name).unwrap_or(1) as f64;
                 let index_pages = storage.get_index_page_count(table_name, 0).unwrap_or(1) as f64;
 
-                let seq_cost = self.cost_model.seq_scan_cost(row_count as u64, page_count as u64);
-                let index_cost = self.cost_model.index_scan_cost(row_count as u64, index_pages as u64, page_count as u64);
+                let seq_cost = self
+                    .cost_model
+                    .seq_scan_cost(row_count as u64, page_count as u64);
+                let index_cost = self.cost_model.index_scan_cost(
+                    row_count as u64,
+                    index_pages as u64,
+                    page_count as u64,
+                );
 
                 if index_cost < seq_cost {
                     let (column, index_name) = &indexes[0];
@@ -111,17 +117,24 @@ impl DefaultPlanner {
         left_rows: u64,
         right_rows: u64,
     ) -> Box<dyn PhysicalPlan> {
-        let hash_join_cost = self.cost_model.join_cost(left_rows, right_rows, "hash_join");
-        let nested_loop_cost = self.cost_model.join_cost(left_rows, right_rows, "nested_loop");
-        let sort_merge_cost = self.cost_model.join_cost(left_rows, right_rows, "sort_merge");
+        let hash_join_cost = self
+            .cost_model
+            .join_cost(left_rows, right_rows, "hash_join");
+        let nested_loop_cost = self
+            .cost_model
+            .join_cost(left_rows, right_rows, "nested_loop");
+        let sort_merge_cost = self
+            .cost_model
+            .join_cost(left_rows, right_rows, "sort_merge");
 
-        let (best_method, best_cost) = if hash_join_cost <= nested_loop_cost && hash_join_cost <= sort_merge_cost {
-            ("hash_join", hash_join_cost)
-        } else if nested_loop_cost <= sort_merge_cost {
-            ("nested_loop", nested_loop_cost)
-        } else {
-            ("sort_merge", sort_merge_cost)
-        };
+        let (best_method, best_cost) =
+            if hash_join_cost <= nested_loop_cost && hash_join_cost <= sort_merge_cost {
+                ("hash_join", hash_join_cost)
+            } else if nested_loop_cost <= sort_merge_cost {
+                ("nested_loop", nested_loop_cost)
+            } else {
+                ("sort_merge", sort_merge_cost)
+            };
 
         eprintln!(
             "[CBO] Join cost comparison: hash_join={:.2}, nested_loop={:.2}, sort_merge={:.2} -> selected: {} ({:.2})",
@@ -130,11 +143,7 @@ impl DefaultPlanner {
 
         let schema = Schema::new(vec![]);
         Box::new(HashJoinExec::new(
-            left_plan,
-            right_plan,
-            join_type,
-            condition,
-            schema,
+            left_plan, right_plan, join_type, condition, schema,
         ))
     }
 
