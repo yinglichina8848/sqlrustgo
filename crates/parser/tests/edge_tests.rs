@@ -2,6 +2,8 @@
 //! Tests for edge conditions: empty, very long, many items, etc.
 
 use sqlrustgo_parser::parse;
+use sqlrustgo_parser::parser::ExplainStatement;
+use sqlrustgo_parser::Statement;
 
 #[test]
 fn test_single_char_identifier() {
@@ -485,5 +487,27 @@ fn test_describe_table() {
 #[test]
 fn test_explain_select() {
     let result = parse("EXPLAIN SELECT * FROM t");
-    assert!(result.is_err(), "EXPLAIN not supported: {:?}", result);
+    assert!(result.is_ok(), "EXPLAIN should parse: {:?}", result);
+    match result.unwrap() {
+        Statement::Explain(ExplainStatement { analyze, statement }) => {
+            assert!(!analyze);
+            match *statement {
+                Statement::Select(s) => assert_eq!(s.table, "t"),
+                _ => panic!("EXPLAIN should wrap a SELECT"),
+            }
+        }
+        _ => panic!("Expected Explain statement"),
+    }
+}
+
+#[test]
+fn test_explain_analyze() {
+    let result = parse("EXPLAIN ANALYZE SELECT * FROM t");
+    assert!(result.is_ok(), "EXPLAIN ANALYZE should parse: {:?}", result);
+    match result.unwrap() {
+        Statement::Explain(ExplainStatement { analyze, .. }) => {
+            assert!(analyze, "EXPLAIN ANALYZE should have analyze=true");
+        }
+        _ => panic!("Expected Explain statement"),
+    }
 }

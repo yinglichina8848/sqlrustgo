@@ -2512,7 +2512,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 rows.push(vec![Value::Text("  ANALYZE only supported for SELECT".to_string())]);
             }
         }
-        Ok(ExecutorResult::new(rows, rows.len()))
+        let rc = rows.len();
+        Ok(ExecutorResult::new(rows, rc))
     }
 
     fn execute_show(&self, show: &ShowStatement) -> SqlResult<ExecutorResult> {

@@ -44,6 +44,7 @@ pub enum Statement {
     Revoke(RevokeStatement),
     Show(ShowStatement),
     Describe(DescribeStatement),
+    Explain(ExplainStatement),
     CreateRole(CreateRoleStatement),
     DropRole(DropRoleStatement),
     GrantRole(GrantRoleStatement),
@@ -466,6 +467,13 @@ pub struct DescribeStatement {
     pub table: String,
 }
 
+/// EXPLAIN statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExplainStatement {
+    pub analyze: bool,
+    pub statement: Box<Statement>,
+}
+
 /// Column definition
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ColumnDefinition {
@@ -822,6 +830,7 @@ impl Parser {
             Some(Token::Revoke) => self.parse_revoke(),
             Some(Token::Show) => self.parse_show(),
             Some(Token::Describe) | Some(Token::Desc) => self.parse_describe(),
+            Some(Token::Explain) => self.parse_explain(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -3919,6 +3928,16 @@ impl Parser {
             Some(t) => Err(format!("Unexpected token after SHOW: {:?}", t)),
             None => Err("Unexpected end of input after SHOW".to_string()),
         }
+    }
+
+    fn parse_explain(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Explain)?;
+        let analyze = if self.current() == Some(&Token::Analyze) {
+            self.next();
+            true
+        } else { false };
+        let statement = Box::new(self.parse_statement()?);
+        Ok(Statement::Explain(ExplainStatement { analyze, statement }))
     }
 
     fn parse_describe(&mut self) -> Result<Statement, String> {
