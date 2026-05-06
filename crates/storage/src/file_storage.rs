@@ -1548,4 +1548,52 @@ impl StorageEngine for FileStorage {
         }
         Ok(count)
     }
+
+    fn get_row_count(&self, table: &str) -> SqlResult<u64> {
+        match self.tables.get(table) {
+            Some(data) => Ok(data.rows.len() as u64),
+            None => Err(SqlError::ExecutionError(format!(
+                "Table not found: {}",
+                table
+            ))),
+        }
+    }
+
+    fn get_page_count(&self, table: &str) -> SqlResult<u64> {
+        const PAGE_SIZE: u64 = 4096;
+        match self.tables.get(table) {
+            Some(data) if !data.rows.is_empty() => {
+                let avg_row_size: u64 = data
+                    .rows
+                    .iter()
+                    .map(|r| r.len() as u64 * 8) // Estimate 8 bytes per value on average
+                    .sum::<u64>()
+                    .div_ceil(data.rows.len() as u64);
+                let total_bytes = avg_row_size * data.rows.len() as u64;
+                Ok(total_bytes.div_ceil(PAGE_SIZE).max(1))
+            }
+            Some(_) => Ok(0),
+            None => Err(SqlError::ExecutionError(format!(
+                "Table not found: {}",
+                table
+            ))),
+        }
+    }
+
+    fn get_index_page_count(&self, table: &str, _column_index: usize) -> SqlResult<u64> {
+        const PAGE_SIZE: u64 = 4096;
+        const INDEX_ENTRY_SIZE: u64 = 16;
+        match self.tables.get(table) {
+            Some(data) if !data.rows.is_empty() => {
+                let index_entries = data.rows.len() as u64;
+                let total_bytes = index_entries * INDEX_ENTRY_SIZE;
+                Ok(total_bytes.div_ceil(PAGE_SIZE).max(1))
+            }
+            Some(_) => Ok(0),
+            None => Err(SqlError::ExecutionError(format!(
+                "Table not found: {}",
+                table
+            ))),
+        }
+    }
 }
