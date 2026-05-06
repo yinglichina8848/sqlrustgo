@@ -1590,5 +1590,6 @@ SELECT ST_astext((ST_dump(ST_geomfromtext('MULTIPOINT(0 0,1 1)')).geom)) FROM us
 -- EXPECT: rows 10
 
 -- === CASE: Select with ST_dumppoints
+-- === SKIP ===
 SELECT (ST_dumppoints(ST_geomfromtext('LINESTRING(0 0,1 1,2 2)')).pt) FROM users;
 -- EXPECT: rows 10

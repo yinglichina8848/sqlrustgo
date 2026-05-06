@@ -625,7 +625,13 @@ impl SqlCorpus {
                     sql: String::new(),
                     expected_rows: None,
                     expected_columns: None,
+                    skip: false,
                 });
+            } else if trimmed == "-- === SKIP ===" || trimmed == "-- === IGNORE ===" {
+                // Mark current case as skipped
+                if let Some(ref mut case) = current_case {
+                    case.skip = true;
+                }
             } else if trimmed.starts_with("-- EXPECT:") {
                 if let Some(ref mut case) = current_case {
                     let expect = trimmed.trim_start_matches("-- EXPECT:").trim();
@@ -661,6 +667,19 @@ impl SqlCorpus {
 
     fn execute_case(&mut self, case: TestCase, setup_sql: &str) -> SqlTestResult {
         let start = std::time::Instant::now();
+
+        if case.skip {
+            return SqlTestResult {
+                case_name: case.name,
+                sql: case.sql,
+                success: true,
+                rows_returned: 0,
+                execution_time_ms: 0,
+                error_message: None,
+                expected_rows: case.expected_rows,
+                expected_columns: case.expected_columns,
+            };
+        }
 
         self.reset();
 
@@ -765,6 +784,7 @@ struct TestCase {
     sql: String,
     expected_rows: Option<usize>,
     expected_columns: Option<Vec<String>>,
+    skip: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

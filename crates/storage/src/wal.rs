@@ -288,6 +288,7 @@ pub struct GroupCommitWriter {
     inner: WalWriter,
     pending_commits: Vec<u64>,
     max_batch_size: usize,
+    #[allow(dead_code)]
     max_wait_ms: u64,
 }
 

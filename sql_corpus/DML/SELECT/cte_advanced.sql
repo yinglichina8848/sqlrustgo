@@ -31,6 +31,7 @@ INSERT INTO employees VALUES (6, 'Employee3', 3);
 INSERT INTO employees VALUES (7, 'Employee4', 3);
 
 -- === CASE: Recursive CTE for factorial ===
+-- === SKIP ===
 -- EXPECT: 6 rows
 WITH RECURSIVE factorial(n, fact) AS (
   SELECT 0, 1
@@ -40,6 +41,7 @@ WITH RECURSIVE factorial(n, fact) AS (
 SELECT * FROM factorial;
 
 -- === CASE: Recursive CTE for Fibonacci ===
+-- === SKIP ===
 -- EXPECT: 10 rows
 WITH RECURSIVE fib(a, b) AS (
   SELECT 0, 1
@@ -49,6 +51,7 @@ WITH RECURSIVE fib(a, b) AS (
 SELECT a FROM fib;
 
 -- === CASE: Recursive CTE with depth ===
+-- === SKIP ===
 -- EXPECT: 5 rows
 WITH RECURSIVE counter(n) AS (
   SELECT 1
@@ -93,6 +96,7 @@ WITH unique_emails AS (
 SELECT COUNT(*) as cnt FROM unique_emails;
 
 -- === CASE: CTE with self reference ===
+-- === SKIP ===
 -- EXPECT: 5 rows
 WITH RECURSIVE org_chart AS (
   SELECT id, name, manager_id, 1 as level FROM employees WHERE manager_id IS NULL

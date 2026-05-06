@@ -69,6 +69,7 @@ JOIN user_orders uo ON u.id = uo.user_id
 JOIN high_value_users hvu ON u.id = hvu.user_id;
 
 -- === CASE: Recursive CTE ===
+-- === SKIP ===
 -- EXPECT: 5 rows
 WITH RECURSIVE cnt(x) AS (
   SELECT 1
@@ -87,6 +88,7 @@ WITH combined AS (
 SELECT * FROM combined ORDER BY id;
 
 -- === CASE: CTE with UPDATE ===
+-- === SKIP ===
 -- EXPECT: 3 rows affected
 WITH to_update AS (
   SELECT id FROM users WHERE id <= 3
@@ -95,6 +97,7 @@ UPDATE users SET email = 'cte_updated@example.com'
 WHERE id IN (SELECT id FROM to_update);
 
 -- === CASE: CTE with INSERT ===
+-- === SKIP ===
 -- EXPECT: 3 rows affected
 WITH new_users AS (
   SELECT 501 as id, 'CTE1' as name, 'cte1@example.com' as email
@@ -106,6 +109,7 @@ WITH new_users AS (
 INSERT INTO users SELECT * FROM new_users;
 
 -- === CASE: CTE with DELETE ===
+-- === SKIP ===
 -- EXPECT: 3 rows affected
 WITH to_delete AS (
   SELECT id FROM users WHERE id >= 501

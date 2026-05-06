@@ -418,7 +418,6 @@ impl fmt::Display for Token {
             Token::SingleQuote => write!(f, "'"),
             Token::Star => write!(f, "*"),
             Token::Eof => write!(f, "EOF"),
-            Token::Explain => write!(f, "EXPLAIN"),
         }
     }
 }
