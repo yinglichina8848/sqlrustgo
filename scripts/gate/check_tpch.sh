@@ -18,6 +18,7 @@
 # Usage:
 #   bash scripts/gate/check_tpch.sh              (SF=0.1, alpha/beta)
 #   bash scripts/gate/check_tpch.sh sf=1         (SF=1, RC/GA)
+#   bash scripts/gate/check_tpch.sh --sf1        (SF=1, RC/GA)
 #   bash scripts/gate/check_tpch.sh --skip-data  (skip data check)
 # ============================================================
 set -euo pipefail
@@ -39,6 +40,8 @@ SKIP_DATA=false
 for arg in "$@"; do
     case "$arg" in
         sf=*) SF="${arg#sf=}"; shift ;;
+        --sf1) SF="1"; shift ;;
+        --sf0.1) SF="0.1"; shift ;;
         --skip-data) SKIP_DATA=true; shift ;;
     esac
 done
