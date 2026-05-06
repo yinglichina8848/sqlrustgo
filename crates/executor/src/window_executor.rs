@@ -310,6 +310,28 @@ impl WindowVolcanoExecutor {
                 }
                 max.map(Value::Integer).unwrap_or(Value::Null)
             }),
+            WindowFunction::Ntile => {
+                // NTILE divides partition into buckets
+                let num_buckets = args
+                    .get(0)
+                    .and_then(|e| {
+                        let target_idx = partition.indices[local_idx];
+                        e.evaluate(&partition.rows[target_idx], &self.input_schema)
+                    })
+                    .and_then(|v| v.as_integer())
+                    .unwrap_or(1) as usize;
+                if num_buckets == 0 {
+                    return Ok(Value::Null);
+                }
+                let total_rows = partition.indices.len();
+                if total_rows == 0 {
+                    return Ok(Value::Null);
+                }
+                // NTILE formula: ((row_number - 1) * num_buckets / total_rows) + 1
+                let row_number = local_idx + 1;
+                let bucket = ((row_number - 1) * num_buckets / total_rows) + 1;
+                Ok(Value::Integer(bucket as i64))
+            }
         }
     }
 
