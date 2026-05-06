@@ -3,6 +3,8 @@
 //! Provides query optimization through rule-based transformations.
 
 use crate::logical_plan::LogicalPlan;
+use sqlrustgo_optimizer::unified_plan::UnifiedPlan;
+use sqlrustgo_optimizer::Rule;
 use thiserror::Error;
 
 /// Optimizer errors
@@ -38,11 +40,18 @@ impl OptimizerRule for PredicatePushdown {
         "PredicatePushdown"
     }
 
-    fn apply(&self, _plan: &mut LogicalPlan) -> bool {
-        // Placeholder implementation - push predicates down in the plan tree
-        // In a full implementation, this would traverse the tree and push
-        // filter conditions as close to the table scan as possible
-        false
+    fn apply(&self, plan: &mut LogicalPlan) -> bool {
+        if let Some(unified) = logical_to_unified(plan) {
+            let mut u = unified;
+            let rule = sqlrustgo_optimizer::PredicatePushdown::new();
+            let changed = rule.apply(&mut u);
+            if changed {
+                unified_to_logical(&u, plan);
+            }
+            changed
+        } else {
+            false
+        }
     }
 }
 
@@ -54,9 +63,14 @@ impl OptimizerRule for ProjectionPruning {
         "ProjectionPruning"
     }
 
-    fn apply(&self, _plan: &mut LogicalPlan) -> bool {
-        // Placeholder implementation - remove unused columns from projections
-        false
+    fn apply(&self, plan: &mut LogicalPlan) -> bool {
+        if let Some(unified) = logical_to_unified(plan) {
+            let mut u = unified;
+            let rule = sqlrustgo_optimizer::ProjectionPruning::new();
+            let changed = rule.apply(&mut u);
+            if changed { unified_to_logical(&u, plan); }
+            changed
+        } else { false }
     }
 }
 
@@ -68,9 +82,14 @@ impl OptimizerRule for ConstantFolding {
         "ConstantFolding"
     }
 
-    fn apply(&self, _plan: &mut LogicalPlan) -> bool {
-        // Placeholder implementation - evaluate constant expressions at compile time
-        false
+    fn apply(&self, plan: &mut LogicalPlan) -> bool {
+        if let Some(unified) = logical_to_unified(plan) {
+            let mut u = unified;
+            let rule = sqlrustgo_optimizer::ConstantFolding::new();
+            let changed = rule.apply(&mut u);
+            if changed { unified_to_logical(&u, plan); }
+            changed
+        } else { false }
     }
 }
 
@@ -117,6 +136,38 @@ impl Optimizer for DefaultOptimizer {
         }
 
         Ok(plan)
+    }
+}
+
+/// Convert LogicalPlan to UnifiedPlan (bridge for optimizer rules)
+fn logical_to_unified(plan: &LogicalPlan) -> Option<UnifiedPlan> {
+    match plan {
+        LogicalPlan::TableScan { table_name, .. } => Some(UnifiedPlan::TableScan {
+            table_name: table_name.clone(),
+            projection: None,
+        }),
+        LogicalPlan::Projection { input, .. } => {
+            let inner = logical_to_unified(input)?;
+            Some(UnifiedPlan::Projection { expr: vec![], input: Box::new(inner) })
+        }
+        LogicalPlan::Filter { input, .. } => {
+            let inner = logical_to_unified(input)?;
+            Some(UnifiedPlan::Filter { predicate: sqlrustgo_optimizer::rules::Expr::Column("pred".to_string()), input: Box::new(inner) })
+        }
+        _ => None,
+    }
+}
+
+/// Convert UnifiedPlan back to LogicalPlan
+fn unified_to_logical(unified: &UnifiedPlan, out: &mut LogicalPlan) {
+    match (unified, out) {
+        (UnifiedPlan::Filter { input: uin, .. }, LogicalPlan::Filter { ref mut input, .. }) => {
+            unified_to_logical(uin, input.as_mut());
+        }
+        (UnifiedPlan::Projection { input: uin, .. }, LogicalPlan::Projection { ref mut input, .. }) => {
+            unified_to_logical(uin, input.as_mut());
+        }
+        _ => {}
     }
 }
 

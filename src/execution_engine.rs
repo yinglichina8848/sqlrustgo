@@ -14,14 +14,14 @@ use sqlrustgo_executor::trigger::{
 };
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, ExplainStatement,
-    CallStatement, CreateIndexStatement,
-    CreateProcedureStatement, CreateRoleStatement, CreateTableStatement, CreateTriggerStatement,
-    DropRoleStatement, DropTableStatement, GrantRoleStatement, GrantStatement, InsertStatement,
-    ObjectType as ParserObjectType, OrderByExpression, Privilege as ParserPrivilege,
-    RevokeRoleStatement, RevokeStatement, SelectStatement, SetRoleStatement,
-    StoredProcParam as ParserStoredProcParam, StoredProcParamMode as ParserParamMode,
-    StoredProcStatement as ParserStatement, ShowStatement, TruncateStatement,
+    AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, CallStatement,
+    CreateIndexStatement, CreateProcedureStatement, CreateRoleStatement, CreateTableStatement,
+    CreateTriggerStatement, DropRoleStatement, DropTableStatement, ExplainStatement,
+    GrantRoleStatement, GrantStatement, InsertStatement, ObjectType as ParserObjectType,
+    OrderByExpression, Privilege as ParserPrivilege, RevokeRoleStatement, RevokeStatement,
+    SelectStatement, SetRoleStatement, ShowStatement, StoredProcParam as ParserStoredProcParam,
+    StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
+    TruncateStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::JoinType; // For join type matching
@@ -145,7 +145,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     /// Create a new execution engine with CBO enabled by default
-    #[deprecated(since = "3.0.0", note = "Use new_with_config() or EngineConfig::builder() instead")]
+    #[deprecated(
+        since = "3.0.0",
+        note = "Use new_with_config() or EngineConfig::builder() instead"
+    )]
     pub fn new(storage: Arc<RwLock<S>>) -> Self {
         Self {
             storage,
@@ -163,7 +166,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     /// Create a new execution engine with CBO configuration
-    #[deprecated(since = "3.0.0", note = "Use new_with_config() or EngineConfig::builder() instead")]
+    #[deprecated(
+        since = "3.0.0",
+        note = "Use new_with_config() or EngineConfig::builder() instead"
+    )]
     pub fn with_cbo(storage: Arc<RwLock<S>>, cbo_enabled: bool) -> Self {
         Self {
             storage,
@@ -1877,26 +1883,43 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         // Build new columns
         let new_columns = match &alter.operation {
-            AlterTableOperation::AddColumn { name, data_type, nullable, .. } => {
+            AlterTableOperation::AddColumn {
+                name,
+                data_type,
+                nullable,
+                ..
+            } => {
                 let mut cols = old_info.columns.clone();
-                let ct = if data_type.to_uppercase().starts_with("INT") { "INTEGER" } else { data_type };
+                let ct = if data_type.to_uppercase().starts_with("INT") {
+                    "INTEGER"
+                } else {
+                    data_type
+                };
                 cols.push(ColumnDefinition {
-                    name: name.clone(), data_type: ct.to_uppercase(),
-                    nullable: *nullable, primary_key: false,
+                    name: name.clone(),
+                    data_type: ct.to_uppercase(),
+                    nullable: *nullable,
+                    primary_key: false,
                 });
                 cols
             }
             AlterTableOperation::DropColumn { name } => {
                 let mut cols = old_info.columns.clone();
-                let idx = cols.iter().position(|c| c.name == *name)
-                    .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}' not found", name)))?;
+                let idx = cols.iter().position(|c| c.name == *name).ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Column '{}' not found", name))
+                })?;
                 cols.remove(idx);
                 cols
             }
-            AlterTableOperation::ModifyColumn { name, data_type, nullable } => {
+            AlterTableOperation::ModifyColumn {
+                name,
+                data_type,
+                nullable,
+            } => {
                 let mut cols = old_info.columns.clone();
-                let col = cols.iter_mut().find(|c| c.name == *name)
-                    .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}' not found", name)))?;
+                let col = cols.iter_mut().find(|c| c.name == *name).ok_or_else(|| {
+                    SqlError::ExecutionError(format!("Column '{}' not found", name))
+                })?;
                 col.data_type = data_type.to_uppercase();
                 col.nullable = *nullable;
                 cols
@@ -1904,11 +1927,17 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             AlterTableOperation::RenameTo { new_name } => {
                 let mut w = self.storage.write().unwrap();
                 w.drop_table(table_name)?;
-                w.create_table(&TableInfo { name: new_name.clone(), ..old_info })?;
+                w.create_table(&TableInfo {
+                    name: new_name.clone(),
+                    ..old_info
+                })?;
                 for row in &old_rows {
                     w.insert(new_name, vec![row.clone()])?;
                 }
-                self.query_cache.write().unwrap().invalidate_table(table_name);
+                self.query_cache
+                    .write()
+                    .unwrap()
+                    .invalidate_table(table_name);
                 return Ok(ExecutorResult::new(vec![], 1));
             }
         };
@@ -1918,16 +1947,21 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         {
             let mut w = self.storage.write().unwrap();
             let _ = w.drop_table(&tmp);
-            w.create_table(&TableInfo { name: tmp.clone(), columns: new_columns,
+            w.create_table(&TableInfo {
+                name: tmp.clone(),
+                columns: new_columns,
                 foreign_keys: old_info.foreign_keys.clone(),
                 unique_constraints: old_info.unique_constraints.clone(),
                 check_constraints: old_info.check_constraints.clone(),
-                partition_info: None })?;
+                partition_info: None,
+            })?;
             // Copy rows, pad with NULL for AddColumn
             let is_add = matches!(&alter.operation, AlterTableOperation::AddColumn { .. });
             for row in &old_rows {
                 let mut r = row.clone();
-                if is_add { r.push(sqlrustgo_types::Value::Null); }
+                if is_add {
+                    r.push(sqlrustgo_types::Value::Null);
+                }
                 w.insert(&tmp, vec![r.clone()])?;
             }
         }
@@ -1937,13 +1971,19 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             let tmp_info = w.get_table_info(&tmp)?;
             let tmp_rows = w.scan(&tmp)?;
             w.drop_table(table_name)?;
-            w.create_table(&TableInfo { name: table_name.to_string(), ..tmp_info })?;
+            w.create_table(&TableInfo {
+                name: table_name.to_string(),
+                ..tmp_info
+            })?;
             for row in &tmp_rows {
                 w.insert(table_name, vec![row.clone()])?;
             }
             w.drop_table(&tmp)?;
         }
-        self.query_cache.write().unwrap().invalidate_table(table_name);
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(table_name);
         Ok(ExecutorResult::new(vec![], 1))
     }
 
@@ -2507,7 +2547,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 let elapsed = start.elapsed();
                 match result {
                     Ok(r) => {
-                        rows.push(vec![Value::Text(format!("  Actual rows: {}, time: {:?}", r.rows.len(), elapsed))]);
+                        rows.push(vec![Value::Text(format!(
+                            "  Actual rows: {}, time: {:?}",
+                            r.rows.len(),
+                            elapsed
+                        ))]);
                         let est = self.estimate_seq_scan_cost(&select.first_table());
                         rows.push(vec![Value::Text(format!("  Estimated cost: {:.2}", est))]);
                     }
@@ -2516,7 +2560,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     }
                 }
             } else {
-                rows.push(vec![Value::Text("  ANALYZE only supported for SELECT".to_string())]);
+                rows.push(vec![Value::Text(
+                    "  ANALYZE only supported for SELECT".to_string(),
+                )]);
             }
         }
         let rc = rows.len();
@@ -2529,17 +2575,18 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             ShowStatement::Columns { table, pattern } => {
                 self.execute_show_columns(table, pattern.as_deref())
             }
-            ShowStatement::Databases => {
-                Ok(ExecutorResult::new(vec![vec![Value::Text("public".to_string())]], 1))
-            }
+            ShowStatement::Databases => Ok(ExecutorResult::new(
+                vec![vec![Value::Text("public".to_string())]],
+                1,
+            )),
             ShowStatement::CreateTable { table } => self.execute_describe(table),
             ShowStatement::Grants { user } => match user {
                 Some(u) => self.execute_show_grants_for(u),
                 None => self.execute_show_grants(),
             },
-            ShowStatement::Index { table: _ } => {
-                Err(SqlError::ExecutionError("SHOW INDEX not yet implemented".to_string()))
-            }
+            ShowStatement::Index { table: _ } => Err(SqlError::ExecutionError(
+                "SHOW INDEX not yet implemented".to_string(),
+            )),
             ShowStatement::Variables { like } => self.execute_show_variables(like.as_deref()),
         }
     }
@@ -2551,17 +2598,29 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(ExecutorResult::new(rows.clone(), rows.len()))
     }
 
-    fn execute_show_columns(&self, table: &str, _pattern: Option<&str>) -> SqlResult<ExecutorResult> {
+    fn execute_show_columns(
+        &self,
+        table: &str,
+        _pattern: Option<&str>,
+    ) -> SqlResult<ExecutorResult> {
         let storage = self.storage.read().unwrap();
         let info = storage.get_table_info(table)?;
-        let rows: Vec<Vec<Value>> = info.columns.iter().map(|col| {
-            vec![
-                Value::Text(col.name.clone()),
-                Value::Text(col.data_type.clone()),
-                Value::Text(if col.nullable { "YES" } else { "NO" }.to_string()),
-                Value::Text(if col.primary_key { "PRI".to_string() } else { String::new() }),
-            ]
-        }).collect();
+        let rows: Vec<Vec<Value>> = info
+            .columns
+            .iter()
+            .map(|col| {
+                vec![
+                    Value::Text(col.name.clone()),
+                    Value::Text(col.data_type.clone()),
+                    Value::Text(if col.nullable { "YES" } else { "NO" }.to_string()),
+                    Value::Text(if col.primary_key {
+                        "PRI".to_string()
+                    } else {
+                        String::new()
+                    }),
+                ]
+            })
+            .collect();
         Ok(ExecutorResult::new(rows.clone(), rows.len()))
     }
 
@@ -2591,7 +2650,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             ("max_connections", "151"),
         ];
         let rc = vars.len();
-        let rows: Vec<Vec<Value>> = vars.into_iter()
+        let rows: Vec<Vec<Value>> = vars
+            .into_iter()
             .filter(|(k, _)| match pattern {
                 Some(p) => {
                     let pat = p.replace('%', ".*").replace('_', ".");

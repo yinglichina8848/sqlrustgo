@@ -177,10 +177,8 @@ fn test_ssi_concurrent_stress() {
         }));
     }
 
-    let results: Vec<Result<(), SsiError>> = handles
-        .into_iter()
-        .map(|h| h.join().unwrap())
-        .collect();
+    let results: Vec<Result<(), SsiError>> =
+        handles.into_iter().map(|h| h.join().unwrap()).collect();
 
     let successes = results.iter().filter(|r| r.is_ok()).count();
     let failures = results.iter().filter(|r| r.is_err()).count();

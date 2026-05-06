@@ -495,7 +495,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "DROP" => Some(Token::Drop),
         "ALTER" => Some(Token::Alter),
         "INDEX" => Some(Token::Index),
-"EXPLAIN" => Some(Token::Explain),
+        "EXPLAIN" => Some(Token::Explain),
         "ON" => Some(Token::On),
         "PRIMARY" => Some(Token::Primary),
         "KEY" => Some(Token::Key),

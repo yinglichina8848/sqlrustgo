@@ -586,7 +586,9 @@ impl Expression {
             Expression::BinaryOp(left, op, right) => {
                 let left_folded = left.as_ref().fold_constants();
                 let right_folded = right.as_ref().fold_constants();
-                if let (Expression::Literal(l), Expression::Literal(r)) = (&left_folded, &right_folded) {
+                if let (Expression::Literal(l), Expression::Literal(r)) =
+                    (&left_folded, &right_folded)
+                {
                     if let Some(val) = evaluate_binary_op(l, r, op) {
                         return val;
                     }
@@ -680,7 +682,11 @@ impl Expression {
                 if expr_folded == **expr && low_folded == **low && high_folded == **high {
                     self.clone()
                 } else {
-                    Expression::Between(Box::new(expr_folded), Box::new(low_folded), Box::new(high_folded))
+                    Expression::Between(
+                        Box::new(expr_folded),
+                        Box::new(low_folded),
+                        Box::new(high_folded),
+                    )
                 }
             }
             Expression::IsNull(inner) => {
@@ -708,7 +714,10 @@ impl Expression {
                     if cond_folded != when.condition || then_folded != when.result {
                         has_change = true;
                     }
-                    folded_clauses.push(WhenClause { condition: cond_folded, result: then_folded });
+                    folded_clauses.push(WhenClause {
+                        condition: cond_folded,
+                        result: then_folded,
+                    });
                 }
                 let else_folded = else_expr.as_ref().map(|e| e.fold_constants());
                 let else_changed = match (&else_folded, else_expr) {
@@ -3935,7 +3944,9 @@ impl Parser {
         let analyze = if self.current() == Some(&Token::Analyze) {
             self.next();
             true
-        } else { false };
+        } else {
+            false
+        };
         let statement = Box::new(self.parse_statement()?);
         Ok(Statement::Explain(ExplainStatement { analyze, statement }))
     }

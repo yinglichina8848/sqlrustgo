@@ -305,7 +305,8 @@ impl DefaultPlanner {
                 if let Some(proj) = projection {
                     if let Some(seq) = exec.as_mut().as_any().downcast_ref::<SeqScanExec>() {
                         return Ok(Box::new(seq.clone().with_projection(proj.clone())));
-                    } else if let Some(idx) = exec.as_mut().as_any().downcast_ref::<IndexScanExec>() {
+                    } else if let Some(idx) = exec.as_mut().as_any().downcast_ref::<IndexScanExec>()
+                    {
                         return Ok(Box::new(idx.clone().with_projection(proj.clone())));
                     }
                 }
@@ -323,66 +324,64 @@ impl DefaultPlanner {
                     schema.clone(),
                 )))
             }
-            LogicalPlan::Filter { predicate, input } => {
-                match predicate {
-                    Expr::In { expr: _, subquery } => {
-                        let _subquery_plan =
-                            self.create_physical_plan_with_cte_ctx(subquery, cte_ctx)?;
-                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
-                        let semi_join_plan = LogicalPlan::Join {
-                            left: input.clone(),
-                            right: subquery.clone(),
-                            join_type: JoinType::LeftSemi,
-                            condition: Some(join_condition),
-                        };
-                        self.create_physical_plan_with_cte_ctx(&semi_join_plan, cte_ctx)
-                    }
-                    Expr::NotIn { expr: _, subquery } => {
-                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
-                        let anti_join_plan = LogicalPlan::Join {
-                            left: input.clone(),
-                            right: subquery.clone(),
-                            join_type: JoinType::LeftAnti,
-                            condition: Some(join_condition),
-                        };
-                        self.create_physical_plan_with_cte_ctx(&anti_join_plan, cte_ctx)
-                    }
-                    Expr::Exists(subquery) => {
-                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
-                        let semi_join_plan = LogicalPlan::Join {
-                            left: input.clone(),
-                            right: subquery.clone(),
-                            join_type: JoinType::LeftSemi,
-                            condition: Some(join_condition),
-                        };
-                        self.create_physical_plan_with_cte_ctx(&semi_join_plan, cte_ctx)
-                    }
-                    Expr::NotExists(subquery) => {
-                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
-                        let anti_join_plan = LogicalPlan::Join {
-                            left: input.clone(),
-                            right: subquery.clone(),
-                            join_type: JoinType::LeftAnti,
-                            condition: Some(join_condition),
-                        };
-                        self.create_physical_plan_with_cte_ctx(&anti_join_plan, cte_ctx)
-                    }
-                    Expr::InList { .. }
-                    | Expr::CaseWhen { .. }
-                    | Expr::Extract { .. }
-                    | Expr::Column(_)
-                    | Expr::Literal(_)
-                    | Expr::BinaryExpr { .. }
-                    | Expr::UnaryExpr { .. }
-                    | Expr::AggregateFunction { .. }
-                    | Expr::Alias { .. }
-                    | Expr::Wildcard
-                    | Expr::QualifiedWildcard { .. } => {
-                        let input_plan = self.create_physical_plan_with_cte_ctx(input, cte_ctx)?;
-                        Ok(Box::new(FilterExec::new(input_plan, predicate.clone())))
-                    }
+            LogicalPlan::Filter { predicate, input } => match predicate {
+                Expr::In { expr: _, subquery } => {
+                    let _subquery_plan =
+                        self.create_physical_plan_with_cte_ctx(subquery, cte_ctx)?;
+                    let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                    let semi_join_plan = LogicalPlan::Join {
+                        left: input.clone(),
+                        right: subquery.clone(),
+                        join_type: JoinType::LeftSemi,
+                        condition: Some(join_condition),
+                    };
+                    self.create_physical_plan_with_cte_ctx(&semi_join_plan, cte_ctx)
                 }
-            }
+                Expr::NotIn { expr: _, subquery } => {
+                    let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                    let anti_join_plan = LogicalPlan::Join {
+                        left: input.clone(),
+                        right: subquery.clone(),
+                        join_type: JoinType::LeftAnti,
+                        condition: Some(join_condition),
+                    };
+                    self.create_physical_plan_with_cte_ctx(&anti_join_plan, cte_ctx)
+                }
+                Expr::Exists(subquery) => {
+                    let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                    let semi_join_plan = LogicalPlan::Join {
+                        left: input.clone(),
+                        right: subquery.clone(),
+                        join_type: JoinType::LeftSemi,
+                        condition: Some(join_condition),
+                    };
+                    self.create_physical_plan_with_cte_ctx(&semi_join_plan, cte_ctx)
+                }
+                Expr::NotExists(subquery) => {
+                    let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                    let anti_join_plan = LogicalPlan::Join {
+                        left: input.clone(),
+                        right: subquery.clone(),
+                        join_type: JoinType::LeftAnti,
+                        condition: Some(join_condition),
+                    };
+                    self.create_physical_plan_with_cte_ctx(&anti_join_plan, cte_ctx)
+                }
+                Expr::InList { .. }
+                | Expr::CaseWhen { .. }
+                | Expr::Extract { .. }
+                | Expr::Column(_)
+                | Expr::Literal(_)
+                | Expr::BinaryExpr { .. }
+                | Expr::UnaryExpr { .. }
+                | Expr::AggregateFunction { .. }
+                | Expr::Alias { .. }
+                | Expr::Wildcard
+                | Expr::QualifiedWildcard { .. } => {
+                    let input_plan = self.create_physical_plan_with_cte_ctx(input, cte_ctx)?;
+                    Ok(Box::new(FilterExec::new(input_plan, predicate.clone())))
+                }
+            },
             LogicalPlan::Aggregate {
                 input,
                 group_expr,
@@ -432,9 +431,12 @@ impl DefaultPlanner {
             LogicalPlan::Values { schema, .. } => {
                 Ok(Box::new(SeqScanExec::new(String::new(), schema.clone())))
             }
-            LogicalPlan::CreateTable { table_name, schema, .. } => {
-                Ok(Box::new(SeqScanExec::new(table_name.clone(), schema.clone())))
-            }
+            LogicalPlan::CreateTable {
+                table_name, schema, ..
+            } => Ok(Box::new(SeqScanExec::new(
+                table_name.clone(),
+                schema.clone(),
+            ))),
             LogicalPlan::DropTable { .. } => {
                 // DDL statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
