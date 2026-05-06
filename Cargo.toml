@@ -40,6 +40,7 @@ members = [
     "crates/types",
     "crates/mysql-server",
     "crates/qmd-bridge",
+    "crates/fuzz",
 ]
 
 [workspace.package]
