@@ -237,3 +237,73 @@ fn test_distinct_with_null() {
     let r = e.execute("SELECT DISTINCT a FROM t").unwrap();
     assert_eq!(r.rows.len(), 3); // 1, NULL, 2
 }
+
+// ===== IN subquery tests =====
+
+#[test]
+fn test_in_subquery() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a INTEGER)").unwrap();
+    e.execute("CREATE TABLE t2 (b INTEGER)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(2),(3),(4)").unwrap();
+    e.execute("INSERT INTO t2 VALUES (2),(4)").unwrap();
+    let r = e
+        .execute("SELECT * FROM t WHERE a IN (SELECT b FROM t2)")
+        .unwrap();
+    assert_eq!(r.rows.len(), 2);
+}
+
+#[test]
+fn test_not_in_subquery() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a INTEGER)").unwrap();
+    e.execute("CREATE TABLE t2 (b INTEGER)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(2),(3),(4)").unwrap();
+    e.execute("INSERT INTO t2 VALUES (2),(4)").unwrap();
+    let r = e
+        .execute("SELECT * FROM t WHERE a NOT IN (SELECT b FROM t2)")
+        .unwrap();
+    assert_eq!(r.rows.len(), 2); // 1, 3
+}
+
+#[test]
+fn test_in_subquery_no_match() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a INTEGER)").unwrap();
+    e.execute("CREATE TABLE t2 (b INTEGER)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(2),(3)").unwrap();
+    e.execute("INSERT INTO t2 VALUES (99)").unwrap();
+    let r = e
+        .execute("SELECT * FROM t WHERE a IN (SELECT b FROM t2)")
+        .unwrap();
+    assert_eq!(r.rows.len(), 0);
+}
+
+// ===== EXISTS subquery tests =====
+
+#[test]
+fn test_exists_subquery() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a INTEGER)").unwrap();
+    e.execute("CREATE TABLE t2 (b INTEGER)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(2),(3)").unwrap();
+    e.execute("INSERT INTO t2 VALUES (2)").unwrap();
+    // EXISTS returns true if subquery returns any rows
+    let r = e
+        .execute("SELECT * FROM t WHERE EXISTS (SELECT 1 FROM t2 WHERE t2.b = t.a)")
+        .unwrap();
+    assert_eq!(r.rows.len(), 1); // only row where a=2 matches
+}
+
+#[test]
+fn test_not_exists_subquery() {
+    let mut e = engine();
+    e.execute("CREATE TABLE t (a INTEGER)").unwrap();
+    e.execute("CREATE TABLE t2 (b INTEGER)").unwrap();
+    e.execute("INSERT INTO t VALUES (1),(2),(3)").unwrap();
+    e.execute("INSERT INTO t2 VALUES (99)").unwrap();
+    let r = e
+        .execute("SELECT * FROM t WHERE NOT EXISTS (SELECT 1 FROM t2 WHERE t2.b = t.a)")
+        .unwrap();
+    assert_eq!(r.rows.len(), 3); // no matches, so NOT EXISTS is true for all
+}

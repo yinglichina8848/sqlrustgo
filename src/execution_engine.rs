@@ -585,7 +585,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             } else {
                 where_expr.clone()
             };
-            rows.retain(|row| eval_predicate(&folded_where, row, &table_info));
+            rows.retain(|row| self.eval_predicate(&folded_where, row, &table_info));
         }
 
         // Step 3: GROUP BY + AGGREGATE
@@ -597,7 +597,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
                 if let Some(ref having_expr) = select.having {
                     let having_schema = build_aggregate_schema(&[], &select.aggregates)?;
-                    if !eval_predicate(having_expr, &agg_values, &having_schema) {
+                    if !self.eval_predicate(having_expr, &agg_values, &having_schema) {
                         return Ok(ExecutorResult::new(vec![], 0));
                     }
                 }
@@ -639,7 +639,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
                 if let Some(ref having_expr) = select.having {
                     let having_schema = build_aggregate_schema(group_exprs, &select.aggregates)?;
-                    agg_result_rows.retain(|row| eval_predicate(having_expr, row, &having_schema));
+                    agg_result_rows.retain(|row| self.eval_predicate(having_expr, row, &having_schema));
                 }
 
                 let row_count = agg_result_rows.len();
@@ -1521,7 +1521,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             let mut count = 0;
 
             for row in &all_rows {
-                if evaluate_where_clause(where_clause, row, &table_info) {
+                if self.eval_predicate(where_clause, row, &table_info) {
                     count += 1;
                     let mut new_row = row.clone();
                     for &(col_idx, ref set_expr) in &set_col_indices {
@@ -1565,7 +1565,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             // Collect non-matching rows to keep
             let rows_to_keep: Vec<Vec<Value>> = all_rows
                 .into_iter()
-                .filter(|row| !evaluate_where_clause(where_clause, row, &table_info))
+                .filter(|row| !self.eval_predicate(where_clause, row, &table_info))
                 .collect();
 
             // Insert non-matching rows
@@ -1593,7 +1593,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         let rows_to_update: Vec<Vec<Value>> = all_rows
             .into_iter()
-            .filter(|row| evaluate_where_clause(where_clause, row, &table_info))
+            .filter(|row| self.eval_predicate(where_clause, row, &table_info))
             .collect();
 
         let count = rows_to_update.len();
@@ -1637,7 +1637,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             let all_rows = storage.scan(&table_name)?;
             all_rows
                 .into_iter()
-                .filter(|row| !evaluate_where_clause(where_clause, row, &table_info))
+                .filter(|row| !self.eval_predicate(where_clause, row, &table_info))
                 .collect()
         };
 
@@ -1749,7 +1749,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                                 .into_iter()
                                 .filter(|&idx| {
                                     if let Ok(Some(row)) = storage.get_row(&table_name, idx) {
-                                        evaluate_where_clause(where_clause, &row, &table_info)
+                                        self.eval_predicate(where_clause, &row, &table_info)
                                     } else {
                                         false
                                     }
@@ -1784,7 +1784,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             // Partition rows using AST-based evaluation (no string parsing)
             let (rows_to_delete, rows_to_keep): (Vec<_>, Vec<_>) = all_rows
                 .into_iter()
-                .partition(|row| evaluate_where_clause(where_clause, row, &table_info));
+                .partition(|row| self.eval_predicate(where_clause, row, &table_info));
 
             let count = rows_to_delete.len();
 
@@ -1822,7 +1822,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         // Filter rows based on WHERE clause
         let rows_to_delete: Vec<Vec<Value>> = all_rows
             .into_iter()
-            .filter(|row| evaluate_where_clause(where_clause, row, &table_info))
+            .filter(|row| self.eval_predicate(where_clause, row, &table_info))
             .collect();
 
         let count = rows_to_delete.len();
@@ -1844,7 +1844,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             let all_rows = storage.scan(&table_name)?;
             all_rows
                 .into_iter()
-                .filter(|row| !evaluate_where_clause(where_clause, row, &table_info))
+                .filter(|row| !self.eval_predicate(where_clause, row, &table_info))
                 .collect()
         };
 
@@ -2969,27 +2969,217 @@ fn validate_foreign_keys(
 /// Evaluate a predicate expression to a boolean result
 /// Phase 1: UNKNOWN is folded to FALSE for WHERE filtering
 /// All NULL handling is centralized here - no NULL logic in individual operators
-fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
+impl<S: StorageEngine> ExecutionEngine<S> {
+    fn eval_predicate(&self, expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
+        match expr {
+            // AND short-circuits on false
+            Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
+                self.eval_predicate(left, row, table_info) && self.eval_predicate(right, row, table_info)
+            }
+            // OR short-circuits on true
+            Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
+                self.eval_predicate(left, row, table_info) || self.eval_predicate(right, row, table_info)
+            }
+            // IS NULL - always goes through evaluate_expression for value extraction
+            Expression::IsNull(inner) => match evaluate_expression(inner, row, table_info) {
+                Ok(val) => matches!(val, Value::Null),
+                Err(_) => false,
+            },
+            // IS NOT NULL
+            Expression::IsNotNull(inner) => match evaluate_expression(inner, row, table_info) {
+                Ok(val) => !matches!(val, Value::Null),
+                Err(_) => false,
+            },
+            // IN list predicate: col IN (val1, val2, ...)
+            Expression::InList(left, values) => {
+                let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+                if matches!(left_val, Value::Null) {
+                    false
+                } else {
+                    values.iter().any(|v| {
+                        let val = evaluate_expression(v, row, table_info).unwrap_or(Value::Null);
+                        left_val == val
+                    })
+                }
+            }
+            // NOT IN list predicate: col NOT IN (val1, val2, ...)
+            Expression::NotInList(left, values) => {
+                let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+                if matches!(left_val, Value::Null) {
+                    false
+                } else {
+                    !values.iter().any(|v| {
+                        let val = evaluate_expression(v, row, table_info).unwrap_or(Value::Null);
+                        left_val == val
+                    })
+                }
+            }
+            // IN subquery predicate: col IN (SELECT col FROM ...)
+            Expression::In(left, subquery) => {
+                let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+                if matches!(left_val, Value::Null) {
+                    false
+                } else {
+                    let subquery_values = self.execute_subquery(subquery, row, table_info);
+                    subquery_values.iter().any(|sq_row| {
+                        sq_row.first().map(|v| *v == left_val).unwrap_or(false)
+                    })
+                }
+            }
+            // NOT IN subquery predicate: col NOT IN (SELECT col FROM ...)
+            Expression::NotIn(left, subquery) => {
+                let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+                if matches!(left_val, Value::Null) {
+                    false
+                } else {
+                    let subquery_values = self.execute_subquery(subquery, row, table_info);
+                    // NOT IN: left_val should not match any value in subquery
+                    // If subquery returns empty, NOT IN is TRUE
+                    if subquery_values.is_empty() {
+                        true
+                    } else {
+                        !subquery_values.iter().any(|sq_row| {
+                            sq_row.first().map(|v| *v == left_val).unwrap_or(false)
+                        })
+                    }
+                }
+            }
+            // EXISTS subquery: EXISTS (SELECT 1 FROM ...)
+            Expression::Exists(subquery) => {
+                let subquery_values = self.execute_subquery(subquery, row, table_info);
+                !subquery_values.is_empty()
+            }
+            // NOT EXISTS subquery: NOT EXISTS (SELECT 1 FROM ...)
+            Expression::NotExists(subquery) => {
+                let subquery_values = self.execute_subquery(subquery, row, table_info);
+                subquery_values.is_empty()
+            }
+            // Legacy IS NULL (col IS NULL) - now uses new Expression::IsNull
+            Expression::BinaryOp(left, op, right)
+                if op.to_uppercase() == "IS"
+                    && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
+            {
+                self.eval_predicate(&Expression::IsNull(left.clone()), row, table_info)
+            }
+            // Legacy IS NOT NULL
+            Expression::BinaryOp(left, op, right)
+                if op.to_uppercase() == "IS NOT"
+                    && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
+            {
+                self.eval_predicate(&Expression::IsNotNull(left.clone()), row, table_info)
+            }
+            // All comparison operators go through sql_compare
+            Expression::BinaryOp(left, op, right) => {
+                let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+                let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
+                sql_compare(op, &left_val, &right_val)
+            }
+            // For other expressions, evaluate and check if truthy
+            _ => match evaluate_expression(expr, row, table_info) {
+                Ok(val) => {
+                    matches!(val, Value::Boolean(true))
+                }
+                Err(_) => false,
+            },
+        }
+    }
+
+    /// Execute a subquery and return the resulting rows
+    /// For correlated subqueries, outer_row and outer_table_info provide context
+    /// for resolving column references to the outer query's tables
+    fn execute_subquery(
+        &self,
+        select: &SelectStatement,
+        outer_row: &[Value],
+        outer_table_info: &TableInfo,
+    ) -> Vec<Vec<Value>> {
+        let storage = match self.storage.read() {
+            Ok(s) => s,
+            Err(_) => return Vec::new(),
+        };
+
+        if select.table.is_empty() {
+            return Vec::new();
+        }
+
+        // Execute the subquery with a fresh evaluation context
+        // Note: We use the same storage but need to respect transaction context
+        let records = match storage.scan(&select.table) {
+            Ok(r) => r,
+            Err(_) => return Vec::new(),
+        };
+
+        let table_info = match storage.get_table_info(&select.table) {
+            Ok(t) => t,
+            Err(_) => return Vec::new(),
+        };
+
+        // Apply WHERE clause if present
+        let filtered: Vec<Vec<Value>> = if let Some(ref where_expr) = select.where_clause {
+            let folded_where = where_expr.fold_constants();
+            // Use version with outer context for correlated subqueries
+            filtered_records_with_outer(&folded_where, records, &table_info, outer_row, outer_table_info)
+        } else {
+            records
+        };
+
+        // Apply SELECT columns projection
+        if select.columns.is_empty() || select.columns.iter().any(|c| c.name == "*") {
+            filtered
+        } else {
+            filtered
+                .into_iter()
+                .map(|row| {
+                    select
+                        .columns
+                        .iter()
+                        .filter_map(|col| {
+                            if let Some(idx) = find_column_index(&col.name, &table_info) {
+                                row.get(idx).cloned()
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                })
+                .collect()
+        }
+    }
+}
+
+/// Filter records based on WHERE expression (used by subqueries)
+fn filtered_records(where_expr: &Expression, records: Vec<Vec<Value>>, table_info: &TableInfo) -> Vec<Vec<Value>> {
+    records
+        .into_iter()
+        .filter(|row| eval_predicate_standalone(where_expr, row, table_info))
+        .collect()
+}
+
+/// Filter records based on WHERE expression with outer row context for correlated subqueries
+fn filtered_records_with_outer(
+    where_expr: &Expression,
+    records: Vec<Vec<Value>>,
+    table_info: &TableInfo,
+    outer_row: &[Value],
+    outer_table_info: &TableInfo,
+) -> Vec<Vec<Value>> {
+    records
+        .into_iter()
+        .filter(|row| eval_predicate_with_outer(where_expr, row, table_info, outer_row, outer_table_info))
+        .collect()
+}
+
+/// Standalone eval_predicate for use in filtered_records (no subquery support needed)
+fn eval_predicate_standalone(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
     match expr {
-        // AND short-circuits on false
         Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
-            eval_predicate(left, row, table_info) && eval_predicate(right, row, table_info)
+            eval_predicate_standalone(left, row, table_info) && eval_predicate_standalone(right, row, table_info)
         }
-        // OR short-circuits on true
         Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
-            eval_predicate(left, row, table_info) || eval_predicate(right, row, table_info)
+            eval_predicate_standalone(left, row, table_info) || eval_predicate_standalone(right, row, table_info)
         }
-        // IS NULL - always goes through evaluate_expression for value extraction
-        Expression::IsNull(inner) => match evaluate_expression(inner, row, table_info) {
-            Ok(val) => matches!(val, Value::Null),
-            Err(_) => false,
-        },
-        // IS NOT NULL
-        Expression::IsNotNull(inner) => match evaluate_expression(inner, row, table_info) {
-            Ok(val) => !matches!(val, Value::Null),
-            Err(_) => false,
-        },
-        // IN list predicate: col IN (val1, val2, ...)
+        Expression::IsNull(inner) => matches!(evaluate_expression(inner, row, table_info), Ok(val) if matches!(val, Value::Null)),
+        Expression::IsNotNull(inner) => !matches!(evaluate_expression(inner, row, table_info), Ok(val) if matches!(val, Value::Null)),
         Expression::InList(left, values) => {
             let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
             if matches!(left_val, Value::Null) {
@@ -3001,7 +3191,6 @@ fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> b
                 })
             }
         }
-        // NOT IN list predicate: col NOT IN (val1, val2, ...)
         Expression::NotInList(left, values) => {
             let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
             if matches!(left_val, Value::Null) {
@@ -3013,40 +3202,25 @@ fn eval_predicate(expr: &Expression, row: &[Value], table_info: &TableInfo) -> b
                 })
             }
         }
-        // Legacy IS NULL (col IS NULL) - now uses new Expression::IsNull
         Expression::BinaryOp(left, op, right)
             if op.to_uppercase() == "IS"
                 && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
         {
-            eval_predicate(&Expression::IsNull(left.clone()), row, table_info)
+            eval_predicate_standalone(&Expression::IsNull(left.clone()), row, table_info)
         }
-        // Legacy IS NOT NULL
         Expression::BinaryOp(left, op, right)
             if op.to_uppercase() == "IS NOT"
                 && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
         {
-            eval_predicate(&Expression::IsNotNull(left.clone()), row, table_info)
+            eval_predicate_standalone(&Expression::IsNotNull(left.clone()), row, table_info)
         }
-        // All comparison operators go through sql_compare
         Expression::BinaryOp(left, op, right) => {
             let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
             let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
             sql_compare(op, &left_val, &right_val)
         }
-        // For other expressions, evaluate and check if truthy
-        _ => match evaluate_expression(expr, row, table_info) {
-            Ok(val) => {
-                matches!(val, Value::Boolean(true))
-            }
-            Err(_) => false,
-        },
+        _ => matches!(evaluate_expression(expr, row, table_info), Ok(val) if matches!(val, Value::Boolean(true))),
     }
-}
-
-/// Legacy alias for compatibility
-#[allow(dead_code)]
-fn evaluate_where_clause(expr: &Expression, row: &[Value], table_info: &TableInfo) -> bool {
-    eval_predicate(expr, row, table_info)
 }
 
 /// SQL comparison operator
@@ -3065,6 +3239,149 @@ fn sql_compare(op: &str, left: &Value, right: &Value) -> bool {
         "<" => compare_values(left, right) < 0,
         "<=" => compare_values(left, right) <= 0,
         _ => false,
+    }
+}
+
+/// Evaluate an expression with outer table context for correlated subqueries
+/// First tries to resolve against inner table, then falls back to outer table
+fn evaluate_expression_with_outer(
+    expr: &Expression,
+    row: &[Value],
+    table_info: &TableInfo,
+    outer_row: &[Value],
+    outer_table_info: &TableInfo,
+) -> Result<Value, String> {
+    // For identifiers, first check if the column exists in inner table
+    if let Expression::Identifier(name) = expr {
+        // Check if this column exists in the inner table
+        let inner_col_idx = find_column_index(name, table_info);
+
+        if inner_col_idx.is_none() {
+            // Column not found in inner table - try outer table
+            // For qualified names like "t.a", extract just the column name
+            let col_name = if name.contains('.') {
+                name.split('.').last().unwrap_or(name)
+            } else {
+                name
+            };
+
+            // Check if this is a qualified name that matches outer table
+            if name.contains('.') {
+                let table_name = name.split('.').next().unwrap_or("");
+                if outer_table_info
+                    .columns
+                    .iter()
+                    .any(|c| c.name.eq_ignore_ascii_case(table_name))
+                {
+                    if let Some(idx) = find_column_index(name, outer_table_info) {
+                        return Ok(outer_row.get(idx).cloned().unwrap_or(Value::Null));
+                    }
+                }
+            }
+
+            // Try unqualified name in outer table
+            if let Some(idx) = find_column_index(col_name, outer_table_info) {
+                return Ok(outer_row.get(idx).cloned().unwrap_or(Value::Null));
+            }
+        }
+    }
+
+    // Fall back to normal evaluation against inner table
+    evaluate_expression(expr, row, table_info)
+}
+
+/// Evaluate a predicate with outer table context for correlated subqueries
+fn eval_predicate_with_outer(
+    expr: &Expression,
+    row: &[Value],
+    table_info: &TableInfo,
+    outer_row: &[Value],
+    outer_table_info: &TableInfo,
+) -> bool {
+    match expr {
+        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
+            eval_predicate_with_outer(left, row, table_info, outer_row, outer_table_info)
+                && eval_predicate_with_outer(right, row, table_info, outer_row, outer_table_info)
+        }
+        Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
+            eval_predicate_with_outer(left, row, table_info, outer_row, outer_table_info)
+                || eval_predicate_with_outer(right, row, table_info, outer_row, outer_table_info)
+        }
+        Expression::IsNull(inner) => {
+            matches!(
+                evaluate_expression_with_outer(inner, row, table_info, outer_row, outer_table_info),
+                Ok(val) if matches!(val, Value::Null)
+            )
+        }
+        Expression::IsNotNull(inner) => {
+            !matches!(
+                evaluate_expression_with_outer(inner, row, table_info, outer_row, outer_table_info),
+                Ok(val) if matches!(val, Value::Null)
+            )
+        }
+        Expression::InList(left, values) => {
+            let left_val =
+                evaluate_expression_with_outer(left, row, table_info, outer_row, outer_table_info)
+                    .unwrap_or(Value::Null);
+            if matches!(left_val, Value::Null) {
+                false
+            } else {
+                values.iter().any(|v| {
+                    let val = evaluate_expression_with_outer(v, row, table_info, outer_row, outer_table_info)
+                        .unwrap_or(Value::Null);
+                    left_val == val
+                })
+            }
+        }
+        Expression::NotInList(left, values) => {
+            let left_val =
+                evaluate_expression_with_outer(left, row, table_info, outer_row, outer_table_info)
+                    .unwrap_or(Value::Null);
+            if matches!(left_val, Value::Null) {
+                false
+            } else {
+                !values.iter().any(|v| {
+                    let val = evaluate_expression_with_outer(v, row, table_info, outer_row, outer_table_info)
+                        .unwrap_or(Value::Null);
+                    left_val == val
+                })
+            }
+        }
+        Expression::BinaryOp(left, op, right)
+            if op.to_uppercase() == "IS"
+                && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
+        {
+            eval_predicate_with_outer(
+                &Expression::IsNull(left.clone()),
+                row,
+                table_info,
+                outer_row,
+                outer_table_info,
+            )
+        }
+        Expression::BinaryOp(left, op, right)
+            if op.to_uppercase() == "IS NOT"
+                && matches!(right.as_ref(), Expression::Literal(s) if s.to_uppercase() == "NULL") =>
+        {
+            eval_predicate_with_outer(
+                &Expression::IsNotNull(left.clone()),
+                row,
+                table_info,
+                outer_row,
+                outer_table_info,
+            )
+        }
+        Expression::BinaryOp(left, op, right) => {
+            let left_val = evaluate_expression_with_outer(left, row, table_info, outer_row, outer_table_info)
+                .unwrap_or(Value::Null);
+            let right_val = evaluate_expression_with_outer(right, row, table_info, outer_row, outer_table_info)
+                .unwrap_or(Value::Null);
+            sql_compare(op, &left_val, &right_val)
+        }
+        _ => matches!(
+            evaluate_expression_with_outer(expr, row, table_info, outer_row, outer_table_info),
+            Ok(val) if matches!(val, Value::Boolean(true))
+        ),
     }
 }
 
