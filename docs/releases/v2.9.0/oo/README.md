@@ -60,14 +60,9 @@ oo/
 | Parser | [PARSER_DESIGN.md](./modules/parser/PARSER_DESIGN.md) | SQL 解析器 |
 | Storage | [STORAGE_DESIGN.md](./modules/storage/STORAGE_DESIGN.md) | 存储引擎 |
 | Optimizer | [OPTIMIZER_DESIGN.md](./modules/optimizer/OPTIMIZER_DESIGN.md) | 查询优化器 |
-| Catalog | [CATALOG_DESIGN.md](./modules/catalog/CATALOG_DESIGN.md) | 元数据管理 |
-| Planner | [PLANNER_DESIGN.md](./modules/planner/PLANNER_DESIGN.md) | 查询规划器 |
 | Transaction | [TRANSACTION_DESIGN.md](./modules/transaction/TRANSACTION_DESIGN.md) | 事务管理 |
-| Server | [SERVER_DESIGN.md](./modules/server/SERVER_DESIGN.md) | 服务器 |
-| Graph | [GRAPH_DESIGN.md](./modules/graph/GRAPH_DESIGN.md) | 图引擎 |
-| Vector | [VECTOR_DESIGN.md](./modules/vector/VECTOR_DESIGN.md) | 向量索引 |
-| Unified Query | [UNIFIED_QUERY_DESIGN.md](./modules/unified-query/UNIFIED_QUERY_DESIGN.md) | 统一查询 |
-| Bench | [BENCH_DESIGN.md](./modules/bench/BENCH_DESIGN.md) | 基准测试 |
+
+> **注意**: Catalog、Planner、Server、Graph、Vector、Unified Query、Bench 模块设计文档正在补充中 (v2.10.0 规划)。
 
 ### 报告
 

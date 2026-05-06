@@ -207,6 +207,6 @@ cargo run --bin bench-cli -- sysbench oltp --threads 4
 ## 相关文档
 
 - [完整文档索引](../../README.md)
-- [API 参考](../v2.8.0/API_REFERENCE.md)
-- [客户端连接](../v2.8.0/CLIENT_CONNECTION.md)
-- [迁移指南](../v2.8.0/MIGRATION_GUIDE.md)
+- [API 参考](./API_REFERENCE.md)
+- [客户端连接](./CLIENT_CONNECTION.md)
+- [迁移指南](./MIGRATION_GUIDE.md)
