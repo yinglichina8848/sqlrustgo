@@ -1,0 +1,45 @@
+# Coverage Trend — v3.0.0
+# Runs daily, stores coverage history for trend analysis.
+# Non-blocking.
+
+name: Coverage Trend
+
+on:
+  schedule:
+    - cron: "0 4 * * *"  # Daily 04:00 UTC
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  coverage-trend:
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          git checkout develop/v3.0.0
+
+      - name: Run Coverage
+        run: |
+          cd repo
+          cargo tarpaulin --all-features --out Json --out-dir ./coverage --timeout 300 2>&1 | tail -5
+          DATE=$(date +%Y%m%d)
+          mkdir -p coverage_history
+          if [ -f coverage/tarpaulin_report.json ]; then
+            python3 -c "
+import json, shutil
+with open('coverage/tarpaulin_report.json') as f:
+    d = json.load(f)
+print(f'Coverage: {d.get(\"coverage\",0):.2f}%')
+" | tee coverage_history/${DATE}_coverage.txt
+          fi
+
+      - name: Store History (30 days)
+        run: |
+          cd repo
+          echo "=== Last 7 coverage points ==="
+          ls -t coverage_history/ 2>/dev/null | head -7
