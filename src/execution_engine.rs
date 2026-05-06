@@ -493,9 +493,14 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             (rows, table_info)
         };
 
-        // Step 2: WHERE
+        // Step 2: WHERE (with constant folding optimization)
         if let Some(ref where_expr) = select.where_clause {
-            rows.retain(|row| eval_predicate(where_expr, row, &table_info));
+            let folded_where = if self.cbo_enabled {
+                where_expr.fold_constants()
+            } else {
+                where_expr.clone()
+            };
+            rows.retain(|row| eval_predicate(&folded_where, row, &table_info));
         }
 
         // Step 3: GROUP BY + AGGREGATE

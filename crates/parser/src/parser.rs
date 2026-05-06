@@ -569,6 +569,188 @@ pub enum Expression {
     Extract(String, Box<Expression>), // EXTRACT(YEAR FROM date)
 }
 
+impl Expression {
+    pub fn fold_constants(&self) -> Expression {
+        match self {
+            Expression::BinaryOp(left, op, right) => {
+                let left_folded = left.as_ref().fold_constants();
+                let right_folded = right.as_ref().fold_constants();
+                if let (Expression::Literal(l), Expression::Literal(r)) = (&left_folded, &right_folded) {
+                    if let Some(val) = evaluate_binary_op(l, r, op) {
+                        return val;
+                    }
+                }
+                if op.to_uppercase() == "AND" {
+                    if let Expression::Literal(l) = &left_folded {
+                        let l_upper = l.to_uppercase();
+                        if l_upper == "TRUE" || l_upper == "1" {
+                            return right_folded;
+                        }
+                        if l_upper == "FALSE" || l_upper == "0" {
+                            return Expression::Literal("FALSE".to_string());
+                        }
+                    }
+                    if let Expression::Literal(r) = &right_folded {
+                        let r_upper = r.to_uppercase();
+                        if r_upper == "TRUE" || r_upper == "1" {
+                            return left_folded;
+                        }
+                        if r_upper == "FALSE" || r_upper == "0" {
+                            return Expression::Literal("FALSE".to_string());
+                        }
+                    }
+                }
+                if op.to_uppercase() == "OR" {
+                    if let Expression::Literal(l) = &left_folded {
+                        let l_upper = l.to_uppercase();
+                        if l_upper == "FALSE" || l_upper == "0" {
+                            return right_folded;
+                        }
+                        if l_upper == "TRUE" || l_upper == "1" {
+                            return Expression::Literal("TRUE".to_string());
+                        }
+                    }
+                    if let Expression::Literal(r) = &right_folded {
+                        let r_upper = r.to_uppercase();
+                        if r_upper == "FALSE" || r_upper == "0" {
+                            return left_folded;
+                        }
+                        if r_upper == "TRUE" || r_upper == "1" {
+                            return Expression::Literal("TRUE".to_string());
+                        }
+                    }
+                }
+                if left_folded == **left && right_folded == **right {
+                    self.clone()
+                } else {
+                    Expression::BinaryOp(Box::new(left_folded), op.clone(), Box::new(right_folded))
+                }
+            }
+            Expression::UnaryOp(op, inner) => {
+                let op_upper = op.to_uppercase();
+                if op_upper == "NOT" {
+                    let folded = inner.as_ref().fold_constants();
+                    if let Expression::Literal(l) = &folded {
+                        let l_upper = l.to_uppercase();
+                        if l_upper == "TRUE" {
+                            return Expression::Literal("FALSE".to_string());
+                        }
+                        if l_upper == "FALSE" {
+                            return Expression::Literal("TRUE".to_string());
+                        }
+                    }
+                    if folded == **inner {
+                        self.clone()
+                    } else {
+                        Expression::UnaryOp(op.clone(), Box::new(folded))
+                    }
+                } else {
+                    let folded = inner.as_ref().fold_constants();
+                    if folded == **inner {
+                        self.clone()
+                    } else {
+                        Expression::UnaryOp(op.clone(), Box::new(folded))
+                    }
+                }
+            }
+            Expression::Like(expr, pattern, escape) => {
+                let expr_folded = expr.as_ref().fold_constants();
+                let pat_folded = pattern.as_ref().fold_constants();
+                if expr_folded == **expr && pat_folded == **pattern {
+                    self.clone()
+                } else {
+                    Expression::Like(Box::new(expr_folded), Box::new(pat_folded), *escape)
+                }
+            }
+            Expression::Between(expr, low, high) => {
+                let expr_folded = expr.as_ref().fold_constants();
+                let low_folded = low.as_ref().fold_constants();
+                let high_folded = high.as_ref().fold_constants();
+                if expr_folded == **expr && low_folded == **low && high_folded == **high {
+                    self.clone()
+                } else {
+                    Expression::Between(Box::new(expr_folded), Box::new(low_folded), Box::new(high_folded))
+                }
+            }
+            Expression::IsNull(inner) => {
+                let folded = inner.as_ref().fold_constants();
+                if folded == **inner {
+                    self.clone()
+                } else {
+                    Expression::IsNull(Box::new(folded))
+                }
+            }
+            Expression::IsNotNull(inner) => {
+                let folded = inner.as_ref().fold_constants();
+                if folded == **inner {
+                    self.clone()
+                } else {
+                    Expression::IsNotNull(Box::new(folded))
+                }
+            }
+            Expression::CaseWhen(when_clauses, else_expr) => {
+                let mut folded_clauses = Vec::new();
+                let mut has_change = false;
+                for when in when_clauses {
+                    let cond_folded = when.condition.fold_constants();
+                    let then_folded = when.result.fold_constants();
+                    if cond_folded != when.condition || then_folded != when.result {
+                        has_change = true;
+                    }
+                    folded_clauses.push(WhenClause { condition: cond_folded, result: then_folded });
+                }
+                let else_folded = else_expr.as_ref().map(|e| e.fold_constants());
+                let else_changed = match (&else_folded, else_expr) {
+                    (Some(f), Some(b)) => *f != **b,
+                    (None, None) => false,
+                    _ => true,
+                };
+                if !has_change && !else_changed {
+                    self.clone()
+                } else {
+                    Expression::CaseWhen(folded_clauses, else_folded.map(Box::new))
+                }
+            }
+            _ => self.clone(),
+        }
+    }
+}
+
+fn evaluate_binary_op(l: &str, r: &str, op: &str) -> Option<Expression> {
+    if let (Ok(lhs), Ok(rhs)) = (l.parse::<f64>(), r.parse::<f64>()) {
+        let result = match op.to_uppercase().as_str() {
+            "+" | "PLUS" => (lhs + rhs).to_string(),
+            "-" | "MINUS" => (lhs - rhs).to_string(),
+            "*" | "MULTIPLY" => (lhs * rhs).to_string(),
+            "/" | "DIVIDE" => {
+                if rhs != 0.0 {
+                    (lhs / rhs).to_string()
+                } else {
+                    return None;
+                }
+            }
+            "=" | "==" | "EQ" => (lhs == rhs).to_string(),
+            "!=" | "<>" | "NE" => (lhs != rhs).to_string(),
+            "<" | "LT" => (lhs < rhs).to_string(),
+            "<=" | "LE" => (lhs <= rhs).to_string(),
+            ">" | "GT" => (lhs > rhs).to_string(),
+            ">=" | "GE" => (lhs >= rhs).to_string(),
+            _ => return None,
+        };
+        return Some(Expression::Literal(result));
+    }
+    let result = match op.to_uppercase().as_str() {
+        "=" | "==" | "EQ" => (l == r).to_string(),
+        "!=" | "<>" | "NE" => (l != r).to_string(),
+        "<" | "LT" => (l < r).to_string(),
+        "<=" | "LE" => (l <= r).to_string(),
+        ">" | "GT" => (l > r).to_string(),
+        ">=" | "GE" => (l >= r).to_string(),
+        _ => return None,
+    };
+    Some(Expression::Literal(result))
+}
+
 /// SQL Parser
 pub struct Parser {
     tokens: Vec<Token>,
