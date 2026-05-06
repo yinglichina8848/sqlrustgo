@@ -251,11 +251,7 @@ fn test_scalar_subquery() {
 #[test]
 fn test_exists_subquery() {
     let result = parse("SELECT * FROM t WHERE EXISTS (SELECT 1)");
-    assert!(
-        result.is_ok(),
-        "EXISTS subquery should parse: {:?}",
-        result
-    );
+    assert!(result.is_ok(), "EXISTS subquery should parse: {:?}", result);
 }
 
 #[test]
