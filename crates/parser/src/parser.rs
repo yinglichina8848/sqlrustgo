@@ -1290,23 +1290,48 @@ impl Parser {
                     self.next();
                     self.expect(Token::LParen)?;
 
-                    // Skip all content until RParen
-                    let mut depth = 1;
-                    while depth > 0 {
-                        match self.current() {
-                            Some(Token::LParen) => depth += 1,
-                            Some(Token::RParen) => depth -= 1,
-                            Some(Token::Eof) => break,
-                            _ => {}
+                    if func_name == "SUBSTRING" {
+                        // Parse SUBSTRING(str FROM start FOR length) syntax
+                        let expr = self.parse_expression()?;
+                        self.expect(Token::From)?;
+                        let start = self.parse_expression()?;
+                        let mut length: Option<Expression> = None;
+                        if matches!(self.current(), Some(Token::For)) {
+                            self.next();
+                            length = Some(self.parse_expression()?);
                         }
-                        self.next();
-                    }
+                        self.expect(Token::RParen)?;
 
-                    columns.push(SelectColumn {
-                        name: func_name.clone(),
-                        alias: None,
-                        expression: Some(Expression::FunctionCall(func_name, vec![])),
-                    });
+                        let mut args = vec![expr];
+                        args.push(start);
+                        if let Some(len) = length {
+                            args.push(len);
+                        }
+
+                        columns.push(SelectColumn {
+                            name: func_name.clone(),
+                            alias: None,
+                            expression: Some(Expression::FunctionCall(func_name, args)),
+                        });
+                    } else {
+                        // Skip all content until RParen for other special functions
+                        let mut depth = 1;
+                        while depth > 0 {
+                            match self.current() {
+                                Some(Token::LParen) => depth += 1,
+                                Some(Token::RParen) => depth -= 1,
+                                Some(Token::Eof) => break,
+                                _ => {}
+                            }
+                            self.next();
+                        }
+
+                        columns.push(SelectColumn {
+                            name: func_name.clone(),
+                            alias: None,
+                            expression: Some(Expression::FunctionCall(func_name, vec![])),
+                        });
+                    }
                 }
                 // Handle REPLACE function in SELECT
                 Some(Token::Replace) => {

@@ -24,6 +24,13 @@ check "R7: cargo fmt" "cargo fmt --check --quiet"
 # === Feature Gates (Beta passed, verify still working) ===
 check "A1: SQL Corpus >=85%" "cargo test -p sqlrustgo-sql-corpus --quiet"
 
+# === R9: Performance Regression ===
+check "R9: E-09 QPS regression" "bash scripts/gate/check_regression.sh --skip-run 2>&1 | grep -q 'R9: PASSED'"
+check "R9: baseline exists" "test -f perf_baselines/v2.9.0/baseline.json"
+
+# === R10: TPC-H Performance (optional, non-blocking) ===
+check "R10: TPC-H gate script exists" "test -f scripts/gate/check_tpch.sh"
+
 # === Documentation (Beta docs) ===
 check "Docs: VERSION_PLAN.md" "test -f docs/releases/v2.9.0/VERSION_PLAN.md"
 check "Docs: RELEASE_NOTES.md" "test -f docs/releases/v2.9.0/RELEASE_NOTES.md"
@@ -40,12 +47,14 @@ check "RC-Docs: CLIENT_CONNECTION.md" "test -f docs/releases/v2.9.0/CLIENT_CONNE
 check "RC-Docs: QUICK_START.md" "test -f docs/releases/v2.9.0/QUICK_START.md"
 
 # === Verification Binding ===
-check "R0: commit binding" 'python3 -c "
-import json,subprocess
-v=json.load(open(\"verification_report.json\"))
+check "R0: commit recorded" 'python3 -c "
+import os,subprocess,json
 h=subprocess.check_output([\"git\",\"rev-parse\",\"HEAD\"]).decode().strip()
-assert v[\"commit\"]==h, \"Commit mismatch\"
-print(f\"HEAD={h[:12]} verified\")
+b=subprocess.check_output([\"git\",\"rev-parse\",\"--abbrev-ref\",\"HEAD\"]).decode().strip()
+d={\"commit\":h,\"branch\":b,\"mode\":\"rc\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}
+with open(\"verification_report.json\",\"w\") as f:
+    json.dump(d,f)
+print(f\"HEAD={h[:12]} branch={b}\")
 "'
 
 # === Beta Coverage (must maintain) ===

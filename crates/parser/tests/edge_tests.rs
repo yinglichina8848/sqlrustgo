@@ -229,13 +229,13 @@ fn test_block_comment() {
 #[test]
 fn test_cte_basic() {
     let result = parse("WITH cte AS (SELECT 1) SELECT * FROM cte");
-    assert!(result.is_err(), "CTE not supported: {:?}", result);
+    assert!(result.is_ok(), "CTE should parse: {:?}", result);
 }
 
 #[test]
 fn test_multiple_ctes() {
     let result = parse("WITH cte1 AS (SELECT 1), cte2 AS (SELECT 2) SELECT * FROM cte1, cte2");
-    assert!(result.is_err(), "CTE not supported: {:?}", result);
+    assert!(result.is_ok(), "Multiple CTEs should parse: {:?}", result);
 }
 
 #[test]
@@ -251,11 +251,7 @@ fn test_scalar_subquery() {
 #[test]
 fn test_exists_subquery() {
     let result = parse("SELECT * FROM t WHERE EXISTS (SELECT 1)");
-    assert!(
-        result.is_err(),
-        "EXISTS subquery not supported: {:?}",
-        result
-    );
+    assert!(result.is_ok(), "EXISTS subquery should parse: {:?}", result);
 }
 
 #[test]

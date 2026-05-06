@@ -21,11 +21,14 @@ fn create_engine() -> MemoryExecutionEngine {
 }
 
 fn setup_tables(engine: &mut MemoryExecutionEngine) {
-    let _ = engine.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER, name TEXT, age INTEGER)");
+    let _ = engine.execute(
+        "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)",
+    );
     let _ = engine
-        .execute("CREATE TABLE IF NOT EXISTS orders (id INTEGER, user_id INTEGER, amount INTEGER)");
-    let _ = engine
-        .execute("CREATE TABLE IF NOT EXISTS products (id INTEGER, name TEXT, price INTEGER)");
+        .execute("CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY, user_id INTEGER, amount INTEGER)");
+    let _ = engine.execute(
+        "CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, name TEXT, price INTEGER)",
+    );
 }
 
 fn cleanup_tables(engine: &mut MemoryExecutionEngine) {
@@ -233,7 +236,7 @@ fn test_qps_aggregation() {
     cleanup_tables(&mut engine);
 }
 
-/// Benchmark: Concurrent SELECT QPS
+/// Benchmark: Concurrent SELECT QPS (with warm-up)
 #[test]
 #[ignore]
 fn test_qps_concurrent_select() {
@@ -252,31 +255,56 @@ fn test_qps_concurrent_select() {
         }
     }
 
-    let start = Instant::now();
-
-    let handles: Vec<thread::JoinHandle<()>> = (0..CONCURRENT_THREADS)
+    // Warm-up phase: run 200 queries per thread to stabilize JIT/dynamic dispatch
+    let warmup_iters = 200;
+    let warmup_handles: Vec<thread::JoinHandle<()>> = (0..CONCURRENT_THREADS)
         .map(|_| {
             let storage = storage.clone();
             thread::spawn(move || {
                 let mut engine = MemoryExecutionEngine::new(storage);
-                for i in 0..(BENCHMARK_ITERATIONS / CONCURRENT_THREADS) {
+                for i in 0..warmup_iters {
                     let _ = engine.execute(&format!("SELECT * FROM users WHERE id = {}", i % 1000));
                 }
             })
         })
         .collect();
-
-    for handle in handles {
+    for handle in warmup_handles {
         handle.join().unwrap();
     }
 
-    let elapsed = start.elapsed();
-    let total_queries = BENCHMARK_ITERATIONS;
-    let qps = total_queries as f64 / elapsed.as_secs_f64();
+    // Run 3 passes and report median
+    let mut results = Vec::new();
+    for pass in 0..3 {
+        let start = Instant::now();
+        let handles: Vec<thread::JoinHandle<()>> = (0..CONCURRENT_THREADS)
+            .map(|_| {
+                let storage = storage.clone();
+                thread::spawn(move || {
+                    let mut engine = MemoryExecutionEngine::new(storage);
+                    for i in 0..(BENCHMARK_ITERATIONS / CONCURRENT_THREADS) {
+                        let _ =
+                            engine.execute(&format!("SELECT * FROM users WHERE id = {}", i % 1000));
+                    }
+                })
+            })
+            .collect();
 
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        let elapsed = start.elapsed();
+        let qps = BENCHMARK_ITERATIONS as f64 / elapsed.as_secs_f64();
+        results.push(qps);
+        println!("   Pass {}: {:.2} qps", pass + 1, qps);
+    }
+
+    // Report median
+    results.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let median = results[1];
     println!(
-        "Concurrent SELECT QPS: {} queries in {:?} ({:.2} qps) - {} threads",
-        total_queries, elapsed, qps, CONCURRENT_THREADS
+        "Concurrent SELECT QPS: median {:.2} qps from 3 passes (range: {:.2}-{:.2}) - {} threads",
+        median, results[0], results[2], CONCURRENT_THREADS
     );
 }
 

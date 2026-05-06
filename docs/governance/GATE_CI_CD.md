@@ -1,8 +1,10 @@
 # Governance Gate CI/CD Automation
 
-> **Version**: 1.0
-> **Date**: 2026-05-02
+> **Version**: 1.1
+> **Date**: 2026-05-05
 > **Gate**: G-04
+
+> **Status**: Target Architecture — 部分 R-Gate 扩展检查（R8/R9/R10）的 CI 自动化尚未完全落地本文档为规划目标。
 
 ---
 
@@ -12,12 +14,14 @@ This document describes the automated CI/CD pipeline for governance gate verific
 
 ## Gates Covered
 
+> **SSOT**: Gate commands and thresholds are defined in [gate_spec.md](./gate_spec.md). This document describes the CI/CD pipeline that implements those gates.
+
 | Gate | Name | Description |
 |------|------|-------------|
-| R1-R7 | Core Gates | Build, Test, Clippy, Format, Coverage, Security, Docs |
+| R1-R7 | Core Gates | Build, Test, Clippy, Format, Coverage (llvm-cov), Security, Docs (R7a-d) |
 | R8 | SQL Compatibility | SQL Corpus ≥80% |
-| R9 | Performance | Performance baseline no regression |
-| R10 | Formal Proof | ≥10 proof files verified |
+| R9 | Performance | Performance baseline + regression check |
+| R10 | Formal Proof | ≥10 proof files with tool_output |
 | G-Gate | Attack Surface | AV1-AV10 verified |
 
 ## CI/CD Pipeline
@@ -149,5 +153,6 @@ When all gates pass:
 
 ---
 
-*Document verified by: openclaw*
-*Date: 2026-05-02*
+*Document maintained by: hermes-z6g4*
+*Date: 2026-05-05*
+*SSOT: gate_spec.md is the authoritative gate definition.*

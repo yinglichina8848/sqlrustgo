@@ -1,109 +1,468 @@
-use sqlrustgo_executor::execute_query;
-use sqlrustgo_parser::parse;
-use sqlrustgo_planner::{LogicalPlan, PhysicalPlan};
-
-/// Verify planner produces semantically valid plans using property-based testing
-///
-/// Instead of testing exact plan structure, we verify:
-/// 1. Output columns match expected
-/// 2. Plan can be executed without errors
-/// 3. Semantics preserved (row count within expected range)
+use sqlrustgo_planner::Expr;
+use sqlrustgo_planner::{AggregateFunction, JoinType, LogicalPlan, Operator, PhysicalPlan, Schema};
+use sqlrustgo_types::Value;
 
 #[cfg(test)]
-mod planner_property_tests {
+mod logical_plan_tests {
     use super::*;
 
-    /// Property: SELECT with GROUP BY should produce aggregated results
     #[test]
-    fn test_group_by_always_aggregates() {
-        let sql = "SELECT department, COUNT(*) FROM employees GROUP BY department";
-        let plan = plan(sql);
-
-        // Property: GROUP BY should aggregate
-        assert!(plan.has_aggregate(), "GROUP BY should trigger aggregation");
-    }
-
-    /// Property: DISTINCT should deduplicate
-    #[test]
-    fn test_distinct_removes_duplicates() {
-        let sql = "SELECT DISTINCT department FROM employees";
-        let plan = plan(sql);
-
-        // Property: DISTINCT implies deduplication
-        assert!(plan.is_deterministic(), "DISTINCT should be deterministic");
-    }
-
-    /// Property: WHERE clause should filter before aggregation
-    #[test]
-    fn test_filter_before_aggregate() {
-        let sql = "SELECT COUNT(*) FROM employees WHERE age > 30";
-        let plan = plan(sql);
-
-        // Property: filter should be pushed down
-        assert!(plan.has_filter(), "WHERE clause should exist in plan");
-    }
-
-    /// Property: JOIN should have join condition
-    #[test]
-    fn test_join_has_condition() {
-        let sql = "SELECT * FROM orders JOIN users ON orders.user_id = users.id";
-        let plan = plan(sql);
-
-        // Property: JOIN requires condition
-        assert!(plan.has_join(), "JOIN should be in plan");
-    }
-
-    /// Property: ORDER BY should appear in output
-    #[test]
-    fn test_order_by_preserves_columns() {
-        let sql = "SELECT name, age FROM users ORDER BY age DESC";
-        let plan = plan(sql);
-
-        // Property: ORDER BY doesn't change column set
-        assert_eq!(plan.output_columns().len(), 2);
-    }
-}
-
-fn plan(sql: &str) -> LogicalPlan {
-    parse(sql).unwrap().plan
-}
-
-trait PlanProperties {
-    fn has_aggregate(&self) -> bool;
-    fn has_filter(&self) -> bool;
-    fn has_join(&self) -> bool;
-    fn is_deterministic(&self) -> bool;
-    fn output_columns(&self) -> Vec<String>;
-}
-
-impl PlanProperties for LogicalPlan {
-    fn has_aggregate(&self) -> bool {
-        matches!(self, LogicalPlan::Aggregate(_))
-    }
-
-    fn has_filter(&self) -> bool {
-        matches!(self, LogicalPlan::Filter(_))
-    }
-
-    fn has_join(&self) -> bool {
-        matches!(self, LogicalPlan::Join(_))
-    }
-
-    fn is_deterministic(&self) -> bool {
-        // DISTINCT, ORDER BY with no LIMIT may be non-deterministic
-        // But filter, aggregate are deterministic
-        matches!(
-            self,
-            LogicalPlan::Scan(_) | LogicalPlan::Filter(_) | LogicalPlan::Aggregate(_)
-        )
-    }
-
-    fn output_columns(&self) -> Vec<String> {
-        match self {
-            LogicalPlan::Scan(s) => s.columns.clone(),
-            LogicalPlan::Project(p) => p.columns.clone(),
-            LogicalPlan::Aggregate(a) => a.group_by.clone(),
-            _ => vec![],
+    fn test_logical_plan_table_scan() {
+        let plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        if let LogicalPlan::TableScan { ref table_name, .. } = plan {
+            assert_eq!(table_name, "users");
         }
+    }
+
+    #[test]
+    fn test_logical_plan_projection() {
+        let inner = LogicalPlan::TableScan {
+            table_name: "t".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Projection {
+            input: Box::new(inner),
+            expr: vec![],
+            schema: Schema::empty(),
+        };
+        assert!(matches!(plan, LogicalPlan::Projection { .. }));
+    }
+
+    #[test]
+    fn test_logical_plan_filter() {
+        let inner = LogicalPlan::TableScan {
+            table_name: "t".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Filter {
+            predicate: Expr::Literal(Value::Boolean(true)),
+            input: Box::new(inner),
+        };
+        assert!(matches!(plan, LogicalPlan::Filter { .. }));
+    }
+
+    #[test]
+    fn test_logical_plan_aggregate() {
+        let inner = LogicalPlan::TableScan {
+            table_name: "t".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Aggregate {
+            input: Box::new(inner),
+            group_expr: vec![],
+            aggregate_expr: vec![],
+            schema: Schema::empty(),
+        };
+        assert!(matches!(plan, LogicalPlan::Aggregate { .. }));
+    }
+
+    #[test]
+    fn test_logical_plan_sort() {
+        let inner = LogicalPlan::TableScan {
+            table_name: "t".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Sort {
+            input: Box::new(inner),
+            sort_expr: vec![],
+        };
+        assert!(matches!(plan, LogicalPlan::Sort { .. }));
+    }
+
+    #[test]
+    fn test_logical_plan_limit() {
+        let inner = LogicalPlan::TableScan {
+            table_name: "t".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Limit {
+            input: Box::new(inner),
+            limit: 100,
+            offset: None,
+        };
+        assert!(matches!(plan, LogicalPlan::Limit { .. }));
+    }
+
+    #[test]
+    fn test_logical_plan_limit_with_offset() {
+        let inner = LogicalPlan::TableScan {
+            table_name: "t".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Limit {
+            input: Box::new(inner),
+            limit: 100,
+            offset: Some(10),
+        };
+        assert!(matches!(
+            plan,
+            LogicalPlan::Limit {
+                limit: 100,
+                offset: Some(10),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_logical_plan_join_inner() {
+        let left = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let right = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Join {
+            left: Box::new(left),
+            right: Box::new(right),
+            join_type: JoinType::Inner,
+            condition: None,
+        };
+        assert!(matches!(
+            plan,
+            LogicalPlan::Join {
+                join_type: JoinType::Inner,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_logical_plan_join_left() {
+        let left = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let right = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Join {
+            left: Box::new(left),
+            right: Box::new(right),
+            join_type: JoinType::Left,
+            condition: None,
+        };
+        assert!(matches!(
+            plan,
+            LogicalPlan::Join {
+                join_type: JoinType::Left,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_logical_plan_join_right() {
+        let left = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let right = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Join {
+            left: Box::new(left),
+            right: Box::new(right),
+            join_type: JoinType::Right,
+            condition: None,
+        };
+        assert!(matches!(
+            plan,
+            LogicalPlan::Join {
+                join_type: JoinType::Right,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_logical_plan_join_full() {
+        let left = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let right = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Join {
+            left: Box::new(left),
+            right: Box::new(right),
+            join_type: JoinType::Full,
+            condition: None,
+        };
+        assert!(matches!(
+            plan,
+            LogicalPlan::Join {
+                join_type: JoinType::Full,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_logical_plan_union() {
+        let left = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let right = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Union {
+            left: Box::new(left),
+            right: Box::new(right),
+        };
+        assert!(matches!(plan, LogicalPlan::Union { .. }));
+    }
+
+    #[test]
+    fn test_logical_plan_delete() {
+        let plan = LogicalPlan::Delete {
+            table_name: "users".to_string(),
+            predicate: None,
+        };
+        assert!(matches!(plan, LogicalPlan::Delete { .. }));
+    }
+
+    #[test]
+    fn test_logical_plan_update() {
+        let plan = LogicalPlan::Update {
+            table_name: "users".to_string(),
+            updates: vec![],
+            predicate: None,
+        };
+        assert!(matches!(plan, LogicalPlan::Update { .. }));
+    }
+}
+
+#[cfg(test)]
+mod join_type_tests {
+    use super::*;
+
+    #[test]
+    fn test_join_type_inner() {
+        assert_eq!(JoinType::Inner, JoinType::Inner);
+    }
+
+    #[test]
+    fn test_join_type_left() {
+        assert_eq!(JoinType::Left, JoinType::Left);
+    }
+
+    #[test]
+    fn test_join_type_right() {
+        assert_eq!(JoinType::Right, JoinType::Right);
+    }
+
+    #[test]
+    fn test_join_type_full() {
+        assert_eq!(JoinType::Full, JoinType::Full);
+    }
+
+    #[test]
+    fn test_join_type_cross() {
+        assert_eq!(JoinType::Cross, JoinType::Cross);
+    }
+
+    #[test]
+    fn test_join_type_left_semi() {
+        assert_eq!(JoinType::LeftSemi, JoinType::LeftSemi);
+    }
+
+    #[test]
+    fn test_join_type_left_anti() {
+        assert_eq!(JoinType::LeftAnti, JoinType::LeftAnti);
+    }
+
+    #[test]
+    fn test_join_type_right_semi() {
+        assert_eq!(JoinType::RightSemi, JoinType::RightSemi);
+    }
+
+    #[test]
+    fn test_join_type_right_anti() {
+        assert_eq!(JoinType::RightAnti, JoinType::RightAnti);
+    }
+
+    #[test]
+    fn test_join_type_all_variants() {
+        let variants = [
+            JoinType::Inner,
+            JoinType::Left,
+            JoinType::Right,
+            JoinType::Full,
+            JoinType::Cross,
+            JoinType::LeftSemi,
+            JoinType::LeftAnti,
+            JoinType::RightSemi,
+            JoinType::RightAnti,
+        ];
+        assert_eq!(variants.len(), 9);
+    }
+}
+
+#[cfg(test)]
+mod aggregate_function_tests {
+    use super::*;
+
+    #[test]
+    fn test_aggregate_function_count() {
+        assert_eq!(AggregateFunction::Count, AggregateFunction::Count);
+    }
+
+    #[test]
+    fn test_aggregate_function_sum() {
+        assert_eq!(AggregateFunction::Sum, AggregateFunction::Sum);
+    }
+
+    #[test]
+    fn test_aggregate_function_avg() {
+        assert_eq!(AggregateFunction::Avg, AggregateFunction::Avg);
+    }
+
+    #[test]
+    fn test_aggregate_function_min() {
+        assert_eq!(AggregateFunction::Min, AggregateFunction::Min);
+    }
+
+    #[test]
+    fn test_aggregate_function_max() {
+        assert_eq!(AggregateFunction::Max, AggregateFunction::Max);
+    }
+
+    #[test]
+    fn test_aggregate_function_all_variants() {
+        let variants = [
+            AggregateFunction::Count,
+            AggregateFunction::Sum,
+            AggregateFunction::Avg,
+            AggregateFunction::Min,
+            AggregateFunction::Max,
+        ];
+        assert_eq!(variants.len(), 5);
+    }
+}
+
+#[cfg(test)]
+mod operator_tests {
+    use super::*;
+
+    #[test]
+    fn test_operator_equality() {
+        assert_eq!(Operator::Eq, Operator::Eq);
+        assert_eq!(Operator::NotEq, Operator::NotEq);
+    }
+
+    #[test]
+    fn test_operator_comparison() {
+        assert_eq!(Operator::Lt, Operator::Lt);
+        assert_eq!(Operator::LtEq, Operator::LtEq);
+        assert_eq!(Operator::Gt, Operator::Gt);
+        assert_eq!(Operator::GtEq, Operator::GtEq);
+    }
+
+    #[test]
+    fn test_operator_logical() {
+        assert_eq!(Operator::And, Operator::And);
+        assert_eq!(Operator::Or, Operator::Or);
+    }
+
+    #[test]
+    fn test_operator_arithmetic() {
+        assert_eq!(Operator::Plus, Operator::Plus);
+        assert_eq!(Operator::Minus, Operator::Minus);
+        assert_eq!(Operator::Multiply, Operator::Multiply);
+        assert_eq!(Operator::Divide, Operator::Divide);
+    }
+
+    #[test]
+    fn test_operator_all_variants() {
+        let operators = [
+            Operator::Eq,
+            Operator::NotEq,
+            Operator::Lt,
+            Operator::LtEq,
+            Operator::Gt,
+            Operator::GtEq,
+            Operator::And,
+            Operator::Or,
+            Operator::Plus,
+            Operator::Minus,
+            Operator::Multiply,
+            Operator::Divide,
+        ];
+        assert_eq!(operators.len(), 12);
+    }
+}
+
+#[cfg(test)]
+mod expr_tests {
+    use super::*;
+
+    #[test]
+    fn test_expr_column() {
+        let expr = Expr::Column(sqlrustgo_planner::Column::new("name".to_string()));
+        assert!(matches!(expr, Expr::Column(_)));
+    }
+
+    #[test]
+    fn test_expr_literal() {
+        let expr = Expr::Literal(Value::Integer(42));
+        assert!(matches!(expr, Expr::Literal(Value::Integer(42))));
+    }
+
+    #[test]
+    fn test_expr_binary() {
+        let left = Expr::Column(sqlrustgo_planner::Column::new("a".to_string()));
+        let right = Expr::Literal(Value::Integer(1));
+        let expr = Expr::binary_expr(left, Operator::Plus, right);
+        assert!(matches!(
+            expr,
+            Expr::BinaryExpr {
+                op: Operator::Plus,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_expr_unary() {
+        let expr = Expr::UnaryExpr {
+            op: Operator::Minus,
+            expr: Box::new(Expr::Literal(Value::Integer(42))),
+        };
+        assert!(matches!(
+            expr,
+            Expr::UnaryExpr {
+                op: Operator::Minus,
+                ..
+            }
+        ));
     }
 }

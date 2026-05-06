@@ -796,4 +796,62 @@ mod tests {
         assert!(ts.contains("_"));
         assert!(ts.contains("-"));
     }
+
+    #[test]
+    fn test_version_info_parse_invalid_format() {
+        assert!(VersionInfo::parse("2.0").is_err());
+        assert!(VersionInfo::parse("2").is_err());
+        assert!(VersionInfo::parse("invalid").is_err());
+        assert!(VersionInfo::parse("").is_err());
+    }
+
+    #[test]
+    fn test_version_info_parse_invalid_numbers() {
+        assert!(VersionInfo::parse("a.b.c").is_err());
+        assert!(VersionInfo::parse("2.x.0").is_err());
+    }
+
+    #[test]
+    fn test_can_upgrade_to_same_patch() {
+        let from = VersionInfo::parse("2.0.0").unwrap();
+        let to = VersionInfo::parse("2.0.0").unwrap();
+        assert!(!from.can_upgrade_to(&to));
+    }
+
+    #[test]
+    fn test_can_upgrade_to_same_minor_lower_patch() {
+        let from = VersionInfo::parse("2.1.0").unwrap();
+        let to = VersionInfo::parse("2.1.0").unwrap();
+        assert!(!from.can_upgrade_to(&to));
+    }
+
+    #[test]
+    fn test_can_upgrade_to_invalid_paths() {
+        let from = VersionInfo::parse("2.0.0").unwrap();
+        let to = VersionInfo::parse("2.0.0").unwrap();
+        assert!(!from.can_upgrade_to(&to));
+    }
+
+    #[test]
+    fn test_version_info_display() {
+        let v = VersionInfo {
+            major: 1,
+            minor: 2,
+            patch: 3,
+        };
+        assert_eq!(format!("{}", v), "1.2.3");
+    }
+
+    #[test]
+    fn test_version_info_debug() {
+        let v = VersionInfo {
+            major: 1,
+            minor: 2,
+            patch: 3,
+        };
+        let debug = format!("{:?}", v);
+        assert!(debug.contains("1"));
+        assert!(debug.contains("2"));
+        assert!(debug.contains("3"));
+    }
 }

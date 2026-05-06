@@ -1,8 +1,10 @@
 # SQLRustGo AI 协作规则
 
-> **版本**: 1.0
-> **更新日期**: 2026-03-07
-> **维护人**: yinglichina8848
+> **版本**: 2.1
+> **更新日期**: 2026-05-05
+> **维护人**: hermes-z6g4
+
+> **SSOT 声明**: 门禁定义以 `gate_spec.md` 为唯一权威。本文档的 R1-R10 描述仅供参考，不自行定义检查命令和阈值。
 
 ---
 
@@ -17,7 +19,8 @@ SQLRustGo 采用人机协作开发模式:
 | **Human Architect** | 架构设计, 重大决策 | 全部权限 |
 | **AI Developer** | 代码实现, 测试编写 | 提交 PR |
 | **AI Maintainer** | 代码审查, 问题诊断 | Review 权限 |
-| **CI System** | 自动化检查, 质量门禁 | 检查执行 |
+| **Hermes Agent** | 自主工程 Agent, 规则执行 | 全部权限 |
+| **CI System (Gitea Actions)** | 自动化检查, 质量门禁 | 检查执行 |
 
 ### 1.2 协作流程
 
@@ -231,18 +234,23 @@ PR 必须包含:
 
 Release Gate 是代码合并到主分支前必须通过的质量检查点。**AI 不可绕过**。
 
-### 6.2 Gate 检查项
+v2.9.0 采用 R1-R10 + G-Gate 门禁体系。详细命令、阈值、证据格式见 [gate_spec.md](./gate_spec.md)。
 
 | Gate | 检查项 | 执行者 |
 |------|--------|--------|
-| **Compile Gate** | 编译通过 | CI |
-| **Test Gate** | 单元测试通过 | CI |
-| **Lint Gate** | 代码规范通过 | CI |
-| **Security Gate** | 安全扫描通过 | CI |
-| **Review Gate** | 人工审查通过 | Human |
-| **Arch Gate** | 架构审查通过 | Human |
+| **R1** | Build | CI |
+| **R2** | Test | CI |
+| **R3** | Clippy | CI |
+| **R4** | Format | CI |
+| **R5** | Coverage | CI |
+| **R6** | Security | CI |
+| **R7** | Docs (R7a-R7d) | CI |
+| **R8** | SQL Compat | CI |
+| **R9** | Performance (回归判定) | CI |
+| **R10** | Formal Proof (tool_output) | CI |
+| **G-Gate** | GA 门禁: 全部 R1-R10 通过 | Human |
 
-### 6.3 门禁失败处理
+### 6.2 门禁失败处理
 
 ```
 门禁失败
@@ -299,18 +307,20 @@ Human Architect 对以下事项负责:
 
 | 渠道 | 用途 |
 |------|------|
-| GitHub Issues | 任务分配, 问题跟踪 |
-| GitHub PRs | 代码审查, 变更讨论 |
-| GitHub Discussions | 技术讨论 |
+| Gitea Issues | 任务分配, 问题跟踪 |
+| Gitea PRs | 代码审查, 变更讨论 |
+| Gitea Wiki | 技术文档 |
 
 ### 8.2 自动化工具
 
 | 工具 | 用途 |
 |------|------|
-| GitHub Actions | CI/CD |
+| Gitea Actions | CI/CD |
+| Nomad + Runner | 任务调度 |
 | Cargo | 编译, 测试 |
 | Clippy | 代码检查 |
 | Cargo Audit | 安全扫描 |
+| Hermes Agent | 自主工程 Agent |
 
 ---
 
@@ -338,10 +348,10 @@ Human Architect 对以下事项负责:
 
 | 文档 | 说明 |
 |------|------|
-| [BRANCH_GOVERNANCE.md](../BRANCH_GOVERNANCE.md) | 分支治理 |
-| [RELEASE_LIFECYCLE.md](./RELEASE_LIFECYCLE.md) | 版本生命周期 |
+| [RELEASE_LIFECYCLE.md](./RELEASE_LIFECYCLE.md) | 版本生命周期 (A/B/R/G 门禁) |
 | [RELEASE_POLICY.md](./RELEASE_POLICY.md) | 发布策略 |
-| 贡献指南 | (待创建) |
+| [gate_spec.md](./gate_spec.md) | 门禁规范 (v2.9.0 R1-R10) |
+| [GATE_CI_CD.md](./GATE_CI_CD.md) | CI/CD 门禁集成 |
 
 ---
 
@@ -349,8 +359,10 @@ Human Architect 对以下事项负责:
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| 2.1 | 2026-05-05 | 对齐 v2.9.0: R1-R10 引用 gate_spec.md(唯一权威), 添加 SSOT 声明 |
+| 2.0 | 2026-05-05 | 更新为 Hermes+Gitea 架构, R1-R10 门禁体系, Gitea 替换 GitHub |
 | 1.0 | 2026-03-07 | 初始版本 |
 
 ---
 
-*本文档由 yinglichina8848 维护*
+*本文档由 hermes-z6g4 维护。门禁权威来源: gate_spec.md*

@@ -454,4 +454,246 @@ mod tests {
         let hash = md5_simple("test");
         assert!(hash > 0);
     }
+
+    #[test]
+    fn test_md5_empty_string() {
+        let hash = md5_simple("");
+        assert_eq!(hash, 0);
+    }
+
+    #[test]
+    fn test_md5_different_inputs() {
+        let hash1 = md5_simple("hello");
+        let hash2 = md5_simple("world");
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_md5_consistency() {
+        let hash1 = md5_simple("consistent");
+        let hash2 = md5_simple("consistent");
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_backup_metadata_new() {
+        let metadata = BackupMetadata::new(
+            "backup_001".to_string(),
+            BackupType::Full,
+            "testdb".to_string(),
+        );
+        assert_eq!(metadata.id, "backup_001");
+        assert_eq!(metadata.database, "testdb");
+        match metadata.status {
+            BackupStatus::InProgress => {}
+            _ => panic!("Expected InProgress status"),
+        }
+    }
+
+    #[test]
+    fn test_backup_metadata_complete() {
+        let mut metadata = BackupMetadata::new(
+            "backup_001".to_string(),
+            BackupType::Full,
+            "testdb".to_string(),
+        );
+        metadata.complete(1024, "abc123".to_string());
+        assert_eq!(metadata.size_bytes, 1024);
+        assert_eq!(metadata.checksum, Some("abc123".to_string()));
+        matches!(metadata.status, BackupStatus::Completed);
+    }
+
+    #[test]
+    fn test_backup_metadata_fail() {
+        let mut metadata = BackupMetadata::new(
+            "backup_001".to_string(),
+            BackupType::Full,
+            "testdb".to_string(),
+        );
+        metadata.fail("disk full".to_string());
+        match metadata.status {
+            BackupStatus::Failed(e) => {
+                assert_eq!(e, "disk full");
+            }
+            _ => panic!("Expected Failed status"),
+        }
+    }
+
+    #[test]
+    fn test_backup_manager_get_backup() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_get_backup");
+        let manager = BackupManager::new(temp_dir.clone());
+
+        let mut tables = HashMap::new();
+        tables.insert(
+            "users".to_string(),
+            vec![{
+                let mut row = HashMap::new();
+                row.insert("id".to_string(), "1".to_string());
+                row
+            }],
+        );
+
+        let result = manager.create_backup("testdb", tables.clone());
+        assert!(result.is_ok());
+
+        let backup_id = &result.unwrap().id;
+        let backup = manager.get_backup(backup_id);
+        assert!(backup.is_some());
+        assert_eq!(backup.unwrap().id, *backup_id);
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_backup_manager_restore_not_found() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_restore_none");
+        let manager = BackupManager::new(temp_dir.clone());
+
+        let result = manager.restore("nonexistent_backup");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_backup_manager_delete_backup() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_delete_backup");
+        let manager = BackupManager::new(temp_dir.clone());
+
+        let mut tables = HashMap::new();
+        tables.insert(
+            "users".to_string(),
+            vec![{
+                let mut row = HashMap::new();
+                row.insert("id".to_string(), "1".to_string());
+                row
+            }],
+        );
+
+        let result = manager.create_backup("testdb", tables);
+        assert!(result.is_ok());
+        let backup_id = result.unwrap().id;
+
+        let delete_result = manager.delete_backup(&backup_id);
+        assert!(delete_result.is_ok());
+
+        let backup = manager.get_backup(&backup_id);
+        assert!(backup.is_none());
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_backup_manager_backup_dir() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_backup_dir");
+        let manager = BackupManager::new(temp_dir.clone());
+        assert_eq!(manager.backup_dir(), temp_dir.as_path());
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_backup_manager_list_multiple_backups() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_list_multiple");
+        let manager = BackupManager::new(temp_dir.clone());
+
+        let tables1 = {
+            let mut t = HashMap::new();
+            t.insert(
+                "t1".to_string(),
+                vec![{
+                    let mut row = HashMap::new();
+                    row.insert("c1".to_string(), "v1".to_string());
+                    row
+                }],
+            );
+            t
+        };
+
+        let tables2 = {
+            let mut t = HashMap::new();
+            t.insert(
+                "t2".to_string(),
+                vec![{
+                    let mut row = HashMap::new();
+                    row.insert("c2".to_string(), "v2".to_string());
+                    row
+                }],
+            );
+            t
+        };
+
+        let result1 = manager.create_backup("db1", tables1);
+        let result2 = manager.create_backup("db2", tables2);
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+
+        let backups = manager.list_backups();
+        assert!(backups.len() >= 1);
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_backup_with_special_characters() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_special_char");
+        let manager = BackupManager::new(temp_dir.clone());
+
+        let mut tables = HashMap::new();
+        tables.insert(
+            "users".to_string(),
+            vec![{
+                let mut row = HashMap::new();
+                row.insert("name".to_string(), "O'Neil".to_string());
+                row.insert("sql".to_string(), "SELECT * FROM `users`".to_string());
+                row
+            }],
+        );
+
+        let result = manager.create_backup("testdb", tables);
+        assert!(result.is_ok());
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_backup_with_empty_table() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_empty_table");
+        let manager = BackupManager::new(temp_dir.clone());
+
+        let mut tables = HashMap::new();
+        tables.insert("empty_table".to_string(), vec![]);
+
+        let result = manager.create_backup("testdb", tables);
+        assert!(result.is_ok());
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_backup_with_multiple_rows() {
+        let temp_dir = std::env::temp_dir().join("sqlrustgo_test_multi_row");
+        let manager = BackupManager::new(temp_dir.clone());
+
+        let rows: Vec<HashMap<String, String>> = (1..=100)
+            .map(|i| {
+                let mut row = HashMap::new();
+                row.insert("id".to_string(), i.to_string());
+                row.insert("value".to_string(), format!("value_{}", i));
+                row
+            })
+            .collect();
+
+        let mut tables = HashMap::new();
+        tables.insert("big_table".to_string(), rows);
+
+        let result = manager.create_backup("testdb", tables);
+        assert!(result.is_ok());
+        let metadata = result.unwrap();
+        assert!(metadata.size_bytes > 0);
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
 }

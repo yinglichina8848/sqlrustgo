@@ -109,20 +109,17 @@ fn test_aggregate_sum_with_null() {
     assert_eq!(result.rows[0][0], Value::Integer(40));
 }
 
-// COUNT DISTINCT test disabled - executor does not support DISTINCT in aggregates
-// #[test]
-// fn test_aggregate_count_distinct() {
-//     let mut engine = create_engine();
-//     engine
-//         .execute("CREATE TABLE t (a INTEGER)")
-//         .unwrap();
-//     engine
-//         .execute("INSERT INTO t VALUES (1), (1), (2), (2), (3)")
-//         .unwrap();
-//
-//     let result = engine.execute("SELECT COUNT(DISTINCT a) FROM t").unwrap();
-//     assert_eq!(result.rows[0][0], Value::Integer(3));
-// }
+#[test]
+fn test_aggregate_count_distinct() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE t (a INTEGER)").unwrap();
+    engine
+        .execute("INSERT INTO t VALUES (1), (1), (2), (2), (3)")
+        .unwrap();
+
+    let result = engine.execute("SELECT COUNT(DISTINCT a) FROM t").unwrap();
+    assert_eq!(result.rows[0][0], Value::Integer(3));
+}
 
 #[test]
 fn test_aggregate_on_empty_table() {

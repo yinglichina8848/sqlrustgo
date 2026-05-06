@@ -482,6 +482,284 @@ mod tests {
         let auth_response = [];
         assert!(!store.verify_password("root", &scramble, &auth_response));
     }
+
+    // Test split_sql_statements
+    #[test]
+    fn test_split_sql_statements_empty() {
+        let result = split_sql_statements("");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_split_sql_statements_single() {
+        let result = split_sql_statements("SELECT * FROM t");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], "SELECT * FROM t");
+    }
+
+    #[test]
+    fn test_split_sql_statements_multiple() {
+        let result = split_sql_statements("SELECT 1; SELECT 2; SELECT 3");
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], "SELECT 1");
+        assert_eq!(result[1], "SELECT 2");
+        assert_eq!(result[2], "SELECT 3");
+    }
+
+    #[test]
+    fn test_split_sql_statements_with_strings() {
+        let result = split_sql_statements("SELECT 'a;b;c' FROM t; SELECT 'x'");
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], "SELECT 'a;b;c' FROM t");
+        assert_eq!(result[1], "SELECT 'x'");
+    }
+
+    #[test]
+    fn test_split_sql_statements_trailing_semicolon() {
+        let result = split_sql_statements("SELECT 1;");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], "SELECT 1");
+    }
+
+    #[test]
+    fn test_split_sql_statements_double_quotes() {
+        let result = split_sql_statements("SELECT \"a;b\" FROM t; SELECT 'x'");
+        assert_eq!(result.len(), 2);
+    }
+
+    // Test col_type_from_string
+    #[test]
+    fn test_col_type_bigint() {
+        assert_eq!(col_type_from_string("BIGINT"), col_type::LONGLONG);
+        assert_eq!(col_type_from_string("bigint"), col_type::LONGLONG);
+    }
+
+    #[test]
+    fn test_col_type_mediumint() {
+        assert_eq!(col_type_from_string("MEDIUMINT"), col_type::INT24);
+        assert_eq!(col_type_from_string("mediumint"), col_type::INT24);
+    }
+
+    #[test]
+    fn test_col_type_smallint() {
+        assert_eq!(col_type_from_string("SMALLINT"), col_type::SHORT);
+    }
+
+    #[test]
+    fn test_col_type_tinyint() {
+        assert_eq!(col_type_from_string("TINYINT"), col_type::TINY);
+    }
+
+    #[test]
+    fn test_col_type_int() {
+        assert_eq!(col_type_from_string("INT"), col_type::LONG);
+        assert_eq!(col_type_from_string("INTEGER"), col_type::LONG);
+        assert_eq!(col_type_from_string("INT UNSIGNED"), col_type::LONG);
+    }
+
+    #[test]
+    fn test_col_type_float() {
+        assert_eq!(col_type_from_string("FLOAT"), col_type::FLOAT);
+    }
+
+    #[test]
+    fn test_col_type_double() {
+        assert_eq!(col_type_from_string("DOUBLE"), col_type::DOUBLE);
+    }
+
+    #[test]
+    fn test_col_type_decimal() {
+        assert_eq!(col_type_from_string("DECIMAL"), col_type::NEWDECIMAL);
+        assert_eq!(col_type_from_string("DECIMAL(10,2)"), col_type::NEWDECIMAL);
+    }
+
+    #[test]
+    fn test_col_type_blob() {
+        assert_eq!(col_type_from_string("BLOB"), col_type::BLOB);
+        assert_eq!(col_type_from_string("BINARY(16)"), col_type::BLOB);
+        assert_eq!(col_type_from_string("VARBINARY(32)"), col_type::BLOB);
+    }
+
+    #[test]
+    fn test_col_type_default() {
+        assert_eq!(col_type_from_string("VARCHAR(255)"), col_type::VARSTRING);
+        assert_eq!(col_type_from_string("DATE"), col_type::VARSTRING);
+    }
+
+    // Test col_len_from_type
+    #[test]
+    fn test_col_len_int1() {
+        assert_eq!(col_len_from_type("TINYINT(1)"), 1);
+    }
+
+    #[test]
+    fn test_col_len_int() {
+        assert_eq!(col_len_from_type("INT(11)"), 11);
+        assert_eq!(col_len_from_type("INT(1)"), 1);
+        assert_eq!(col_len_from_type("BIGINT"), 255);
+    }
+
+    #[test]
+    fn test_col_len_float() {
+        assert_eq!(col_len_from_type("FLOAT"), 12);
+    }
+
+    #[test]
+    fn test_col_len_double() {
+        assert_eq!(col_len_from_type("DOUBLE"), 22);
+    }
+
+    #[test]
+    fn test_col_len_varchar() {
+        assert_eq!(col_len_from_type("VARCHAR(255)"), 255);
+        assert_eq!(col_len_from_type("VARCHAR(100)"), 255);
+    }
+
+    #[test]
+    fn test_col_len_text() {
+        assert_eq!(col_len_from_type("TEXT"), 65535);
+        assert_eq!(col_len_from_type("TINYTEXT"), 65535);
+    }
+
+    #[test]
+    fn test_col_len_default() {
+        assert_eq!(col_len_from_type("DATE"), 255);
+    }
+
+    // Test value_to_string
+    #[test]
+    fn test_value_to_string_null() {
+        use sqlrustgo_types::Value;
+        assert_eq!(value_to_string(&Value::Null), "NULL");
+    }
+
+    #[test]
+    fn test_value_to_string_boolean() {
+        use sqlrustgo_types::Value;
+        assert_eq!(value_to_string(&Value::Boolean(true)), "1");
+        assert_eq!(value_to_string(&Value::Boolean(false)), "0");
+    }
+
+    #[test]
+    fn test_value_to_string_integer() {
+        use sqlrustgo_types::Value;
+        assert_eq!(value_to_string(&Value::Integer(42)), "42");
+        assert_eq!(value_to_string(&Value::Integer(-10)), "-10");
+    }
+
+    #[test]
+    fn test_value_to_string_float() {
+        use sqlrustgo_types::Value;
+        assert_eq!(value_to_string(&Value::Float(3.14)), "3.14");
+    }
+
+    #[test]
+    fn test_value_to_string_text() {
+        use sqlrustgo_types::Value;
+        assert_eq!(value_to_string(&Value::Text("hello".into())), "hello");
+    }
+
+    #[test]
+    fn test_value_to_string_blob() {
+        use sqlrustgo_types::Value;
+        let result = value_to_string(&Value::Blob(b"abc".to_vec()));
+        assert!(result.contains("97") || result.contains("[97"));
+    }
+
+    // Test count_placeholders
+    #[test]
+    fn test_count_placeholders_none() {
+        assert_eq!(count_placeholders("SELECT * FROM t"), 0);
+    }
+
+    #[test]
+    fn test_count_placeholders_one() {
+        assert_eq!(count_placeholders("SELECT * FROM t WHERE id = ?"), 1);
+    }
+
+    #[test]
+    fn test_count_placeholders_multiple() {
+        assert_eq!(count_placeholders("SELECT ?, ?, ?"), 3);
+        assert_eq!(count_placeholders("INSERT INTO t VALUES (?, ?, ?)"), 3);
+    }
+
+    // Test replace_placeholders
+    #[test]
+    fn test_replace_placeholders_empty_params() {
+        let result = replace_placeholders("SELECT ?", &[]);
+        assert_eq!(result, "SELECT ?");
+    }
+
+    #[test]
+    fn test_replace_placeholders_single() {
+        let result = replace_placeholders("SELECT ?", &[b"42".to_vec()]);
+        assert_eq!(result, "SELECT '42'");
+    }
+
+    #[test]
+    fn test_replace_placeholders_multiple() {
+        let params = vec![b"1".to_vec(), b"2".to_vec(), b"3".to_vec()];
+        let result = replace_placeholders("SELECT ?, ?, ?", &params);
+        assert_eq!(result, "SELECT '1', '2', '3'");
+    }
+
+    #[test]
+    fn test_replace_placeholders_string_with_quotes() {
+        let params = vec![b"o'brien".to_vec()];
+        let result = replace_placeholders("SELECT ?", &params);
+        assert_eq!(result, "SELECT 'o''brien'");
+    }
+
+    #[test]
+    fn test_replace_placeholders_non_utf8() {
+        let params = vec![vec![0x80, 0x81]];
+        let result = replace_placeholders("SELECT ?", &params);
+        assert_eq!(result, "SELECT NULL");
+    }
+
+    // Test extract_table_name
+    #[test]
+    fn test_extract_table_name_simple() {
+        assert_eq!(
+            extract_table_name("SELECT * FROM users"),
+            Some("users".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_table_name_with_where() {
+        assert_eq!(
+            extract_table_name("SELECT * FROM users WHERE id = 1"),
+            Some("users".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_table_name_with_join() {
+        let result =
+            extract_table_name("SELECT * FROM users JOIN orders ON users.id = orders.user_id");
+        assert_eq!(result, Some("users".to_string()));
+    }
+
+    #[test]
+    fn test_extract_table_name_lowercase() {
+        assert_eq!(
+            extract_table_name("select * from users"),
+            Some("users".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_table_name_not_select() {
+        assert_eq!(extract_table_name("INSERT INTO users VALUES (1)"), None);
+        assert_eq!(extract_table_name("UPDATE users SET name = 'x'"), None);
+        assert_eq!(extract_table_name("DELETE FROM users"), None);
+    }
+
+    #[test]
+    fn test_extract_table_name_no_from() {
+        assert_eq!(extract_table_name("SELECT 1 + 1"), None);
+    }
 }
 
 #[derive(Debug)]

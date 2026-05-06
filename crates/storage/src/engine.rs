@@ -51,7 +51,11 @@ pub fn evaluate_check_constraint(
 
 /// Evaluate a SQL expression against a record
 /// Supports: comparisons (=, !=, <, >, <=, >=), boolean ops (AND, OR, NOT), IS NULL/IS NOT NULL
-fn evaluate_sql_expression(expr: &str, columns: &[String], record: &[Value]) -> SqlResult<bool> {
+pub(crate) fn evaluate_sql_expression(
+    expr: &str,
+    columns: &[String],
+    record: &[Value],
+) -> SqlResult<bool> {
     let expr = expr.trim();
 
     // Handle AND/OR
@@ -485,6 +489,36 @@ pub trait StorageEngine: Send + Sync {
 
     /// Check if a view exists
     fn has_view(&self, name: &str) -> bool;
+
+    /// Delete rows matching a predicate (SQL expression string)
+    /// Returns the number of rows deleted
+    fn delete_by_predicate(&mut self, table: &str, predicate: &str) -> SqlResult<usize>;
+
+    /// Update rows matching a predicate with assignments
+    /// assignments: Vec of (column_index, new_value)
+    /// Returns the number of rows updated
+    fn update_by_predicate(
+        &mut self,
+        table: &str,
+        predicate: &str,
+        assignments: &[(usize, Value)],
+    ) -> SqlResult<usize>;
+
+    /// Get mutable access to table records for in-place updates
+    /// Returns the records (Vec<Record>) if table exists
+    fn get_table_records_mut(&mut self, table: &str) -> SqlResult<&mut Vec<Record>>;
+
+    /// Delete rows by their indices (for in-place deletion)
+    /// Returns the number of rows deleted
+    fn delete_by_indices(&mut self, table: &str, indices: &[usize]) -> SqlResult<usize>;
+
+    /// Find row indices by index lookup
+    /// Returns row indices for matching key, or None if no index exists for this column
+    fn find_by_index(&self, table: &str, column_index: usize, key: i64) -> Option<Vec<usize>>;
+
+    /// Get a specific row by index
+    /// Returns the row if found, or None if index is out of bounds
+    fn get_row(&self, table: &str, index: usize) -> SqlResult<Option<Record>>;
 }
 
 /// In-memory storage implementation for testing and caching
@@ -494,6 +528,9 @@ pub struct MemoryStorage {
     table_infos: HashMap<String, TableInfo>,
     triggers: HashMap<String, TriggerInfo>,
     views: HashSet<String>,
+    /// Column indexes: map from "table:column" to (column_index, HashIndex)
+    /// HashIndex maps key value -> row indices
+    indexes: HashMap<String, (usize, HashMap<i64, Vec<usize>>)>,
 }
 
 impl MemoryStorage {
@@ -503,7 +540,20 @@ impl MemoryStorage {
             table_infos: HashMap::new(),
             triggers: HashMap::new(),
             views: HashSet::new(),
+            indexes: HashMap::new(),
         }
+    }
+
+    /// Find row indices by index lookup
+    pub fn find_by_index(&self, table: &str, column_index: usize, key: i64) -> Option<Vec<usize>> {
+        let index_key = table.to_string();
+        self.indexes.get(&index_key).and_then(|(idx, data)| {
+            if *idx == column_index {
+                data.get(&key).cloned()
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -519,6 +569,21 @@ impl StorageEngine for MemoryStorage {
     }
 
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
+        // Update indexes for each inserted record
+        for (row_idx, record) in records.iter().enumerate() {
+            let table_records = self.tables.entry(table.to_string()).or_default();
+            let actual_row_idx = table_records.len() + row_idx;
+
+            // Update all indexes for this table
+            for (index_key, (col_idx, index_data)) in self.indexes.iter_mut() {
+                if index_key == table {
+                    if let Some(Value::Integer(key)) = record.get(*col_idx) {
+                        index_data.entry(*key).or_default().push(actual_row_idx);
+                    }
+                }
+            }
+        }
+
         self.tables
             .entry(table.to_string())
             .or_default()
@@ -579,6 +644,25 @@ impl StorageEngine for MemoryStorage {
     fn create_table(&mut self, info: &TableInfo) -> SqlResult<()> {
         self.table_infos.insert(info.name.clone(), info.clone());
         self.tables.entry(info.name.clone()).or_default();
+
+        // Auto-create index for primary key column
+        for (col_idx, col) in info.columns.iter().enumerate() {
+            if col.primary_key {
+                // Use table name as index key, build index from existing data
+                if let Some(records) = self.tables.get(&info.name) {
+                    let mut index_data: HashMap<i64, Vec<usize>> = HashMap::new();
+                    for (row_idx, row) in records.iter().enumerate() {
+                        if let Some(Value::Integer(key)) = row.get(col_idx) {
+                            index_data.entry(*key).or_default().push(row_idx);
+                        }
+                    }
+                    self.indexes
+                        .insert(info.name.clone(), (col_idx, index_data));
+                }
+                break; // Only one primary key index per table for now
+            }
+        }
+
         Ok(())
     }
 
@@ -595,6 +679,53 @@ impl StorageEngine for MemoryStorage {
             .ok_or_else(|| SqlError::ExecutionError(format!("Table not found: {}", table)))
     }
 
+    fn get_table_records_mut(&mut self, table: &str) -> SqlResult<&mut Vec<Record>> {
+        self.tables
+            .get_mut(table)
+            .ok_or_else(|| SqlError::ExecutionError(format!("Table not found: {}", table)))
+    }
+
+    fn delete_by_indices(&mut self, table: &str, indices: &[usize]) -> SqlResult<usize> {
+        let Some(records) = self.tables.get_mut(table) else {
+            return Ok(0);
+        };
+
+        let indices_to_delete: std::collections::HashSet<usize> = indices.iter().cloned().collect();
+        let count = indices_to_delete.len();
+
+        if count == 0 {
+            return Ok(0);
+        }
+
+        // Build new vector keeping only rows not in delete set (single pass)
+        let remaining: Vec<_> = records
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| !indices_to_delete.contains(idx))
+            .map(|(_, row)| row.clone())
+            .collect();
+
+        *records = remaining;
+
+        Ok(count)
+    }
+
+    fn find_by_index(&self, table: &str, column_index: usize, key: i64) -> Option<Vec<usize>> {
+        // Delegate to the inherent method
+        MemoryStorage::find_by_index(self, table, column_index, key)
+    }
+
+    fn get_row(&self, table: &str, index: usize) -> SqlResult<Option<Record>> {
+        match self.tables.get(table) {
+            Some(records) if index < records.len() => Ok(Some(records[index].clone())),
+            Some(_) => Ok(None), // Index out of bounds
+            None => Err(SqlError::ExecutionError(format!(
+                "Table not found: {}",
+                table
+            ))),
+        }
+    }
+
     fn has_table(&self, table: &str) -> bool {
         self.table_infos.contains_key(table)
     }
@@ -603,7 +734,21 @@ impl StorageEngine for MemoryStorage {
         self.table_infos.keys().cloned().collect()
     }
 
-    fn create_index(&mut self, _table: &str, _column: &str, _column_index: usize) -> SqlResult<()> {
+    fn create_index(&mut self, table: &str, _column: &str, column_index: usize) -> SqlResult<()> {
+        let Some(records) = self.tables.get(table) else {
+            return Ok(());
+        };
+
+        let index_key = table.to_string();
+        let mut index_data: HashMap<i64, Vec<usize>> = HashMap::new();
+
+        for (row_idx, row) in records.iter().enumerate() {
+            if let Some(Value::Integer(key)) = row.get(column_index) {
+                index_data.entry(*key).or_default().push(row_idx);
+            }
+        }
+
+        self.indexes.insert(index_key, (column_index, index_data));
         Ok(())
     }
 
@@ -670,6 +815,48 @@ impl StorageEngine for MemoryStorage {
 
     fn list_indexes(&self, _table: &str) -> Vec<(String, String)> {
         Vec::new()
+    }
+
+    fn delete_by_predicate(&mut self, table: &str, predicate: &str) -> SqlResult<usize> {
+        let Some(records) = self.tables.get_mut(table) else {
+            return Ok(0);
+        };
+        let columns: Vec<String> = self
+            .table_infos
+            .get(table)
+            .map(|info| info.columns.iter().map(|c| c.name.clone()).collect())
+            .unwrap_or_default();
+        let original_len = records.len();
+        records.retain(|row| !evaluate_sql_expression(predicate, &columns, row).unwrap_or(false));
+        Ok(original_len - records.len())
+    }
+
+    fn update_by_predicate(
+        &mut self,
+        table: &str,
+        predicate: &str,
+        assignments: &[(usize, Value)],
+    ) -> SqlResult<usize> {
+        let Some(records) = self.tables.get_mut(table) else {
+            return Ok(0);
+        };
+        let columns: Vec<String> = self
+            .table_infos
+            .get(table)
+            .map(|info| info.columns.iter().map(|c| c.name.clone()).collect())
+            .unwrap_or_default();
+        let mut count = 0;
+        for record in records.iter_mut() {
+            if evaluate_sql_expression(predicate, &columns, record).unwrap_or(false) {
+                for &(col_idx, ref new_val) in assignments {
+                    if col_idx < record.len() {
+                        record[col_idx] = new_val.clone();
+                    }
+                }
+                count += 1;
+            }
+        }
+        Ok(count)
     }
 }
 

@@ -11,7 +11,9 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 #[test]
 fn test_create_table_then_immediate_select() {
     let mut engine = create_engine();
-    engine.execute("CREATE TABLE t (id INTEGER, name TEXT)").unwrap();
+    engine
+        .execute("CREATE TABLE t (id INTEGER, name TEXT)")
+        .unwrap();
 
     let result = engine.execute("SELECT * FROM t").unwrap();
     assert_eq!(result.rows.len(), 0);
@@ -57,7 +59,9 @@ fn test_create_and_recreate_table() {
     engine.execute("INSERT INTO t VALUES (1)").unwrap();
     engine.execute("DROP TABLE t").unwrap();
 
-    engine.execute("CREATE TABLE t (id INTEGER, val TEXT)").unwrap();
+    engine
+        .execute("CREATE TABLE t (id INTEGER, val TEXT)")
+        .unwrap();
     engine.execute("INSERT INTO t VALUES (1, 'hello')").unwrap();
 
     let r = engine.execute("SELECT COUNT(*) FROM t").unwrap();

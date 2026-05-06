@@ -1,0 +1,13 @@
+[package]
+name = "sqlrustgo-code-graph-cli"
+version = "0.1.0"
+edition = "2021"
+description = "CLI for SQLRustGo Code Intelligence Graph"
+
+[[bin]]
+name = "code-graph"
+path = "src/main.rs"
+
+[dependencies]
+sqlrustgo-code-graph = { path = "../code-graph" }
+clap = { version = "4.4", features = ["derive"] }
