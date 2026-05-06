@@ -35,6 +35,7 @@ mod packet_type {
     pub const COM_STMT_PREPARE: u8 = 0x16;
     pub const COM_STMT_EXECUTE: u8 = 0x17;
     pub const COM_STMT_CLOSE: u8 = 0x19;
+    pub const COM_MULTI: u8 = 0x11;
 }
 
 mod capability {
@@ -1597,6 +1598,60 @@ fn do_command_loop<S: Read + Write>(
                         Err(e) => {
                             make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
                             seq = seq.wrapping_add(1);
+                        }
+                    }
+                }
+            }
+            packet_type::COM_MULTI => {
+                let q = String::from_utf8_lossy(payload)
+                    .trim_end_matches('\0')
+                    .trim()
+                    .to_string();
+                tracing::info!("COM_MULTI [{}]: {}", addr, q);
+
+                for (idx, stmt) in q.split(';').enumerate() {
+                    let stmt = stmt.trim();
+                    if stmt.is_empty() {
+                        continue;
+                    }
+
+                    tracing::info!("COM_MULTI[{}]: {}", idx, stmt);
+
+                    if is_select(stmt) {
+                        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            execute_select(stmt, engine, &storage)
+                        })) {
+                            Ok(Ok((c, t, r))) => {
+                                seq = send_result_set(stream, &c, &t, &r, seq, cap)?;
+                            }
+                            Ok(Err(e)) => {
+                                let code = match &e {
+                                    MySqlError::Sql(s) if s.contains("not found") => 1146,
+                                    MySqlError::Sql(_) => 1064,
+                                    _ => 2000,
+                                };
+                                make_err_packet(seq, code, "42000", &e.to_string()).write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                break;
+                            }
+                            Err(_) => {
+                                make_err_packet(seq, 2000, "HY000", "Internal error")
+                                    .write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                break;
+                            }
+                        }
+                    } else {
+                        match execute_write(stmt, engine) {
+                            Ok(a) => {
+                                make_ok_packet(seq, a as u64, 0, 0x0002, 0).write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                            }
+                            Err(e) => {
+                                make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                break;
+                            }
                         }
                     }
                 }
