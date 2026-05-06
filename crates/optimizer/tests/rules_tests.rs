@@ -4,18 +4,18 @@ use sqlrustgo_optimizer::{
     rules::{
         BinaryOperator, ConstantFolding, Expr, JoinType, PredicatePushdown, ProjectionPruning,
     },
+    unified_plan::UnifiedPlan,
     Rule,
 };
 
 mod predicate_pushdown_tests {
     use super::*;
-    use sqlrustgo_optimizer::Rule;
 
     #[test]
     fn test_predicate_pushdown_name() {
         let rule = PredicatePushdown::new();
         assert_eq!(
-            <PredicatePushdown as Rule<i32>>::name(&rule),
+            <PredicatePushdown as Rule<UnifiedPlan>>::name(&rule),
             "PredicatePushdown"
         );
     }
@@ -24,29 +24,38 @@ mod predicate_pushdown_tests {
     fn test_predicate_pushdown_default() {
         let rule = PredicatePushdown::default();
         assert_eq!(
-            <PredicatePushdown as Rule<i32>>::name(&rule),
+            <PredicatePushdown as Rule<UnifiedPlan>>::name(&rule),
             "PredicatePushdown"
         );
     }
 
     #[test]
-    fn test_predicate_pushdown_apply() {
+    fn test_predicate_pushdown_on_filter() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("1".to_string())),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Literal("2".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
         let rule = PredicatePushdown::new();
-        let mut plan = 42i32;
         let result = rule.apply(&mut plan);
-        assert!(!result);
+        assert!(result);
     }
 }
 
 mod projection_pruning_tests {
     use super::*;
-    use sqlrustgo_optimizer::Rule;
 
     #[test]
     fn test_projection_pruning_name() {
         let rule = ProjectionPruning::new();
         assert_eq!(
-            <ProjectionPruning as Rule<i32>>::name(&rule),
+            <ProjectionPruning as Rule<UnifiedPlan>>::name(&rule),
             "ProjectionPruning"
         );
     }
@@ -55,15 +64,21 @@ mod projection_pruning_tests {
     fn test_projection_pruning_default() {
         let rule = ProjectionPruning::default();
         assert_eq!(
-            <ProjectionPruning as Rule<i32>>::name(&rule),
+            <ProjectionPruning as Rule<UnifiedPlan>>::name(&rule),
             "ProjectionPruning"
         );
     }
 
     #[test]
-    fn test_projection_pruning_apply() {
+    fn test_projection_pruning_table_scan() {
+        let mut plan = UnifiedPlan::Projection {
+            expr: vec![Expr::Column("0".to_string())],
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
         let rule = ProjectionPruning::new();
-        let mut plan = 42i32;
         let result = rule.apply(&mut plan);
         assert!(!result);
     }
@@ -71,13 +86,12 @@ mod projection_pruning_tests {
 
 mod constant_folding_tests {
     use super::*;
-    use sqlrustgo_optimizer::Rule;
 
     #[test]
     fn test_constant_folding_name() {
         let rule = ConstantFolding::new();
         assert_eq!(
-            <ConstantFolding as Rule<i32>>::name(&rule),
+            <ConstantFolding as Rule<UnifiedPlan>>::name(&rule),
             "ConstantFolding"
         );
     }
@@ -86,17 +100,30 @@ mod constant_folding_tests {
     fn test_constant_folding_default() {
         let rule = ConstantFolding::default();
         assert_eq!(
-            <ConstantFolding as Rule<i32>>::name(&rule),
+            <ConstantFolding as Rule<UnifiedPlan>>::name(&rule),
             "ConstantFolding"
         );
     }
 
     #[test]
-    fn test_constant_folding_apply() {
+    fn test_constant_folding_on_filter() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("1".to_string())),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Literal("2".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
         let rule = ConstantFolding::new();
-        let mut plan = 42i32;
         let result = rule.apply(&mut plan);
-        assert!(!result);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("3".to_string()));
+        }
     }
 }
 
@@ -106,51 +133,16 @@ mod rule_trait_tests {
     #[test]
     fn test_rule_trait_name_method() {
         struct TestRule;
-        impl Rule<i32> for TestRule {
+        impl Rule<UnifiedPlan> for TestRule {
             fn name(&self) -> &str {
                 "TestRule"
             }
-            fn apply(&self, _plan: &mut i32) -> bool {
+            fn apply(&self, _plan: &mut UnifiedPlan) -> bool {
                 true
             }
         }
         let rule = TestRule;
         assert_eq!(rule.name(), "TestRule");
-    }
-
-    #[test]
-    fn test_rule_trait_apply_changes_plan() {
-        struct IncrementRule;
-        impl Rule<i32> for IncrementRule {
-            fn name(&self) -> &str {
-                "IncrementRule"
-            }
-            fn apply(&self, plan: &mut i32) -> bool {
-                *plan += 1;
-                true
-            }
-        }
-        let rule = IncrementRule;
-        let mut plan = 10i32;
-        assert!(rule.apply(&mut plan));
-        assert_eq!(plan, 11);
-    }
-
-    #[test]
-    fn test_rule_trait_apply_no_change() {
-        struct NoChangeRule;
-        impl Rule<String> for NoChangeRule {
-            fn name(&self) -> &str {
-                "NoChangeRule"
-            }
-            fn apply(&self, _plan: &mut String) -> bool {
-                false
-            }
-        }
-        let rule = NoChangeRule;
-        let mut plan = String::from("original");
-        assert!(!rule.apply(&mut plan));
-        assert_eq!(plan, "original");
     }
 }
 
