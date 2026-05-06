@@ -78,6 +78,8 @@ fn expr_to_planner(e: &sqlrustgo_optimizer::rules::Expr) -> crate::Expr {
             crate::Expr::Literal(
                 if let Ok(n) = s.parse::<i64>() { sqlrustgo_types::Value::Integer(n) }
                 else if let Ok(f) = s.parse::<f64>() { sqlrustgo_types::Value::Float(f) }
+                else if s.eq_ignore_ascii_case("true") { sqlrustgo_types::Value::Boolean(true) }
+                else if s.eq_ignore_ascii_case("false") { sqlrustgo_types::Value::Boolean(false) }
                 else { sqlrustgo_types::Value::Text(s.clone()) }
             ),
         sqlrustgo_optimizer::rules::Expr::BinaryExpr { left, op, right } =>
