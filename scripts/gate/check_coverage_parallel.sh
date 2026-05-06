@@ -10,6 +10,20 @@ PARALLEL=4
 WAVE="all"
 TIMEOUT=300
 
+# macOS 兼容：检测 timeout 命令
+if ! command -v timeout &>/dev/null; then
+    if command -v gtimeout &>/dev/null; then
+        timeout() { gtimeout "$@"; }
+    else
+        # 使用 perl 实现 timeout
+        timeout() {
+            local secs="$1"
+            shift
+            perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+        }
+    fi
+fi
+
 usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
@@ -62,7 +76,7 @@ WAVE1_MODULES=(
     "sqlrustgo-expr"
     "sqlrustgo-catalog"
     "query-stats"
-    "sqlrustgo-information-schema"
+    "information-schema"
     "sqlrustgo-telemetry"
     "sqlrustgo-security"
     "sqlrustgo-tools"
@@ -149,8 +163,8 @@ run_wave() {
                     running=$((running - 1))
                 fi
             done
-            pids=("${pids[@]}")
-            names=("${names[@]}")
+            [[ ${#pids[@]} -gt 0 ]] && pids=("${pids[@]}")
+            [[ ${#names[@]} -gt 0 ]] && names=("${names[@]}")
             sleep 0.5
         done
 
