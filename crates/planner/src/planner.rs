@@ -12,6 +12,7 @@ use crate::Schema;
 use crate::{Expr, JoinType};
 use sqlrustgo_optimizer::SimpleCostModel;
 use sqlrustgo_storage::StorageEngine;
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
 
@@ -271,9 +272,202 @@ impl DefaultPlanner {
                 // Union - use left plan as base (simplified)
                 self.create_physical_plan_internal(left)
             }
-            LogicalPlan::With { input, .. } => {
-                // CTE handling: delegate to input plan (CTEs are resolved at execution layer)
-                self.create_physical_plan_internal(input)
+            LogicalPlan::With { ctes, input } => {
+                // CTE handling: inline CTE definitions and resolve references
+                let cte_ctx = ctes
+                    .iter()
+                    .map(|cte| (cte.name.clone(), cte.subquery.clone()))
+                    .collect::<HashMap<_, _>>();
+                self.create_physical_plan_with_cte_ctx(input, &cte_ctx)
+            }
+        }
+    }
+
+    /// Create physical plan with CTE context for resolving CTE references
+    fn create_physical_plan_with_cte_ctx(
+        &self,
+        logical_plan: &LogicalPlan,
+        cte_ctx: &HashMap<String, Box<LogicalPlan>>,
+    ) -> PlannerResult<Box<dyn PhysicalPlan>> {
+        match logical_plan {
+            LogicalPlan::TableScan {
+                table_name,
+                schema,
+                projection,
+            } => {
+                // Check if table_name is a CTE reference
+                if let Some(cte_subquery) = cte_ctx.get(table_name) {
+                    // Inline the CTE subquery instead of scanning a table
+                    return self.create_physical_plan_with_cte_ctx(cte_subquery, cte_ctx);
+                }
+                // Regular table scan
+                let mut exec = self.select_scan(table_name, schema);
+                if let Some(proj) = projection {
+                    if let Some(seq) = exec.as_mut().as_any().downcast_ref::<SeqScanExec>() {
+                        return Ok(Box::new(seq.clone().with_projection(proj.clone())));
+                    } else if let Some(idx) = exec.as_mut().as_any().downcast_ref::<IndexScanExec>() {
+                        return Ok(Box::new(idx.clone().with_projection(proj.clone())));
+                    }
+                }
+                Ok(exec)
+            }
+            LogicalPlan::Projection {
+                input,
+                expr,
+                schema,
+            } => {
+                let input_plan = self.create_physical_plan_with_cte_ctx(input, cte_ctx)?;
+                Ok(Box::new(ProjectionExec::new(
+                    input_plan,
+                    expr.clone(),
+                    schema.clone(),
+                )))
+            }
+            LogicalPlan::Filter { predicate, input } => {
+                match predicate {
+                    Expr::In { expr: _, subquery } => {
+                        let _subquery_plan =
+                            self.create_physical_plan_with_cte_ctx(subquery, cte_ctx)?;
+                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                        let semi_join_plan = LogicalPlan::Join {
+                            left: input.clone(),
+                            right: subquery.clone(),
+                            join_type: JoinType::LeftSemi,
+                            condition: Some(join_condition),
+                        };
+                        self.create_physical_plan_with_cte_ctx(&semi_join_plan, cte_ctx)
+                    }
+                    Expr::NotIn { expr: _, subquery } => {
+                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                        let anti_join_plan = LogicalPlan::Join {
+                            left: input.clone(),
+                            right: subquery.clone(),
+                            join_type: JoinType::LeftAnti,
+                            condition: Some(join_condition),
+                        };
+                        self.create_physical_plan_with_cte_ctx(&anti_join_plan, cte_ctx)
+                    }
+                    Expr::Exists(subquery) => {
+                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                        let semi_join_plan = LogicalPlan::Join {
+                            left: input.clone(),
+                            right: subquery.clone(),
+                            join_type: JoinType::LeftSemi,
+                            condition: Some(join_condition),
+                        };
+                        self.create_physical_plan_with_cte_ctx(&semi_join_plan, cte_ctx)
+                    }
+                    Expr::NotExists(subquery) => {
+                        let join_condition = Expr::Literal(sqlrustgo_types::Value::Boolean(true));
+                        let anti_join_plan = LogicalPlan::Join {
+                            left: input.clone(),
+                            right: subquery.clone(),
+                            join_type: JoinType::LeftAnti,
+                            condition: Some(join_condition),
+                        };
+                        self.create_physical_plan_with_cte_ctx(&anti_join_plan, cte_ctx)
+                    }
+                    Expr::InList { .. }
+                    | Expr::CaseWhen { .. }
+                    | Expr::Extract { .. }
+                    | Expr::Column(_)
+                    | Expr::Literal(_)
+                    | Expr::BinaryExpr { .. }
+                    | Expr::UnaryExpr { .. }
+                    | Expr::AggregateFunction { .. }
+                    | Expr::Alias { .. }
+                    | Expr::Wildcard
+                    | Expr::QualifiedWildcard { .. } => {
+                        let input_plan = self.create_physical_plan_with_cte_ctx(input, cte_ctx)?;
+                        Ok(Box::new(FilterExec::new(input_plan, predicate.clone())))
+                    }
+                }
+            }
+            LogicalPlan::Aggregate {
+                input,
+                group_expr,
+                aggregate_expr,
+                schema,
+            } => {
+                let input_plan = self.create_physical_plan_with_cte_ctx(input, cte_ctx)?;
+                Ok(Box::new(AggregateExec::new(
+                    input_plan,
+                    group_expr.clone(),
+                    aggregate_expr.clone(),
+                    schema.clone(),
+                )))
+            }
+            LogicalPlan::Join {
+                left,
+                right,
+                join_type,
+                condition,
+            } => {
+                let left_plan = self.create_physical_plan_with_cte_ctx(left, cte_ctx)?;
+                let right_plan = self.create_physical_plan_with_cte_ctx(right, cte_ctx)?;
+                let schema = Schema::new(vec![]);
+                Ok(Box::new(HashJoinExec::new(
+                    left_plan,
+                    right_plan,
+                    join_type.clone(),
+                    condition.clone(),
+                    schema,
+                )))
+            }
+            LogicalPlan::Sort { input, sort_expr } => {
+                let input_plan = self.create_physical_plan_with_cte_ctx(input, cte_ctx)?;
+                Ok(Box::new(SortExec::new(input_plan, sort_expr.clone())))
+            }
+            LogicalPlan::Limit {
+                input,
+                limit,
+                offset,
+            } => {
+                let input_plan = self.create_physical_plan_with_cte_ctx(input, cte_ctx)?;
+                Ok(Box::new(LimitExec::new(input_plan, *limit, *offset)))
+            }
+            LogicalPlan::EmptyRelation => {
+                Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
+            }
+            LogicalPlan::Values { schema, .. } => {
+                Ok(Box::new(SeqScanExec::new(String::new(), schema.clone())))
+            }
+            LogicalPlan::CreateTable { table_name, schema, .. } => {
+                Ok(Box::new(SeqScanExec::new(table_name.clone(), schema.clone())))
+            }
+            LogicalPlan::DropTable { .. } => {
+                // DDL statements - handled differently
+                Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
+            }
+            LogicalPlan::Update { .. } => {
+                Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
+            }
+            LogicalPlan::CreateTrigger { .. }
+            | LogicalPlan::CreateProcedure { .. }
+            | LogicalPlan::Call { .. } => {
+                // These are handled by storage layer
+                Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
+            }
+            LogicalPlan::Delete {
+                table_name,
+                predicate,
+            } => Ok(Box::new(DeleteExec::new(
+                table_name.clone(),
+                predicate.clone(),
+            ))),
+            LogicalPlan::Subquery { subquery, .. } => {
+                self.create_physical_plan_with_cte_ctx(subquery, cte_ctx)
+            }
+            LogicalPlan::Union { left, .. } => {
+                self.create_physical_plan_with_cte_ctx(left, cte_ctx)
+            }
+            LogicalPlan::With { ctes, input } => {
+                // Nested WITH - merge CTE contexts (outer CTEs take precedence)
+                let mut nested_ctx = cte_ctx.clone();
+                for cte in ctes {
+                    nested_ctx.insert(cte.name.clone(), cte.subquery.clone());
+                }
+                self.create_physical_plan_with_cte_ctx(input, &nested_ctx)
             }
         }
     }
