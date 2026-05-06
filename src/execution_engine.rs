@@ -2338,6 +2338,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             ShowStatement::Index { table: _ } => {
                 Err(SqlError::ExecutionError("SHOW INDEX not yet implemented".to_string()))
             }
+            ShowStatement::Variables { like } => self.execute_show_variables(like.as_deref()),
         }
     }
 
@@ -2368,6 +2369,39 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
     fn execute_show_grants(&self) -> SqlResult<ExecutorResult> {
         Ok(ExecutorResult::new(vec![], 0))
+    }
+
+    fn execute_show_variables(&self, pattern: Option<&str>) -> SqlResult<ExecutorResult> {
+        let vars: Vec<(&str, &str)> = vec![
+            ("version", "3.0.0"),
+            ("version_comment", "SQLRustGo Database"),
+            ("lower_case_table_names", "1"),
+            ("max_allowed_packet", "67108864"),
+            ("character_set_server", "utf8mb4"),
+            ("collation_server", "utf8mb4_general_ci"),
+            ("autocommit", "1"),
+            ("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES"),
+            ("transaction_isolation", "REPEATABLE-READ"),
+            ("wait_timeout", "28800"),
+            ("innodb_version", "3.0.0"),
+            ("protocol_version", "10"),
+            ("have_ssl", "NO"),
+            ("max_connections", "151"),
+        ];
+        let rc = vars.len();
+        let rows: Vec<Vec<Value>> = vars.into_iter()
+            .filter(|(k, _)| match pattern {
+                Some(p) => {
+                    let pat = p.replace('%', ".*").replace('_', ".");
+                    regex::Regex::new(&format!("^{}$", pat))
+                        .map(|re| re.is_match(k))
+                        .unwrap_or(false)
+                }
+                None => true,
+            })
+            .map(|(k, v)| vec![Value::Text(k.to_string()), Value::Text(v.to_string())])
+            .collect();
+        Ok(ExecutorResult::new(rows, rc))
     }
 
     fn execute_show_roles(&self) -> SqlResult<ExecutorResult> {

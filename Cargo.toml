@@ -150,6 +150,7 @@ bytes.workspace = true
 lru-cache.workspace = true
 ctrlc.workspace = true
 serde_json.workspace = true
+regex = "1"
 
 [[test]]
 name = "ci_test"
