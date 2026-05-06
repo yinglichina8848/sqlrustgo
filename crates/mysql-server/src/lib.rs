@@ -1249,6 +1249,101 @@ fn count_placeholders(sql: &str) -> u16 {
     sql.chars().filter(|&c| c == '?').count() as u16
 }
 
+fn parse_stmt_execute_params(payload: &[u8], param_count: usize) -> Vec<Vec<u8>> {
+    if payload.len() < 10 || param_count == 0 {
+        return Vec::new();
+    }
+
+    let mut params: Vec<Vec<u8>> = Vec::with_capacity(param_count);
+    let null_bitmap_len = ((param_count + 7) / 8) as usize;
+    let header_len = 10 + null_bitmap_len;
+
+    if payload.len() < header_len {
+        return Vec::new();
+    }
+
+    let null_bitmap = &payload[10..header_len];
+    let mut pos = header_len;
+
+    for i in 0..param_count {
+        let byte_idx = i / 8;
+        let bit_idx = i % 8;
+        let is_null = (null_bitmap.get(byte_idx).unwrap_or(&0) >> bit_idx) & 1 == 1;
+
+        if is_null {
+            params.push(Vec::new());
+            continue;
+        }
+
+        if pos >= payload.len() {
+            params.push(Vec::new());
+            continue;
+        }
+
+        let param_type = payload[pos];
+        pos += 1;
+
+        if pos >= payload.len() {
+            params.push(Vec::new());
+            continue;
+        }
+
+        match param_type {
+            0x01 | 0x02 | 0x03 | 0x04 | 0x08 | 0x09 | 0x0d => {
+                let len = match param_type {
+                    0x01 | 0x02 | 0x03 | 0x04 => param_type as usize,
+                    0x08 => 8,
+                    0x09 => 8,
+                    0x0d => 4,
+                    _ => 8,
+                };
+                if pos + len <= payload.len() {
+                    let val = &payload[pos..pos + len];
+                    params.push(val.to_vec());
+                } else {
+                    params.push(Vec::new());
+                }
+                pos += len;
+            }
+            0x0f | 0xfc | 0xfd | 0xfe => {
+                let len = if param_type == 0xfc {
+                    if pos + 2 <= payload.len() {
+                        u16::from_le_bytes([payload[pos], payload[pos + 1]]) as usize
+                    } else {
+                        0
+                    }
+                } else if param_type == 0xfd {
+                    3
+                } else if param_type == 0xfe {
+                    if pos + 8 <= payload.len() {
+                        u64::from_le_bytes([
+                            payload[pos], payload[pos + 1], payload[pos + 2], payload[pos + 3],
+                            payload[pos + 4], payload[pos + 5], payload[pos + 6], payload[pos + 7],
+                        ]) as usize
+                    } else {
+                        0
+                    }
+                } else {
+                    255
+                };
+                if pos + if param_type == 0xfc { 2 } else if param_type == 0xfe { 8 } else { 1 } + len <= payload.len() {
+                    let skip = if param_type == 0xfc { 2 } else if param_type == 0xfe { 8 } else { 1 };
+                    let val = &payload[pos + skip..pos + skip + len];
+                    params.push(val.to_vec());
+                    pos += skip + len;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            _ => {
+                params.push(Vec::new());
+            }
+        }
+    }
+
+    params
+}
+
 fn replace_placeholders(sql: &str, params: &[Vec<u8>]) -> String {
     let mut result = sql.to_string();
     for param in params.iter() {
@@ -1795,25 +1890,26 @@ fn do_command_loop<S: Read + Write>(
                 };
                 let stmt_sql = &stmt_info.sql;
                 let stmt_col_count = stmt_info.column_count;
+                let param_count = stmt_info.param_count as usize;
 
-                let params: Vec<Vec<u8>> = Vec::new();
-                let _final_sql = replace_placeholders(stmt_sql, &params);
+                let params = parse_stmt_execute_params(payload, param_count);
+                let final_sql = replace_placeholders(stmt_sql, &params);
 
-                tracing::info!("STMT EXECUTE (id={}): {}", stmt_id, stmt_sql);
+                tracing::info!("STMT EXECUTE (id={}): {}", stmt_id, final_sql);
 
-                if is_select(stmt_sql) {
+                if is_select(&final_sql) {
                     let result = if let Some(ref parsed_stmt) = stmt_info.parsed_stmt {
                         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                             execute_select_statement(
                                 parsed_stmt.clone(),
-                                stmt_sql,
+                                &final_sql,
                                 engine,
                                 &storage,
                             )
                         }))
                     } else {
                         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            execute_select(stmt_sql, engine, &storage)
+                            execute_select(&final_sql, engine, &storage)
                         }))
                     };
                     match result {
@@ -1844,7 +1940,7 @@ fn do_command_loop<S: Read + Write>(
                     let write_result = if let Some(ref parsed_stmt) = stmt_info.parsed_stmt {
                         execute_write_statement(parsed_stmt.clone(), engine)
                     } else {
-                        execute_write(stmt_sql, engine)
+                        execute_write(&final_sql, engine)
                     };
                     match write_result {
                         Ok(a) => {
