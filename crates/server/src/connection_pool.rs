@@ -145,33 +145,93 @@ impl ConnectionPool {
     }
 
     fn acquire_round_robin(&self, timeout: std::time::Duration) -> PooledSession {
-        let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
-        let session_index = index % self.sessions.len();
-        self.sessions[session_index].clone()
+        match timeout {
+            _ if timeout.as_millis() == 0 => {
+                self.try_acquire_session()
+            }
+            _ => {
+                self.received
+                    .recv_timeout(timeout)
+                    .map(|mut session| {
+                        session.mark_in_use();
+                        session
+                    })
+                    .unwrap_or_else(|| {
+                        let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
+                        let session_index = index % self.sessions.len();
+                        let mut session = self.sessions[session_index].clone();
+                        session.mark_in_use();
+                        session
+                    })
+            }
+        }
     }
 
-    fn acquire_least_connections(&self) -> PooledSession {
-        let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
-        let session_index = index % self.sessions.len();
-        self.sessions[session_index].clone()
+    fn acquire_least_connections(&self, timeout: std::time::Duration) -> PooledSession {
+        self.received
+            .recv_timeout(timeout)
+            .map(|mut session| {
+                session.mark_in_use();
+                session
+            })
+            .unwrap_or_else(|| {
+                let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
+                let session_index = index % self.sessions.len();
+                let mut session = self.sessions[session_index].clone();
+                session.mark_in_use();
+                session
+            })
     }
 
     fn acquire_health_check(&self, timeout: std::time::Duration) -> PooledSession {
-        let healthy: Vec<usize> = self
-            .sessions
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| s.health_check())
-            .map(|(i, _)| i)
-            .collect();
+        self.received
+            .recv_timeout(timeout)
+            .map(|mut session| {
+                if session.health_check() {
+                    session.mark_in_use();
+                    session
+                } else {
+                    drop(session);
+                    self.acquire_health_check(timeout)
+                }
+            })
+            .unwrap_or_else(|| {
+                let healthy: Vec<usize> = self
+                    .sessions
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, s)| s.health_check())
+                    .map(|(i, _)| i)
+                    .collect();
 
-        if healthy.is_empty() {
-            return self.sessions[0].clone();
-        }
+                if healthy.is_empty() {
+                    let mut session = self.sessions[0].clone();
+                    session.mark_in_use();
+                    return session;
+                }
 
-        let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
-        let healthy_index = index % healthy.len();
-        self.sessions[healthy[healthy_index]].clone()
+                let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
+                let healthy_index = index % healthy.len();
+                let mut session = self.sessions[healthy[healthy_index]].clone();
+                session.mark_in_use();
+                session
+            })
+    }
+
+    fn try_acquire_session(&self) -> PooledSession {
+        self.received
+            .try_recv()
+            .map(|mut session| {
+                session.mark_in_use();
+                session
+            })
+            .unwrap_or_else(|| {
+                let index = self.round_robin_index.fetch_add(1, Ordering::SeqCst);
+                let session_index = index % self.sessions.len();
+                let mut session = self.sessions[session_index].clone();
+                session.mark_in_use();
+                session
+            })
     }
 
     pub fn get_strategy(&self) -> LoadBalanceStrategy {

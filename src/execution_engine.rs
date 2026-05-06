@@ -14,7 +14,7 @@ use sqlrustgo_executor::trigger::{
 };
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement,
+    AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, ExplainStatement,
     CallStatement, CreateIndexStatement,
     CreateProcedureStatement, CreateRoleStatement, CreateTableStatement, CreateTriggerStatement,
     DropRoleStatement, DropTableStatement, GrantRoleStatement, GrantStatement, InsertStatement,
@@ -505,6 +505,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::ShowRoles => self.execute_show_roles(),
             Statement::ShowGrantsFor(ref user) => self.execute_show_grants_for(user),
             Statement::AlterTable(ref alter) => self.execute_alter_table(alter),
+            Statement::Explain(ref explain) => self.execute_explain(explain),
             Statement::WithSelect(ref ws) => {
                 // Execute the inner SELECT (CTE definitions not yet executed)
                 self.execute_select(&ws.select)
@@ -2484,6 +2485,34 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             vec![vec![Value::Text(format!("SET ROLE to {}", role_name))]],
             1,
         ))
+    }
+
+    fn execute_explain(&self, explain: &ExplainStatement) -> SqlResult<ExecutorResult> {
+        let plan_desc = format!("{:?}", explain.statement);
+        let mut rows = vec![
+            vec![Value::Text("Query Plan".to_string())],
+            vec![Value::Text(format!("  {}", plan_desc))],
+        ];
+        if explain.analyze {
+            if let Statement::Select(ref select) = *explain.statement {
+                let start = std::time::Instant::now();
+                let result = self.execute_select(select);
+                let elapsed = start.elapsed();
+                match result {
+                    Ok(r) => {
+                        rows.push(vec![Value::Text(format!("  Actual rows: {}, time: {:?}", r.rows.len(), elapsed))]);
+                        let est = self.estimate_seq_scan_cost(&select.first_table());
+                        rows.push(vec![Value::Text(format!("  Estimated cost: {:.2}", est))]);
+                    }
+                    Err(e) => {
+                        rows.push(vec![Value::Text(format!("  Execution error: {:?}", e))]);
+                    }
+                }
+            } else {
+                rows.push(vec![Value::Text("  ANALYZE only supported for SELECT".to_string())]);
+            }
+        }
+        Ok(ExecutorResult::new(rows, rows.len()))
     }
 
     fn execute_show(&self, show: &ShowStatement) -> SqlResult<ExecutorResult> {

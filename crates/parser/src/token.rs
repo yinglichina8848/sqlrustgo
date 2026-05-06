@@ -21,6 +21,7 @@ pub enum Token {
     Drop,
     Alter,
     Index,
+    Explain,
     On,
     Primary,
     Key,
@@ -333,6 +334,7 @@ impl fmt::Display for Token {
             Token::Call => write!(f, "CALL"),
             Token::Procedure => write!(f, "PROCEDURE"),
             Token::End => write!(f, "END"),
+            Token::Explain => write!(f, "EXPLAIN"),
             Token::Show => write!(f, "SHOW"),
             Token::Describe => write!(f, "DESCRIBE"),
             Token::Role => write!(f, "ROLE"),
@@ -416,6 +418,7 @@ impl fmt::Display for Token {
             Token::SingleQuote => write!(f, "'"),
             Token::Star => write!(f, "*"),
             Token::Eof => write!(f, "EOF"),
+            Token::Explain => write!(f, "EXPLAIN"),
         }
     }
 }
@@ -493,6 +496,7 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "DROP" => Some(Token::Drop),
         "ALTER" => Some(Token::Alter),
         "INDEX" => Some(Token::Index),
+"EXPLAIN" => Some(Token::Explain),
         "ON" => Some(Token::On),
         "PRIMARY" => Some(Token::Primary),
         "KEY" => Some(Token::Key),
