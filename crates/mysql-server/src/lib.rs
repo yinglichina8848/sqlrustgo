@@ -1449,7 +1449,10 @@ fn parse_stmt_execute_params(payload: &[u8], param_count: usize) -> Vec<Vec<u8>>
                 let (str_len, consumed): (usize, usize) = if first < 0xfb {
                     (first as usize, 1)
                 } else if first == 0xfc && pos + 3 <= payload.len() {
-                    (u16::from_le_bytes([payload[pos + 1], payload[pos + 2]]) as usize, 3)
+                    (
+                        u16::from_le_bytes([payload[pos + 1], payload[pos + 2]]) as usize,
+                        3,
+                    )
                 } else if first == 0xfd && pos + 4 <= payload.len() {
                     let v = (payload[pos + 1] as u32)
                         | ((payload[pos + 2] as u32) << 8)
@@ -1791,8 +1794,16 @@ fn do_command_loop<S: Read + Write>(
                 if is_transaction_cmd(&q) {
                     match parse_transaction_command(&q) {
                         TransactionCommand::Begin => {
-                            if let Err(e) = engine.begin_transaction(sqlrustgo_transaction::IsolationLevel::SnapshotIsolation) {
-                                make_err_packet(seq, 2000, "HY000", &format!("Begin failed: {}", e)).write_to(stream)?;
+                            if let Err(e) = engine.begin_transaction(
+                                sqlrustgo_transaction::IsolationLevel::SnapshotIsolation,
+                            ) {
+                                make_err_packet(
+                                    seq,
+                                    2000,
+                                    "HY000",
+                                    &format!("Begin failed: {}", e),
+                                )
+                                .write_to(stream)?;
                                 seq = seq.wrapping_add(1);
                                 continue;
                             }
@@ -1800,7 +1811,13 @@ fn do_command_loop<S: Read + Write>(
                         }
                         TransactionCommand::Commit => {
                             if let Err(e) = engine.commit_transaction() {
-                                make_err_packet(seq, 2000, "HY000", &format!("Commit failed: {}", e)).write_to(stream)?;
+                                make_err_packet(
+                                    seq,
+                                    2000,
+                                    "HY000",
+                                    &format!("Commit failed: {}", e),
+                                )
+                                .write_to(stream)?;
                                 seq = seq.wrapping_add(1);
                                 continue;
                             }
@@ -1808,7 +1825,13 @@ fn do_command_loop<S: Read + Write>(
                         }
                         TransactionCommand::Rollback => {
                             if let Err(e) = engine.rollback_transaction() {
-                                make_err_packet(seq, 2000, "HY000", &format!("Rollback failed: {}", e)).write_to(stream)?;
+                                make_err_packet(
+                                    seq,
+                                    2000,
+                                    "HY000",
+                                    &format!("Rollback failed: {}", e),
+                                )
+                                .write_to(stream)?;
                                 seq = seq.wrapping_add(1);
                                 continue;
                             }
@@ -1890,7 +1913,8 @@ fn do_command_loop<S: Read + Write>(
                                     MySqlError::Sql(_) => 1064,
                                     _ => 2000,
                                 };
-                                make_err_packet(seq, code, "42000", &e.to_string()).write_to(stream)?;
+                                make_err_packet(seq, code, "42000", &e.to_string())
+                                    .write_to(stream)?;
                                 seq = seq.wrapping_add(1);
                                 break;
                             }
@@ -1908,7 +1932,8 @@ fn do_command_loop<S: Read + Write>(
                                 seq = seq.wrapping_add(1);
                             }
                             Err(e) => {
-                                make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
+                                make_err_packet(seq, 1064, "42000", &e.to_string())
+                                    .write_to(stream)?;
                                 seq = seq.wrapping_add(1);
                                 break;
                             }
