@@ -225,3 +225,12 @@ fi
 
 echo ""
 echo "✅ R9: PASSED — all benchmarks within 5% of baseline, E-09 thresholds met"
+
+# ---------- Optional: TPC-H Extended Gate ----------
+if [ -f "$PROJECT_ROOT/scripts/gate/check_tpch.sh" ] && [ -d "$HOME/sqlrustgo-tpch/data" ]; then
+    echo ""
+    echo "=== R10: TPC-H Extended Gate (optional) ==="
+    bash "$PROJECT_ROOT/scripts/gate/check_tpch.sh" --skip-data 2>&1 || {
+        echo "⚠️  R10: TPC-H check had issues (non-blocking)"
+    }
+fi

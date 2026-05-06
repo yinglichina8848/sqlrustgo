@@ -1,0 +1,220 @@
+{
+  "timestamp": "2026-05-06T04:00:37.576618Z",
+  "scale_factor": 0.1,
+  "systems": {
+    "sqlite": {
+      "import_rows": 866602,
+      "queries_tested": 2
+    },
+    "sqlrustgo": {
+      "import_rows": 866602,
+      "queries_tested": 2
+    }
+  },
+  "queries": [
+    {
+      "name": "Q1",
+      "sqlite_ms": 1018.99,
+      "sqlite_rows": 4,
+      "sqlrustgo_ms": 2811.12,
+      "sqlrustgo_rows": 3,
+      "ratio": 2.76,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q2",
+      "sqlite_ms": 97.53,
+      "sqlite_rows": 44,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q3",
+      "sqlite_ms": 232.28,
+      "sqlite_rows": 10,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q4",
+      "sqlite_ms": 51.19,
+      "sqlite_rows": 5,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q5",
+      "sqlite_ms": 100.45,
+      "sqlite_rows": 5,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q6",
+      "sqlite_ms": 141.12,
+      "sqlite_rows": 1,
+      "sqlrustgo_ms": 1881.04,
+      "sqlrustgo_rows": 1,
+      "ratio": 13.33,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q7",
+      "sqlite_ms": 149.28,
+      "sqlite_rows": 4,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q8",
+      "sqlite_ms": 331.68,
+      "sqlite_rows": 1,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q9",
+      "sqlite_ms": 374.15,
+      "sqlite_rows": 175,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q10",
+      "sqlite_ms": 64.28,
+      "sqlite_rows": 20,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q11",
+      "sqlite_ms": 65.28,
+      "sqlite_rows": 22,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q12",
+      "sqlite_ms": 78.97,
+      "sqlite_rows": 2,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q13",
+      "sqlite_ms": 23.05,
+      "sqlite_rows": 10,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q14",
+      "sqlite_ms": 40.69,
+      "sqlite_rows": 1,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q15",
+      "sqlite_ms": 210.73,
+      "sqlite_rows": 1,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q16",
+      "sqlite_ms": 39.54,
+      "sqlite_rows": 2862,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q17",
+      "sqlite_ms": 29.77,
+      "sqlite_rows": 1,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q18",
+      "sqlite_ms": 865.55,
+      "sqlite_rows": 5,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q19",
+      "sqlite_ms": 168.63,
+      "sqlite_rows": 1,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q20",
+      "sqlite_ms": 630.97,
+      "sqlite_rows": 9,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q21",
+      "sqlite_ms": 139.42,
+      "sqlite_rows": 10,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    },
+    {
+      "name": "Q22",
+      "sqlite_ms": 25.6,
+      "sqlite_rows": 1,
+      "sqlrustgo_ms": null,
+      "sqlrustgo_rows": null,
+      "ratio": null,
+      "faster": "sqlite"
+    }
+  ],
+  "summary": {
+    "sqlite_total_ms": 4879.15,
+    "sqlrustgo_total_ms": 4692.16,
+    "overall_ratio": 0.96,
+    "note": "SQLRustGo tested on Q1, Q6 only due to memory constraints"
+  }
+}
