@@ -257,10 +257,43 @@ Week 19    (9/8-9/14):   GA — 最终审计 + 发布
 
 ---
 
-## 十三、关联文档
+## 十三、Agent 分组实施计划
+
+| 组 | Agent | 主要任务 | 文档 |
+|----|-------|---------|------|
+| A 组 | opencode (openheart/sqlrustgo) | Phase 0-1 性能核心 + I-03 SSL/TLS | [A_GROUP_IMPLEMENTATION_PLAN.md](./A_GROUP_IMPLEMENTATION_PLAN.md) |
+| B 组 | claude (yinglichina163/sqlrustgo) | Phase 0-2 SQL 功能 + TPC-H 扩展 + 形式化验证 | [B_GROUP_IMPLEMENTATION_PLAN.md](./B_GROUP_IMPLEMENTATION_PLAN.md) |
+| C 组 | deepseek (yinglichina163/sqlrustgo) | Phase 3-4 基础设施 + 架构加固 | [C_GROUP_IMPLEMENTATION_PLAN.md](./C_GROUP_IMPLEMENTATION_PLAN.md) |
+
+---
+
+## 十四、Issue 跟踪清单
+
+### 遗留 Issue（需在 v3.0.0 关闭）
+
+| Issue | 标题 | 负责组 | 关闭条件 |
+|-------|------|--------|---------|
+| #234 | TPC-H 9/22 → 18/22 | B 组 | `tpch-bench --queries all` ≥18/22 通过，无 OOM |
+| #235 | PROOF-026 Write Skew / SSI | B 组 | `formal_smoke.sh` 含 SSI + `ssi_integration_test` 通过 |
+| #277 | TPC-H 三平台对比 | B 组 | `tpch_comparison.json` 含 4 平台数据 |
+| #175 | TPC-H SF=0.1 测试 | B 组 | 22 查询 SF=0.1 全部运行并记录 |
+
+### 新增 Issue（按 Phase）
+
+| Issue | 标题 | 负责组 | Phase |
+|-------|------|--------|-------|
+| #263 | 优化器 CBO 准确性测试 | B 组 | Phase 0 |
+| #353 | v3.0.0 开发总控 | Hermes | All |
+
+---
+
+## 十五、关联文档
 
 | 文档 | 说明 |
 |------|------|
+| [A_GROUP_IMPLEMENTATION_PLAN.md](./A_GROUP_IMPLEMENTATION_PLAN.md) | A 组性能核心实施计划 |
+| [B_GROUP_IMPLEMENTATION_PLAN.md](./B_GROUP_IMPLEMENTATION_PLAN.md) | B 组 SQL 功能 + TPC-H 实施计划 |
+| [C_GROUP_IMPLEMENTATION_PLAN.md](./C_GROUP_IMPLEMENTATION_PLAN.md) | C 组基础设施实施计划 |
 | [AUDIT_AND_SUPPLEMENT.md](./AUDIT_AND_SUPPLEMENT.md) | v3.0.0 计划审计与补充报告 |
 | [../v2.9.0/WEAKNESS_ANALYSIS.md](../v2.9.0/WEAKNESS_ANALYSIS.md) | v2.9.0 弱项分析 |
 | [../v2.9.0/V3_0_0_DEVELOPMENT_PLAN.md](../v2.9.0/V3_0_0_DEVELOPMENT_PLAN.md) | 计划 B（原 v2.9.0 视角的 v3.0.0 计划） |
@@ -269,7 +302,7 @@ Week 19    (9/8-9/14):   GA — 最终审计 + 发布
 
 ---
 
-*计划版本: 2.0（审计修订版）*
-*修订日期: 2026-05-05*
-*修订依据: v2.9.0 弱项分析 + 源码验证 + 两份旧计划对比审计*
-*前版: 1.0 (2026-03-28, MySQL 5.6 兼容版 — 已废弃)*
+*计划版本: 3.0（分组整合版）*
+*修订日期: 2026-05-06*
+*修订依据: 添加 Agent 分组计划 + Issue 跟踪清单*
+*前版: 2.0 (2026-05-05, 审计修订版)*
