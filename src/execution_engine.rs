@@ -1258,15 +1258,22 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             storage.get_table_info(&table_name)?.clone()
         };
 
-        // Convert expressions to records
-        let mut all_records: Vec<Vec<Value>> = Vec::new();
-        for row_exprs in &insert.values {
-            let mut record = Vec::with_capacity(row_exprs.len());
-            for (_i, expr) in row_exprs.iter().enumerate() {
-                let val = expression_to_value(expr);
-                record.push(val);
+        // Convert expressions to records (INSERT ... VALUES) or execute SELECT (INSERT ... SELECT)
+        let mut all_records: Vec<Vec<Value>> = if let Some(ref select) = insert.select {
+            let result = self.execute_select(select)?;
+            result.rows
+        } else {
+            Vec::new()
+        };
+        if !insert.values.is_empty() {
+            for row_exprs in &insert.values {
+                let mut record = Vec::with_capacity(row_exprs.len());
+                for (_i, expr) in row_exprs.iter().enumerate() {
+                    let val = expression_to_value(expr);
+                    record.push(val);
+                }
+                all_records.push(record);
             }
-            all_records.push(record);
         }
 
         // For REPLACE INTO: if insert.values has a unique/key conflict, delete old row first
