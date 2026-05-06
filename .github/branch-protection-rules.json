@@ -61,6 +61,69 @@
     "allow_force_pushes": false,
     "allow_deletions": false
   },
+  "develop/v3.0.0": {
+    "required_status_checks": {
+      "strict": true,
+      "contexts": [
+        "build",
+        "test",
+        "clippy",
+        "fmt",
+        "coverage",
+        "docs-links"
+      ]
+    },
+    "required_pull_request_reviews": {
+      "dismiss_stale_reviews": true,
+      "require_code_owner_reviews": false,
+      "required_approving_review_count": 1
+    },
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  },
+  "alpha/v3.0.0": {
+    "required_status_checks": {
+      "strict": true,
+      "contexts": [
+        "build",
+        "test",
+        "clippy",
+        "fmt",
+        "coverage"
+      ]
+    },
+    "required_pull_request_reviews": {
+      "dismiss_stale_reviews": true,
+      "require_code_owner_reviews": false,
+      "required_approving_review_count": 1
+    },
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  },
+  "beta/v3.0.0": {
+    "required_status_checks": {
+      "strict": true,
+      "contexts": [
+        "build",
+        "test",
+        "clippy",
+        "fmt",
+        "coverage",
+        "tpch-sf01",
+        "sql-corpus"
+      ]
+    },
+    "required_pull_request_reviews": {
+      "dismiss_stale_reviews": true,
+      "require_code_owner_reviews": false,
+      "required_approving_review_count": 1
+    },
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  },
   "release-*": {
     "required_status_checks": {
       "strict": true,

@@ -3,7 +3,7 @@ name: CI (Optimized)
 on:
   pull_request:
     branches:
-      - develop/v2.9.0
+      - develop/v3.0.0
     paths-ignore:
       - 'docs/**'
       - '*.md'
@@ -199,8 +199,8 @@ jobs:
       # -----------------------------
       - name: Detect test file changes
         run: |
-          git fetch origin develop/v2.9.0
-          CHANGED=$(git diff --name-only origin/develop/v2.9.0...HEAD | grep "^tests/" || true)
+          git fetch origin develop/v3.0.0
+          CHANGED=$(git diff --name-only origin/develop/v3.0.0...HEAD | grep "^tests/" || true)
           if [ ! -z "$CHANGED" ]; then
             echo "❌ Tests modified:"
             echo "$CHANGED"
@@ -212,8 +212,8 @@ jobs:
       # -----------------------------
       - name: Detect NEW #[ignore] additions
         run: |
-          git fetch origin develop/v2.9.0
-          NEW_IGNORES=$(git diff origin/develop/v2.9.0...HEAD -- "*.rs" | grep "^+.*#\[ignore\]" || true)
+          git fetch origin develop/v3.0.0
+          NEW_IGNORES=$(git diff origin/develop/v3.0.0...HEAD -- "*.rs" | grep "^+.*#\[ignore\]" || true)
           if [ ! -z "$NEW_IGNORES" ]; then
             echo "❌ NEW #[ignore] detected in PR:"
             echo "$NEW_IGNORES"
@@ -251,7 +251,7 @@ jobs:
 
       - name: Prevent proof tampering
         run: |
-          if git diff --name-only origin/develop/v2.9.0...HEAD | grep "verification_report.json"; then
+          if git diff --name-only origin/develop/v3.0.0...HEAD | grep "verification_report.json"; then
             echo "❌ Proof file modified in PR"
             exit 1
           fi
