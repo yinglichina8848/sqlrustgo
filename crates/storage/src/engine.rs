@@ -260,6 +260,152 @@ fn is_zero_or_empty(val: &Value) -> bool {
     }
 }
 
+/// Predicate AST for cached expression evaluation
+#[derive(Debug, Clone)]
+enum Predicate {
+    And(Box<Predicate>, Box<Predicate>),
+    Or(Box<Predicate>, Box<Predicate>),
+    Not(Box<Predicate>),
+    IsNull(usize),
+    IsNotNull(usize),
+    Compare(usize, &'static str, String), // column_index, op, value_str
+    Literal(bool),
+    ColumnCheck(usize), // column index - check if not null and not zero
+}
+
+/// Parse SQL expression string into Predicate AST
+fn parse_predicate(expr: &str, columns: &[String]) -> SqlResult<Predicate> {
+    let expr = expr.trim();
+
+    // Handle AND/OR
+    if let Some(idx) = find_top_level_op(expr, "AND") {
+        let left = parse_predicate(expr[..idx].trim(), columns)?;
+        let right = parse_predicate(expr[idx + 3..].trim(), columns)?;
+        return Ok(Predicate::And(Box::new(left), Box::new(right)));
+    }
+    if let Some(idx) = find_top_level_op(expr, "OR") {
+        let left = parse_predicate(expr[..idx].trim(), columns)?;
+        let right = parse_predicate(expr[idx + 2..].trim(), columns)?;
+        return Ok(Predicate::Or(Box::new(left), Box::new(right)));
+    }
+
+    // Handle NOT
+    let upper = expr.to_uppercase();
+    if upper.starts_with("NOT ") {
+        let inner = parse_predicate(expr[4..].trim(), columns)?;
+        return Ok(Predicate::Not(Box::new(inner)));
+    }
+
+    // Handle IS NULL / IS NOT NULL
+    if let Some(idx) = upper.find(" IS NULL") {
+        let col_name = expr[..idx].trim();
+        if let Some(col_idx) = find_column_index(col_name, columns) {
+            return Ok(Predicate::IsNull(col_idx));
+        }
+        // Column not found, return literal true
+        return Ok(Predicate::Literal(true));
+    }
+    if let Some(idx) = upper.find(" IS NOT NULL") {
+        let col_name = expr[..idx].trim();
+        if let Some(col_idx) = find_column_index(col_name, columns) {
+            return Ok(Predicate::IsNotNull(col_idx));
+        }
+        // Column not found, return literal false
+        return Ok(Predicate::Literal(false));
+    }
+
+    // Handle comparisons: column op value
+    for (op, check) in &[
+        (">=", "gte"),
+        ("<=", "lte"),
+        ("!=", "neq"),
+        ("<>", "neq"),
+        ("=", "eq"),
+        ("==", "eq"),
+        (">", "gt"),
+        ("<", "lt"),
+    ] {
+        if let Some(idx) = expr.find(op) {
+            let col_name = expr[..idx].trim();
+            let value_str = expr[idx + op.len()..].trim().to_string();
+
+            if let Some(col_idx) = find_column_index(col_name, columns) {
+                return Ok(Predicate::Compare(col_idx, check, value_str));
+            }
+            break;
+        }
+    }
+
+    // If no comparison found, try to evaluate as a literal boolean
+    let upper = expr.to_uppercase();
+    if upper == "TRUE" || upper == "1" {
+        return Ok(Predicate::Literal(true));
+    }
+    if upper == "FALSE" || upper == "0" {
+        return Ok(Predicate::Literal(false));
+    }
+
+    // Treat as column name - check if not null and not zero
+    if let Some(col_idx) = find_column_index(expr, columns) {
+        return Ok(Predicate::ColumnCheck(col_idx));
+    }
+
+    Err(format!("Cannot parse predicate: {}", expr).into())
+}
+
+/// Find column index by name (case-insensitive)
+fn find_column_index(name: &str, columns: &[String]) -> Option<usize> {
+    let name = name.trim().trim_matches(|c| c == '\'' || c == '"');
+    for (i, col) in columns.iter().enumerate() {
+        if col.eq_ignore_ascii_case(name) {
+            return Some(i);
+        }
+    }
+    None
+}
+
+/// Evaluate parsed predicate against a record
+fn evaluate_predicate(predicate: &Predicate, record: &[Value]) -> SqlResult<bool> {
+    match predicate {
+        Predicate::And(left, right) => {
+            Ok(evaluate_predicate(left, record)? && evaluate_predicate(right, record)?)
+        }
+        Predicate::Or(left, right) => {
+            Ok(evaluate_predicate(left, record)? || evaluate_predicate(right, record)?)
+        }
+        Predicate::Not(inner) => Ok(!evaluate_predicate(inner, record)?),
+        Predicate::IsNull(col_idx) => {
+            if let Some(val) = record.get(*col_idx) {
+                Ok(matches!(val, Value::Null))
+            } else {
+                Ok(true)
+            }
+        }
+        Predicate::IsNotNull(col_idx) => {
+            if let Some(val) = record.get(*col_idx) {
+                Ok(!matches!(val, Value::Null))
+            } else {
+                Ok(false)
+            }
+        }
+        Predicate::Compare(col_idx, op, value_str) => {
+            if let Some(col_val) = record.get(*col_idx) {
+                compare_values(col_val, value_str, op)
+            } else {
+                Ok(false)
+            }
+        }
+        Predicate::Literal(b) => Ok(*b),
+        Predicate::ColumnCheck(col_idx) => {
+            if let Some(val) = record.get(*col_idx) {
+                Ok(!matches!(val, Value::Null) && !is_zero_or_empty(val))
+            } else {
+                Ok(false)
+            }
+        }
+    }
+}
+
 /// Trigger timing: BEFORE or AFTER
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TriggerTiming {
@@ -531,6 +677,8 @@ pub struct MemoryStorage {
     /// Column indexes: map from "table:column" to (column_index, HashIndex)
     /// HashIndex maps key value -> row indices
     indexes: HashMap<String, (usize, HashMap<i64, Vec<usize>>)>,
+    /// Cache for parsed predicates: (table_name, predicate_str) -> (columns, parsed_predicate)
+    predicate_cache: HashMap<String, (Vec<String>, Predicate)>,
 }
 
 impl MemoryStorage {
@@ -541,6 +689,7 @@ impl MemoryStorage {
             triggers: HashMap::new(),
             views: HashSet::new(),
             indexes: HashMap::new(),
+            predicate_cache: HashMap::new(),
         }
     }
 
@@ -554,6 +703,35 @@ impl MemoryStorage {
                 None
             }
         })
+    }
+
+    /// Get or parse predicate, using cache if available (returns owned Predicate)
+    fn get_or_parse_predicate(
+        &mut self,
+        table: &str,
+        predicate: &str,
+    ) -> SqlResult<Predicate> {
+        let cache_key = format!("{}:{}", table, predicate);
+
+        // If cached, return cloned version
+        if let Some(cached) = self.predicate_cache.get(&cache_key) {
+            return Ok(cached.1.clone());
+        }
+
+        let columns: Vec<String> = self
+            .table_infos
+            .get(table)
+            .map(|info| info.columns.iter().map(|c| c.name.clone()).collect())
+            .unwrap_or_default();
+
+        let parsed = parse_predicate(predicate, &columns)?;
+        self.predicate_cache.insert(cache_key, (columns, parsed.clone()));
+        Ok(parsed)
+    }
+
+    /// Clear predicate cache for a table (call after insert/delete/update)
+    pub fn clear_predicate_cache(&mut self, table: &str) {
+        self.predicate_cache.retain(|key, _| !key.starts_with(&format!("{}:", table)));
     }
 }
 
@@ -818,17 +996,20 @@ impl StorageEngine for MemoryStorage {
     }
 
     fn delete_by_predicate(&mut self, table: &str, predicate: &str) -> SqlResult<usize> {
+        let parsed_predicate = self.get_or_parse_predicate(table, predicate)?;
+
         let Some(records) = self.tables.get_mut(table) else {
             return Ok(0);
         };
-        let columns: Vec<String> = self
-            .table_infos
-            .get(table)
-            .map(|info| info.columns.iter().map(|c| c.name.clone()).collect())
-            .unwrap_or_default();
         let original_len = records.len();
-        records.retain(|row| !evaluate_sql_expression(predicate, &columns, row).unwrap_or(false));
-        Ok(original_len - records.len())
+        records.retain(|row| {
+            !evaluate_predicate(&parsed_predicate, row).unwrap_or(false)
+        });
+        let deleted = original_len - records.len();
+        if deleted > 0 {
+            self.clear_predicate_cache(table);
+        }
+        Ok(deleted)
     }
 
     fn update_by_predicate(
@@ -837,17 +1018,14 @@ impl StorageEngine for MemoryStorage {
         predicate: &str,
         assignments: &[(usize, Value)],
     ) -> SqlResult<usize> {
+        let parsed_predicate = self.get_or_parse_predicate(table, predicate)?;
+
         let Some(records) = self.tables.get_mut(table) else {
             return Ok(0);
         };
-        let columns: Vec<String> = self
-            .table_infos
-            .get(table)
-            .map(|info| info.columns.iter().map(|c| c.name.clone()).collect())
-            .unwrap_or_default();
         let mut count = 0;
         for record in records.iter_mut() {
-            if evaluate_sql_expression(predicate, &columns, record).unwrap_or(false) {
+            if evaluate_predicate(&parsed_predicate, record).unwrap_or(false) {
                 for &(col_idx, ref new_val) in assignments {
                     if col_idx < record.len() {
                         record[col_idx] = new_val.clone();
@@ -855,6 +1033,9 @@ impl StorageEngine for MemoryStorage {
                 }
                 count += 1;
             }
+        }
+        if count > 0 {
+            self.clear_predicate_cache(table);
         }
         Ok(count)
     }
