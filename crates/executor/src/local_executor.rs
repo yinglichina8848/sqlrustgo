@@ -16,8 +16,38 @@ use crate::query_cache::QueryCache;
 use crate::query_cache_config::{CacheEntry, CacheKey, QueryCacheConfig};
 use crate::sql_normalizer::SqlNormalizer;
 use crate::{Executor, ExecutorResult};
-use parking_lot::RwLock;
-use query_stats::SlowQueryConfig;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+/// Memory usage tracker for query execution
+pub struct MemoryTracker {
+    max_bytes: usize,
+    current: Arc<AtomicUsize>,
+}
+
+impl MemoryTracker {
+    pub fn new(max_mb: usize) -> Self {
+        Self { max_bytes: max_mb * 1024 * 1024, current: Arc::new(AtomicUsize::new(0)) }
+    }
+    pub fn try_alloc(&self, bytes: usize) -> Result<(), String> {
+        let prev = self.current.fetch_add(bytes, Ordering::SeqCst);
+        if prev + bytes > self.max_bytes {
+            self.current.fetch_sub(bytes, Ordering::SeqCst);
+            return Err(format!("Memory limit exceeded: {} MB", self.max_bytes / (1024 * 1024)));
+        }
+        Ok(())
+    }
+    pub fn free(&self, bytes: usize) { self.current.fetch_sub(bytes, Ordering::SeqCst); }
+    pub fn rows_size(rows: &[Vec<Value>]) -> usize {
+        std::mem::size_of::<Vec<Vec<Value>>>() + rows.iter().map(|r|
+            std::mem::size_of::<Vec<Value>>() + r.iter().map(|v| match v {
+                Value::Integer(_) => 8, Value::Float(_) => 8, Value::Text(s) => s.len() + 24, _ => 0,
+            }).sum::<usize>()
+        ).sum::<usize>()
+    }
+}
+
+use parking_lot::RwLock;use query_stats::SlowQueryConfig;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
