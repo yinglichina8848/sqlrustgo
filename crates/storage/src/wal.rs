@@ -273,6 +273,88 @@ impl WalWriter {
     pub fn current_lsn(&self) -> u64 {
         self.lsn
     }
+
+    /// Set flush threshold for batch mode
+    pub fn set_flush_threshold(&mut self, threshold: usize) {
+        self.flush_threshold = threshold;
+    }
+}
+
+/// Group Commit Writer - batches multiple commit requests into a single fsync
+///
+/// This reduces fsync calls by grouping multiple transaction commits together,
+/// significantly improving throughput under high concurrency.
+pub struct GroupCommitWriter {
+    inner: WalWriter,
+    pending_commits: Vec<u64>,
+    max_batch_size: usize,
+    max_wait_ms: u64,
+}
+
+impl GroupCommitWriter {
+    pub fn new(path: &PathBuf, max_batch_size: usize, max_wait_ms: u64) -> std::io::Result<Self> {
+        Ok(Self {
+            inner: WalWriter::new(path)?,
+            pending_commits: Vec::with_capacity(max_batch_size),
+            max_batch_size,
+            max_wait_ms: max_wait_ms.max(1),
+        })
+    }
+
+    pub fn append_commit(&mut self, tx_id: u64) -> std::io::Result<u64> {
+        let entry = WalEntry {
+            tx_id,
+            entry_type: WalEntryType::Commit,
+            table_id: 0,
+            key: None,
+            data: None,
+            lsn: self.inner.current_lsn(),
+            timestamp: current_timestamp(),
+        };
+
+        let lsn = self.inner.append(&entry)?;
+        self.pending_commits.push(tx_id);
+
+        if self.pending_commits.len() >= self.max_batch_size {
+            self.flush()?;
+        }
+
+        Ok(lsn)
+    }
+
+    pub fn append_entry(&mut self, entry: &WalEntry) -> std::io::Result<u64> {
+        self.inner.append(entry)
+    }
+
+    pub fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()?;
+        self.pending_commits.clear();
+        Ok(())
+    }
+
+    pub fn pending_count(&self) -> usize {
+        self.pending_commits.len()
+    }
+
+    pub fn stats(&self) -> GroupCommitStats {
+        GroupCommitStats {
+            pending: self.pending_commits.len(),
+            max_batch: self.max_batch_size,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GroupCommitStats {
+    pub pending: usize,
+    pub max_batch: usize,
+}
+
+fn current_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 /// WAL reader
@@ -1043,13 +1125,6 @@ impl WalArchiveManager {
             archive_count: archives.len() as u32,
         })
     }
-}
-
-fn current_timestamp() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
 }
 
 #[cfg(test)]
@@ -1894,5 +1969,79 @@ mod tests {
         let manager = WalManager::new(wal_path);
         let entries = manager.recover().unwrap();
         assert_eq!(entries.len(), 3); // Valid entries only
+    }
+
+    #[test]
+    fn test_group_commit_basic() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("group_commit.wal");
+
+        let mut writer = GroupCommitWriter::new(&wal_path, 5, 1000).unwrap();
+
+        for i in 1..=3 {
+            let _ = writer.append_commit(i).unwrap();
+        }
+
+        assert_eq!(writer.pending_count(), 3);
+        writer.flush().unwrap();
+        assert_eq!(writer.pending_count(), 0);
+
+        let stats = writer.stats();
+        assert_eq!(stats.max_batch, 5);
+    }
+
+    #[test]
+    fn test_group_commit_auto_flush() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("group_commit_auto.wal");
+
+        let mut writer = GroupCommitWriter::new(&wal_path, 3, 1000).unwrap();
+
+        for i in 1..=3 {
+            let _ = writer.append_commit(i).unwrap();
+        }
+
+        assert_eq!(writer.pending_count(), 0);
+
+        for i in 4..=5 {
+            let _ = writer.append_commit(i).unwrap();
+        }
+        assert_eq!(writer.pending_count(), 2);
+    }
+
+    #[test]
+    fn test_group_commit_mixed_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("group_commit_mixed.wal");
+
+        let mut writer = GroupCommitWriter::new(&wal_path, 10, 1000).unwrap();
+
+        let entry = WalEntry {
+            tx_id: 1,
+            entry_type: WalEntryType::Insert,
+            table_id: 1,
+            key: Some(vec![1]),
+            data: Some(vec![10]),
+            lsn: 0,
+            timestamp: current_timestamp(),
+        };
+        let _ = writer.append_entry(&entry).unwrap();
+
+        let _ = writer.append_commit(1).unwrap();
+
+        assert_eq!(writer.pending_count(), 1);
+        writer.flush().unwrap();
+    }
+
+    #[test]
+    fn test_group_commit_stats() {
+        let dir = tempfile::tempdir().unwrap();
+        let wal_path = dir.path().join("group_commit_stats.wal");
+
+        let writer = GroupCommitWriter::new(&wal_path, 8, 500).unwrap();
+        let stats = writer.stats();
+
+        assert_eq!(stats.max_batch, 8);
+        assert_eq!(stats.pending, 0);
     }
 }
