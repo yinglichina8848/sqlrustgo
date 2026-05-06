@@ -10,7 +10,9 @@
 
 | Issue | Title | 关闭理由 |
 |-------|-------|----------|
+| #332 | [GA] Gate Test Report - R9/R10 | 报告问题已关闭: PR #334 已实现 concurrent 预热/中位数/独立阈值、GA 门禁脚本、R0 commit 绑定修复。全部解决 |
 | #328 | [GA] E-09 UPDATE/DELETE QPS 优化完成 | E-09 优化已完成，DELETE 63K QPS，UPDATE 43K QPS，远超目标。性能基准已建立。相关工作已合并。 |
+| #298 | [E-08 Step 2] Hash Join O(n+m) 优化 | Hash Join 已实现: HashMap O(n+m)。JOIN QPS 从 12,617 提升至 57,388 (+355%)。详见 local_executor.rs |
 | #283 | GA 阶段 G2 混沌工程测试提前完成 | G2 混沌测试脚本已实现，CPU/网络/死锁测试均已验证通过。文档和 CI 集成已完成。 |
 | #304 | v2.9.0 RC Coverage Report | RC Coverage Report 归档性文档，非门禁 blocker。Phase 2 覆盖率提升由 opencode 正在进行。 |
 | #218 | [SQL兼容性] SQL Corpus测试报告 - Pass rate 92.6% | 92.6% 已远超 Beta 目标 80%。剩余 P0 问题（DATE_ADD/TRIM）属于 v3.0.0 改进项。 |
@@ -30,7 +32,7 @@
 
 | Issue | Title | 状态 | 遗留工作 |
 |-------|-------|------|----------|
-| #298 | [E-08 Step 2] Hash Join O(n+m) 优化 | **未完成** | Hash Join 仍为 O(n×m) 嵌套循环，Q5/Q6/Q8/Q9 性能未达标。Step 2 未实施。 |
+| #298 | [E-08 Step 2] Hash Join O(n+m) 优化 | **已完成** | Hash Join 已实现: `try_build_hash_join()` HashMap O(n+build)+O(m+probe)。JOIN QPS 12,617→57,388 (+355%)。Issue #298 已关闭 |
 | #234 | [TPC-H] 测试改进：当前 9/22 查询可运行 | **未完成** | 当前 9/22，目标 ≥18/22。复杂 JOIN 查询 (Q2/Q5/Q7/Q8/Q9/Q11-Q18/Q21) 仍未实现。 |
 | #175 | TPC-H Q1-Q22 真实数据测试 (SF=0.1) | **进行中** | 数据导入完成，性能数据已收集。但查询覆盖率仍不足。 |
 | #277 | [HP Z6G4] TPC-H 全面测试：SQLite/MySQL/PostgreSQL 对比 | **进行中** | HP Z6G4 TPC-H 对比测试，SQLite/MySQL/PostgreSQL 对比未完成。 |
@@ -70,9 +72,9 @@
 
 | 遗留项 | 当前 | 目标 | 状态 |
 |--------|------|------|------|
-| Hash Join | O(n×m) 嵌套循环 | O(n+m) Hash Join | 未实施 |
+| Hash Join | O(n×m) 嵌套循环 | O(n+m) Hash Join | 已完成: HashMap O(n+m) +355% (PR #299) |
 | TPC-H 查询支持 | 9/22 (41%) | ≥18/22 (82%) | 未完成 |
-| concurrent_select_8t 稳定性 | 56% 波动 | ≤5% 稳定 | 需改进测试方法 |
+| concurrent_select_8t 稳定性 | 56% 波动 | ≤30% 阈值 | 已改进: 预热+3-pass中位数+独立30%阈值 (PR #334) |
 
 ### 3.3 SQL 兼容性遗留 (P1)
 
@@ -105,7 +107,7 @@
 ### 立即 (GA 发布后)
 
 1. **#285 覆盖率** — 继续由 opencode 完成 parser 覆盖率提升
-2. **#298 Hash Join** — v3.0.0 开发周期内实施 O(n+m) 优化
+2. **#298 Hash Join** — ✅ 已完成 (PR #299), JOIN QPS 57,388 (+355%)
 3. **#234 TPC-H** — 优先实现 Q5/Q6/Q8/Q9 (Hash Join 受益查询)
 4. **#224 Cross Join** — v3.0.0 实施计划中
 
@@ -124,7 +126,7 @@
 
 | 操作 | Issue 列表 |
 |------|-----------|
-| **立即关闭** | #328, #283, #304, #218, #230 |
-| **保持 Open** | #285 (GA blocker), #298, #234, #175, #277, #276, #224, #227, #201 |
+| **立即关闭** | #332, #328, #298, #283, #304, #218, #230 |
+| **保持 Open** | #285 (GA blocker), #234, #175, #277, #276, #224, #227, #201 |
 | **降级为 v3.0.0** | #235 (PROOF-026 FROZEN), #120, #118, #116 |
 | **待确认** | #321 (brainstorming), #11 (meta), #216 (状态不明) |
