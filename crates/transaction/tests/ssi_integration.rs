@@ -242,3 +242,75 @@ async fn test_ssi_overlapping_reads_different_writes() {
     assert!(detector.validate_commit(tx1).await.is_ok());
     assert!(detector.validate_commit(tx2).await.is_ok());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
+async fn test_ssi_concurrent_100_transactions_no_conflict() {
+    let locks = Arc::new(DistributedLockManager::new());
+    let detector = Arc::new(SsiDetector::new(locks));
+
+    let mut handles = Vec::new();
+
+    for i in 0..100 {
+        let detector = detector.clone();
+        let handle = tokio::spawn(async move {
+            let tx_id = TxId::new(i);
+            let key = format!("key_{}", i % 10);
+            detector.record_read(tx_id, key.into_bytes()).await;
+            let _ = detector
+                .record_write(tx_id, format!("value_{}", i).into_bytes())
+                .await;
+            detector.validate_commit(tx_id).await
+        });
+        handles.push(handle);
+    }
+
+    let mut committed = 0;
+    let mut aborted = 0;
+
+    for handle in handles {
+        match handle.await.unwrap() {
+            Ok(_) => committed += 1,
+            Err(_) => aborted += 1,
+        }
+    }
+
+    assert_eq!(
+        committed, 100,
+        "All 100 transactions should commit when no conflicts exist"
+    );
+    assert_eq!(aborted, 0, "No transactions should abort");
+}
+
+#[test]
+fn test_ssi_sync_concurrent_100_no_conflict() {
+    let detector = SsiDetectorSync::new();
+
+    std::thread::scope(|s| {
+        let mut handles = Vec::new();
+
+        for i in 0..100 {
+            let detector = &detector;
+            let handle = s.spawn(move || {
+                let tx_id = TxId::new(i);
+                let key = format!("key_{}", i % 10);
+                detector.record_read(tx_id, key.into_bytes());
+                detector.record_write(tx_id, format!("value_{}", i).into_bytes());
+                detector.validate_commit(tx_id)
+            });
+            handles.push(handle);
+        }
+
+        let mut committed = 0;
+        let mut aborted = 0;
+
+        for handle in handles {
+            match handle.join().unwrap() {
+                Ok(_) => committed += 1,
+                Err(_) => aborted += 1,
+            }
+        }
+
+        assert_eq!(committed, 100);
+        assert_eq!(aborted, 0);
+    });
+}

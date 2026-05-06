@@ -32,3 +32,4 @@ ci_artifacts/
 .deepseek/
 .claude/
 .gitnexus/
+.worktrees/
