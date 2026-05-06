@@ -282,7 +282,8 @@ fn test_qps_concurrent_select() {
                 thread::spawn(move || {
                     let mut engine = MemoryExecutionEngine::new(storage);
                     for i in 0..(BENCHMARK_ITERATIONS / CONCURRENT_THREADS) {
-                        let _ = engine.execute(&format!("SELECT * FROM users WHERE id = {}", i % 1000));
+                        let _ =
+                            engine.execute(&format!("SELECT * FROM users WHERE id = {}", i % 1000));
                     }
                 })
             })
