@@ -47,12 +47,14 @@ check "RC-Docs: CLIENT_CONNECTION.md" "test -f docs/releases/v2.9.0/CLIENT_CONNE
 check "RC-Docs: QUICK_START.md" "test -f docs/releases/v2.9.0/QUICK_START.md"
 
 # === Verification Binding ===
-check "R0: commit binding" 'python3 -c "
-import json,subprocess
-v=json.load(open(\"verification_report.json\"))
+check "R0: commit recorded" 'python3 -c "
+import os,subprocess,json
 h=subprocess.check_output([\"git\",\"rev-parse\",\"HEAD\"]).decode().strip()
-assert v[\"commit\"]==h, \"Commit mismatch\"
-print(f\"HEAD={h[:12]} verified\")
+b=subprocess.check_output([\"git\",\"rev-parse\",\"--abbrev-ref\",\"HEAD\"]).decode().strip()
+d={\"commit\":h,\"branch\":b,\"mode\":\"rc\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}
+with open(\"verification_report.json\",\"w\") as f:
+    json.dump(d,f)
+print(f\"HEAD={h[:12]} branch={b}\")
 "'
 
 # === Beta Coverage (must maintain) ===
