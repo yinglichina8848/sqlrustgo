@@ -24,6 +24,10 @@ check "R7: cargo fmt" "cargo fmt --check --quiet"
 # === Feature Gates (Beta passed, verify still working) ===
 check "A1: SQL Corpus >=85%" "cargo test -p sqlrustgo-sql-corpus --quiet"
 
+# === R9: Performance Regression ===
+check "R9: E-09 QPS regression" "bash scripts/gate/check_regression.sh --skip-run 2>&1 | grep -q 'R9: PASSED'"
+check "R9: baseline exists" "test -f perf_baselines/v2.9.0/baseline.json"
+
 # === Documentation (Beta docs) ===
 check "Docs: VERSION_PLAN.md" "test -f docs/releases/v2.9.0/VERSION_PLAN.md"
 check "Docs: RELEASE_NOTES.md" "test -f docs/releases/v2.9.0/RELEASE_NOTES.md"
