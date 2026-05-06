@@ -14,7 +14,8 @@ use sqlrustgo_executor::trigger::{
 };
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    AggregateCall, AggregateFunction, CallStatement, CreateIndexStatement,
+    AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement,
+    CallStatement, CreateIndexStatement,
     CreateProcedureStatement, CreateRoleStatement, CreateTableStatement, CreateTriggerStatement,
     DropRoleStatement, DropTableStatement, GrantRoleStatement, GrantStatement, InsertStatement,
     ObjectType as ParserObjectType, OrderByExpression, Privilege as ParserPrivilege,
@@ -73,8 +74,78 @@ pub struct ColumnStatistics {
 /// Type alias for MemoryStorage-backed execution engine
 pub type MemoryExecutionEngine = ExecutionEngine<MemoryStorage>;
 
+/// Configuration for ExecutionEngine
+#[derive(Debug, Clone)]
+pub struct EngineConfig {
+    pub cbo_enabled: bool,
+    pub stats_enabled: bool,
+    pub default_isolation: TmIsolationLevel,
+    pub cache_config: QueryCacheConfig,
+}
+
+impl Default for EngineConfig {
+    fn default() -> Self {
+        Self {
+            cbo_enabled: true,
+            stats_enabled: true,
+            default_isolation: TmIsolationLevel::default(),
+            cache_config: QueryCacheConfig::default(),
+        }
+    }
+}
+
+impl EngineConfig {
+    pub fn builder() -> EngineConfigBuilder {
+        EngineConfigBuilder::default()
+    }
+}
+
+/// Builder for EngineConfig
+#[derive(Debug, Default)]
+pub struct EngineConfigBuilder {
+    cbo_enabled: bool,
+    stats_enabled: bool,
+}
+
+impl EngineConfigBuilder {
+    pub fn cbo_enabled(mut self, enabled: bool) -> Self {
+        self.cbo_enabled = enabled;
+        self
+    }
+    pub fn stats_enabled(mut self, enabled: bool) -> Self {
+        self.stats_enabled = enabled;
+        self
+    }
+    pub fn build(self) -> EngineConfig {
+        EngineConfig {
+            cbo_enabled: self.cbo_enabled,
+            stats_enabled: self.stats_enabled,
+            ..Default::default()
+        }
+    }
+}
+
 impl<S: StorageEngine + 'static> ExecutionEngine<S> {
+    /// Create a new execution engine with configuration (v3.0.0+)
+    #[doc(hidden)]
+    pub fn new_with_config(storage: Arc<RwLock<S>>, config: EngineConfig) -> Self {
+        Self {
+            storage,
+            catalog: None,
+            stats: Arc::new(RwLock::new(ExecutionStats::default())),
+            cbo_enabled: config.cbo_enabled,
+            stats_enabled: config.stats_enabled,
+            transaction_manager: TransactionManager::new(),
+            current_tx_id: None,
+            default_isolation: config.default_isolation,
+            current_role: None,
+            query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: config.cache_config,
+        }
+    }
+
     /// Create a new execution engine with CBO enabled by default
+    #[deprecated(since = "3.0.0", note = "Use new_with_config() or EngineConfig::builder() instead")]
     pub fn new(storage: Arc<RwLock<S>>) -> Self {
         Self {
             storage,
@@ -92,6 +163,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     /// Create a new execution engine with CBO configuration
+    #[deprecated(since = "3.0.0", note = "Use new_with_config() or EngineConfig::builder() instead")]
     pub fn with_cbo(storage: Arc<RwLock<S>>, cbo_enabled: bool) -> Self {
         Self {
             storage,
@@ -432,6 +504,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::Show(ref show) => self.execute_show(show),
             Statement::ShowRoles => self.execute_show_roles(),
             Statement::ShowGrantsFor(ref user) => self.execute_show_grants_for(user),
+            Statement::AlterTable(ref alter) => self.execute_alter_table(alter),
             _ => Err(SqlError::ExecutionError(format!(
                 "Unsupported statement type: {:?}",
                 std::mem::discriminant(&statement)
@@ -1777,6 +1850,89 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .unwrap()
             .invalidate_table(&table_name);
         Ok(ExecutorResult::new(vec![], count))
+    }
+
+    fn execute_alter_table(&self, alter: &AlterTableStatement) -> SqlResult<ExecutorResult> {
+        let table_name = &alter.table_name;
+
+        // Read current schema and all rows
+        let (old_info, old_rows) = {
+            let r = self.storage.read().unwrap();
+            let info = r.get_table_info(table_name)?;
+            let rows = r.scan(table_name)?;
+            (info, rows)
+        };
+
+        // Build new columns
+        let new_columns = match &alter.operation {
+            AlterTableOperation::AddColumn { name, data_type, nullable, .. } => {
+                let mut cols = old_info.columns.clone();
+                let ct = if data_type.to_uppercase().starts_with("INT") { "INTEGER" } else { data_type };
+                cols.push(ColumnDefinition {
+                    name: name.clone(), data_type: ct.to_uppercase(),
+                    nullable: *nullable, primary_key: false,
+                });
+                cols
+            }
+            AlterTableOperation::DropColumn { name } => {
+                let mut cols = old_info.columns.clone();
+                let idx = cols.iter().position(|c| c.name == *name)
+                    .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}' not found", name)))?;
+                cols.remove(idx);
+                cols
+            }
+            AlterTableOperation::ModifyColumn { name, data_type, nullable } => {
+                let mut cols = old_info.columns.clone();
+                let col = cols.iter_mut().find(|c| c.name == *name)
+                    .ok_or_else(|| SqlError::ExecutionError(format!("Column '{}' not found", name)))?;
+                col.data_type = data_type.to_uppercase();
+                col.nullable = *nullable;
+                cols
+            }
+            AlterTableOperation::RenameTo { new_name } => {
+                let mut w = self.storage.write().unwrap();
+                w.drop_table(table_name)?;
+                w.create_table(&TableInfo { name: new_name.clone(), ..old_info })?;
+                for row in &old_rows {
+                    w.insert(new_name, vec![row.clone()])?;
+                }
+                self.query_cache.write().unwrap().invalidate_table(table_name);
+                return Ok(ExecutorResult::new(vec![], 1));
+            }
+        };
+
+        // Rebuild: create new schema, copy rows, swap
+        let tmp = format!("__tmp_alter_{}", table_name);
+        {
+            let mut w = self.storage.write().unwrap();
+            let _ = w.drop_table(&tmp);
+            w.create_table(&TableInfo { name: tmp.clone(), columns: new_columns,
+                foreign_keys: old_info.foreign_keys.clone(),
+                unique_constraints: old_info.unique_constraints.clone(),
+                check_constraints: old_info.check_constraints.clone(),
+                partition_info: None })?;
+            // Copy rows, pad with NULL for AddColumn
+            let is_add = matches!(&alter.operation, AlterTableOperation::AddColumn { .. });
+            for row in &old_rows {
+                let mut r = row.clone();
+                if is_add { r.push(sqlrustgo_types::Value::Null); }
+                w.insert(&tmp, vec![r.clone()])?;
+            }
+        }
+        // Swap: drop original, recreate with data from temp
+        {
+            let mut w = self.storage.write().unwrap();
+            let tmp_info = w.get_table_info(&tmp)?;
+            let tmp_rows = w.scan(&tmp)?;
+            w.drop_table(table_name)?;
+            w.create_table(&TableInfo { name: table_name.to_string(), ..tmp_info })?;
+            for row in &tmp_rows {
+                w.insert(table_name, vec![row.clone()])?;
+            }
+            w.drop_table(&tmp)?;
+        }
+        self.query_cache.write().unwrap().invalidate_table(table_name);
+        Ok(ExecutorResult::new(vec![], 1))
     }
 
     fn execute_create_table(&self, create: &CreateTableStatement) -> SqlResult<ExecutorResult> {
