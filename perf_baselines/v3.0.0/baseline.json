@@ -1,0 +1,58 @@
+{
+  "version": "v3.0.0",
+  "baseline_date": "2026-05-06",
+  "status": "PROVISIONAL",
+  "note": "Initial baseline using v2.9.0 numbers as reference. Must be re-run after Phase 1 (Performance Pocket) completion.",
+  "source": "v2.9.0 GA benchmark results",
+  "benchmarks": {
+    "point_select_qps": {
+      "value": 2000,
+      "unit": "queries_per_second",
+      "source": "v2.9.0 GA",
+      "target_v300_pass": 10000,
+      "target_v300_goal": 20000
+    },
+    "update_qps": {
+      "value": 950,
+      "unit": "queries_per_second",
+      "source": "v2.9.0 GA",
+      "target_v300_pass": 5000,
+      "target_v300_goal": 10000
+    },
+    "delete_qps": {
+      "value": 206,
+      "unit": "queries_per_second",
+      "source": "v2.9.0 GA",
+      "target_v300_pass": 2000,
+      "target_v300_goal": 5000
+    },
+    "tpch_sf01_q1_time_ms": {
+      "value": null,
+      "unit": "milliseconds",
+      "note": "Baseline not yet measured. Will be measured during Alpha gate."
+    },
+    "tpch_sf01_all_passed": {
+      "value": 10,
+      "note": "v2.9.0 GA: 10/22 queries passing at SF=0.1"
+    },
+    "tpch_sf1_all_passed": {
+      "value": 10,
+      "note": "v2.9.0 GA: 10/22 queries passing at SF=1 (Q17/Q18 OOM)"
+    },
+    "sql_corpus_pct": {
+      "value": 92.6,
+      "unit": "percent",
+      "source": "v2.9.0 GA"
+    }
+  },
+  "regression_threshold": {
+    "qps_degradation_allowed": 5,
+    "note": "QPS degradation ≤5% = PASS; 5-20% = requires justification; >20% = FAIL"
+  },
+  "environment": {
+    "rust_version": "1.75",
+    "os": "Linux",
+    "cpu": "Intel/AMD 8+ cores",
+    "memory_gb": 16
+  }
+}

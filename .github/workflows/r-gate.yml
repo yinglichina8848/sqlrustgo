@@ -2,9 +2,9 @@ name: R-Gate Verification
 
 on:
   pull_request:
-    branches: [develop/v2.9.0]
+    branches: [develop/v3.0.0]
   push:
-    branches: [develop/v2.9.0]
+    branches: [develop/v3.0.0]
 
 jobs:
   gate-r1-r7:
@@ -47,22 +47,42 @@ jobs:
       - name: R8: SQL Corpus Check
         run: bash scripts/gate/check_sql_compat.sh
 
-  gate-r9-performance:
-    name: R9: Performance Baseline
+  gate-r9-tpch-sf1:
+    name: R9: TPC-H SF=1
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: R9: Performance Check
-        run: bash scripts/gate/check_perf_baseline.sh
+      - name: R9: TPC-H SF=1 Check
+        run: bash scripts/gate/check_tpch.sh sf=1
 
-  gate-r10-proof:
-    name: R10: Formal Proof
+  gate-r10-performance:
+    name: R10: Performance Baseline
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: R10: Proof Registry Check
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: R10: Performance Check
+        run: bash scripts/gate/check_perf_baseline.sh
+
+  gate-r11-sysbench:
+    name: R11: Sysbench Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: R11: Sysbench Check
+        run: bash scripts/gate/check_sysbench.sh || true
+
+  gate-r12-proof:
+    name: R12: Formal Proof
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: R12: Proof Registry Check
         run: bash scripts/gate/check_proof.sh
 
   gate-attack-surface:
@@ -75,7 +95,7 @@ jobs:
 
   merge-gate:
     name: Merge Eligibility
-    needs: [gate-r1-r7, gate-r8-sql-compat, gate-r9-performance, gate-r10-proof, gate-attack-surface]
+    needs: [gate-r1-r7, gate-r8-sql-compat, gate-r9-tpch-sf1, gate-r10-performance, gate-r11-sysbench, gate-r12-proof, gate-attack-surface]
     runs-on: ubuntu-latest
     if: always()
     steps:

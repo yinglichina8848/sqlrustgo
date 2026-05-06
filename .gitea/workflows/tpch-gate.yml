@@ -1,0 +1,51 @@
+# TPC-H Performance Gate — v3.0.0
+# Runs TPC-H SF=0.1 queries and validates ≥18/22 pass.
+# Blocking on develop/v3.0.0 PRs.
+
+name: TPC-H Gate
+
+on:
+  push:
+    branches:
+      - develop/v3.0.0
+      - beta/v3.0.0
+  pull_request:
+    branches:
+      - develop/v3.0.0
+      - beta/v3.0.0
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tpch-gate:
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
+
+      - name: Build bench-cli
+        run: |
+          cd repo
+          cargo build -p sqlrustgo-bench-cli --quiet 2>&1 | tail -3
+
+      - name: Run TPC-H SF=0.1
+        run: |
+          cd repo
+          bash scripts/gate/check_tpch.sh --skip-data 2>&1 | tee tpch_report.txt
+          
+      - name: Gate Decision
+        run: |
+          cd repo
+          if grep -q 'PASSED' tpch_report.txt; then
+            echo "TPC-H Gate: PASS"
+          else
+            echo "TPC-H Gate: FAIL"
+            exit 1
+          fi

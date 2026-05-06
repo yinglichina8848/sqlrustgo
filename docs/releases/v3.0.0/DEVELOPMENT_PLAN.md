@@ -227,7 +227,42 @@ Week 19    (9/8-9/14):   GA — 最终审计 + 发布
 
 ---
 
-## 十一、P2 延后至 v3.1.0
+## 十一、运维增强（Operations Enhancement）
+
+根据 v2.9.0 弱项分析（运维维度仅 35/100，差距 -65），以下运维/管理功能需整合入 v3.0.0：
+
+### Added to Phase 3 (Infrastructure)
+
+| 增量任务 | 工时 | 验收标准 | 对应弱项 |
+|---------|------|---------|---------|
+| I-06: SHOW VARIABLES / 系统变量体系 | 2d | `SHOW VARIABLES LIKE '%version%'` 返回正确 | §1.5 |
+| I-07: 运维手册 | 2d | `docs/OPERATIONS_MANUAL.md` 备份/监控/配置指南 | §6.1 |
+| I-08: 架构决策记录 ADR | 1d | `docs/ARCHITECTURE_DECISIONS.md` 正式 ADR 格式 | §6.1 |
+
+### Added to Phase 4 (Architecture Hardening)
+
+| 增量任务 | 工时 | 验收标准 | 对应弱项 |
+|---------|------|---------|---------|
+| A-05: 在线 DDL 基础 | 2d | `ALTER TABLE ADD COLUMN` 不阻塞读取 | §5.2 |
+| A-06: mysqldump 功能完善 | 1d | `crates/tools/src/mysqldump.rs` 可导出完整 schema+data | §5.2 |
+| A-07: 性能调优指南 | 1d | `docs/PERFORMANCE_TUNING.md` B+Tree/BufferPool/WAL 调优 | §6.1 |
+
+### 延至 v3.1.0 的运维项
+
+| 任务 | 原因 |
+|------|------|
+| performance_schema | 需要完整的 instrumentation 框架 |
+| mysqladmin 等效工具 | CLI 工具，独立 crate |
+| mysqlbinlog / WAL binlog 格式 | 需要 WAL 重构 |
+| 在线添加索引 | 需要存储引擎支持并行索引构建 |
+| 自动故障转移 | 需要分布式共识（Raft/Paxos） |
+| 组复制 | 需要分布式共识 |
+| AES-256 存储加密 | 需要安全 crate 改造 |
+| 行级安全 (RLS) | 需要查询重写和权限系统增强 |
+
+---
+
+## 十二、P2 延后至 v3.1.0
 
 以下任务从原计划 A 中延后，在 v3.1.0 实现：
 
