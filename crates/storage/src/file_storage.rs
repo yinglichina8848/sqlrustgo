@@ -1369,41 +1369,6 @@ impl StorageEngine for FileStorage {
         }
     }
 
-    fn get_row_count(&self, table: &str) -> SqlResult<u64> {
-        match self.tables.get(table) {
-            Some(data) => Ok(data.rows.len() as u64),
-            None => Err(SqlError::ExecutionError(format!(
-                "Table not found: {}",
-                table
-            ))),
-        }
-    }
-
-    fn get_page_count(&self, table: &str) -> SqlResult<u64> {
-        const PAGE_SIZE: u64 = 4096;
-        match self.tables.get(table) {
-            Some(data) if !data.rows.is_empty() => {
-                let avg_row_size: u64 = data
-                    .rows
-                    .iter()
-                    .map(|r| r.len() as u64 * 8)
-                    .sum::<u64>()
-                    .div_ceil(data.rows.len() as u64);
-                let total_bytes = avg_row_size * data.rows.len() as u64;
-                Ok(total_bytes.div_ceil(PAGE_SIZE).max(1))
-            }
-            Some(_) => Ok(0),
-            None => Err(SqlError::ExecutionError(format!(
-                "Table not found: {}",
-                table
-            ))),
-        }
-    }
-
-    fn get_index_page_count(&self, _table: &str, _column_index: usize) -> SqlResult<u64> {
-        Ok(1)
-    }
-
     fn has_table(&self, table: &str) -> bool {
         self.tables.contains_key(table)
     }
