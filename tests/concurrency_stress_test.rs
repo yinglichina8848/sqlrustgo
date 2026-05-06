@@ -1,5 +1,5 @@
-use sqlrustgo::MemoryExecutionEngine;
 use sqlrustgo::execution_engine::EngineConfig;
+use sqlrustgo::MemoryExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use std::sync::{Arc, RwLock};
 use std::thread;
