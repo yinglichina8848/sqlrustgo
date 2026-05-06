@@ -2,7 +2,7 @@
 
 > 版本：v1.1.0
 > 评估日期：2026-03-03
-> 评估模型：[CASCADES_OPTIMIZER.md](../../v2.0/CASCADES_OPTIMIZER.md)
+> 评估模型：SQLRustGo 工程成熟度模型 v1.0
 
 ---
 
@@ -209,7 +209,7 @@
 
 ### A. 评估依据
 
-- [CASCADES_OPTIMIZER.md](../../v2.0/CASCADES_OPTIMIZER.md)
+- SQLRustGo 工程成熟度模型 v1.0
 - [RELEASE_GATE_CHECKLIST.md](RELEASE_GATE_CHECKLIST.md)
 - [PERFORMANCE_REPORT.md](PERFORMANCE_REPORT.md)
 - [SECURITY_AUDIT.md](SECURITY_AUDIT.md)

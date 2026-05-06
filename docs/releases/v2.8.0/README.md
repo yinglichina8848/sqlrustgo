@@ -69,11 +69,11 @@
 |------|------|------|
 | [QUICK_START.md](./QUICK_START.md) | 快速开始 | ✅ |
 | [CLIENT_CONNECTION.md](./CLIENT_CONNECTION.md) | 客户端连接指南 | ✅ |
-| [user-guide/USER_MANUAL.md](./user-guide/USER_MANUAL.md) | 用户手册 | ✅ |
-| [user-guide/README.md](./user-guide/README.md) | 用户指南索引 | ✅ |
-| [user-guide/GMP_USER_GUIDE.md](./user-guide/GMP_USER_GUIDE.md) | GMP 用户指南 | ✅ |
-| [user-guide/GRAPH_SEARCH_USER_GUIDE.md](./user-guide/GRAPH_SEARCH_USER_GUIDE.md) | 图检索用户指南 | ✅ |
-| [user-guide/VECTOR_SEARCH_USER_GUIDE.md](./user-guide/VECTOR_SEARCH_USER_GUIDE.md) | 向量检索用户指南 | ✅ |
+| [oo/user-guide/USER_MANUAL.md](./oo/user-guide/USER_MANUAL.md) | 用户手册 | ✅ |
+| [oo/README.md](./oo/README.md) | OO 架构文档索引 | ✅ |
+| [oo/user-guide/GMP_USER_GUIDE.md](./oo/user-guide/GMP_USER_GUIDE.md) | GMP 用户指南 | ✅ |
+| [oo/user-guide/GRAPH_SEARCH_USER_GUIDE.md](./oo/user-guide/GRAPH_SEARCH_USER_GUIDE.md) | 图检索用户指南 | ✅ |
+| [oo/user-guide/VECTOR_SEARCH_USER_GUIDE.md](./oo/user-guide/VECTOR_SEARCH_USER_GUIDE.md) | 向量检索用户指南 | ✅ |
 
 ---
 
