@@ -11,6 +11,7 @@ sqlrustgo-executor = { path = "../executor" }
 sqlrustgo-storage = { path = "../storage" }
 sqlrustgo-types = { path = "../types" }
 sqlrustgo-common = { path = "../common" }
+sqlrustgo-transaction = { path = "../transaction" }
 byteorder = "1"
 thiserror = "1"
 tracing = "0.1"

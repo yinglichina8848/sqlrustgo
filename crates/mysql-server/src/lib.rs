@@ -1250,20 +1250,40 @@ fn count_placeholders(sql: &str) -> u16 {
 }
 
 fn parse_stmt_execute_params(payload: &[u8], param_count: usize) -> Vec<Vec<u8>> {
-    if payload.len() < 10 || param_count == 0 {
+    // COM_STMT_EXECUTE binary protocol layout:
+    //   [4 bytes] statement_id
+    //   [1 byte]  flags (0x00 = CURSOR_TYPE_NO_CURSOR)
+    //   [4 bytes] iteration_count (always 1)
+    //   [ceil(param_count/8) bytes] null_bitmap
+    //   [1 byte]  new_params_bound_flag
+    //   IF new_params_bound_flag == 0x01:
+    //     [param_count * 2 bytes] type definitions (type + unsigned_flag)
+    //     [variable] values (encoding depends on type)
+    if payload.len() < 9 || param_count == 0 {
         return Vec::new();
     }
 
+    let null_bitmap_len = param_count.div_ceil(8);
+    // Fixed header ends at byte 9 (4+1+4), then null_bitmap follows
+    let null_bitmap_end = 9 + null_bitmap_len;
+
+    if payload.len() <= null_bitmap_end {
+        return vec![Vec::new(); param_count];
+    }
+
+    // Skip new_params_bound_flag (must be 0x01 for type info to follow)
+    let _new_params_bound_flag = payload[null_bitmap_end];
+    let type_start = null_bitmap_end + 1; // skip the flag byte
+
+    // Types are 2 bytes per param (type + unsigned_flag)
+    let value_start = type_start + param_count * 2;
+    if payload.len() < value_start {
+        return vec![Vec::new(); param_count];
+    }
+
+    let null_bitmap = &payload[9..null_bitmap_end];
     let mut params: Vec<Vec<u8>> = Vec::with_capacity(param_count);
-    let null_bitmap_len = ((param_count + 7) / 8) as usize;
-    let header_len = 10 + null_bitmap_len;
-
-    if payload.len() < header_len {
-        return Vec::new();
-    }
-
-    let null_bitmap = &payload[10..header_len];
-    let mut pos = header_len;
+    let mut pos = value_start;
 
     for i in 0..param_count {
         let byte_idx = i / 8;
@@ -1280,62 +1300,187 @@ fn parse_stmt_execute_params(payload: &[u8], param_count: usize) -> Vec<Vec<u8>>
             continue;
         }
 
-        let param_type = payload[pos];
-        pos += 1;
+        // Read 2-byte type definition: [type_byte, unsigned_flag]
+        let type_base = type_start + i * 2;
+        let param_type = payload.get(type_base).copied().unwrap_or(0);
 
-        if pos >= payload.len() {
-            params.push(Vec::new());
-            continue;
-        }
-
+        // Parse value based on MySQL binary protocol encoding
         match param_type {
-            0x01 | 0x02 | 0x03 | 0x04 | 0x08 | 0x09 | 0x0d => {
-                let len = match param_type {
-                    0x01 | 0x02 | 0x03 | 0x04 => param_type as usize,
-                    0x08 => 8,
-                    0x09 => 8,
-                    0x0d => 4,
-                    _ => 8,
-                };
-                if pos + len <= payload.len() {
-                    let val = &payload[pos..pos + len];
-                    params.push(val.to_vec());
+            // MYSQL_TYPE_TINY (1 byte signed)
+            0x01 => {
+                if pos < payload.len() {
+                    let val = (payload[pos] as i8).to_string().into_bytes();
+                    params.push(val);
+                    pos += 1;
                 } else {
                     params.push(Vec::new());
                 }
-                pos += len;
             }
-            0x0f | 0xfc | 0xfd | 0xfe => {
-                let len = if param_type == 0xfc {
-                    if pos + 2 <= payload.len() {
-                        u16::from_le_bytes([payload[pos], payload[pos + 1]]) as usize
+            // MYSQL_TYPE_SHORT (2 bytes signed, little-endian)
+            0x02 => {
+                if pos + 2 <= payload.len() {
+                    let val = i16::from_le_bytes([payload[pos], payload[pos + 1]])
+                        .to_string()
+                        .into_bytes();
+                    params.push(val);
+                    pos += 2;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_LONG (4 bytes signed, little-endian)
+            0x03 => {
+                if pos + 4 <= payload.len() {
+                    let val = i32::from_le_bytes([
+                        payload[pos],
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                    ])
+                    .to_string()
+                    .into_bytes();
+                    params.push(val);
+                    pos += 4;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_FLOAT (4 bytes IEEE 754, little-endian)
+            0x04 => {
+                if pos + 4 <= payload.len() {
+                    let val = f32::from_le_bytes([
+                        payload[pos],
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                    ])
+                    .to_string()
+                    .into_bytes();
+                    params.push(val);
+                    pos += 4;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_DOUBLE (8 bytes IEEE 754, little-endian)
+            0x05 => {
+                if pos + 8 <= payload.len() {
+                    let val = f64::from_le_bytes([
+                        payload[pos],
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                        payload[pos + 4],
+                        payload[pos + 5],
+                        payload[pos + 6],
+                        payload[pos + 7],
+                    ])
+                    .to_string()
+                    .into_bytes();
+                    params.push(val);
+                    pos += 8;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_LONGLONG (8 bytes signed, little-endian)
+            0x08 => {
+                if pos + 8 <= payload.len() {
+                    let val = i64::from_le_bytes([
+                        payload[pos],
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                        payload[pos + 4],
+                        payload[pos + 5],
+                        payload[pos + 6],
+                        payload[pos + 7],
+                    ])
+                    .to_string()
+                    .into_bytes();
+                    params.push(val);
+                    pos += 8;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_INT24 / MEDIUMINT (4 bytes signed, same as LONG)
+            0x09 => {
+                if pos + 4 <= payload.len() {
+                    let val = i32::from_le_bytes([
+                        payload[pos],
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                    ])
+                    .to_string()
+                    .into_bytes();
+                    params.push(val);
+                    pos += 4;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_DATE, TIME, DATETIME, TIMESTAMP
+            // Format: [1 byte length] [data bytes]
+            0x0a..=0x0d => {
+                if pos < payload.len() {
+                    let len = payload[pos] as usize;
+                    pos += 1;
+                    if pos + len <= payload.len() {
+                        params.push(payload[pos..pos + len].to_vec());
+                        pos += len;
                     } else {
-                        0
-                    }
-                } else if param_type == 0xfd {
-                    3
-                } else if param_type == 0xfe {
-                    if pos + 8 <= payload.len() {
-                        u64::from_le_bytes([
-                            payload[pos], payload[pos + 1], payload[pos + 2], payload[pos + 3],
-                            payload[pos + 4], payload[pos + 5], payload[pos + 6], payload[pos + 7],
-                        ]) as usize
-                    } else {
-                        0
+                        params.push(Vec::new());
                     }
                 } else {
-                    255
+                    params.push(Vec::new());
+                }
+            }
+            // String types: VARCHAR(0x0f), BLOB(0xfc), VARSTRING(0xfd), STRING(0xfe)
+            // Encoded as: net_store_length(data_len) + data_bytes
+            0x0f | 0xfc | 0xfd | 0xfe => {
+                if pos >= payload.len() {
+                    params.push(Vec::new());
+                    continue;
+                }
+                // Read variable-length length prefix
+                let first = payload[pos];
+                let (str_len, consumed): (usize, usize) = if first < 0xfb {
+                    (first as usize, 1)
+                } else if first == 0xfc && pos + 3 <= payload.len() {
+                    (u16::from_le_bytes([payload[pos + 1], payload[pos + 2]]) as usize, 3)
+                } else if first == 0xfd && pos + 4 <= payload.len() {
+                    let v = (payload[pos + 1] as u32)
+                        | ((payload[pos + 2] as u32) << 8)
+                        | ((payload[pos + 3] as u32) << 16);
+                    (v as usize, 4)
+                } else if first == 0xfe && pos + 9 <= payload.len() {
+                    let v = u64::from_le_bytes([
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                        payload[pos + 4],
+                        payload[pos + 5],
+                        payload[pos + 6],
+                        payload[pos + 7],
+                        payload[pos + 8],
+                    ]);
+                    (v as usize, 9)
+                } else {
+                    params.push(Vec::new());
+                    continue;
                 };
-                if pos + if param_type == 0xfc { 2 } else if param_type == 0xfe { 8 } else { 1 } + len <= payload.len() {
-                    let skip = if param_type == 0xfc { 2 } else if param_type == 0xfe { 8 } else { 1 };
-                    let val = &payload[pos + skip..pos + skip + len];
-                    params.push(val.to_vec());
-                    pos += skip + len;
+                pos += consumed;
+                if pos + str_len <= payload.len() {
+                    params.push(payload[pos..pos + str_len].to_vec());
+                    pos += str_len;
                 } else {
                     params.push(Vec::new());
                 }
             }
             _ => {
+                // Unknown type - push NULL
                 params.push(Vec::new());
             }
         }
@@ -1646,7 +1791,7 @@ fn do_command_loop<S: Read + Write>(
                 if is_transaction_cmd(&q) {
                     match parse_transaction_command(&q) {
                         TransactionCommand::Begin => {
-                            if let Err(e) = engine.begin_transaction(transaction::TmIsolationLevel::Snapshot) {
+                            if let Err(e) = engine.begin_transaction(sqlrustgo_transaction::IsolationLevel::SnapshotIsolation) {
                                 make_err_packet(seq, 2000, "HY000", &format!("Begin failed: {}", e)).write_to(stream)?;
                                 seq = seq.wrapping_add(1);
                                 continue;
@@ -2093,6 +2238,7 @@ fn handle_connection(
             make_ok_packet(3, 0, 0, 0x0002, 0).write_to(&mut tls).ok();
             tracing::info!("Starting command loop, seq=4");
             let mut ps_manager = PreparedStatementManager::new();
+            #[allow(deprecated)]
             let mut engine = MemoryExecutionEngine::new(storage.clone());
             let mut session = SessionState::default();
             let _ = do_command_loop(
@@ -2146,6 +2292,7 @@ fn handle_connection(
         .ok();
     tracing::info!("Starting command loop, seq=3");
     let mut ps_manager = PreparedStatementManager::new();
+    #[allow(deprecated)]
     let mut engine = MemoryExecutionEngine::new(storage.clone());
     let mut session = SessionState::default();
     let _ = do_command_loop(
@@ -2169,6 +2316,7 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
 
     let storage: Arc<RwLock<MemoryStorage>> = Arc::new(RwLock::new(MemoryStorage::new()));
     {
+        #[allow(deprecated)]
         let mut eng = MemoryExecutionEngine::new(storage.clone());
         for sql in ["CREATE TABLE content (hash TEXT PRIMARY KEY, doc TEXT NOT NULL, created_at TEXT NOT NULL)",
             "CREATE TABLE vectors (hash_seq TEXT PRIMARY KEY, hash TEXT NOT NULL, embedding TEXT NOT NULL, created_at TEXT NOT NULL)",
