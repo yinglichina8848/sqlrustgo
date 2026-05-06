@@ -1645,9 +1645,29 @@ fn do_command_loop<S: Read + Write>(
                 }
                 if is_transaction_cmd(&q) {
                     match parse_transaction_command(&q) {
-                        TransactionCommand::Begin => session.transaction_active = true,
-                        TransactionCommand::Commit | TransactionCommand::Rollback => {
-                            session.transaction_active = false
+                        TransactionCommand::Begin => {
+                            if let Err(e) = engine.begin_transaction(transaction::TmIsolationLevel::Snapshot) {
+                                make_err_packet(seq, 2000, "HY000", &format!("Begin failed: {}", e)).write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                continue;
+                            }
+                            session.transaction_active = true;
+                        }
+                        TransactionCommand::Commit => {
+                            if let Err(e) = engine.commit_transaction() {
+                                make_err_packet(seq, 2000, "HY000", &format!("Commit failed: {}", e)).write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                continue;
+                            }
+                            session.transaction_active = false;
+                        }
+                        TransactionCommand::Rollback => {
+                            if let Err(e) = engine.rollback_transaction() {
+                                make_err_packet(seq, 2000, "HY000", &format!("Rollback failed: {}", e)).write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                continue;
+                            }
+                            session.transaction_active = false;
                         }
                         TransactionCommand::None => {}
                     }
