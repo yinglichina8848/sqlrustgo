@@ -20,7 +20,7 @@ use sqlrustgo_parser::parser::{
     ObjectType as ParserObjectType, OrderByExpression, Privilege as ParserPrivilege,
     RevokeRoleStatement, RevokeStatement, SelectStatement, SetRoleStatement,
     StoredProcParam as ParserStoredProcParam, StoredProcParamMode as ParserParamMode,
-    StoredProcStatement as ParserStatement, TruncateStatement,
+    StoredProcStatement as ParserStatement, ShowStatement, TruncateStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::JoinType; // For join type matching
@@ -429,6 +429,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::GrantRole(ref stmt) => self.execute_grant_role(stmt),
             Statement::RevokeRole(ref stmt) => self.execute_revoke_role(stmt),
             Statement::SetRole(ref stmt) => self.execute_set_role(stmt),
+            Statement::Show(ref show) => self.execute_show(show),
             Statement::ShowRoles => self.execute_show_roles(),
             Statement::ShowGrantsFor(ref user) => self.execute_show_grants_for(user),
             _ => Err(SqlError::ExecutionError(format!(
@@ -2318,6 +2319,55 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             vec![vec![Value::Text(format!("SET ROLE to {}", role_name))]],
             1,
         ))
+    }
+
+    fn execute_show(&self, show: &ShowStatement) -> SqlResult<ExecutorResult> {
+        match show {
+            ShowStatement::Tables => self.execute_show_tables(),
+            ShowStatement::Columns { table, pattern } => {
+                self.execute_show_columns(table, pattern.as_deref())
+            }
+            ShowStatement::Databases => {
+                Ok(ExecutorResult::new(vec![vec![Value::Text("public".to_string())]], 1))
+            }
+            ShowStatement::CreateTable { table } => self.execute_describe(table),
+            ShowStatement::Grants { user } => match user {
+                Some(u) => self.execute_show_grants_for(u),
+                None => self.execute_show_grants(),
+            },
+            ShowStatement::Index { table: _ } => {
+                Err(SqlError::ExecutionError("SHOW INDEX not yet implemented".to_string()))
+            }
+        }
+    }
+
+    fn execute_show_tables(&self) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+        let tables = storage.list_tables();
+        let rows: Vec<Vec<Value>> = tables.into_iter().map(|t| vec![Value::Text(t)]).collect();
+        Ok(ExecutorResult::new(rows.clone(), rows.len()))
+    }
+
+    fn execute_show_columns(&self, table: &str, _pattern: Option<&str>) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+        let info = storage.get_table_info(table)?;
+        let rows: Vec<Vec<Value>> = info.columns.iter().map(|col| {
+            vec![
+                Value::Text(col.name.clone()),
+                Value::Text(col.data_type.clone()),
+                Value::Text(if col.nullable { "YES" } else { "NO" }.to_string()),
+                Value::Text(if col.primary_key { "PRI".to_string() } else { String::new() }),
+            ]
+        }).collect();
+        Ok(ExecutorResult::new(rows.clone(), rows.len()))
+    }
+
+    fn execute_describe(&self, table: &str) -> SqlResult<ExecutorResult> {
+        self.execute_show_columns(table, None)
+    }
+
+    fn execute_show_grants(&self) -> SqlResult<ExecutorResult> {
+        Ok(ExecutorResult::new(vec![], 0))
     }
 
     fn execute_show_roles(&self) -> SqlResult<ExecutorResult> {
