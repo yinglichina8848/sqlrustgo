@@ -351,6 +351,35 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         result
     }
 
+    /// Try index scan if applicable, fall back to full table scan
+    fn try_index_scan_or_fallback(
+        &self,
+        select: &SelectStatement,
+        storage: &dyn StorageEngine,
+        table_info: &TableInfo,
+    ) -> SqlResult<Vec<Vec<SqlValue>>> {
+        // Try to extract simple equality predicate for index lookup
+        if let Some(ref where_expr) = select.where_clause {
+            if let Some(idx_info) = try_extract_index_lookup(where_expr, &table_info.columns) {
+                if let Some(row_indices) =
+                    storage.find_by_index(&select.table, idx_info.column_index, idx_info.key_value)
+                {
+                    let mut index_rows = Vec::with_capacity(row_indices.len());
+                    for row_idx in row_indices {
+                        if let Some(row) = storage.get_row(&select.table, row_idx)? {
+                            index_rows.push(row);
+                        }
+                    }
+                    if !index_rows.is_empty() {
+                        return Ok(index_rows);
+                    }
+                }
+            }
+        }
+        // Fallback: full table scan
+        storage.scan(&select.table)
+    }
+
     /// Collect statistics for a table (ANALYZE)
     fn collect_table_stats(&self, table: &str) -> SqlResult<TableStatistics> {
         let storage = self.storage.read().unwrap();
@@ -572,6 +601,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         // Step 1: FROM/JOIN - get initial rows and schema
         let (mut rows, table_info) = if select.join_clause.is_some() {
             self.execute_join(select)?
+        } else if self.cbo_enabled {
+            // CBO: try index scan for simple equality predicates
+            let table_info = storage.get_table_info(&select.table)?;
+            let rows = self.try_index_scan_or_fallback(select, &*storage, &table_info)?;
+            (rows, table_info)
         } else {
             let rows = storage.scan(&select.table)?;
             let table_info = storage.get_table_info(&select.table)?;
@@ -2541,6 +2575,51 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             vec![Value::Text("Query Plan".to_string())],
             vec![Value::Text(format!("  {}", plan_desc))],
         ];
+
+        // Show CBO analysis for SELECT statements
+        if let Statement::Select(ref select) = *explain.statement {
+            let table_name = &select.table;
+            if !table_name.is_empty() {
+                let row_count = self.estimate_row_count(table_name);
+                let seq_cost = self.estimate_seq_scan_cost(table_name);
+
+                // Check if index scan would be beneficial
+                let storage = self.storage.read().unwrap();
+                let indexes = storage.list_indexes(table_name);
+                drop(storage);
+
+                if !indexes.is_empty() && self.cbo_enabled {
+                    rows.push(vec![Value::Text(format!(
+                        "  Scan type: CBO index scan ({} indexes available)",
+                        indexes.len()
+                    ))]);
+                    // Show first index benefit
+                    let (col, _) = &indexes[0];
+                    let selectivity = self.estimate_selectivity(table_name, col);
+                    let index_cost = self.estimate_index_scan_cost(table_name, selectivity);
+                    let benefit = self.estimate_index_benefit(table_name, selectivity);
+                    if benefit > 0.0 {
+                        rows.push(vec![Value::Text(format!(
+                            "  Index on {}: est_cost={:.2}, selectivity={:.4}, benefit={:.2}",
+                            col, index_cost, selectivity, benefit
+                        ))]);
+                    }
+                } else {
+                    rows.push(vec![Value::Text("  Scan type: SeqScan".to_string())]);
+                }
+                rows.push(vec![Value::Text(format!(
+                    "  Table: {}, est_rows={}, est_seq_cost={:.2}",
+                    table_name, row_count, seq_cost
+                ))]);
+
+                if let Some(ref join) = select.join_clause {
+                    let tables = vec![table_name.as_str(), join.table.as_str()];
+                    let ordered = self.optimize_join_order(&tables);
+                    rows.push(vec![Value::Text(format!("  Join order: {:?}", ordered))]);
+                }
+            }
+        }
+
         if explain.analyze {
             if let Statement::Select(ref select) = *explain.statement {
                 let start = std::time::Instant::now();
@@ -2553,8 +2632,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             r.rows.len(),
                             elapsed
                         ))]);
-                        let est = self.estimate_seq_scan_cost(&select.first_table());
-                        rows.push(vec![Value::Text(format!("  Estimated cost: {:.2}", est))]);
                     }
                     Err(e) => {
                         rows.push(vec![Value::Text(format!("  Execution error: {:?}", e))]);
@@ -4048,5 +4125,61 @@ mod tests {
 
         // Smallest (t3 with 5 rows) should be first after ANALYZE
         assert_eq!(optimal[0], "t3");
+    }
+
+    #[test]
+    fn test_index_scan_in_execute_select() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+            .unwrap();
+        engine
+            .execute("CREATE INDEX idx_users_id ON users (id)")
+            .unwrap();
+
+        for i in 0..100 {
+            engine
+                .execute(&format!("INSERT INTO users VALUES ({}, 'user{}')", i, i))
+                .unwrap();
+        }
+
+        // SELECT with equality predicate should use index scan via CBO
+        let result = engine.execute("SELECT * FROM users WHERE id = 42").unwrap();
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(result.rows[0][0], Value::Integer(42));
+        assert_eq!(result.rows[0][1], Value::Text("user42".to_string()));
+
+        // SELECT with non-matching predicate should return empty
+        let result = engine
+            .execute("SELECT * FROM users WHERE id = 999")
+            .unwrap();
+        assert_eq!(result.rows.len(), 0);
+    }
+
+    #[test]
+    fn test_index_scan_with_cbo_disabled() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::with_cbo(storage, false);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+            .unwrap();
+        engine
+            .execute("CREATE INDEX idx_users_id ON users (id)")
+            .unwrap();
+
+        for i in 0..100 {
+            engine
+                .execute(&format!("INSERT INTO users VALUES ({}, 'user{}')", i, i))
+                .unwrap();
+        }
+
+        // With CBO disabled, should fall back to full scan (still works)
+        let result = engine.execute("SELECT * FROM users WHERE id = 42").unwrap();
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(result.rows[0][0], Value::Integer(42));
+        assert_eq!(result.rows[0][1], Value::Text("user42".to_string()));
     }
 }
