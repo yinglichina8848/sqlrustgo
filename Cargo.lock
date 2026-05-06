@@ -4725,7 +4725,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4842,7 +4842,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-catalog"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "hmac 0.12.1",
  "log",
@@ -4892,7 +4892,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-common"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4930,7 +4930,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-executor"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "log",
  "serde",
@@ -4948,7 +4948,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-expr"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "regex",
  "serde",
@@ -4961,7 +4961,7 @@ version = "0.1.0"
 
 [[package]]
 name = "sqlrustgo-gmp"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5037,7 +5037,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-optimizer"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "async-trait",
  "log",
@@ -5051,7 +5051,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-parser"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "log",
  "serde",
@@ -5062,7 +5062,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-planner"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "log",
  "serde",
@@ -5128,7 +5128,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-server"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "actix-web",
  "async-trait",
@@ -5178,7 +5178,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-sql-corpus"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "serde",
  "sqlrustgo",
@@ -5191,7 +5191,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-storage"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "arrow",
  "async-trait",
@@ -5212,7 +5212,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-telemetry"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "log",
  "parking_lot",
@@ -5224,7 +5224,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-tools"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -5243,7 +5243,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-transaction"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "log",
  "serde",
@@ -5256,7 +5256,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-types"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "hex",
  "log",
@@ -5266,7 +5266,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-unified-query"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "lru-cache",
@@ -5284,7 +5284,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-unified-storage"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "serde",
  "serde_json",
