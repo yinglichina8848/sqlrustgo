@@ -15,7 +15,7 @@
 
 ### 1.2 评估标准
 
-依据 [CASCADES_OPTIMIZER.md](../../v2.0/CASCADES_OPTIMIZER.md) 进行评估。
+依据 SQLRustGo 工程成熟度模型 v1.0 进行评估。
 
 ### 1.3 评估结果
 

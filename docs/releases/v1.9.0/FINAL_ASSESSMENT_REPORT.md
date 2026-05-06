@@ -437,7 +437,7 @@ Parser
 ### A. 参考文档
 
 - `docs/architecture.md` - 系统架构
-- `docs/v2.0/TECH_ROADMAP.md` - 技术路线图
+- SQLRustGo v2.0 技术路线图 (待规划)
 - `docs/releases/v1.9.0/RELEASE_GATE_CHECKLIST.md` - 门禁清单
 - `docs/releases/v1.9.0/DEPLOYMENT_GUIDE.md` - 部署指南
 

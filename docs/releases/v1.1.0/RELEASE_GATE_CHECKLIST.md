@@ -453,9 +453,7 @@ gh release create v1.1.0-alpha --prerelease --title "v1.1.0 Alpha" --notes-file 
 ### A. 相关文档
 
 - [v1.0.0 发布回顾](../../governance/v1.0-release-retrospective.md)
-- [CASCADES_OPTIMIZER.md](../../v2.0/CASCADES_OPTIMIZER.md)
-- [BRANCH_STRATEGY.md](../../v2.0/BRANCH_STRATEGY.md)
-- [2.0 路线图](../../v2.0/SQLRUSTGO_2_0_ROADMAP.md)
+- SQLRustGo v2.0 路线图 (待规划)
 - [代码质量审计报告](./CODE_QUALITY_AUDIT.md)
 - [安全审计报告](./SECURITY_AUDIT.md)
 

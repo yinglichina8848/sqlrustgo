@@ -252,7 +252,7 @@ tests/
 ## 九、参考文档
 
 - [全面评估报告](FINAL_ASSESSMENT_REPORT.md)
-- [技术路线图](../../v2.0/TECH_ROADMAP.md)
+- SQLRustGo v2.0 技术路线图 (待规划)
 - [部署指南](DEPLOYMENT_GUIDE.md)
 - [门禁清单](RELEASE_GATE_CHECKLIST.md)
 
