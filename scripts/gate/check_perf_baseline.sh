@@ -1,32 +1,19 @@
 #!/usr/bin/env bash
+# ============================================================
+# R9: Performance Baseline Check (delegates to check_regression.sh)
+#
+# This is a thin wrapper for backward compatibility.
+# The actual regression check logic lives in check_regression.sh.
+# ============================================================
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo "=== R9: Performance Baseline Check ==="
 echo "Date: $(date)"
 echo ""
 
-cd "$PROJECT_ROOT"
+# Delegate to the real regression check
+bash "$SCRIPT_DIR/check_regression.sh" "${1:-}"
 
-PERF_THRESHOLD=10
-
-echo "[1/2] Checking benchmark baseline..."
-
-if [ ! -f "benchmark_baseline.json" ]; then
-    echo "⚠️  benchmark_baseline.json not found"
-    echo "   Run 'cargo bench' first to establish baseline"
-    echo ""
-    echo "✅ R9: SKIPPED (no baseline established)"
-    exit 0
-fi
-
-echo "[2/2] Running benchmarks..."
-
-BENCH_OUTPUT=$(cargo bench 2>&1 || true)
-
-echo ""
-echo "✅ R9: Performance Baseline Check COMPLETED"
-echo "   Review benchmark results manually"
-echo "   Baseline file: benchmark_baseline.json"
+exit $?
