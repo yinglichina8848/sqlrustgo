@@ -26,3 +26,9 @@ docs/formal/*_TTrace_*.tla
 docs/formal/*_TTrace_*.bin
 
 ci_artifacts/
+
+# Local workspace and tool artifacts
+.worktrees/
+.deepseek/
+.claude/
+.gitnexus/
