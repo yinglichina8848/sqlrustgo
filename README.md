@@ -152,3 +152,4 @@ cargo clippy --all-targets -- -D warnings
 
 - [v2.8.0 GA 文档](docs/releases/v2.8.0/README.md)
 - [v2.7.0 文档](docs/releases/v2.7.0/README.md)
+# v3.0.0 Gate Verification
