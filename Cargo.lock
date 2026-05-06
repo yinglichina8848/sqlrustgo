@@ -4955,6 +4955,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlrustgo-fuzz"
+version = "0.1.0"
+
+[[package]]
 name = "sqlrustgo-gmp"
 version = "2.5.0"
 dependencies = [
