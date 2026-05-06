@@ -2,9 +2,9 @@
 
 > **版本**: v3.0.0
 > **日期**: 2026-05-06（源同步版）
-> **状态**: Development 阶段已完成，已进入 Alpha
+> **状态**: Development 阶段已完成，已进入 Alpha (CBO 进行中)
 > **实际开发周期**: 2026-05-05 ~ 2026-05-06（2 天，非计划 12 周）
-> **当前分支**: `develop/v3.0.0` @ `10ffc0e3`
+> **当前分支**: `develop/v3.0.0` @ `ebdf0487`
 
 ---
 
@@ -12,11 +12,14 @@
 
 | 指标 | 目标 | **当前** | 状态 |
 |------|------|--------|------|
-| Point SELECT QPS | ≥20,000 | **7,312**（待 CBO 优化） | 🟡 |
+| Point SELECT QPS | ≥20,000 | **7,312**（待 CBO #392） | 🟡 |
 | UPDATE QPS | ≥10,000 | **42,427** | ✅ |
 | DELETE QPS | ≥5,000 | **62,352** | ✅ |
 | SQL Corpus | ≥98% | **100%** | ✅ |
 | TPC-H SF=0.1 | 22/22 | **22/22** ~10.9s | 🟡 |
+| Sysbench oltp_read_only | — | **17,068 QPS** | ✅ |
+| Sysbench oltp_write_only | — | **37,075 QPS** | ✅ |
+| Sysbench oltp_read_write | — | **19,430 QPS** | ✅ |
 
 ---
 
@@ -48,6 +51,11 @@
 | **内存** | PP-06 内存治理 (512MB 限额) | ✅ | |
 | **形式化证明** | PROOF-026 Write Skew/SSI | ✅ | TLA+ 模型 + 7 测试 |
 | **SQL 测试** | SQL Corpus 100% (485/485) | ✅ | |
+| **协议** | COM_MULTI (0x11) 多语句执行 | ✅ | opencode |
+| **协议** | Prepared Statement 参数绑定修复 | ✅ | opencode |
+| **协议** | BEGIN/COMMIT/ROLLBACK 引擎集成 | ✅ | opencode |
+| **Sysbench** | oltp_read_only / write_only / read_write | ✅ | 17k / 37k / 19k QPS |
+| **Sysbench** | Sysbench 设置指南 (docs) | ✅ | opencode |
 
 ---
 
@@ -55,16 +63,14 @@
 
 | 优先级 | 任务 | 难度 | 负责人 | Issue |
 |--------|------|------|--------|-------|
-| **P0** | CBO 代价模型集成 (SimpleCostModel + 索引选择) | 🔴 5-7d | opencode | — |
-| **P0** | Sysbench OLTP 完整适配 | 🟡 3d | opencode | #376 |
-| **P0** | COM_MULTI 多语句执行 | 🟡 2d | opencode | #377 |
-| **P0** | Prepared Statement 参数绑定修复 | 🟢 1d | opencode | #378 |
+| **P0** | CBO 代价模型集成 (SimpleCostModel + 索引选择) | 🔴 5-7d | opencode | #392 |
 | **P0** | 事务状态机压力测试 | 🟡 2d | claude | #379 |
 | **P1** | TPC-H SF=1 CI Gate | 🟡 1d | — | #382 |
 | **P1** | Optimizer 测试扩展 | 🟢 2d | claude | #380 |
 | **P1** | Planner 逻辑测试扩展 | 🟢 2d | claude | #381 |
 | **P2** | 连接池并发压力测试 | 🟡 2d | — | — |
 | **P2** | 覆盖率 ≥85% | 🟡 3d | — | — |
+| **P3** | Cargo.toml 版本号 2.x → 3.0.0 验证 | 🟢 0.5d | deepseek | — |
 
 ---
 
@@ -72,13 +78,17 @@
 
 | Agent | 工作目录 | 负责任务 |
 |-------|---------|---------|
-| **opencode** | `~/workspace/dev/openheart/sqlrustgo` | #376 #377 #378 + CBO 代价模型 |
+| **opencode** | `~/workspace/dev/openheart/sqlrustgo` | #392 CBO 代价模型集成 |
 | **claude** | `~/workspace/dev/yinglichina163/sqlrustgo` | #379 #380 #381 |
-| **deepseek** | `~/workspace/dev/openheart/sqlrustgo` | 文档同步 + A-HYG 门禁 + 临时修复 |
+| **deepseek** | `~/workspace/dev/openheart/sqlrustgo` | 文档同步 + A-HYG 门禁 + 版本号 |
 
 ---
 
 ## 五、当前分支
 
-`develop/v3.0.0` @ `10ffc0e3`
-Open PR: #387 (Phase 1 complete → main)
+`develop/v3.0.0` @ `ebdf0487`
+
+已合并 PR:
+- #388 COM_MULTI + Prepared Statement + Transaction Fixes
+- #390 Prepared Statement 参数绑定修复 + 编译修复
+- #391 TPC-H SF=1 CI Gate (`--sf1`/`--sf0.1` 选项)
