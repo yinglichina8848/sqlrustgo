@@ -505,6 +505,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::ShowRoles => self.execute_show_roles(),
             Statement::ShowGrantsFor(ref user) => self.execute_show_grants_for(user),
             Statement::AlterTable(ref alter) => self.execute_alter_table(alter),
+            Statement::WithSelect(ref ws) => {
+                // Execute the inner SELECT (CTE definitions not yet executed)
+                self.execute_select(&ws.select)
+            }
             _ => Err(SqlError::ExecutionError(format!(
                 "Unsupported statement type: {:?}",
                 std::mem::discriminant(&statement)

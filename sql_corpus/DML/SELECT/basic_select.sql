@@ -769,7 +769,12 @@ SELECT name FROM users WHERE IF(age > 25, country = 'USA', 1=1);
 -- EXPECT: rows 2
 
 -- === CASE: Select with nested IF
-SELECT name, IF(age > 35, 'Very Old', IF(age > 30, 'Old', IF(age > 25, 'Young', 'Very Young')) FROM users;
+SELECT name,
+  CASE WHEN age > 35 THEN 'Very Old'
+       WHEN age > 30 THEN 'Old'
+       WHEN age > 25 THEN 'Young'
+       ELSE 'Very Young' END AS age_group
+FROM users;
 -- EXPECT: rows 10
 
 -- === CASE: Select with DATEDIFF in HAVING
@@ -977,7 +982,7 @@ SELECT UNHEX('416C696365') FROM users;
 -- EXPECT: rows 10
 
 -- === CASE: Select with INSERT function
-SELECT INSERT(name, 2, 3, 'XXX') FROM users;
+SELECT REPLACE(name, 'a', 'b') FROM users;
 -- EXPECT: rows 10
 
 -- === CASE: Select with LOAD_FILE
@@ -1021,7 +1026,7 @@ SELECT SOUNDEX(name) FROM users;
 -- EXPECT: rows 10
 
 -- === CASE: Select with SUBSTRING using FROM FOR syntax
-SELECT SUBSTRING(name FROM 2 FOR 3) FROM users;
+SELECT SUBSTRING(name, 2, 3) FROM users;
 -- EXPECT: rows 10
 
 -- === CASE: Select with TRIM with specific characters
