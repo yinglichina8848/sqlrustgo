@@ -15,6 +15,7 @@ mod connection_pool_tests {
     // ============================================================
 
     struct MockPool {
+        #[allow(dead_code)]
         size: usize,
         available: Arc<AtomicUsize>,
         in_use: Arc<AtomicUsize>,
@@ -206,9 +207,9 @@ mod connection_pool_tests {
         let barrier = Arc::new(Barrier::new(10));
 
         let handles: Vec<_> = (0..10)
-            .map(|i| {
+            .map(|_i| {
                 let pool = Arc::clone(&pool);
-                let errors = Arc::clone(&errors);
+                let _errors = Arc::clone(&errors);
                 let barrier = Arc::clone(&barrier);
                 thread::spawn(move || {
                     barrier.wait();
