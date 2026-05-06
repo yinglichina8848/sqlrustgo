@@ -5014,6 +5014,7 @@ dependencies = [
  "sqlrustgo-parser",
  "sqlrustgo-planner",
  "sqlrustgo-storage",
+ "sqlrustgo-transaction",
  "sqlrustgo-types",
  "thiserror 1.0.69",
  "tracing",

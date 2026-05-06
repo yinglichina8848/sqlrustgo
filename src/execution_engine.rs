@@ -2225,7 +2225,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
     }
 
-    fn begin_transaction(&mut self, isolation: TmIsolationLevel) -> SqlResult<ExecutorResult> {
+    pub fn begin_transaction(&mut self, isolation: TmIsolationLevel) -> SqlResult<ExecutorResult> {
         if self.current_tx_id.is_some() {
             return Err(SqlError::ExecutionError(
                 "Transaction already in progress".to_string(),
@@ -2244,7 +2244,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         ))
     }
 
-    fn commit_transaction(&mut self) -> SqlResult<ExecutorResult> {
+    pub fn commit_transaction(&mut self) -> SqlResult<ExecutorResult> {
         let tx_id = self
             .current_tx_id
             .ok_or_else(|| SqlError::ExecutionError("No transaction in progress".to_string()))?;
@@ -2255,7 +2255,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(ExecutorResult::empty())
     }
 
-    fn rollback_transaction(&mut self) -> SqlResult<ExecutorResult> {
+    pub fn rollback_transaction(&mut self) -> SqlResult<ExecutorResult> {
         let tx_id = self
             .current_tx_id
             .ok_or_else(|| SqlError::ExecutionError("No transaction in progress".to_string()))?;
