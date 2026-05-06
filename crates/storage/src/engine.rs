@@ -665,6 +665,16 @@ pub trait StorageEngine: Send + Sync {
     /// Get a specific row by index
     /// Returns the row if found, or None if index is out of bounds
     fn get_row(&self, table: &str, index: usize) -> SqlResult<Option<Record>>;
+
+    /// Get the number of rows in a table (for CBO cost estimation)
+    fn get_row_count(&self, table: &str) -> SqlResult<u64>;
+
+    /// Get the number of pages used by a table (for CBO cost estimation)
+    /// Returns estimated page count based on average row size
+    fn get_page_count(&self, table: &str) -> SqlResult<u64>;
+
+    /// Get the number of index pages for an index on a table
+    fn get_index_page_count(&self, table: &str, column_index: usize) -> SqlResult<u64>;
 }
 
 /// In-memory storage implementation for testing and caching
@@ -895,6 +905,53 @@ impl StorageEngine for MemoryStorage {
         match self.tables.get(table) {
             Some(records) if index < records.len() => Ok(Some(records[index].clone())),
             Some(_) => Ok(None), // Index out of bounds
+            None => Err(SqlError::ExecutionError(format!(
+                "Table not found: {}",
+                table
+            ))),
+        }
+    }
+
+    fn get_row_count(&self, table: &str) -> SqlResult<u64> {
+        match self.tables.get(table) {
+            Some(records) => Ok(records.len() as u64),
+            None => Err(SqlError::ExecutionError(format!(
+                "Table not found: {}",
+                table
+            ))),
+        }
+    }
+
+    fn get_page_count(&self, table: &str) -> SqlResult<u64> {
+        const PAGE_SIZE: u64 = 4096;
+        match self.tables.get(table) {
+            Some(records) if !records.is_empty() => {
+                let avg_row_size: u64 = records
+                    .iter()
+                    .map(|r| r.len() as u64 * 8) // Estimate 8 bytes per value on average
+                    .sum::<u64>()
+                    .div_ceil(records.len() as u64);
+                let total_bytes = avg_row_size * records.len() as u64;
+                Ok(total_bytes.divCeil(PAGE_SIZE).max(1))
+            }
+            Some(_) => Ok(0),
+            None => Err(SqlError::ExecutionError(format!(
+                "Table not found: {}",
+                table
+            ))),
+        }
+    }
+
+    fn get_index_page_count(&self, table: &str, _column_index: usize) -> SqlResult<u64> {
+        const PAGE_SIZE: u64 = 4096;
+        const INDEX_ENTRY_SIZE: u64 = 16;
+        match self.tables.get(table) {
+            Some(records) if !records.is_empty() => {
+                let index_entries = records.len() as u64;
+                let total_bytes = index_entries * INDEX_ENTRY_SIZE;
+                Ok(total_bytes.div_ceil(PAGE_SIZE).max(1))
+            }
+            Some(_) => Ok(0),
             None => Err(SqlError::ExecutionError(format!(
                 "Table not found: {}",
                 table
