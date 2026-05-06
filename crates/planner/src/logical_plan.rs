@@ -106,6 +106,24 @@ pub enum LogicalPlan {
         procedure_name: String,
         args: Vec<String>,
     },
+    /// WITH clause (CTE - Common Table Expression)
+    With {
+        /// Common table expressions
+        ctes: Vec<CommonTableExpression>,
+        /// The main input plan after CTE definitions
+        input: Box<LogicalPlan>,
+    },
+}
+
+/// Common Table Expression in logical plan
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommonTableExpression {
+    /// CTE name (referenced in the main query)
+    pub name: String,
+    /// Column names if specified (e.g., WITH cte(col1, col2) AS ...)
+    pub columns: Vec<String>,
+    /// The subquery that defines this CTE
+    pub subquery: Box<LogicalPlan>,
 }
 
 /// Trigger timing
@@ -168,6 +186,7 @@ impl LogicalPlan {
             LogicalPlan::CreateTrigger { .. } => Schema::empty(),
             LogicalPlan::CreateProcedure { .. } => Schema::empty(),
             LogicalPlan::Call { .. } => Schema::empty(),
+            LogicalPlan::With { input, .. } => input.schema(),
         }
     }
 }
@@ -291,5 +310,32 @@ mod tests {
             offset: None,
         };
         assert_eq!(plan.schema().fields.len(), 1);
+    }
+
+    #[test]
+    fn test_logical_plan_with_cte() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let cte_subquery = LogicalPlan::TableScan {
+            table_name: "cte_table".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+        let main_input = LogicalPlan::TableScan {
+            table_name: "main_table".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+        let cte = CommonTableExpression {
+            name: "my_cte".to_string(),
+            columns: vec!["id".to_string()],
+            subquery: Box::new(cte_subquery),
+        };
+        let plan = LogicalPlan::With {
+            ctes: vec![cte],
+            input: Box::new(main_input),
+        };
+        // Schema should match the input schema
+        assert_eq!(plan.schema().fields.len(), 1);
+        assert_eq!(plan.schema().fields[0].name, "id");
     }
 }
