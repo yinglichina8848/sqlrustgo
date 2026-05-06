@@ -79,18 +79,63 @@ impl DefaultPlanner {
             let indexes = storage.list_indexes(table_name);
 
             if !indexes.is_empty() {
-                // Use first available index for now
-                let (column, index_name) = &indexes[0];
-                return Box::new(IndexScanExec::new(
-                    table_name.to_string(),
-                    column.clone(),
-                    index_name.clone(),
-                    schema.clone(),
-                ));
+                let row_count = storage.get_row_count(table_name).unwrap_or(1) as f64;
+                let page_count = storage.get_page_count(table_name).unwrap_or(1) as f64;
+                let index_pages = storage.get_index_page_count(table_name, 0).unwrap_or(1) as f64;
+
+                let seq_cost = self.cost_model.seq_scan_cost(row_count as u64, page_count as u64);
+                let index_cost = self.cost_model.index_scan_cost(row_count as u64, index_pages as u64, page_count as u64);
+
+                if index_cost < seq_cost {
+                    let (column, index_name) = &indexes[0];
+                    return Box::new(IndexScanExec::new(
+                        table_name.to_string(),
+                        column.clone(),
+                        index_name.clone(),
+                        schema.clone(),
+                    ));
+                }
             }
         }
 
         Box::new(SeqScanExec::new(table_name.to_string(), schema.clone()))
+    }
+
+    /// Select best join method using cost model
+    fn select_join(
+        &self,
+        left_plan: Box<dyn PhysicalPlan>,
+        right_plan: Box<dyn PhysicalPlan>,
+        join_type: crate::JoinType,
+        condition: Option<crate::Expr>,
+        left_rows: u64,
+        right_rows: u64,
+    ) -> Box<dyn PhysicalPlan> {
+        let hash_join_cost = self.cost_model.join_cost(left_rows, right_rows, "hash_join");
+        let nested_loop_cost = self.cost_model.join_cost(left_rows, right_rows, "nested_loop");
+        let sort_merge_cost = self.cost_model.join_cost(left_rows, right_rows, "sort_merge");
+
+        let (best_method, best_cost) = if hash_join_cost <= nested_loop_cost && hash_join_cost <= sort_merge_cost {
+            ("hash_join", hash_join_cost)
+        } else if nested_loop_cost <= sort_merge_cost {
+            ("nested_loop", nested_loop_cost)
+        } else {
+            ("sort_merge", sort_merge_cost)
+        };
+
+        eprintln!(
+            "[CBO] Join cost comparison: hash_join={:.2}, nested_loop={:.2}, sort_merge={:.2} -> selected: {} ({:.2})",
+            hash_join_cost, nested_loop_cost, sort_merge_cost, best_method, best_cost
+        );
+
+        let schema = Schema::new(vec![]);
+        Box::new(HashJoinExec::new(
+            left_plan,
+            right_plan,
+            join_type,
+            condition,
+            schema,
+        ))
     }
 
     fn create_physical_plan_internal(
@@ -211,14 +256,20 @@ impl DefaultPlanner {
             } => {
                 let left_plan = self.create_physical_plan_internal(left)?;
                 let right_plan = self.create_physical_plan_internal(right)?;
-                let schema = Schema::new(vec![]); // Would need to compute from children
-                Ok(Box::new(HashJoinExec::new(
+
+                let left_rows = 1000u64;
+                let right_rows = 1000u64;
+
+                let join_plan = self.select_join(
                     left_plan,
                     right_plan,
                     join_type.clone(),
                     condition.clone(),
-                    schema,
-                )))
+                    left_rows,
+                    right_rows,
+                );
+
+                Ok(join_plan)
             }
             LogicalPlan::Sort { input, sort_expr } => {
                 let input_plan = self.create_physical_plan_internal(input)?;
