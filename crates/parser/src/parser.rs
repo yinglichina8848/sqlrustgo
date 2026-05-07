@@ -33,6 +33,10 @@ pub enum Statement {
     DropView(DropViewStatement),
     Truncate(TruncateStatement),
     Analyze(AnalyzeStatement),
+    Check(CheckStatement),
+    Optimize(OptimizeStatement),
+    Vacuum(VacuumStatement),
+    Repair(RepairStatement),
     WithSelect(WithSelect),
     AlterTable(AlterTableStatement),
     Call(CallStatement),
@@ -438,6 +442,26 @@ pub struct TruncateStatement {
     pub name: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckStatement {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptimizeStatement {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VacuumStatement {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RepairStatement {
+    pub name: String,
+}
+
 /// SHOW statement variants
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShowStatement {
@@ -831,6 +855,10 @@ impl Parser {
             Some(Token::Drop) => self.parse_drop(),
             Some(Token::Truncate) => self.parse_truncate(),
             Some(Token::Analyze) => self.parse_analyze(),
+            Some(Token::Check) => self.parse_check(),
+            Some(Token::Optimize) => self.parse_optimize(),
+            Some(Token::Vacuum) => self.parse_vacuum(),
+            Some(Token::Repair) => self.parse_repair(),
             Some(Token::With) => self.parse_with_select(),
             Some(Token::Alter) => self.parse_alter_table(),
             Some(Token::Call) => self.parse_call(),
@@ -4034,6 +4062,46 @@ impl Parser {
         };
 
         Ok(Statement::Analyze(AnalyzeStatement { table_name }))
+    }
+
+    fn parse_check(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Check)?;
+        self.expect(Token::Table)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+        Ok(Statement::Check(CheckStatement { name }))
+    }
+
+    fn parse_optimize(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Optimize)?;
+        self.expect(Token::Table)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+        Ok(Statement::Optimize(OptimizeStatement { name }))
+    }
+
+    fn parse_vacuum(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Vacuum)?;
+        self.expect(Token::Table)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+        Ok(Statement::Vacuum(VacuumStatement { name }))
+    }
+
+    fn parse_repair(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Repair)?;
+        self.expect(Token::Table)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+        Ok(Statement::Repair(RepairStatement { name }))
     }
 
     fn parse_grant(&mut self) -> Result<Statement, String> {
