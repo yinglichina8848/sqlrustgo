@@ -281,9 +281,69 @@ R7 包含四个子检查：
 
 ---
 
-## 七、门禁状态追踪
+## 七、Beta Phase 3: 风险驱动验证体系
 
-### 7.1 各分支门禁要求
+> **更新时间**: 2026-05-08
+> **背景**: 从"功能测试"转向"可信度证明" — 数据库从"能运行"进入"可信"的分水岭
+
+### 7.1 核心转变
+
+```
+旧哲学: coverage % → 数字
+新哲学: coverage % → 风险 → 场景
+```
+
+**当前致命问题**:
+- optimizer 覆盖率 0%，planner <1%，transaction ~0%
+- 294 tests 集中在 5-6 个文件，高度偏向 happy path
+- 覆盖率高但不知道哪里危险 — 数据库行业经典灾难
+
+### 7.2 BP3 P0 必须完成（GMP 生产可信度门槛）
+
+| ID | 名称 | Issue | 验证内容 |
+|----|------|-------|---------|
+| BP3-1 | WAL Crash Injection Matrix | #499 | 9个 crash 点验证（before/after wal append, checkpoint, page split 等）|
+| BP3-2 | MVCC Isolation Matrix | #500 | 4种隔离级别 + 5个并发场景（concurrent UPDATE/lost update/snapshot visibility）|
+| BP3-3 | Deadlock Fuzzer | #501 | 随机化锁调度，1000+ 轮无死锁 |
+| BP3-4 | Optimizer 最小测试集 | #502 | 覆盖率目标 ≥50%（cost model/index selection/join reorder/predicate pushdown）|
+| BP3-5 | Planner 最小测试集 | #503 | 覆盖率目标 ≥50%（plan cache/prepared statement/parameter binding）|
+| BP3-6 | Differential Testing 扩展 | #504 | SQLite/MySQL/PG 结果一致性（NULL/NaN/overflow/collation）|
+| BP3-7 | Audit Integrity Verification | #505 | GMP 审计链验证（append-only/crash-safe/hash-chain/timestamp monotonicity）|
+
+### 7.3 BP3 P1 强烈建议
+
+| ID | 名称 | Issue |
+|----|------|-------|
+| BP3-8 | RANGE Partition | #506 |
+| BP3-9 | EXPLAIN ANALYZE | #507 |
+| BP3-10 | SHOW / INFO_SCHEMA | #508 |
+| BP3-11 | SQL Corpus Operation 扩展 | #509 |
+
+### 7.4 测试分布目标
+
+| 类型 | 当前比例 | 目标比例 |
+|------|---------|---------|
+| happy path | ~90% | 30% |
+| edge cases | ~5% | 30% |
+| concurrency | ~3% | 20% |
+| crash/recovery | ~1% | 10% |
+| fuzz/randomized | ~1% | 10% |
+
+### 7.5 Beta Gate 中的 BP3 策略
+
+Beta 阶段（`check_beta_v300.sh`）：
+- BP3 项为 **advisory**（INFO 级别，不 block）
+- 报告当前状态，追踪到对应 Issue
+
+RC/GA 阶段：
+- BP3 项为 **强制 blockers**
+- 未通过 = 无法进入 RC/GA
+
+---
+
+## 八、门禁状态追踪
+
+### 8.1 各分支门禁要求
 
 | 分支 | 门禁 | 覆盖率目标 | 性能要求 |
 |------|------|-----------|---------|
@@ -292,7 +352,7 @@ R7 包含四个子检查：
 | beta/v3.0.0 | R-Gate | ≥85% | TPC-H SF=1 22/22 |
 | rc/v3.0.0 | G-Gate | ≥85% | Point Select ≥10K |
 
-### 7.2 当前状态 (v3.0.0)
+### 8.2 当前状态 (v3.0.0)
 
 | 门禁 | 状态 | 完成日期 | 备注 |
 |------|------|----------|------|
@@ -303,7 +363,7 @@ R7 包含四个子检查：
 
 ---
 
-## 八、CI Gate 新建清单
+## 九、CI Gate 新建清单
 
 > 来源: `DEVELOPMENT_PLAN.md` §Phase 3 I-05
 
@@ -319,7 +379,7 @@ v3.0.0 需新建以下 CI Gate：
 
 ---
 
-## 九、豁免规则
+## 十、豁免规则
 
 以下情况可申请门禁豁免：
 
@@ -332,7 +392,7 @@ v3.0.0 需新建以下 CI Gate：
 
 ---
 
-## 十、变更历史
+## 十一、变更历史
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
