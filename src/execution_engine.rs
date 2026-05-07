@@ -4,6 +4,7 @@
 #![allow(unused_variables, unused_imports)]
 
 use crate::{parse, SqlError, SqlResult, Value};
+use information_schema::*;
 use sqlrustgo_catalog::stored_proc::{ParamMode, StoredProcParam, StoredProcStatement};
 use sqlrustgo_catalog::{auth::UserIdentity, Catalog, StoredProcedure};
 use sqlrustgo_executor::query_cache::{should_cache, QueryCache};
@@ -598,6 +599,14 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             return Ok(ExecutorResult::new(vec![], 0));
         }
 
+        if select
+            .table
+            .to_lowercase()
+            .starts_with("information_schema.")
+        {
+            return self.execute_information_schema_select(select);
+        }
+
         // Step 1: FROM/JOIN - get initial rows and schema
         let (mut rows, table_info) = if select.join_clause.is_some() {
             self.execute_join(select)?
@@ -764,6 +773,194 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         let row_count = limited_rows.len();
         Ok(ExecutorResult::new(limited_rows, row_count))
+    }
+
+    fn execute_information_schema_select(
+        &self,
+        select: &SelectStatement,
+    ) -> SqlResult<ExecutorResult> {
+        let table_lower = select.table.to_lowercase();
+        let info_table = table_lower
+            .strip_prefix("information_schema.")
+            .unwrap_or(&table_lower);
+        let info_table = info_table.trim_start_matches('`').trim_end_matches('`');
+
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("Catalog not available".to_string()))?;
+        let catalog = catalog.read().unwrap();
+
+        let info_schema = InformationSchema::new(&catalog);
+
+        let opt_text = |opt: Option<String>| match opt {
+            Some(s) => Value::Text(s),
+            None => Value::Null,
+        };
+
+        let rows: Vec<Vec<Value>> = match info_table {
+            "schemata" => info_schema
+                .get_schemata()
+                .into_iter()
+                .map(|row| vec![Value::Text(row.schema_name), Value::Text(row.schema_owner)])
+                .collect(),
+            "tables" => info_schema
+                .get_tables()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.table_schema),
+                        Value::Text(row.table_name),
+                        Value::Text(row.table_type),
+                        Value::Text(row.is_insertable_into),
+                    ]
+                })
+                .collect(),
+            "columns" => info_schema
+                .get_columns()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.table_schema),
+                        Value::Text(row.table_name),
+                        Value::Text(row.column_name),
+                        Value::Integer(row.ordinal_position as i64),
+                        opt_text(row.column_default),
+                        Value::Text(row.is_nullable),
+                        Value::Text(row.data_type),
+                        Value::Integer(row.character_maximum_length.unwrap_or(0) as i64),
+                        Value::Integer(row.numeric_precision.unwrap_or(0) as i64),
+                        Value::Integer(row.numeric_scale.unwrap_or(0) as i64),
+                    ]
+                })
+                .collect(),
+            "indexes" => info_schema
+                .get_indexes()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.table_schema),
+                        Value::Text(row.table_name),
+                        Value::Text(row.index_name),
+                        Value::Text(row.column_name),
+                        Value::Integer(row.ordinal_position as i64),
+                        Value::Boolean(row.is_unique),
+                        Value::Boolean(row.is_primary),
+                    ]
+                })
+                .collect(),
+            "triggers" => info_schema
+                .get_triggers()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.trigger_name),
+                        Value::Text(row.trigger_schema),
+                        Value::Text(row.event_manipulation),
+                        Value::Integer(row.action_order as i64),
+                        opt_text(row.action_condition),
+                        Value::Text(row.action_statement),
+                        Value::Text(row.orientid),
+                        Value::Text(row.schema_uid),
+                        Value::Text(row.body_catalog),
+                        Value::Text(row.schema_catalog),
+                    ]
+                })
+                .collect(),
+            "routines" => info_schema
+                .get_routines()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.specific_name),
+                        Value::Text(row.routine_schema),
+                        Value::Text(row.routine_name),
+                        Value::Text(row.routine_type),
+                        Value::Text(row.data_type),
+                        opt_text(row.routine_definition),
+                        opt_text(row.external_name),
+                        Value::Text(row.external_language),
+                    ]
+                })
+                .collect(),
+            "parameters" => info_schema
+                .get_parameters()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.specific_schema),
+                        Value::Text(row.specific_name),
+                        Value::Integer(row.ordinal_position as i64),
+                        opt_text(row.parameter_name),
+                        Value::Text(row.data_type),
+                        opt_text(row.parameter_mode),
+                    ]
+                })
+                .collect(),
+            "user_privileges" => info_schema
+                .get_user_privileges()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.grantee),
+                        Value::Text(row.table_catalog),
+                        Value::Text(row.privilege_type),
+                        Value::Text(row.is_grantable),
+                    ]
+                })
+                .collect(),
+            "schema_privileges" => info_schema
+                .get_schema_privileges()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.grantee),
+                        Value::Text(row.table_catalog),
+                        Value::Text(row.schema_name),
+                        Value::Text(row.privilege_type),
+                        Value::Text(row.is_grantable),
+                    ]
+                })
+                .collect(),
+            "table_privileges" => info_schema
+                .get_table_privileges()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.grantee),
+                        Value::Text(row.table_catalog),
+                        Value::Text(row.table_schema),
+                        Value::Text(row.table_name),
+                        Value::Text(row.privilege_type),
+                        Value::Text(row.is_grantable),
+                    ]
+                })
+                .collect(),
+            "column_privileges" => info_schema
+                .get_column_privileges()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.grantee),
+                        Value::Text(row.table_catalog),
+                        Value::Text(row.table_schema),
+                        Value::Text(row.table_name),
+                        Value::Text(row.column_name),
+                        Value::Text(row.privilege_type),
+                        Value::Text(row.is_grantable),
+                    ]
+                })
+                .collect(),
+            _ => {
+                return Err(SqlError::ExecutionError(format!(
+                    "Unknown INFORMATION_SCHEMA table: {}",
+                    info_table
+                )));
+            }
+        };
+
+        let row_count = rows.len();
+        Ok(ExecutorResult::new(rows, row_count))
     }
 
     fn compute_aggregates(

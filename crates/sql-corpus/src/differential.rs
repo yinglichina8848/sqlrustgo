@@ -35,7 +35,7 @@ pub enum DiffStatus {
     /// Both engines failed (possibly same error)
     BothError,
     /// Results differ between engines
-   Mismatch,
+    Mismatch,
     /// One engine succeeded, other failed
     OneFailed,
     /// Test skipped
@@ -274,7 +274,11 @@ impl ResultComparator {
 
     fn format_mismatch(a: &[Vec<Value>], b: &[Vec<Value>]) -> String {
         if a.len() != b.len() {
-            return format!("Row count mismatch: SQLRustGo={}, MySQL={}", a.len(), b.len());
+            return format!(
+                "Row count mismatch: SQLRustGo={}, MySQL={}",
+                a.len(),
+                b.len()
+            );
         }
         format!(
             "Row content mismatch:\n  SQLRustGo: {:?}\n  MySQL: {:?}",
@@ -298,10 +302,7 @@ impl<E1: SqlEngine, E2: SqlEngine> DifferentialCorpus<E1, E2> {
 
 impl DifferentialCorpus<SqlRustGoRunner, MySqlRunner> {
     /// Create a new differential corpus with SQLRustGo and MySQL
-    pub fn with_engines(
-        sqlrustgo: SqlRustGoRunner,
-        mysql: MySqlRunner,
-    ) -> Self {
+    pub fn with_engines(sqlrustgo: SqlRustGoRunner, mysql: MySqlRunner) -> Self {
         Self::new(sqlrustgo, mysql)
     }
 }
@@ -331,11 +332,26 @@ impl<E1: SqlEngine + 'static, E2: SqlEngine + 'static> DifferentialCorpus<E1, E2
     /// Get summary statistics
     pub fn summarize(results: &[DiffResult]) -> DifferentialSummary {
         let total = results.len();
-        let matches = results.iter().filter(|r| r.status == DiffStatus::Match).count();
-        let mismatches = results.iter().filter(|r| r.status == DiffStatus::Mismatch).count();
-        let both_error = results.iter().filter(|r| r.status == DiffStatus::BothError).count();
-        let one_failed = results.iter().filter(|r| r.status == DiffStatus::OneFailed).count();
-        let skipped = results.iter().filter(|r| r.status == DiffStatus::Skipped).count();
+        let matches = results
+            .iter()
+            .filter(|r| r.status == DiffStatus::Match)
+            .count();
+        let mismatches = results
+            .iter()
+            .filter(|r| r.status == DiffStatus::Mismatch)
+            .count();
+        let both_error = results
+            .iter()
+            .filter(|r| r.status == DiffStatus::BothError)
+            .count();
+        let one_failed = results
+            .iter()
+            .filter(|r| r.status == DiffStatus::OneFailed)
+            .count();
+        let skipped = results
+            .iter()
+            .filter(|r| r.status == DiffStatus::Skipped)
+            .count();
 
         DifferentialSummary {
             total_cases: total,

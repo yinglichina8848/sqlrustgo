@@ -1973,8 +1973,32 @@ impl Parser {
                 loop {
                     match self.next() {
                         Some(Token::Identifier(name)) => {
+                            // Check for qualified table name (e.g., `FROM information_schema.schemata`)
+                            let (table_name, is_qualified) =
+                                if matches!(self.current(), Some(Token::Dot)) {
+                                    self.next(); // consume DOT
+                                    match self.next() {
+                                        Some(Token::Identifier(second)) => {
+                                            (format!("{}.{}", name, second), true)
+                                        }
+                                        Some(t) => {
+                                            return Err(format!(
+                                                "Expected table name after DOT, got {:?}",
+                                                t
+                                            ))
+                                        }
+                                        None => {
+                                            return Err("Expected table name after DOT".to_string())
+                                        }
+                                    }
+                                } else {
+                                    (name.clone(), false)
+                                };
+
                             // Check for table alias (e.g., `FROM users u`)
-                            let alias = if matches!(self.current(), Some(Token::Identifier(_)))
+                            // Only check for alias if name was NOT qualified (qualified names can't have alias on first identifier)
+                            let alias = if !is_qualified
+                                && matches!(self.current(), Some(Token::Identifier(_)))
                                 && !matches!(self.peek(), Some(Token::Dot))
                             {
                                 let a = match self.current().cloned() {
@@ -1987,11 +2011,11 @@ impl Parser {
                                 None
                             };
                             tables.push(FromTable {
-                                name: name.clone(),
+                                name: table_name.clone(),
                                 alias,
                             });
                             if primary_table.is_empty() {
-                                primary_table = name;
+                                primary_table = table_name;
                             }
                         }
                         Some(Token::LParen) => {
