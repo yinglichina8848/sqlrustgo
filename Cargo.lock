@@ -4735,6 +4735,7 @@ dependencies = [
  "ctrlc",
  "env_logger",
  "hex",
+ "information-schema",
  "log",
  "lru-cache",
  "mysql",

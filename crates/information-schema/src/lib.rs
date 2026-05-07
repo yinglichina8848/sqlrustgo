@@ -618,7 +618,10 @@ mod tests {
         let routines = info_schema.get_routines();
 
         assert!(!routines.is_empty());
-        let proc_routine = routines.iter().find(|r| r.routine_name == "test_proc").unwrap();
+        let proc_routine = routines
+            .iter()
+            .find(|r| r.routine_name == "test_proc")
+            .unwrap();
         assert_eq!(proc_routine.routine_type, "PROCEDURE");
     }
 

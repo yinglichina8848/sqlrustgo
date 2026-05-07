@@ -69,6 +69,7 @@ sqlrustgo-vector = { path = "crates/vector" }
 sqlrustgo-graph = { path = "crates/graph" }
 sqlrustgo-sql-corpus = { path = "crates/sql-corpus" }
 sqlrustgo-qmd-bridge = { path = "crates/qmd-bridge" }
+information-schema = { path = "crates/information-schema" }
 
 tokio = { version = "1.0", features = ["full"] }
 tonic = "0.14"
@@ -136,6 +137,7 @@ sqlrustgo-optimizer.workspace = true
 sqlrustgo-executor.workspace = true
 sqlrustgo-storage.workspace = true
 sqlrustgo-catalog.workspace = true
+information-schema.workspace = true
 sqlrustgo-transaction.workspace = true
 sqlrustgo-server.workspace = true
 tokio.workspace = true

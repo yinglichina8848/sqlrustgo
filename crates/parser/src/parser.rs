@@ -1988,9 +1988,7 @@ impl Parser {
                                             ))
                                         }
                                         None => {
-                                            return Err(
-                                                "Expected table name after DOT".to_string()
-                                            )
+                                            return Err("Expected table name after DOT".to_string())
                                         }
                                     }
                                 } else {
