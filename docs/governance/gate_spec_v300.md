@@ -129,6 +129,10 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | B7 | 文档链接 | `bash scripts/gate/check_docs_links.sh` | 无死链 |
 | B8 | TPC-H SF=0.1 | `scripts/gate/check_tpch.sh sf=0.1` | 22/22 通过，无 OOM |
 | B9 | SQL Corpus | `cargo test -p sqlrustgo-sql-corpus` | ≥85% |
+| B10 | CBO Index Scan | `cargo test --test cbo_integration_test test_should_use_index` | 测试通过 |
+| B11 | CBO Join Cost | `cargo test --test cbo_integration_test test_estimate_join_cost` | 测试通过 |
+| B12 | CBO Optimizer | `cargo test -p sqlrustgo-optimizer` | 全部通过 |
+| B13 | CBO Planner | `cargo test --test cbo_integration_test` | 全部通过 |
 
 ### 4.3 TPC-H SF=0.1 详细要求
 
