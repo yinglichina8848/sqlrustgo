@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlrustgo_storage::{ColumnDefinition, StorageEngine};
 use sqlrustgo_types::{SqlResult, Value};
-use std::sync::{Arc, RwLock};
 
 /// Audit log action types
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,7 +148,7 @@ impl AuditLogEntry {
             self.old_value.as_ref().map(|s| Value::Text(s.clone())).unwrap_or(Value::Null),
             self.new_value.as_ref().map(|s| Value::Text(s.clone())).unwrap_or(Value::Null),
             self.sql_text.as_ref().map(|s| Value::Text(s.clone())).unwrap_or(Value::Null),
-            self.session_id.map(|n| Value::Integer(n)).unwrap_or(Value::Null),
+            self.session_id.map(Value::Integer).unwrap_or(Value::Null),
             Value::Text(self.checksum.clone()),
         ]
     }
@@ -304,6 +303,7 @@ pub fn create_system_audit_log_table(storage: &mut dyn StorageEngine) -> SqlResu
 }
 
 /// Record an audit log entry for INSERT
+#[allow(clippy::too_many_arguments)]
 pub fn record_insert_audit(
     storage: &mut dyn StorageEngine,
     tx_id: i64,
@@ -331,6 +331,7 @@ pub fn record_insert_audit(
 }
 
 /// Record an audit log entry for UPDATE
+#[allow(clippy::too_many_arguments)]
 pub fn record_update_audit(
     storage: &mut dyn StorageEngine,
     tx_id: i64,
@@ -359,6 +360,7 @@ pub fn record_update_audit(
 }
 
 /// Record an audit log entry for DELETE
+#[allow(clippy::too_many_arguments)]
 pub fn record_delete_audit(
     storage: &mut dyn StorageEngine,
     tx_id: i64,
@@ -386,6 +388,7 @@ pub fn record_delete_audit(
 }
 
 /// Record an audit log entry for DDL
+#[allow(clippy::too_many_arguments)]
 pub fn record_ddl_audit(
     storage: &mut dyn StorageEngine,
     tx_id: i64,
@@ -472,7 +475,7 @@ fn record_audit_log_impl(
         old_value.map(|s| Value::Text(s.to_string())).unwrap_or(Value::Null),
         new_value.map(|s| Value::Text(s.to_string())).unwrap_or(Value::Null),
         sql_text.map(|s| Value::Text(s.to_string())).unwrap_or(Value::Null),
-        session_id.map(|n| Value::Integer(n)).unwrap_or(Value::Null),
+        session_id.map(Value::Integer).unwrap_or(Value::Null),
         Value::Text(checksum),
     ];
 
@@ -590,6 +593,7 @@ impl AuditLogger {
     }
 
     /// Log an INSERT operation
+    #[allow(clippy::too_many_arguments)]
     pub fn log_insert(
         &self,
         storage: &mut dyn StorageEngine,
@@ -617,6 +621,7 @@ impl AuditLogger {
     }
 
     /// Log an UPDATE operation
+    #[allow(clippy::too_many_arguments)]
     pub fn log_update(
         &self,
         storage: &mut dyn StorageEngine,
@@ -646,6 +651,7 @@ impl AuditLogger {
     }
 
     /// Log a DELETE operation
+    #[allow(clippy::too_many_arguments)]
     pub fn log_delete(
         &self,
         storage: &mut dyn StorageEngine,
