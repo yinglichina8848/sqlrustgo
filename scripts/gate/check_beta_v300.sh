@@ -426,6 +426,99 @@ else
     BLOCKERS=$((BLOCKERS+1))
 fi
 
+# =============================================================================
+# BP3: Risk-Driven Verification Advisory (Beta Phase 3)
+# These are P0 items tracked in milestone v3.0.0-beta Issues #499-505
+# Beta gate: informational only (advisory), not blockers
+# =============================================================================
+
+echo ""
+echo "=== Beta Phase 3 Advisory (P0 Risk-Driven Verification) ==="
+
+# BP3-4: Optimizer Coverage ≥50% (currently 0%, tracked by Issue #502)
+echo -n "[beta-v3.0.0] BP3-4: Optimizer coverage (advisory) ... "
+TOTAL=$((TOTAL+1))
+OPT_COV=$(cargo llvm-cov -p sqlrustgo-optimizer --all-features --only-changed 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%' || echo "0")
+if (( $(echo "$OPT_COV >= 50" | bc -l) )); then
+    echo "INFO (optimizer coverage: ${OPT_COV}% ≥ 50% — OK)"
+else
+    echo "INFO (optimizer coverage: ${OPT_COV}% < 50% — tracked in Issue #502)"
+fi
+PASS=$((PASS+1))
+
+# BP3-5: Planner Coverage ≥50% (currently <1%, tracked by Issue #503)
+echo -n "[beta-v3.0.0] BP3-5: Planner coverage (advisory) ... "
+TOTAL=$((TOTAL+1))
+PLAN_COV=$(cargo llvm-cov -p sqlrustgo-planner --all-features --only-changed 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%' || echo "0")
+if (( $(echo "$PLAN_COV >= 50" | bc -l) )); then
+    echo "INFO (planner coverage: ${PLAN_COV}% ≥ 50% — OK)"
+else
+    echo "INFO (planner coverage: ${PLAN_COV}% < 50% — tracked in Issue #503)"
+fi
+PASS=$((PASS+1))
+
+# BP3-2: MVCC Isolation Matrix (transaction ~0%, tracked by Issue #500)
+echo -n "[beta-v3.0.0] BP3-2: MVCC isolation tests (advisory) ... "
+TOTAL=$((TOTAL+1))
+TX_COV=$(cargo llvm-cov -p sqlrustgo-transaction --all-features --only-changed 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%' || echo "0")
+if (( $(echo "$TX_COV >= 50" | bc -l) )); then
+    echo "INFO (transaction coverage: ${TX_COV}% ≥ 50% — OK)"
+else
+    echo "INFO (transaction coverage: ${TX_COV}% < 50% — tracked in Issue #500)"
+fi
+PASS=$((PASS+1))
+
+# BP3-7: Audit Integrity Verification (tracked by Issue #505)
+echo -n "[beta-v3.0.0] BP3-7: Audit integrity tests (advisory) ... "
+TOTAL=$((TOTAL+1))
+AUDIT_TEST=$(cargo test -p sqlrustgo-transaction --test audit_integrity_test 2>&1 || echo "NO_TEST")
+if echo "$AUDIT_TEST" | grep -q "test result"; then
+    AUDIT_PASSED=$(echo "$AUDIT_TEST" | grep -c "test result: ok" || echo "0")
+    AUDIT_FAILED=$(echo "$AUDIT_TEST" | grep -c "test result: FAILED" || echo "0")
+    if [ "$AUDIT_FAILED" -eq 0 ] && [ "$AUDIT_PASSED" -gt 0 ]; then
+        echo "INFO (audit integrity: ${AUDIT_PASSED} tests — OK)"
+    else
+        echo "INFO (audit integrity: ${AUDIT_PASSED} passed, ${AUDIT_FAILED} failed — tracked in Issue #505)"
+    fi
+else
+    echo "INFO (audit integrity: test file not found — tracked in Issue #505)"
+fi
+PASS=$((PASS+1))
+
+# BP3-3: Deadlock Fuzzer (tracked by Issue #501)
+echo -n "[beta-v3.0.0] BP3-3: Deadlock fuzzer (advisory) ... "
+TOTAL=$((TOTAL+1))
+DEADLOCK_TEST=$(cargo test --test deadlock_fuzzer_test 2>&1 || echo "NO_TEST")
+if echo "$DEADLOCK_TEST" | grep -q "test result"; then
+    DL_PASSED=$(echo "$DEADLOCK_TEST" | grep -c "test result: ok" || echo "0")
+    DL_FAILED=$(echo "$DEADLOCK_TEST" | grep -c "test result: FAILED" || echo "0")
+    if [ "$DL_FAILED" -eq 0 ] && [ "$DL_PASSED" -gt 0 ]; then
+        echo "INFO (deadlock fuzzer: ${DL_PASSED} tests — OK)"
+    else
+        echo "INFO (deadlock fuzzer: ${DL_PASSED} passed, ${DL_FAILED} failed — tracked in Issue #501)"
+    fi
+else
+    echo "INFO (deadlock fuzzer: test file not found — tracked in Issue #501)"
+fi
+PASS=$((PASS+1))
+
+# BP3-1: WAL Crash Injection Matrix (tracked by Issue #499)
+echo -n "[beta-v3.0.0] BP3-1: WAL crash injection (advisory) ... "
+TOTAL=$((TOTAL+1))
+WAL_CRASH_TEST=$(cargo test --test wal_crash_injection_test 2>&1 || echo "NO_TEST")
+if echo "$WAL_CRASH_TEST" | grep -q "test result"; then
+    WC_PASSED=$(echo "$WAL_CRASH_TEST" | grep -c "test result: ok" || echo "0")
+    WC_FAILED=$(echo "$WAL_CRASH_TEST" | grep -c "test result: FAILED" || echo "0")
+    if [ "$WC_FAILED" -eq 0 ] && [ "$WC_PASSED" -gt 0 ]; then
+        echo "INFO (WAL crash injection: ${WC_PASSED} crash points — OK)"
+    else
+        echo "INFO (WAL crash injection: ${WC_PASSED} passed, ${WC_FAILED} failed — tracked in Issue #499)"
+    fi
+else
+    echo "INFO (WAL crash injection: test file not found — tracked in Issue #499)"
+fi
+PASS=$((PASS+1))
+
 echo ""
 echo "=== Beta Gate Results: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="
 

@@ -772,5 +772,52 @@ Workspace    2185/3242   30.17%    26.16%      🔴
 
 ---
 
+## 十二、Beta Phase 3: 风险驱动验证追踪
+
+> **日期**: 2026-05-08
+> **目标**: 从"功能测试"转向"风险驱动验证"
+
+### 12.1 BP3 与 TEST_PLAN 映射
+
+| BP3 Issue | 对应 TEST_PLAN 章节 | 当前状态 | 行动 |
+|-----------|---------------------|---------|------|
+| #499 WAL Crash Matrix | §四覆盖率弱项 + §七L3深度 | 测试文件不存在 | 创建 wal_crash_injection_test.rs |
+| #500 MVCC Isolation | §二L3并发测试 | transaction ~0% | 补充 isolation_levels_test.rs |
+| #501 Deadlock Fuzzer | §二L3混沌 | 测试文件不存在 | 创建 deadlock_fuzzer_test.rs |
+| #502 Optimizer 50% | §四风险评级 🔴CRITICAL | 0% | 补充 optimizer_test_crates |
+| #503 Planner 50% | §四风险评级 🔴CRITICAL | <1% | 补充 planner_integration_tests |
+| #504 Differential Testing | §五SQL Corpus | 已部分实现 | 扩展 NULL/NaN/overflow 场景 |
+| #505 Audit Integrity | §四gmp模块 | 测试文件不存在 | 创建 audit_integrity_test.rs |
+| #506 RANGE Partition | §六TPC-H增强 | 未实现 | PARTITION BY RANGE 语法支持 |
+| #507 EXPLAIN ANALYZE | §六性能测试 | 已实现 | 补充 ANALYZE 统计信息验证 |
+| #508 SHOW/INFO_SCHEMA | §五SQL增强 | 部分实现 | 完善 INFORMATION_SCHEMA |
+| #509 SQL Corpus Ops | §五SQL增强 | ~11/55 | 扩展 operations 类别 |
+
+### 12.2 风险优先级矩阵
+
+| 模块 | 当前覆盖 | 危险路径 | BP3 行动 |
+|------|---------|---------|---------|
+| optimizer | 0% | cost model/index selection/join reorder | #502 目标≥50% |
+| planner | <1% | plan cache/subquery/prepared statement | #503 目标≥50% |
+| transaction | ~0% | MVCC visibility/deadlock/WAL recovery | #500/#501 目标≥50% |
+| gmp/audit | 0% | audit append-only/hash-chain/crash-safe | #505 必须实现 |
+| storage | 1% | page split/WAL partial write/torn page | #499 9 crash 点全覆盖 |
+| executor | 72% | 表面数字，真实风险：聚合溢出/NULL处理 | #504 differential testing |
+
+### 12.3 测试分布重分配目标
+
+当前问题：90% happy path，数据库最危险路径（crash/recovery/concurrency）几乎不测。
+
+目标分布：
+| 类型 | 目标 | BP3 对应 |
+|------|------|---------|
+| edge cases | 30% | #504 Differential Testing |
+| concurrency | 20% | #500/#501 MVCC+Deadlock |
+| crash/recovery | 10% | #499 WAL Crash Matrix |
+| fuzz/randomized | 10% | #501 Deadlock Fuzzer |
+| happy path | 30% | 现状保留 |
+
+---
+
 *本文档综合自 v1.9.0 / v2.7.0 / v2.9.0 / v3.0.0 历史测试文档*
 *最后更新: 2026-05-08*
