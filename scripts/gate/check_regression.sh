@@ -20,9 +20,16 @@
 #   UPDATE ≥ 10,000 QPS
 #   NOTE: E-09 floor is ALWAYS enforced, even with --skip-run
 #
+# ⚠️  GATE DECISION WARNING: --skip-run is UNSAFE for gate decisions
+#   --skip-run reads cached current.json. If current.json == baseline.json
+#   (e.g. after baseline was just created), delta=0% masks real regressions.
+#   A real run of concurrent_select_8t has shown 56% regression while
+#   --skip-run reported Δ=0%.
+#   ALWAYS run without --skip-run for CI/gate purposes.
+#
 # Usage:
-#   bash scripts/gate/check_regression.sh             (full run)
-#   bash scripts/gate/check_regression.sh --skip-run  (use existing current.json, still checks E-09)
+#   bash scripts/gate/check_regression.sh             (full run — REQUIRED for gate)
+#   bash scripts/gate/check_regression.sh --skip-run  (local dev only, NOT for gates)
 # ============================================================
 set -euo pipefail
 
@@ -50,6 +57,11 @@ RESULT_FILE="$PROJECT_ROOT/perf_baselines/$VERSION/current.json"
 SKIP_RUN=false
 if [[ "${1:-}" == "--skip-run" ]]; then
     SKIP_RUN=true
+    echo ""
+    echo "⚠️  WARNING: --skip-run is active. This uses cached current.json."
+    echo "   Do NOT use this for gate decisions. Real regression may be masked."
+    echo "   Run without --skip-run for CI/gate purposes."
+    echo ""
 fi
 
 echo "=== R9: Performance Regression Check ==="
