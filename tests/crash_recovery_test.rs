@@ -1,10 +1,11 @@
+use sqlrustgo::execution_engine::EngineConfig;
 use sqlrustgo::MemoryExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use std::sync::{Arc, RwLock};
 
 fn create_fresh_engine() -> MemoryExecutionEngine {
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-    MemoryExecutionEngine::new(storage)
+    MemoryExecutionEngine::new_with_config(storage, EngineConfig::default())
 }
 
 #[test]
