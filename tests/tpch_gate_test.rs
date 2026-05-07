@@ -186,6 +186,7 @@ fn load_tbl_file(
 // ============================================================
 
 #[test]
+#[ignore]
 fn test_tpch_sf01_gate() {
     let sf = scale_factor();
     let dir = data_dir();

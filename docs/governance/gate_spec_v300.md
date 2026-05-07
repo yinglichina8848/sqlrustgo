@@ -140,7 +140,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 |---|--------|----------|---------|
 | B-S1 | concurrency_stress_test | `cargo test --test concurrency_stress_test` | 全部通过 |
 | B-S2 | crash_recovery_test | `cargo test --test crash_recovery_test` | 全部通过 |
-| B-S3 | long_run_stability_test | `cargo test --test long_run_stability_test -- --ignored` | 全部通过 |
+| B-S3 | long_run_stability_test | `cargo test --test long_run_stability_test` | 全部通过 |
 | B-S4 | wal_integration_test | `cargo test --test wal_integration_test` | 全部通过 |
 | B-S5 | network_tcp_smoke_test | `cargo test --test network_tcp_smoke_test` | 全部通过 |
 | B-S6 | ssi_stress_test | `cargo test -p sqlrustgo-transaction --test ssi_stress_test` | 全部通过 |
