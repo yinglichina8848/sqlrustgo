@@ -3992,6 +3992,10 @@ impl Parser {
     fn parse_analyze(&mut self) -> Result<Statement, String> {
         self.expect(Token::Analyze)?;
 
+        if self.current() == Some(&Token::Table) {
+            self.next();
+        }
+
         let table_name = match self.current() {
             Some(Token::Identifier(name)) => {
                 let n = name.clone();

@@ -225,6 +225,7 @@ impl SimpleExecutor {
                 Ok(ExecutorResult::new(vec![], 0))
             }
             Statement::CreateIndex(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Analyze(_) => Ok(ExecutorResult::new(vec![], 0)),
             Statement::WithSelect(with_select) => {
                 self.execute_with_select(&with_select)?;
                 Ok(ExecutorResult::new(vec![], 0))
