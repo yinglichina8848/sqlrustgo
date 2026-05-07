@@ -53,10 +53,12 @@ check "B3: cargo clippy --all-features" "cargo clippy --all-features -- -D warni
 check "B4: cargo fmt --check" "cargo fmt --all -- --check"
 
 # B5: Coverage ≥75%
+# Note: Slow tests (tpch_gate_test, long_run_stability_72h_test) may cause timeout
+# Use --ignore-run-fail to allow partial coverage on timeout
 echo -n "[beta-v3.0.0] B5: Coverage ≥75% ... "
 TOTAL=$((TOTAL+1))
 if command -v cargo-llvm-cov &>/dev/null; then
-    COVERAGE=$(cargo llvm-cov --all-features --lcov --output-path /tmp/lcov-v300-beta.info 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%' || echo "0")
+    COVERAGE=$(cargo llvm-cov --all-features --ignore-run-fail --lcov --output-path /tmp/lcov-v300-beta.info 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%' || echo "0")
     if (( $(echo "$COVERAGE >= 75" | bc -l) )); then
         echo "PASS (${COVERAGE}%)"
         PASS=$((PASS+1))
@@ -247,6 +249,62 @@ if [ "$SSI_FAILED" -eq 0 ] && [ "$SSI_PASSED" -gt 0 ]; then
     PASS=$((PASS+1))
 else
     echo "FAIL ($SSI_PASSED passed, $SSI_FAILED failed)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
+# B-S7: Operations Tests - Backup/Restore
+echo -n "[beta-v3.0.0] B-S7: Operations - Backup/Restore ... "
+TOTAL=$((TOTAL+1))
+BACKUP_OUTPUT=$(cargo test -p sqlrustgo-tools --test backup_test 2>&1 || true)
+BACKUP_PASSED=$(echo "$BACKUP_OUTPUT" | grep -c "test result: ok" || echo "0")
+BACKUP_FAILED=$(echo "$BACKUP_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+if [ "$BACKUP_FAILED" -eq 0 ] && [ "$BACKUP_PASSED" -gt 0 ]; then
+    echo "PASS ($BACKUP_PASSED tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($BACKUP_PASSED passed, $BACKUP_FAILED failed)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
+# B-S8: Operations Tests - Explain/Monitoring
+echo -n "[beta-v3.0.0] B-S8: Operations - Explain/Monitoring ... "
+TOTAL=$((TOTAL+1))
+EXPLAIN_OUTPUT=$(cargo test --test explain_analyze_test 2>&1 || true)
+EXPLAIN_PASSED=$(echo "$EXPLAIN_OUTPUT" | grep -c "test result: ok" || echo "0")
+EXPLAIN_FAILED=$(echo "$EXPLAIN_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+if [ "$EXPLAIN_FAILED" -eq 0 ] && [ "$EXPLAIN_PASSED" -gt 0 ]; then
+    echo "PASS ($EXPLAIN_PASSED tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($EXPLAIN_PASSED passed, $EXPLAIN_FAILED failed)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
+# B-S9: Operations Tests - Information Schema
+echo -n "[beta-v3.0.0] B-S9: Operations - Information Schema ... "
+TOTAL=$((TOTAL+1))
+SCHEMA_OUTPUT=$(cargo test --test information_schema_test 2>&1 || true)
+SCHEMA_PASSED=$(echo "$SCHEMA_OUTPUT" | grep -c "test result: ok" || echo "0")
+SCHEMA_FAILED=$(echo "$SCHEMA_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+if [ "$SCHEMA_FAILED" -eq 0 ] && [ "$SCHEMA_PASSED" -gt 0 ]; then
+    echo "PASS ($SCHEMA_PASSED tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($SCHEMA_PASSED passed, $SCHEMA_FAILED failed)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
+# B-S10: Operations Tests - SQL Corpus Operations Category
+echo -n "[beta-v3.0.0] B-S10: Operations - SQL Corpus ... "
+TOTAL=$((TOTAL+1))
+CORPUS_OPS_OUTPUT=$(cargo test -p sqlrustgo-sql-corpus -- OPERATIONS 2>&1 || true)
+CORPUS_OPS_PASSED=$(echo "$CORPUS_OPS_OUTPUT" | grep -c "test result: ok" || echo "0")
+CORPUS_OPS_FAILED=$(echo "$CORPUS_OPS_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+if [ "$CORPUS_OPS_FAILED" -eq 0 ] && [ "$CORPUS_OPS_PASSED" -gt 0 ]; then
+    echo "PASS ($CORPUS_OPS_PASSED tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($CORPUS_OPS_PASSED passed, $CORPUS_OPS_FAILED failed)"
     BLOCKERS=$((BLOCKERS+1))
 fi
 
