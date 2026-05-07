@@ -2104,6 +2104,46 @@ fn execute_sql(
 
             execute_before_insert_triggers(storage, table_name, &mut records)?;
 
+            // REPLACE INTO: Delete existing rows with matching primary key
+            if insert.is_replace {
+                if let Some(ref info) = table_info {
+                    let pk_columns: Vec<usize> = info
+                        .columns
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, col)| col.primary_key)
+                        .map(|(idx, _)| idx)
+                        .collect();
+
+                    if !pk_columns.is_empty() {
+                        for record in &records {
+                            let key_values: Vec<_> = pk_columns
+                                .iter()
+                                .filter_map(|&col_idx| record.get(col_idx).cloned())
+                                .collect();
+
+                            let existing_records = storage.scan(table_name)?;
+                            let mut indices_to_delete: Vec<usize> = Vec::new();
+
+                            for (idx, existing) in existing_records.iter().enumerate() {
+                                let existing_key: Vec<_> = pk_columns
+                                    .iter()
+                                    .filter_map(|&col_idx| existing.get(col_idx).cloned())
+                                    .collect();
+
+                                if existing_key == key_values {
+                                    indices_to_delete.push(idx);
+                                }
+                            }
+
+                            for idx in indices_to_delete.iter().rev() {
+                                storage.delete_by_indices(table_name, &[*idx])?;
+                            }
+                        }
+                    }
+                }
+            }
+
             let records_to_insert = records.clone();
             storage
                 .insert(table_name, records)
