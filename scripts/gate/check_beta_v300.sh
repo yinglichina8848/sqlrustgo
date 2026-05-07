@@ -113,6 +113,58 @@ else
     BLOCKERS=$((BLOCKERS+1))
 fi
 
+# B10: CBO Index Scan Selection (test_should_use_index)
+echo -n "[beta-v3.0.0] B10: CBO Index Scan Selection ... "
+TOTAL=$((TOTAL+1))
+CBO_INDEX_OUTPUT=$(cargo test --test cbo_integration_test test_should_use_index 2>&1 || true)
+if echo "$CBO_INDEX_OUTPUT" | grep -q "test_should_use_index.*ok"; then
+    echo "PASS"
+    PASS=$((PASS+1))
+else
+    echo "FAIL"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
+# B11: CBO Join Cost Estimation (test_estimate_join_cost)
+echo -n "[beta-v3.0.0] B11: CBO Join Cost Estimation ... "
+TOTAL=$((TOTAL+1))
+CBO_JOIN_OUTPUT=$(cargo test --test cbo_integration_test test_estimate_join_cost 2>&1 || true)
+if echo "$CBO_JOIN_OUTPUT" | grep -q "test_estimate_join_cost.*ok"; then
+    echo "PASS"
+    PASS=$((PASS+1))
+else
+    echo "FAIL"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
+# B12: CBO Optimizer Tests (all optimizer tests pass)
+echo -n "[beta-v3.0.0] B12: CBO Optimizer Tests ... "
+TOTAL=$((TOTAL+1))
+CBO_OPT_OUTPUT=$(cargo test -p sqlrustgo-optimizer 2>&1 || true)
+CBO_OPT_PASSED=$(echo "$CBO_OPT_OUTPUT" | grep -c "test result: ok" || echo "0")
+CBO_OPT_FAILED=$(echo "$CBO_OPT_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+if [ "$CBO_OPT_FAILED" -eq 0 ] && [ "$CBO_OPT_PASSED" -gt 0 ]; then
+    echo "PASS ($CBO_OPT_PASSED tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($CBO_OPT_PASSED passed, $CBO_OPT_FAILED failed)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
+# B13: CBO Planner Tests (planner integration tests pass)
+echo -n "[beta-v3.0.0] B13: CBO Planner Tests ... "
+TOTAL=$((TOTAL+1))
+CBO_PLANNER_OUTPUT=$(cargo test --test cbo_integration_test 2>&1 || true)
+CBO_PLANNER_PASSED=$(echo "$CBO_PLANNER_OUTPUT" | grep -c "test result: ok" || echo "0")
+CBO_PLANNER_FAILED=$(echo "$CBO_PLANNER_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+if [ "$CBO_PLANNER_FAILED" -eq 0 ] && [ "$CBO_PLANNER_PASSED" -gt 0 ]; then
+    echo "PASS ($CBO_PLANNER_PASSED tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($CBO_PLANNER_PASSED passed, $CBO_PLANNER_FAILED failed)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
 echo ""
 echo "=== Beta Gate Results: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="
 
