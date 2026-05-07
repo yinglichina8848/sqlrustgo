@@ -14,6 +14,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub mod differential;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SqlTestResult {
     pub case_name: String,
