@@ -23,6 +23,16 @@ pub trait PhysicalPlan: Send + Sync {
 
     /// Downcast to concrete type
     fn as_any(&self) -> &dyn Any;
+
+    /// Estimated number of rows output by this plan node
+    fn row_count(&self) -> u64 {
+        0
+    }
+
+    /// Estimated number of pages accessed by this plan node
+    fn page_count(&self) -> u64 {
+        0
+    }
 }
 
 /// Sequential scan execution operator
@@ -32,6 +42,8 @@ pub struct SeqScanExec {
     table_name: String,
     schema: Schema,
     projection: Option<Vec<usize>>,
+    row_count: u64,
+    page_count: u64,
 }
 
 impl SeqScanExec {
@@ -40,11 +52,19 @@ impl SeqScanExec {
             table_name,
             schema: schema.clone(),
             projection: None,
+            row_count: 0,
+            page_count: 0,
         }
     }
 
     pub fn with_projection(mut self, projection: Vec<usize>) -> Self {
         self.projection = Some(projection);
+        self
+    }
+
+    pub fn with_stats(mut self, row_count: u64, page_count: u64) -> Self {
+        self.row_count = row_count;
+        self.page_count = page_count;
         self
     }
 
@@ -77,6 +97,14 @@ impl PhysicalPlan for SeqScanExec {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn row_count(&self) -> u64 {
+        self.row_count
+    }
+
+    fn page_count(&self) -> u64 {
+        self.page_count
+    }
 }
 
 /// Index scan execution operator - uses an index to retrieve rows
@@ -88,6 +116,8 @@ pub struct IndexScanExec {
     index_name: String,
     schema: Schema,
     projection: Option<Vec<usize>>,
+    row_count: u64,
+    page_count: u64,
 }
 
 impl IndexScanExec {
@@ -98,11 +128,19 @@ impl IndexScanExec {
             index_name,
             schema,
             projection: None,
+            row_count: 0,
+            page_count: 0,
         }
     }
 
     pub fn with_projection(mut self, projection: Vec<usize>) -> Self {
         self.projection = Some(projection);
+        self
+    }
+
+    pub fn with_stats(mut self, row_count: u64, page_count: u64) -> Self {
+        self.row_count = row_count;
+        self.page_count = page_count;
         self
     }
 
@@ -134,6 +172,14 @@ impl PhysicalPlan for IndexScanExec {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn row_count(&self) -> u64 {
+        self.row_count
+    }
+
+    fn page_count(&self) -> u64 {
+        self.page_count
     }
 }
 

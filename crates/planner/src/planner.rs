@@ -78,30 +78,35 @@ impl DefaultPlanner {
             let storage = storage.read().unwrap();
             let indexes = storage.list_indexes(table_name);
 
-            if !indexes.is_empty() {
-                let row_count = storage.get_row_count(table_name).unwrap_or(1) as f64;
-                let page_count = storage.get_page_count(table_name).unwrap_or(1) as f64;
-                let index_pages = storage.get_index_page_count(table_name, 0).unwrap_or(1) as f64;
+            let row_count = storage.get_row_count(table_name).unwrap_or(1);
+            let page_count = storage.get_page_count(table_name).unwrap_or(1);
 
-                let seq_cost = self
-                    .cost_model
-                    .seq_scan_cost(row_count as u64, page_count as u64);
-                let index_cost = self.cost_model.index_scan_cost(
-                    row_count as u64,
-                    index_pages as u64,
-                    page_count as u64,
-                );
+            if !indexes.is_empty() {
+                let index_pages = storage.get_index_page_count(table_name, 0).unwrap_or(1);
+
+                let seq_cost = self.cost_model.seq_scan_cost(row_count, page_count);
+                let index_cost =
+                    self.cost_model
+                        .index_scan_cost(row_count, index_pages, page_count);
 
                 if index_cost < seq_cost {
                     let (column, index_name) = &indexes[0];
-                    return Box::new(IndexScanExec::new(
-                        table_name.to_string(),
-                        column.clone(),
-                        index_name.clone(),
-                        schema.clone(),
-                    ));
+                    return Box::new(
+                        IndexScanExec::new(
+                            table_name.to_string(),
+                            column.clone(),
+                            index_name.clone(),
+                            schema.clone(),
+                        )
+                        .with_stats(row_count, page_count),
+                    );
                 }
             }
+
+            return Box::new(
+                SeqScanExec::new(table_name.to_string(), schema.clone())
+                    .with_stats(row_count, page_count),
+            );
         }
 
         Box::new(SeqScanExec::new(table_name.to_string(), schema.clone()))
@@ -266,8 +271,8 @@ impl DefaultPlanner {
                 let left_plan = self.create_physical_plan_internal(left)?;
                 let right_plan = self.create_physical_plan_internal(right)?;
 
-                let left_rows = 1000u64;
-                let right_rows = 1000u64;
+                let left_rows = left_plan.row_count().max(1);
+                let right_rows = right_plan.row_count().max(1);
 
                 let join_plan = self.select_join(
                     left_plan,
