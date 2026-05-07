@@ -193,10 +193,10 @@ else
     BLOCKERS=$((BLOCKERS+1))
 fi
 
-# B-S3: long_run_stability_test (10 tests with --ignored)
+# B-S3: long_run_stability_test (10 tests)
 echo -n "[beta-v3.0.0] B-S3: long_run_stability_test ... "
 TOTAL=$((TOTAL+1))
-LONG_RUN_OUTPUT=$(cargo test --test long_run_stability_test -- --ignored 2>&1 || true)
+LONG_RUN_OUTPUT=$(cargo test --test long_run_stability_test 2>&1 || true)
 LONG_RUN_PASSED=$(echo "$LONG_RUN_OUTPUT" | grep -c "test result: ok" || echo "0")
 LONG_RUN_FAILED=$(echo "$LONG_RUN_OUTPUT" | grep -c "test result: FAILED" || echo "0")
 LONG_RUN_IGNORED=$(echo "$LONG_RUN_OUTPUT" | grep -c "ignored" || echo "0")
