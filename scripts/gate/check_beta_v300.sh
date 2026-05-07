@@ -165,6 +165,77 @@ else
     BLOCKERS=$((BLOCKERS+1))
 fi
 
+# B-S1: concurrency_stress_test
+echo -n "[beta-v3.0.0] B-S1: concurrency_stress_test ... "
+TOTAL=$((TOTAL+1))
+CONCURRENCY_OUTPUT=$(cargo test --test concurrency_stress_test 2>&1 || true)
+CONCURRENCY_PASSED=$(echo "$CONCURRENCY_OUTPUT" | grep -c "test result: ok" || echo "0")
+CONCURRENCY_FAILED=$(echo "$CONCURRENCY_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+if [ "$CONCURRENCY_FAILED" -eq 0 ] && [ "$CONCURRENCY_PASSED" -gt 0 ]; then
+    echo "PASS ($CONCURRENCY_PASSED tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($CONCURRENCY_PASSED passed, $CONCURRENCY_FAILED failed)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
+# B-S2: crash_recovery_test (8 tests)
+echo -n "[beta-v3.0.0] B-S2: crash_recovery_test ... "
+TOTAL=$((TOTAL+1))
+CRASH_OUTPUT=$(cargo test --test crash_recovery_test 2>&1 || true)
+CRASH_PASSED=$(echo "$CRASH_OUTPUT" | grep -c "test result: ok" || echo "0")
+CRASH_FAILED=$(echo "$CRASH_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+if [ "$CRASH_FAILED" -eq 0 ] && [ "$CRASH_PASSED" -gt 0 ]; then
+    echo "PASS ($CRASH_PASSED/8 tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($CRASH_PASSED/8 tests)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
+# B-S3: long_run_stability_test (10 tests with --ignored)
+echo -n "[beta-v3.0.0] B-S3: long_run_stability_test ... "
+TOTAL=$((TOTAL+1))
+LONG_RUN_OUTPUT=$(cargo test --test long_run_stability_test -- --ignored 2>&1 || true)
+LONG_RUN_PASSED=$(echo "$LONG_RUN_OUTPUT" | grep -c "test result: ok" || echo "0")
+LONG_RUN_FAILED=$(echo "$LONG_RUN_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+LONG_RUN_IGNORED=$(echo "$LONG_RUN_OUTPUT" | grep -c "ignored" || echo "0")
+if [ "$LONG_RUN_FAILED" -eq 0 ] && [ "$LONG_RUN_PASSED" -gt 0 ]; then
+    echo "PASS ($LONG_RUN_PASSED/10 tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($LONG_RUN_PASSED/10 passed, $LONG_RUN_FAILED failed, $LONG_RUN_IGNORED ignored)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
+# B-S4: wal_integration_test (zero data loss after crash)
+echo -n "[beta-v3.0.0] B-S4: wal_integration_test ... "
+TOTAL=$((TOTAL+1))
+WAL_OUTPUT=$(cargo test --test wal_integration_test 2>&1 || true)
+WAL_PASSED=$(echo "$WAL_OUTPUT" | grep -c "test result: ok" || echo "0")
+WAL_FAILED=$(echo "$WAL_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+if [ "$WAL_FAILED" -eq 0 ] && [ "$WAL_PASSED" -gt 0 ]; then
+    echo "PASS ($WAL_PASSED tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($WAL_PASSED passed, $WAL_FAILED failed)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
+# B-S5: network_tcp_smoke_test (6 tests, no connection leak)
+echo -n "[beta-v3.0.0] B-S5: network_tcp_smoke_test ... "
+TOTAL=$((TOTAL+1))
+NETWORK_OUTPUT=$(cargo test --test network_tcp_smoke_test 2>&1 || true)
+NETWORK_PASSED=$(echo "$NETWORK_OUTPUT" | grep -c "test result: ok" || echo "0")
+NETWORK_FAILED=$(echo "$NETWORK_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+if [ "$NETWORK_FAILED" -eq 0 ] && [ "$NETWORK_PASSED" -gt 0 ]; then
+    echo "PASS ($NETWORK_PASSED/6 tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($NETWORK_PASSED/6 tests)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
 echo ""
 echo "=== Beta Gate Results: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="
 
