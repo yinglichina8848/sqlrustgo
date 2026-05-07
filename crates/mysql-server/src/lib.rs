@@ -2265,7 +2265,8 @@ fn handle_connection(
             tracing::info!("Starting command loop, seq=4");
             let mut ps_manager = PreparedStatementManager::new();
             #[allow(deprecated)]
-            let mut engine = MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
+            let mut engine =
+                MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
             let mut session = SessionState::default();
             let _ = do_command_loop(
                 &mut tls,
@@ -2319,7 +2320,8 @@ fn handle_connection(
     tracing::info!("Starting command loop, seq=3");
     let mut ps_manager = PreparedStatementManager::new();
     #[allow(deprecated)]
-    let mut engine = MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
+    let mut engine =
+        MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
     let mut session = SessionState::default();
     let _ = do_command_loop(
         &mut &stream,
@@ -2343,7 +2345,8 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
     let storage: Arc<RwLock<MemoryStorage>> = Arc::new(RwLock::new(MemoryStorage::new()));
     {
         #[allow(deprecated)]
-        let mut eng = MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
+        let mut eng =
+            MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
         for sql in ["CREATE TABLE content (hash TEXT PRIMARY KEY, doc TEXT NOT NULL, created_at TEXT NOT NULL)",
             "CREATE TABLE vectors (hash_seq TEXT PRIMARY KEY, hash TEXT NOT NULL, embedding TEXT NOT NULL, created_at TEXT NOT NULL)",
             "CREATE TABLE documents (id TEXT PRIMARY KEY, title TEXT, content TEXT, created_at TEXT)"] {

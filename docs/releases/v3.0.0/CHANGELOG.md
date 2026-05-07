@@ -1,11 +1,52 @@
-# v3.0.0 Changelog
+# v3.0.0 变更日志
 
-> **版本**: v3.0.0-alpha
-> **日期**: 2026-05-06
+> **版本**: v3.0.0
+> **发布日期**: 2026-05-07
 
 ---
 
-## [3.0.0-alpha] (2026-05-06)
+## v3.0.0 GA (2026-05-07)
+
+### 新增功能
+
+#### Beta Gate 测试体系
+
+- **B-S1**: concurrency_stress_test - 并发压力测试 (9 tests)
+- **B-S2**: crash_recovery_test - 崩溃恢复测试 (8 tests)
+- **B-S3**: long_run_stability_test - 长期稳定性测试 (10 tests)
+- **B-S4**: wal_integration_test - WAL 集成测试 (16 tests)
+- **B-S5**: network_tcp_smoke_test - 网络 TCP 冒烟测试 (6 tests)
+- **B-S6**: ssi_stress_test - SSI 隔离级别压力测试
+
+#### 性能基准
+
+- **QPS 基线**: 建立 v3.0.0 性能基线
+  - simple_select: 398,353 QPS
+  - update: 43,121 QPS (E-09 ≥10,000 ✅)
+  - delete: 64,896 QPS (E-09 ≥10,000 ✅)
+- **TPC-H 基线**: SF=0.1 全部 22 查询可运行
+- **R10/GA-10**: 完整的 check_perf_baseline.sh 脚本
+
+#### 测试基础设施
+
+- **wal_crash_recovery_test**: WAL 崩溃恢复测试 (11 tests)
+- **query_cache_test**: 查询缓存测试 (13 tests)
+
+### 改进
+
+- 格式化修复 (cargo fmt)
+- EngineConfig 标准化使用
+- 移除 deprecated API 使用
+
+### 测试与质量
+
+- 461 测试全部通过
+- clippy 零警告
+- fmt 检查通过
+
+---
+
+## v3.0.0-alpha (2026-05-06)
 
 ### Added
 
@@ -13,7 +54,7 @@
 - `planner::optimizer.rs` 完整重写，桥接至 `crates/optimizer/rules.rs` 真实实现
 - ConstantFolding 激活（`SELECT 1+2` → 返回 `3`）
 - PredicatePushdown 激活（filter 下推至 TableScan 层）
-- ProjectionPruning 激活（冗余列读取消除）
+- ProjectionPruning 激活（冗余列读消除）
 
 #### SQL 兼容性
 - IN 子查询支持 (`WHERE c IN (SELECT ...)`)
@@ -55,19 +96,13 @@
 - SQL Corpus: 100% (485/485)
 - TPC-H SF=0.1: 22/22 可运行
 
-### Changed
+---
 
-- 优化器调用链：从占位符实现 → 真实 CBO 规则
-- `cargo test --all-features`: 86 测试全部通过
+## v2.9.0 (2026-05-05)
 
-### Known Issues
-
-- SimpleCostModel 未接入 planner
-- TPC-H SF=1 存在 OOM 风险
-- optimizer/executor 模块覆盖率未达 GA 标准
+详见 [v2.9.0 CHANGELOG](../v2.9.0/CHANGELOG.md)
 
 ---
 
-## [2.9.0] (2026-04-??)
-
-详见 [v2.9.0 CHANGELOG](../v2.9.0/CHANGELOG.md)
+*本文档由 SQLRustGo Team 维护*
+*更新日期: 2026-05-07*

@@ -128,7 +128,11 @@ fn test_wal_recover_committed_transaction() {
         .iter()
         .filter(|e| e.tx_id == 1 && e.entry_type == WalEntryType::Commit)
         .collect();
-    assert_eq!(committed_entries.len(), 1, "Committed transaction should be recovered");
+    assert_eq!(
+        committed_entries.len(),
+        1,
+        "Committed transaction should be recovered"
+    );
 }
 
 #[test]
@@ -277,13 +281,21 @@ fn test_wal_recover_to_timestamp() {
     let entries = wal
         .recover_to_timestamp(far_future_timestamp)
         .expect("Failed to recover to timestamp");
-    assert_eq!(entries.len(), 3, "Should recover all entries with future timestamp");
+    assert_eq!(
+        entries.len(),
+        3,
+        "Should recover all entries with future timestamp"
+    );
 
     // Recover with timestamp 0 (before all entries) should return nothing
     let entries = wal
         .recover_to_timestamp(0)
         .expect("Failed to recover to timestamp");
-    assert_eq!(entries.len(), 0, "Should recover no entries with past timestamp");
+    assert_eq!(
+        entries.len(),
+        0,
+        "Should recover no entries with past timestamp"
+    );
 }
 
 #[test]
@@ -368,7 +380,8 @@ fn wal_data_integrity_after_recovery() {
         .expect("Should find insert entry");
 
     assert_eq!(
-        insert_entry.data.as_ref().unwrap(), &test_data,
+        insert_entry.data.as_ref().unwrap(),
+        &test_data,
         "Data should match after recovery"
     );
     assert_eq!(

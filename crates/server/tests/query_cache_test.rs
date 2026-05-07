@@ -131,13 +131,17 @@ mod query_cache_dml_tests {
         );
 
         // Verify cache has the entry
-        assert!(cache.get(&make_cache_key("SELECT * FROM users WHERE id = ?", 1)).is_some());
+        assert!(cache
+            .get(&make_cache_key("SELECT * FROM users WHERE id = ?", 1))
+            .is_some());
 
         // Simulate INSERT operation on "users" table
         cache.invalidate_table("users");
 
         // Cache should be invalidated
-        assert!(cache.get(&make_cache_key("SELECT * FROM users WHERE id = ?", 1)).is_none());
+        assert!(cache
+            .get(&make_cache_key("SELECT * FROM users WHERE id = ?", 1))
+            .is_none());
     }
 
     // ============================================================
@@ -174,8 +178,12 @@ mod query_cache_dml_tests {
 
         // Only orders cache should be invalidated, products should remain
         assert_eq!(cache.stats().entries, 1);
-        assert!(cache.get(&make_cache_key("SELECT * FROM products WHERE id = ?", 1)).is_some());
-        assert!(cache.get(&make_cache_key("SELECT * FROM orders WHERE id = ?", 1)).is_none());
+        assert!(cache
+            .get(&make_cache_key("SELECT * FROM products WHERE id = ?", 1))
+            .is_some());
+        assert!(cache
+            .get(&make_cache_key("SELECT * FROM orders WHERE id = ?", 1))
+            .is_none());
     }
 
     // ============================================================
@@ -193,13 +201,23 @@ mod query_cache_dml_tests {
         );
 
         // Verify cache has the entry
-        assert!(cache.get(&make_cache_key("SELECT * FROM lineitem WHERE order_id = ?", 1)).is_some());
+        assert!(cache
+            .get(&make_cache_key(
+                "SELECT * FROM lineitem WHERE order_id = ?",
+                1
+            ))
+            .is_some());
 
         // Simulate DELETE operation
         cache.invalidate_table("lineitem");
 
         // Cache should be invalidated
-        assert!(cache.get(&make_cache_key("SELECT * FROM lineitem WHERE order_id = ?", 1)).is_none());
+        assert!(cache
+            .get(&make_cache_key(
+                "SELECT * FROM lineitem WHERE order_id = ?",
+                1
+            ))
+            .is_none());
         assert_eq!(cache.stats().entries, 0);
     }
 
@@ -212,7 +230,10 @@ mod query_cache_dml_tests {
 
         // Cache a JOIN query
         cache.put(
-            make_cache_key("SELECT * FROM orders JOIN customers ON orders.customer_id = customers.id", 0),
+            make_cache_key(
+                "SELECT * FROM orders JOIN customers ON orders.customer_id = customers.id",
+                0,
+            ),
             make_cache_entry(1, vec!["orders".to_string(), "customers".to_string()]),
             vec!["orders".to_string(), "customers".to_string()],
         );
@@ -235,7 +256,9 @@ mod query_cache_dml_tests {
         cache.invalidate_table("orders");
 
         assert_eq!(cache.stats().entries, 1);
-        assert!(cache.get(&make_cache_key("SELECT * FROM customers", 0)).is_some());
+        assert!(cache
+            .get(&make_cache_key("SELECT * FROM customers", 0))
+            .is_some());
     }
 
     // ============================================================
@@ -246,9 +269,21 @@ mod query_cache_dml_tests {
         let mut cache = QueryCache::new();
 
         // Cache queries for multiple tables
-        cache.put(make_cache_key("SELECT * FROM t1", 0), make_cache_entry(1, vec!["t1".to_string()]), vec!["t1".to_string()]);
-        cache.put(make_cache_key("SELECT * FROM t2", 0), make_cache_entry(2, vec!["t2".to_string()]), vec!["t2".to_string()]);
-        cache.put(make_cache_key("SELECT * FROM t3", 0), make_cache_entry(3, vec!["t3".to_string()]), vec!["t3".to_string()]);
+        cache.put(
+            make_cache_key("SELECT * FROM t1", 0),
+            make_cache_entry(1, vec!["t1".to_string()]),
+            vec!["t1".to_string()],
+        );
+        cache.put(
+            make_cache_key("SELECT * FROM t2", 0),
+            make_cache_entry(2, vec!["t2".to_string()]),
+            vec!["t2".to_string()],
+        );
+        cache.put(
+            make_cache_key("SELECT * FROM t3", 0),
+            make_cache_entry(3, vec!["t3".to_string()]),
+            vec!["t3".to_string()],
+        );
 
         assert_eq!(cache.stats().entries, 3);
 
@@ -277,7 +312,10 @@ mod query_cache_dml_tests {
             let mut cache = cache.lock().unwrap();
             for i in 0..100 {
                 cache.put(
-                    make_cache_key(&format!("SELECT * FROM table_{} WHERE id = ?", i as u64 % 10), i as u64),
+                    make_cache_key(
+                        &format!("SELECT * FROM table_{} WHERE id = ?", i as u64 % 10),
+                        i as u64,
+                    ),
                     make_cache_entry(i as i64, vec![format!("table_{}", i as u64 % 10)]),
                     vec![format!("table_{}", i as u64 % 10)],
                 );
@@ -325,8 +363,16 @@ mod query_cache_dml_tests {
         let mut cache = QueryCache::new();
 
         // Fill cache
-        cache.put(make_cache_key("SELECT * FROM users", 0), make_cache_entry(1, vec!["users".to_string()]), vec!["users".to_string()]);
-        cache.put(make_cache_key("SELECT * FROM orders", 0), make_cache_entry(2, vec!["orders".to_string()]), vec!["orders".to_string()]);
+        cache.put(
+            make_cache_key("SELECT * FROM users", 0),
+            make_cache_entry(1, vec!["users".to_string()]),
+            vec!["users".to_string()],
+        );
+        cache.put(
+            make_cache_key("SELECT * FROM orders", 0),
+            make_cache_entry(2, vec!["orders".to_string()]),
+            vec!["orders".to_string()],
+        );
 
         let stats_before = cache.stats();
         assert_eq!(stats_before.entries, 2);
@@ -348,14 +394,20 @@ mod query_cache_dml_tests {
         let mut cache = QueryCache::new();
 
         // Cache something
-        cache.put(make_cache_key("SELECT * FROM users", 0), make_cache_entry(1, vec!["users".to_string()]), vec!["users".to_string()]);
+        cache.put(
+            make_cache_key("SELECT * FROM users", 0),
+            make_cache_entry(1, vec!["users".to_string()]),
+            vec!["users".to_string()],
+        );
 
         // Invalidate non-existent table
         cache.invalidate_table("nonexistent_table");
 
         // Original cache should be untouched
         assert_eq!(cache.stats().entries, 1);
-        assert!(cache.get(&make_cache_key("SELECT * FROM users", 0)).is_some());
+        assert!(cache
+            .get(&make_cache_key("SELECT * FROM users", 0))
+            .is_some());
     }
 
     // ============================================================
@@ -366,16 +418,30 @@ mod query_cache_dml_tests {
         let mut cache = QueryCache::new();
 
         // Initial cache
-        cache.put(make_cache_key("SELECT * FROM users", 0), make_cache_entry(1, vec!["users".to_string()]), vec!["users".to_string()]);
-        assert!(cache.get(&make_cache_key("SELECT * FROM users", 0)).is_some());
+        cache.put(
+            make_cache_key("SELECT * FROM users", 0),
+            make_cache_entry(1, vec!["users".to_string()]),
+            vec!["users".to_string()],
+        );
+        assert!(cache
+            .get(&make_cache_key("SELECT * FROM users", 0))
+            .is_some());
 
         // DML invalidates
         cache.invalidate_table("users");
-        assert!(cache.get(&make_cache_key("SELECT * FROM users", 0)).is_none());
+        assert!(cache
+            .get(&make_cache_key("SELECT * FROM users", 0))
+            .is_none());
 
         // Repopulate cache
-        cache.put(make_cache_key("SELECT * FROM users", 0), make_cache_entry(2, vec!["users".to_string()]), vec!["users".to_string()]);
-        assert!(cache.get(&make_cache_key("SELECT * FROM users", 0)).is_some());
+        cache.put(
+            make_cache_key("SELECT * FROM users", 0),
+            make_cache_entry(2, vec!["users".to_string()]),
+            vec!["users".to_string()],
+        );
+        assert!(cache
+            .get(&make_cache_key("SELECT * FROM users", 0))
+            .is_some());
     }
 
     // ============================================================
@@ -386,9 +452,21 @@ mod query_cache_dml_tests {
         let mut cache = QueryCache::new();
 
         // Cache for multiple tables
-        cache.put(make_cache_key("SELECT * FROM a", 0), make_cache_entry(1, vec!["a".to_string()]), vec!["a".to_string()]);
-        cache.put(make_cache_key("SELECT * FROM b", 0), make_cache_entry(2, vec!["b".to_string()]), vec!["b".to_string()]);
-        cache.put(make_cache_key("SELECT * FROM c", 0), make_cache_entry(3, vec!["c".to_string()]), vec!["c".to_string()]);
+        cache.put(
+            make_cache_key("SELECT * FROM a", 0),
+            make_cache_entry(1, vec!["a".to_string()]),
+            vec!["a".to_string()],
+        );
+        cache.put(
+            make_cache_key("SELECT * FROM b", 0),
+            make_cache_entry(2, vec!["b".to_string()]),
+            vec!["b".to_string()],
+        );
+        cache.put(
+            make_cache_key("SELECT * FROM c", 0),
+            make_cache_entry(3, vec!["c".to_string()]),
+            vec!["c".to_string()],
+        );
 
         // DML on table 'b'
         cache.invalidate_table("b");
@@ -415,7 +493,10 @@ mod query_cache_dml_tests {
             for i in 0..50 {
                 let table_id = i as u64 % 5;
                 cache.put(
-                    make_cache_key(&format!("SELECT * FROM t{} WHERE id = ?", table_id), i as u64),
+                    make_cache_key(
+                        &format!("SELECT * FROM t{} WHERE id = ?", table_id),
+                        i as u64,
+                    ),
                     make_cache_entry(i as i64, vec![format!("t{}", table_id)]),
                     vec![format!("t{}", table_id)],
                 );
@@ -438,7 +519,10 @@ mod query_cache_dml_tests {
                             cache.invalidate_table(&table);
                             // Immediately repopulate
                             cache.put(
-                                make_cache_key(&format!("SELECT * FROM {} WHERE id = ?", table), i as u64),
+                                make_cache_key(
+                                    &format!("SELECT * FROM {} WHERE id = ?", table),
+                                    i as u64,
+                                ),
                                 make_cache_entry(i as i64, vec![table.clone()]),
                                 vec![table],
                             );
@@ -467,9 +551,21 @@ mod query_cache_dml_tests {
     fn test_clear_caches() {
         let mut cache = QueryCache::new();
 
-        cache.put(make_cache_key("SELECT * FROM users", 0), make_cache_entry(1, vec!["users".to_string()]), vec!["users".to_string()]);
-        cache.put(make_cache_key("SELECT * FROM orders", 0), make_cache_entry(2, vec!["orders".to_string()]), vec!["orders".to_string()]);
-        cache.put(make_cache_key("SELECT * FROM products", 0), make_cache_entry(3, vec!["products".to_string()]), vec!["products".to_string()]);
+        cache.put(
+            make_cache_key("SELECT * FROM users", 0),
+            make_cache_entry(1, vec!["users".to_string()]),
+            vec!["users".to_string()],
+        );
+        cache.put(
+            make_cache_key("SELECT * FROM orders", 0),
+            make_cache_entry(2, vec!["orders".to_string()]),
+            vec!["orders".to_string()],
+        );
+        cache.put(
+            make_cache_key("SELECT * FROM products", 0),
+            make_cache_entry(3, vec!["products".to_string()]),
+            vec!["products".to_string()],
+        );
 
         assert_eq!(cache.stats().entries, 3);
 
