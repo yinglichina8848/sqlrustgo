@@ -92,3 +92,99 @@
 - #388 COM_MULTI + Prepared Statement + Transaction Fixes
 - #390 Prepared Statement 参数绑定修复 + 编译修复
 - #391 TPC-H SF=1 CI Gate (`--sf1`/`--sf0.1` 选项)
+
+---
+
+## 六、v3.1.0 延续任务（来自 v3.0.0 未完成项）
+
+> 基于 gate_lifecycle_tracking.md §7.3 建立
+
+以下任务在 v3.0.0 未完成或未达到 Beta Gate 要求，必须在 v3.1.0 中完成。
+
+### 6.1 P0 任务（阻塞 v3.1.0 Beta Gate）
+
+| 原 Issue | 任务 | v3.0.0 状态 | v3.1.0 目标 | 验收条件 |
+|----------|------|------------|-------------|----------|
+| #451 | SQL Operations 语法支持 | 20% (11/55) | ≥80% (44/55) | `test_sql_corpus_operations` 通过率 ≥80%，涉及 BACKUP, SAVEPOINT, SET TRANSACTION ISOLATION LEVEL, LIMIT/OFFSET, TRUNCATE, REPLACE, SHOW, EXPLAIN ANALYZE, TEMPORARY TABLE, ALTER TABLE INPLACE, BATCH INSERT |
+| #392 | CBO 代价模型集成 | 未开始 | SimpleCostModel 接入 planner | EXPLAIN 能选择索引扫描而非全表；多表 JOIN 按代价排序 |
+| — | TPC-H SF=1 无 OOM | SF=1 曾 OOM | 22/22 无 OOM，p99 < 5s | `check_tpch.sh sf=1` 22/22 全部通过 |
+| #379 | 事务状态机压力测试 | 未开始 | crash_recovery_test 全部 PASS | B-S2 PASS，100 并发 BEGIN/COMMIT/ROLLBACK 无状态泄漏 |
+
+### 6.2 P1 任务（阻塞 v3.1.0 RC Gate）
+
+| 原 Issue | 任务 | v3.0.0 状态 | v3.1.0 目标 | 验收条件 |
+|----------|------|------------|-------------|----------|
+| #380 | Optimizer 测试扩展 | 未开始 | 覆盖率 ≥75% | `cargo llvm-cov -p sqlrustgo-optimizer` ≥ 75% |
+| #381 | Planner 测试扩展 | 未开始 | 覆盖率 ≥80% | `cargo llvm-cov -p sqlrustgo-planner` ≥ 80% |
+| — | 连接池/缓存/Group Commit 正确性 | 部分完成 | 并发压力测试通过 | 连接池泄漏检测、缓存 DML 失效、WAL 崩溃恢复全部 PASS |
+| #382 | TPC-H SF=1 CI Gate | 已完成（PR #391） | — | ✅ 已完成 |
+
+### 6.3 GA 门禁遗留问题修复（来自 GA_GATE_AUDIT.md）
+
+> 基于 GA_GATE_AUDIT.md §四建立
+
+#### P0 — 阻塞 v3.1.0 GA
+
+| 遗留编号 | 任务 | 验收条件 |
+|----------|------|----------|
+| GA-GAP-02 | 实现 G7/G8/G9 QPS 实际测量 | `cargo bench -- point_select` 输出 ≥10,000 ops/s |
+| GA-GAP-03 | 统一 SQL Corpus 阈值为 ≥98% | `test_sql_corpus_all` ≥98%，当前 94.1% |
+
+#### P1 — 阻塞 v3.1.0 RC
+
+| 遗留编号 | 任务 | 验收条件 |
+|----------|------|----------|
+| GA-GAP-01 | 修复 R-05 semver 漏洞或申请豁免 | `cargo audit` 输出不包含 R-05，或 Architect 批准豁免 |
+| GA-GAP-08 | 创建缺失的 3 个文档 | INSTALL.md、DEPLOYMENT_GUIDE.md、QUICK_START.md 存在且内容完整 |
+| GA-GAP-04 | 将 B-S1~B-S5 稳定性测试纳入 GA Gate | check_ga_v300.sh 包含 B-S1~B-S5 检查 |
+
+#### P2 — 建议完成
+
+| 遗留编号 | 任务 | 验收条件 |
+|----------|------|----------|
+| GA-GAP-05 | 实现 MySQL Protocol Test | `docker run --rm mysql:5.7 mysql -h <host> -e "SELECT 1"` 成功 |
+| GA-GAP-06 | 修复 run_integration.sh 退出码验证 | `bash scripts/test/run_integration.sh --quick` 退出码为 0 |
+| GA-GAP-07 | 扩展 formal proofs 检查到 .dfy/.tla | check_ga_v300.sh GA-11 计数 ≥10 个文件（所有格式） |
+
+#### P3 — 规范对齐
+
+| 遗留编号 | 任务 | 验收条件 |
+|----------|------|----------|
+| GA-GAP-09 | 将 GA-8 添加到 gate_spec_v300.md 或从脚本移除 | gate_spec_v300.md 与 check_ga_v300.sh GA-8 定义一致 |
+
+### 6.4 v3.1.0 门禁目标
+
+| 门禁 | 指标 | v3.0.0 实际 | v3.1.0 目标 |
+|------|------|------------|-------------|
+| B2 | 测试通过率 | 94.1% (test_sql_corpus_all) | ≥90% (全量) |
+| B5 | 覆盖率 | — | ≥75% |
+| B9 | SQL Corpus | 94.1% (all) / 20% (operations) | ≥85% |
+| B-S2 | crash_recovery_test | — | 全部 PASS |
+| B-S10 | test_sql_corpus_operations | 20% | ≥80% |
+
+### 6.5 任务追踪机制
+
+```
+v3.0.0: Issue #451 (SQL operations 20%) → OPEN
+         ↓
+v3.1.0 DEVELOPMENT_PLAN.md §6.1 建立延续映射
+         ↓
+v3.1.0 开发期间持续追踪
+         ↓
+修复完成 → PR 合并 → Issue #451 closedByPullRequest
+         ↓
+验证 test_sql_corpus_operations ≥ 80%
+```
+
+### 6.6 GA 门禁遗留问题追踪
+
+```
+GA_GATE_AUDIT.md GA-GAP-XX（OPEN）
+    ↓
+v3.1.0 DEVELOPMENT_PLAN.md §6.3 建立延续映射
+    ↓
+创建 Issue（milestone: v3.1.0-ga）
+    ↓
+修复完成 → 验证门禁 PASS → GA_GATE_AUDIT.md 状态改为 CLOSED
+```
+
