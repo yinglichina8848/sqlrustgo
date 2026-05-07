@@ -67,7 +67,8 @@ fn main() {
 
     // Initialize execution engine
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-    let mut engine = MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
+    let mut engine =
+        MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
 
     // Initialize session manager and create CLI session
     let session_manager = Arc::new(SessionManager::new());

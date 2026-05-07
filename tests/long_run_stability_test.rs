@@ -123,7 +123,8 @@ fn test_concurrent_read_write_stability() {
 
     // Create initial table
     {
-        let mut engine = MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
+        let mut engine =
+            MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
         let _ = engine.execute("DROP TABLE IF EXISTS stability_test");
         let _ = engine.execute("CREATE TABLE stability_test (id INTEGER, value TEXT)");
     }
@@ -137,7 +138,8 @@ fn test_concurrent_read_write_stability() {
         let errors = error_counter.clone();
 
         let handle = thread::spawn(move || {
-            let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
+            let mut engine =
+                MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
             for i in 0..100 {
                 let unique_id = thread_id * 1000 + i;
                 let result = engine.execute(&format!(
@@ -161,7 +163,8 @@ fn test_concurrent_read_write_stability() {
         let counter = read_counter.clone();
 
         let handle = thread::spawn(move || {
-            let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
+            let mut engine =
+                MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
             for _ in 0..100 {
                 let result = engine.execute("SELECT * FROM stability_test");
                 if result.is_ok() {
@@ -237,7 +240,8 @@ fn test_memory_stability_under_load() {
 
     // Create table
     {
-        let mut engine = MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
+        let mut engine =
+            MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
         let _ = engine.execute("DROP TABLE IF EXISTS stability_test");
         let _ = engine.execute("CREATE TABLE stability_test (id INTEGER, value TEXT)");
     }
@@ -249,7 +253,8 @@ fn test_memory_stability_under_load() {
         let storage = storage.clone();
 
         let handle = thread::spawn(move || {
-            let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
+            let mut engine =
+                MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
             for i in 0..10 {
                 let id = batch * 1000 + i;
                 let _ = engine.execute(&format!(
@@ -342,7 +347,8 @@ fn test_interleaved_read_write_consistency() {
 
     // Create table
     {
-        let mut engine = MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
+        let mut engine =
+            MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
         let _ = engine.execute("DROP TABLE IF EXISTS stability_test");
         let _ = engine.execute("CREATE TABLE stability_test (id INTEGER, value TEXT)");
     }
@@ -353,7 +359,8 @@ fn test_interleaved_read_write_consistency() {
         let storage = storage.clone();
 
         let handle = thread::spawn(move || {
-            let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
+            let mut engine =
+                MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
             for i in 0..100 {
                 let id = thread_id * 1000 + i;
                 // Write
@@ -383,7 +390,8 @@ fn test_rapid_burst_writes() {
 
     // Create table
     {
-        let mut engine = MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
+        let mut engine =
+            MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
         let _ = engine.execute("DROP TABLE IF EXISTS stability_test");
         let _ = engine.execute("CREATE TABLE stability_test (id INTEGER, value TEXT)");
     }
@@ -398,7 +406,8 @@ fn test_rapid_burst_writes() {
             .map(|i| {
                 let storage = storage.clone();
                 thread::spawn(move || {
-                    let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
+                    let mut engine =
+                        MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
                     let id = burst * 1000 + i;
                     let _ = engine.execute(&format!(
                         "INSERT INTO stability_test VALUES ({}, 'burst_{}_value_{}')",

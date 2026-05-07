@@ -353,7 +353,8 @@ fn run_sqlrustgo_benchmarks() -> SystemResult {
 
         for _ in 0..ITERATIONS {
             let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-            let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
+            let mut engine =
+                MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
 
             // Create and populate tables
             create_tables(&mut engine, &lineitem_data, &orders_data, &customer_data);

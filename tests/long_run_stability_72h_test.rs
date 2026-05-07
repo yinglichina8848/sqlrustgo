@@ -268,7 +268,10 @@ fn test_sustained_write_concurrent_72h() {
             let mut local_count = counter_clone.fetch_add(1000000 * i as i64, Ordering::Relaxed);
             let mut local_inserted = 0i64;
             while start_clone.elapsed() < dur && run_clone.load(Ordering::Relaxed) {
-                let mut engine = MemoryExecutionEngine::new_with_config(Arc::clone(&storage_clone), EngineConfig::default());
+                let mut engine = MemoryExecutionEngine::new_with_config(
+                    Arc::clone(&storage_clone),
+                    EngineConfig::default(),
+                );
                 let result = engine.execute(&format!(
                     "INSERT INTO stability_test VALUES ({}, 'value_{}')",
                     local_count, local_count
@@ -326,7 +329,8 @@ fn test_sustained_read_72h() {
 
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
     for i in 0..10000 {
-        let mut eng = MemoryExecutionEngine::new_with_config(Arc::clone(&storage), EngineConfig::default());
+        let mut eng =
+            MemoryExecutionEngine::new_with_config(Arc::clone(&storage), EngineConfig::default());
         let _ = eng.execute(&format!(
             "INSERT INTO stability_test VALUES ({}, 'value_{}')",
             i, i
@@ -355,7 +359,10 @@ fn test_sustained_read_72h() {
         handles.push(std::thread::spawn(move || {
             let mut local_reads = 0i64;
             while start_clone.elapsed() < dur && run_clone.load(Ordering::Relaxed) {
-                let mut eng = MemoryExecutionEngine::new_with_config(Arc::clone(&storage_clone), EngineConfig::default());
+                let mut eng = MemoryExecutionEngine::new_with_config(
+                    Arc::clone(&storage_clone),
+                    EngineConfig::default(),
+                );
                 let _ = eng.execute("SELECT * FROM stability_test WHERE id % 100 = 0");
                 local_reads += 1;
             }
@@ -419,7 +426,10 @@ fn test_concurrent_read_write_72h() {
     let writer_handle = std::thread::spawn(move || {
         let mut local_counter = writer_counter.load(Ordering::Relaxed);
         while writer_start.elapsed() < writer_dur && writer_running.load(Ordering::Relaxed) {
-            let mut engine = MemoryExecutionEngine::new_with_config(Arc::clone(&writer_storage), EngineConfig::default());
+            let mut engine = MemoryExecutionEngine::new_with_config(
+                Arc::clone(&writer_storage),
+                EngineConfig::default(),
+            );
             let result = engine.execute(&format!(
                 "INSERT INTO stability_test VALUES ({}, 'value_{}')",
                 local_counter, local_counter
@@ -441,7 +451,10 @@ fn test_concurrent_read_write_72h() {
         let handle = std::thread::spawn(move || {
             let mut local_reads = 0i64;
             while start_clone.elapsed() < dur_clone && run_clone.load(Ordering::Relaxed) {
-                let mut engine = MemoryExecutionEngine::new_with_config(Arc::clone(&storage_clone), EngineConfig::default());
+                let mut engine = MemoryExecutionEngine::new_with_config(
+                    Arc::clone(&storage_clone),
+                    EngineConfig::default(),
+                );
                 let _ = engine.execute("SELECT * FROM stability_test WHERE id % 100 = 0");
                 local_reads += 1;
             }
