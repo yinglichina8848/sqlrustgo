@@ -6,6 +6,7 @@
 //! These tests are designed to run with --ignored flag:
 //!   cargo test --test qps_benchmark_test -- --ignored
 
+use sqlrustgo::execution_engine::EngineConfig;
 use sqlrustgo::MemoryExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use std::sync::{Arc, RwLock};
@@ -17,7 +18,7 @@ const CONCURRENT_THREADS: usize = 8;
 
 fn create_engine() -> MemoryExecutionEngine {
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-    MemoryExecutionEngine::new(storage)
+    MemoryExecutionEngine::new_with_config(storage, EngineConfig::default())
 }
 
 fn setup_tables(engine: &mut MemoryExecutionEngine) {
@@ -243,7 +244,7 @@ fn test_qps_concurrent_select() {
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
 
     {
-        let mut engine = MemoryExecutionEngine::new(storage.clone());
+        let mut engine = MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
         setup_tables(&mut engine);
         for i in 0..1000 {
             let _ = engine.execute(&format!(
@@ -261,7 +262,7 @@ fn test_qps_concurrent_select() {
         .map(|_| {
             let storage = storage.clone();
             thread::spawn(move || {
-                let mut engine = MemoryExecutionEngine::new(storage);
+                let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
                 for i in 0..warmup_iters {
                     let _ = engine.execute(&format!("SELECT * FROM users WHERE id = {}", i % 1000));
                 }
@@ -280,7 +281,7 @@ fn test_qps_concurrent_select() {
             .map(|_| {
                 let storage = storage.clone();
                 thread::spawn(move || {
-                    let mut engine = MemoryExecutionEngine::new(storage);
+                    let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
                     for i in 0..(BENCHMARK_ITERATIONS / CONCURRENT_THREADS) {
                         let _ =
                             engine.execute(&format!("SELECT * FROM users WHERE id = {}", i % 1000));
@@ -315,7 +316,7 @@ fn test_qps_concurrent_mixed() {
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
 
     {
-        let mut engine = MemoryExecutionEngine::new(storage.clone());
+        let mut engine = MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
         setup_tables(&mut engine);
         insert_test_data(&mut engine);
     }
@@ -326,7 +327,7 @@ fn test_qps_concurrent_mixed() {
         .map(|thread_id| {
             let storage = storage.clone();
             thread::spawn(move || {
-                let mut engine = MemoryExecutionEngine::new(storage);
+                let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
                 for i in 0..(BENCHMARK_ITERATIONS / CONCURRENT_THREADS) {
                     let query_type = (thread_id + i) % 4;
                     match query_type {

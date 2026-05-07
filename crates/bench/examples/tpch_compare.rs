@@ -16,6 +16,7 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
+use sqlrustgo::execution_engine::EngineConfig;
 use sqlrustgo::MemoryExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use std::io::Write;
@@ -352,7 +353,7 @@ fn run_sqlrustgo_benchmarks() -> SystemResult {
 
         for _ in 0..ITERATIONS {
             let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-            let mut engine = MemoryExecutionEngine::new(storage);
+            let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
 
             // Create and populate tables
             create_tables(&mut engine, &lineitem_data, &orders_data, &customer_data);
