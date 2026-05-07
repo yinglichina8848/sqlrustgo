@@ -3,7 +3,7 @@
 > **版本**: v3.0.0-beta.2
 > **日期**: 2026-05-08
 > **分支**: develop/v3.0.0
-> **状态**: 🟡 进行中 (4/9 完成)
+> **状态**: 🟡 进行中 (5/9 完成)
 
 ---
 
@@ -24,7 +24,7 @@
 
 | Issue | 标题 | 状态 | 对应门禁 |
 |-------|------|------|---------|
-| #442 | RANGE Partition 分区裁剪 (BP2-7) | 🔴 未开始 | BP2-7 |
+| #442 | RANGE Partition 分区裁剪 (BP2-7) | ✅ 已完成 | BP2-7 | #458 |
 | #443 | Cursor 基础版 (BP2-8) | 🔴 未开始 | BP2-8 |
 | #444 | Trigger Chain 触发器链 (BP2-9) | 🔴 未开始 | BP2-9 |
 
@@ -42,7 +42,7 @@
 | BP2-4 | INFORMATION_SCHEMA | `cargo test --test information_schema_test` | 8/8 PASS | #439 | ✅ |
 | BP2-5 | EXPLAIN ANALYZE | `cargo test --test explain_analyze_test` | actual_rows 输出正确 | #440 | ⏳ |
 | BP2-6 | Window Functions | `cargo test --test window_function_test` | LEAD/LAG/NTILE 正确 | #441 | ⏳ |
-| BP2-7 | RANGE Partition | `cargo test --test partition_test` | 分区裁剪正确 | #442 | ⏳ |
+| BP2-7 | RANGE Partition | `cargo test --test partition_test` | 8/8 PASS | #442 | ✅ |
 | BP2-8 | Cursor | `cargo test --test cursor_test` | FETCH 正确 | #443 | ⏳ |
 | BP2-9 | Trigger Chain | `cargo test --test trigger_chain_test` | 有序执行正确 | #444 | ⏳ |
 | BP2-QA1 | Soak Test 72h | `cargo test --test long_run_stability_72h_test` | 72h 无 leak | - | ⏳ |
@@ -79,7 +79,7 @@
              ⏳ BP2-Gate 验证
 ```
 
-### 完成进度: 4/9 (44%)
+### 完成进度: 5/9 (56%)
 
 ---
 
