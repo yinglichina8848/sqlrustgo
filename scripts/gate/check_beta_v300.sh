@@ -236,6 +236,20 @@ else
     BLOCKERS=$((BLOCKERS+1))
 fi
 
+# B-S6: ssi_stress_test (7 tests, SSI transaction stress)
+echo -n "[beta-v3.0.0] B-S6: ssi_stress_test ... "
+TOTAL=$((TOTAL+1))
+SSI_OUTPUT=$(cargo test -p sqlrustgo-transaction --test ssi_stress_test 2>&1 || true)
+SSI_PASSED=$(echo "$SSI_OUTPUT" | grep -c "test result: ok" || echo "0")
+SSI_FAILED=$(echo "$SSI_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+if [ "$SSI_FAILED" -eq 0 ] && [ "$SSI_PASSED" -gt 0 ]; then
+    echo "PASS ($SSI_PASSED tests)"
+    PASS=$((PASS+1))
+else
+    echo "FAIL ($SSI_PASSED passed, $SSI_FAILED failed)"
+    BLOCKERS=$((BLOCKERS+1))
+fi
+
 echo ""
 echo "=== Beta Gate Results: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="
 

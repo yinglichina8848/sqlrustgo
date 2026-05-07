@@ -134,7 +134,18 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | B12 | CBO Optimizer | `cargo test -p sqlrustgo-optimizer` | 全部通过 |
 | B13 | CBO Planner | `cargo test --test cbo_integration_test` | 全部通过 |
 
-### 4.3 TPC-H SF=0.1 详细要求
+### 4.3 稳定性测试清单
+
+| # | 检查项 | 命令/方法 | 通过标准 |
+|---|--------|----------|---------|
+| B-S1 | concurrency_stress_test | `cargo test --test concurrency_stress_test` | 全部通过 |
+| B-S2 | crash_recovery_test | `cargo test --test crash_recovery_test` | 全部通过 |
+| B-S3 | long_run_stability_test | `cargo test --test long_run_stability_test -- --ignored` | 全部通过 |
+| B-S4 | wal_integration_test | `cargo test --test wal_integration_test` | 全部通过 |
+| B-S5 | network_tcp_smoke_test | `cargo test --test network_tcp_smoke_test` | 全部通过 |
+| B-S6 | ssi_stress_test | `cargo test -p sqlrustgo-transaction --test ssi_stress_test` | 全部通过 |
+
+### 4.4 TPC-H SF=0.1 详细要求
 
 ```bash
 # 验证命令
@@ -150,7 +161,7 @@ cargo run -p sqlrustgo-bench-cli -- tpch-bench \
 # - Q17/Q18 允许慢，但必须出结果
 ```
 
-### 4.4 覆盖率要求
+### 4.5 覆盖率要求
 
 | 模块 | 目标 |
 |------|------|
