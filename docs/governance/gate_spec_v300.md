@@ -250,19 +250,23 @@ R7 包含四个子检查：
 
 ### 6.2 检查清单
 
-| # | 检查项 | 命令/方法 | 通过标准 |
-|---|--------|----------|---------|
-| G1 | Build | `cargo build --release --workspace` | 无错误 |
-| G2 | Test | `cargo test --all-features` | 100% 通过 |
-| G3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 |
-| G4 | Format | `cargo fmt --all -- --check` | 无格式错误 |
-| G5 | Coverage | `cargo llvm-cov --all-features --lcov` | ≥85% |
-| G6 | Security | `cargo audit` | 无漏洞 |
-| G7 | Point Select QPS | `cargo bench -- point_select` | ≥10,000 QPS |
-| G8 | UPDATE QPS | `cargo bench -- update_simple` | ≥5,000 QPS |
-| G9 | DELETE QPS | `cargo bench -- delete_simple` | ≥2,000 QPS |
-| G10 | TPC-H SF=1 | `scripts/gate/check_tpch.sh sf=1` | 22/22 通过，无 OOM |
-| G11 | SQL Corpus | `cargo test -p sqlrustgo-sql-corpus` | ≥98% |
+| # | 检查项 | 命令/方法 | 通过标准 | 证据格式 |
+|---|--------|----------|---------|---------|
+| G1 | Build | `cargo build --release --workspace` | 无错误 | `{command, exit_code}` |
+| G2 | Test | `cargo test --all-features` | 100% 通过 | `{passed, failed, exit_code}` |
+| G3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 | `{warnings, exit_code}` |
+| G4 | Format | `cargo fmt --all -- --check` | 无格式错误 | `{diff_count, exit_code}` |
+| G5 | Coverage | `cargo llvm-cov --all-features --lcov` | ≥85% | `{total_pct, module_pcts}` |
+| G6 | Security | `cargo audit` | 无高危漏洞 | `{vulnerabilities}` |
+| G7 | Point Select QPS | `cargo bench -- point_select` | **≥10,000 ops/s**（实际测量） | `{qps, threshold, pass}` |
+| G8 | UPDATE QPS | `cargo bench -- update_simple` | **≥5,000 ops/s**（实际测量） | `{qps, threshold, pass}` |
+| G9 | DELETE QPS | `cargo bench -- delete_simple` | **≥2,000 ops/s**（实际测量） | `{qps, threshold, pass}` |
+| G10 | TPC-H SF=1 | `scripts/gate/check_tpch.sh sf=1` | 22/22 通过，无 OOM | `{passed, total, oom_count}` |
+| G11 | SQL Corpus | `cargo test -p sqlrustgo-sql-corpus` | **≥98%**（统一阈值） | `{passed, total, pct}` |
+| G12 | B-S 稳定性测试 | `scripts/gate/check_beta_v300.sh` B-S1~B-S5 | 全部 PASS | `{b_s1_pass, b_s2_pass, ...}` |
+| G13 | MySQL Protocol | mysql:5.7 容器握手测试 | 连接成功 | `{handshake, query_response}` |
+
+> **注**: G7/G8/G9 要求实际运行 `cargo bench` 并解析 ops/s 输出，禁止仅依赖 check_regression.sh 的回归检测。
 
 ### 6.3 覆盖率要求
 

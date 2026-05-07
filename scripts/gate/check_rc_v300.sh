@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # v3.0.0 RC Gate — 进入 RC 阶段必须通过
-# 基于 gate_spec_v300.md §五
+# 基于 gate_spec_v300.md §五 + gate_lifecycle_tracking.md
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 PASS=0; TOTAL=0; BLOCKERS=0
+FAIL_REASONS=()
 
 check() {
     local name="$1" cmd="$2"
+    local label="$3"
     TOTAL=$((TOTAL+1))
     echo -n "[rc-v3.0.0] $name ... "
     if eval "$cmd" >/dev/null 2>&1; then
@@ -16,6 +18,7 @@ check() {
     else
         echo "FAIL"
         BLOCKERS=$((BLOCKERS+1))
+        FAIL_REASONS+=("【$label】$name")
     fi
 }
 
@@ -23,7 +26,7 @@ echo "=== v3.0.0 RC Gate ==="
 echo ""
 
 # R1: Build
-check "R1: cargo build --release --workspace" "cargo build --release --workspace"
+check "R1: cargo build --release --workspace" "cargo build --release --workspace" "R1"
 
 # R2: Test 100%
 echo -n "[rc-v3.0.0] R2: cargo test --all-features (100%) ... "
@@ -39,10 +42,10 @@ else
 fi
 
 # R3: Clippy
-check "R3: cargo clippy --all-features" "cargo clippy --all-features -- -D warnings"
+check "R3: cargo clippy --all-features" "cargo clippy --all-features -- -D warnings" "R3"
 
 # R4: Format
-check "R4: cargo fmt --check" "cargo fmt --all -- --check"
+check "R4: cargo fmt --check" "cargo fmt --all -- --check" "R4"
 
 # R5: Coverage ≥85%
 echo -n "[rc-v3.0.0] R5: Coverage ≥85% ... "
@@ -61,10 +64,10 @@ else
 fi
 
 # R6: Security Audit
-check "R6: cargo audit" "cargo audit 2>/dev/null || true"
+check "R6: cargo audit" "cargo audit 2>/dev/null || true" "R6"
 
 # R7: Docs Links + version consistency
-check "R7: check_docs_links.sh" "bash scripts/gate/check_docs_links.sh"
+check "R7: check_docs_links.sh" "bash scripts/gate/check_docs_links.sh" "R7"
 echo -n "[rc-v3.0.0] R7b: Version docs completeness ... "
 TOTAL=$((TOTAL+1))
 # Check v3.0.0 release docs exist
@@ -143,15 +146,28 @@ else
 fi
 
 # R12: Formal Proof
-check "R12: check_proof.sh" "bash scripts/gate/check_proof.sh"
+check "R12: check_proof.sh" "bash scripts/gate/check_proof.sh" "R12"
 
 echo ""
 echo "=== RC Gate Results: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="
 
+# 输出未通过项详情
 if [ $BLOCKERS -gt 0 ]; then
+    echo ""
+    echo "=== 未通过项详情 ==="
+    for reason in "${FAIL_REASONS[@]}"; do
+        echo "  - $reason"
+    done
+    echo ""
+    echo "=== 建议行动 ==="
+    echo "  1. 为每个 BLOCKER 创建 Gitea Issue（milestone: v3.0.0-rc）"
+    echo "  2. 在 docs/governance/gate_lifecycle_tracking.md 中登记失败项"
+    echo "  3. 修复后重新运行 check_rc_v300.sh"
+    echo "  4. 如当前版本无法修复，将任务延续到 v3.1.0 DEVELOPMENT_PLAN.md"
+    echo ""
     echo "❌ RC Gate FAILED — $BLOCKERS blocker(s)"
     exit 1
 else
-    echo "✅ RC Gate PASSED"
+    echo "✅ RC Gate PASSED — $PASS / $TOTAL 检查项全部通过"
     exit 0
 fi
