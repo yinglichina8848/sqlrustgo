@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ============================================================
-# R10: TPC-H Performance Gate
+# R9 / B8: TPC-H Performance Gate
 #
 # Runs TPC-H queries against SQLRustGo and enforces time thresholds.
 # Supports SF=0.1 (alpha/beta) and SF=1 (RC/GA).
 #
 # Thresholds (Alpha/Beta — SF=0.1):
-#   Q1:  ≤ 10.0s   (p99 target < 2s is BP, currently ~10.9s)
+#   Q1:  ≤ 10.0s
 #   Q6:  ≤  6.0s
 #   All 22 queries must complete without OOM.
 #
@@ -46,7 +46,7 @@ for arg in "$@"; do
     esac
 done
 
-# Thresholds by SF
+# Thresholds by SF (in milliseconds)
 case "$SF" in
     0.1)
         TIME_Q1=10000; TIME_Q6=6000
@@ -62,7 +62,7 @@ case "$SF" in
         ;;
 esac
 
-echo "=== R10: TPC-H Performance Gate (SF=$SF) ==="
+echo "=== R9/B8: TPC-H Performance Gate (SF=$SF) ==="
 echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "Data dir: $DATA_DIR"
 echo "Result file: $RESULT_FILE"
@@ -70,152 +70,73 @@ echo ""
 
 # ---------- Step 1: Data availability ----------
 if [ "$SKIP_DATA" = false ]; then
-    echo "[1/5] Checking TPC-H data (SF=$SF)..."
+    echo "[1/4] Checking TPC-H data (SF=$SF)..."
     if [ ! -d "$DATA_DIR" ] || [ -z "$(ls -A "$DATA_DIR"/*.tbl 2>/dev/null)" ]; then
         echo "⚠️  TPC-H data not found at $DATA_DIR"
         echo "   Generate with: ~/tpch-tools/dbgen/dbgen -s $SF -f -d"
         echo "   Or set TPCH_DATA_DIR env var."
         echo ""
-        echo "⏭️  R10: SKIPPED (no TPC-H data)"
+        echo "⏭️  TPC-H Gate: SKIPPED (no TPC-H data)"
         exit 0
     fi
     echo "[✓] TPC-H data found"
 else
-    echo "[1/5] Skipping data check (--skip-data)"
+    echo "[1/4] Skipping data check (--skip-data)"
 fi
 
 # ---------- Step 2: Build bench CLI ----------
 echo ""
-echo "[2/5] Building bench CLI..."
-if ! cargo build -p sqlrustgo-bench --quiet 2>&1; then
-    # Fallback: try bench crate
-    cargo build -p sqlrustgo-bench-cli --quiet 2>&1 || true
+echo "[2/4] Building bench CLI..."
+if ! cargo build -p sqlrustgo-bench-cli --quiet 2>&1; then
+    echo "❌ Failed to build sqlrustgo-bench-cli"
+    exit 1
 fi
 
 # Check for bench binary
-BENCH_BIN=""
-for bin in target/release/sqlrustgo-bench target/release/sqlrustgo-bench-cli; do
-    if [ -f "$PROJECT_ROOT/$bin" ]; then
-        BENCH_BIN="$PROJECT_ROOT/$bin"
-        break
-    fi
-done
-
-# ---------- Step 3: Import TPC-H data ----------
-echo ""
-echo "[3/5] Importing TPC-H SF=$SF data..."
-
-IMPORT_START=$(python3 -c 'import time; print(time.time())')
-
-# Use the bench CLI's import functionality if available
-if [ -n "$BENCH_BIN" ]; then
-    $BENCH_BIN import --ddl "$TPCH_DIR/tpch_schema.sql" \
-        --data "$DATA_DIR" --sf "$SF" 2>&1 || true
+BENCH_BIN="$PROJECT_ROOT/target/release/sqlrustgo-bench-cli"
+if [ ! -f "$BENCH_BIN" ]; then
+    echo "❌ bench CLI not found at $BENCH_BIN"
+    exit 1
 fi
+echo "[✓] bench CLI built"
 
-IMPORT_END=$(python3 -c 'import time; print(time.time())')
-IMPORT_MS=$(python3 -c "print(round(($IMPORT_END - $IMPORT_START) * 1000, 0))")
-echo "Import time: ${IMPORT_MS}ms"
-
-# ---------- Step 4: Run TPC-H queries ----------
+# ---------- Step 3: Run TPC-H queries via bench CLI ----------
 echo ""
-echo "[4/5] Running TPC-H SF=$SF queries..."
+echo "[3/4] Running TPC-H SF=$SF queries (22/22)..."
 
 mkdir -p "$(dirname "$RESULT_FILE")"
 
-# TPC-H query definitions (simplified, in-process via sqlrustgo binary)
-# For a proper implementation, queries are run via sqlrustgo REPL or bench CLI
-# Here we measure using cargo run for isolation
+# Run all 22 TPC-H queries using bench CLI
+# The bench CLI handles parameter substitution automatically
+BENCH_OUTPUT=$("$BENCH_BIN" tpch-bench \
+    --ddl "$TPCH_DIR/tpch_schema.sql" \
+    --data "$DATA_DIR" \
+    --queries all \
+    --iterations 1 \
+    --output "$RESULT_FILE" 2>&1)
 
-run_tpch_query() {
-    local q_name="$1"
-    local q_sql="$2"
+# Parse the output to show results
+echo "$BENCH_OUTPUT" | grep -E "^(Q[0-9]+|TOTAL)" | while read -r line; do
+    echo "  $line"
+done
 
-    echo -n "  $q_name ... "
+# Check if bench CLI encountered errors
+if echo "$BENCH_OUTPUT" | grep -qi "error\|panic\|OOM\|memory"; then
+    echo ""
+    echo "❌ TPC-H benchmark encountered errors:"
+    echo "$BENCH_OUTPUT" | grep -iE "error|panic|oom|memory" | head -5
+    exit 1
+fi
 
-    local start end elapsed_ms
-    start=$(python3 -c 'import time; print(time.time())')
+# Verify result file exists
+if [ ! -f "$RESULT_FILE" ]; then
+    echo "❌ Result file not created: $RESULT_FILE"
+    exit 1
+fi
 
-    # Run query via sqlrustgo REPL
-    local output
-    output=$(echo "$q_sql" | cargo run --release --bin sqlrustgo -- --execute "" 2>&1 || echo "ERROR")
-
-    end=$(python3 -c 'import time; print(time.time())')
-    elapsed_ms=$(python3 -c "print(round(($end - $start) * 1000, 0))")
-
-    # Check for OOM or error
-    if echo "$output" | grep -qi "memory\|OOM\|out.of.memory"; then
-        echo "OOM"
-        echo "{\"name\":\"$q_name\",\"ms\":999999,\"status\":\"OOM\"}" >> "$RESULT_FILE.tmp"
-    elif echo "$output" | grep -qi "error\|panic"; then
-        echo "ERROR"
-        echo "{\"name\":\"$q_name\",\"ms\":999999,\"status\":\"ERROR\"}" >> "$RESULT_FILE.tmp"
-    else
-        echo "${elapsed_ms}ms"
-        echo "{\"name\":\"$q_name\",\"ms\":$elapsed_ms,\"status\":\"OK\"}" >> "$RESULT_FILE.tmp"
-    fi
-}
-
-# Initialize result file
-echo "[" > "$RESULT_FILE.tmp"
-FIRST=true
-
-# Run key TPC-H queries (representative subset for gate)
-# Q1, Q6 are mandatory (TPCH-137)
-# Full 22 queries are run in detailed mode
-
-KEY_QUERIES=$(cat << 'EOF'
-Q1|SELECT l_returnflag, l_linestatus, SUM(l_quantity) as sum_qty, SUM(l_extendedprice) as sum_base_price, SUM(l_extendedprice * (1 - l_discount)) as sum_disc_price, SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, AVG(l_quantity) as avg_qty, AVG(l_extendedprice) as avg_price, AVG(l_discount) as avg_disc, COUNT(*) as count_order FROM lineitem WHERE l_shipdate <= 19980902 GROUP BY l_returnflag, l_linestatus ORDER BY l_returnflag, l_linestatus
-Q6|SELECT SUM(l_extendedprice * l_discount) as revenue FROM lineitem WHERE l_shipdate >= 19940101 AND l_shipdate < 19950101 AND l_discount >= 0.05 AND l_discount <= 0.07 AND l_quantity < 25
-EOF
-)
-
-while IFS='|' read -r q_name q_sql; do
-    if [ -n "$q_sql" ]; then
-        run_tpch_query "$q_name" "$q_sql"
-        if [ -n "$(tail -c 1 "$RESULT_FILE.tmp")" ] && [ "$(tail -c 1 "$RESULT_FILE.tmp")" != "[" ]; then
-            echo "," >> "$RESULT_FILE.tmp"
-        fi
-    fi
-done <<< "$KEY_QUERIES"
-
-# Complete the JSON array
-echo "{\"name\":\"dummy\",\"ms\":0,\"status\":\"OK\"}" >> "$RESULT_FILE.tmp"
-echo "]" >> "$RESULT_FILE.tmp"
-
-# Convert to proper JSON array
-python3 -c "
-import json
-entries = []
-with open('$RESULT_FILE.tmp') as f:
-    content = f.read()
-    # Find the JSON array
-    start = content.find('[')
-    end = content.rfind(']') + 1
-    if start >= 0 and end > start:
-        inner = content[start+1:end-1]
-        # Split on }\n{ but carefully
-        parts = inner.split('}\n{')
-        for i, part in enumerate(parts):
-            part = part.strip().rstrip(',')
-            if not part or part == '{\"name\":\"dummy\"':
-                continue
-            if not part.startswith('{'):
-                part = '{' + part
-            if not part.endswith('}'):
-                part = part + '}'
-            try:
-                entries.append(json.loads(part))
-            except:
-                pass
-with open('$RESULT_FILE', 'w') as f:
-    json.dump({'timestamp': '$(date -u +%Y-%m-%dT%H:%M:%SZ)', 'sf': '$SF', 'queries': entries}, f, indent=2)
-" 2>/dev/null || true
-rm -f "$RESULT_FILE.tmp"
-
-# ---------- Step 5: Evaluate thresholds ----------
+# ---------- Step 4: Evaluate thresholds ----------
 echo ""
-echo "[5/5] Evaluating TPC-H performance (SF=$SF)..."
+echo "[4/4] Evaluating TPC-H performance (SF=$SF)..."
 
 FAIL_COUNT=0
 WARN_COUNT=0
@@ -225,37 +146,22 @@ evaluate_q() {
     local name="$1"
     local threshold_ms="$2"
 
-    local result
-    result=$(python3 -c "
+    local ms
+    ms=$(python3 -c "
 import json
 try:
     with open('$RESULT_FILE') as f:
         d = json.load(f)
     for q in d.get('queries', []):
         if q.get('name') == '$name':
-            print(json.dumps(q))
+            print(int(q.get('avg_ms', 999999)))
             break
-except: print('null')
-" 2>/dev/null || echo "null")
+except: print(999999)
+" 2>/dev/null || echo "999999")
 
-    if [ "$result" = "null" ] || [ -z "$result" ]; then
+    if [ "$ms" -ge 999000 ]; then
         echo "⚠️  $name: no result"
-        return
-    fi
-
-    local ms status
-    ms=$(echo "$result" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ms',999999))" 2>/dev/null || echo "999999")
-    status=$(echo "$result" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','ERROR'))" 2>/dev/null || echo "ERROR")
-
-    if [ "$status" = "OOM" ]; then
-        echo "❌ $name: OOM (out of memory)"
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        return
-    fi
-
-    if [ "$status" = "ERROR" ]; then
-        echo "❌ $name: ERROR"
-        FAIL_COUNT=$((FAIL_COUNT + 1))
+        WARN_COUNT=$((WARN_COUNT + 1))
         return
     fi
 
@@ -263,25 +169,45 @@ except: print('null')
         echo "✅ $name: ${ms}ms ≤ ${threshold_ms}ms"
         PASS_COUNT=$((PASS_COUNT + 1))
     else
-        echo "❌ $name: ${ms}ms > ${threshold_ms}ms (FAIL)"
+        echo "❌ $name: ${ms}ms > ${threshold_ms}ms"
         FAIL_COUNT=$((FAIL_COUNT + 1))
     fi
 }
 
+# Evaluate key queries with thresholds
 evaluate_q "Q1" "$TIME_Q1"
 evaluate_q "Q6" "$TIME_Q6"
 
+# Count total queries in result
+TOTAL_QUERIES=$(python3 -c "
+import json
+try:
+    with open('$RESULT_FILE') as f:
+        d = json.load(f)
+    print(len(d.get('queries', [])))
+except: print('0')
+" 2>/dev/null || echo "0")
+
 echo ""
-echo "=== R10 TPC-H Gate (SF=$SF) ==="
-echo "PASS=$PASS_COUNT | WARN=$WARN_COUNT | FAIL=$FAIL_COUNT"
+echo "=== TPC-H Gate (SF=$SF) ==="
+echo "Total queries run: $TOTAL_QUERIES / $Q_COUNT"
+echo "Key queries (Q1, Q6): PASS=$PASS_COUNT | WARN=$WARN_COUNT | FAIL=$FAIL_COUNT"
 echo ""
 
+# For SF=1, we primarily care about no OOM and all 22 running
+# Performance thresholds are indicative for initial验收标准
 if [ "$FAIL_COUNT" -gt 0 ]; then
-    echo "❌ R10: FAILED — $FAIL_COUNT query(s) failed"
+    echo "❌ TPC-H Gate: FAILED — $FAIL_COUNT key query(s) exceeded thresholds"
     echo "   Results: $RESULT_FILE"
     exit 1
 fi
 
-echo "✅ R10: PASSED — key TPC-H queries meet thresholds (SF=$SF)"
+if [ "$TOTAL_QUERIES" -lt "$Q_COUNT" ]; then
+    echo "❌ TPC-H Gate: FAILED — only $TOTAL_QUERIES/$Q_COUNT queries ran"
+    echo "   Results: $RESULT_FILE"
+    exit 1
+fi
+
+echo "✅ TPC-H Gate: PASSED — all $Q_COUNT queries completed without OOM (SF=$SF)"
 echo "   Results: $RESULT_FILE"
 exit 0
