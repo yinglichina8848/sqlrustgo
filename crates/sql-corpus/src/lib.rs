@@ -6,8 +6,10 @@
 use serde::{Deserialize, Serialize};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    parse, AlterTableOperation, Expression, InsertStatement, SelectStatement, Statement, WithSelect,
+    parse, AlterTableOperation, Expression, InsertStatement, SelectStatement, ShowStatement,
+    Statement, WithSelect,
 };
+use sqlrustgo_parser::transaction::{IsolationLevel, TransactionStatement};
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
 use std::collections::HashMap;
@@ -225,11 +227,6 @@ impl SimpleExecutor {
                 Ok(ExecutorResult::new(vec![], 0))
             }
             Statement::CreateIndex(_) => Ok(ExecutorResult::new(vec![], 0)),
-            Statement::Analyze(_) => Ok(ExecutorResult::new(vec![], 0)),
-            Statement::WithSelect(with_select) => {
-                self.execute_with_select(&with_select)?;
-                Ok(ExecutorResult::new(vec![], 0))
-            }
             Statement::Union(union_stmt) => {
                 let left_rows = self.execute_statement(&union_stmt.left)?;
                 let right_rows = self.execute_statement(&union_stmt.right)?;
@@ -241,6 +238,21 @@ impl SimpleExecutor {
                 }
                 let count = combined.len();
                 Ok(ExecutorResult::new(combined, count))
+            }
+            Statement::Analyze(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Check(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Optimize(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Vacuum(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Repair(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Explain(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Show(show) => {
+                let rows = self.execute_show(&show);
+                let count = rows.len();
+                Ok(ExecutorResult::new(rows, count))
+            }
+            Statement::Transaction(tx_stmt) => {
+                self.execute_transaction(&tx_stmt)?;
+                Ok(ExecutorResult::new(vec![], 0))
             }
             _ => Err("Unsupported statement type".to_string()),
         }
@@ -478,6 +490,69 @@ impl SimpleExecutor {
             .columns
             .iter()
             .position(|c| c.name.eq_ignore_ascii_case(col_name))
+    }
+
+    fn execute_show(&self, show: &ShowStatement) -> Vec<Vec<Value>> {
+        match show {
+            ShowStatement::Tables => {
+                let names = self.storage.list_tables();
+                names
+                    .into_iter()
+                    .map(|name| vec![Value::Text(name)])
+                    .collect()
+            }
+            ShowStatement::Databases => {
+                vec![vec![Value::Text("default".to_string())]]
+            }
+            ShowStatement::Columns { table, .. } => {
+                if let Ok(info) = self.storage.get_table_info(table) {
+                    info.columns
+                        .iter()
+                        .map(|c| {
+                            vec![
+                                Value::Text(c.name.clone()),
+                                Value::Text(c.data_type.clone()),
+                                Value::Text(if c.nullable { "YES" } else { "NO" }.to_string()),
+                            ]
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                }
+            }
+            ShowStatement::Index { table, .. } => {
+                if let Ok(_info) = self.storage.get_table_info(table) {
+                    vec![vec![Value::Text("index_on_".to_string() + table)]]
+                } else {
+                    vec![]
+                }
+            }
+            ShowStatement::CreateTable { table } => {
+                let sql = format!("CREATE TABLE {} (...)", table);
+                vec![vec![Value::Text(sql)]]
+            }
+            ShowStatement::Variables { .. } => vec![],
+            ShowStatement::Grants { .. } => {
+                vec![vec![Value::Text("GRANT ALL ON *.* TO current_user".to_string())]]
+            }
+        }
+    }
+
+    fn execute_transaction(&mut self, stmt: &TransactionStatement) -> Result<(), String> {
+        match stmt {
+            TransactionStatement::Begin { .. } => Ok(()),
+            TransactionStatement::Commit { .. } => Ok(()),
+            TransactionStatement::Rollback { .. } => Ok(()),
+            TransactionStatement::SetTransaction { isolation_level } => {
+                match isolation_level {
+                    IsolationLevel::ReadCommitted
+                    | IsolationLevel::ReadUncommitted
+                    | IsolationLevel::SnapshotIsolation
+                    | IsolationLevel::Serializable => Ok(()),
+                }
+            }
+            TransactionStatement::StartTransaction { .. } => Ok(()),
+        }
     }
 
     fn execute_with_select(&mut self, with_select: &WithSelect) -> Result<(), String> {
