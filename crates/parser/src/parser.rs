@@ -459,6 +459,10 @@ pub enum ShowStatement {
     Variables {
         like: Option<String>,
     },
+    TableStatus {
+        database: Option<String>,
+    },
+    Processlist,
 }
 
 /// DESCRIBE statement (aliased as DESC)
@@ -3957,6 +3961,29 @@ impl Parser {
                     None
                 };
                 Ok(Statement::Show(ShowStatement::Variables { like }))
+            }
+            Some(Token::Table) => {
+                self.next();
+                match self.current() {
+                    Some(Token::Identifier(ref s)) if s.to_uppercase() == "STATUS" => {
+                        self.next();
+                        let database = if self.current() == Some(&Token::From) {
+                            self.next();
+                            match self.next() {
+                                Some(Token::Identifier(db)) => Some(db),
+                                _ => return Err("Expected database name".to_string()),
+                            }
+                        } else {
+                            None
+                        };
+                        Ok(Statement::Show(ShowStatement::TableStatus { database }))
+                    }
+                    _ => Err("Expected TABLE STATUS".to_string()),
+                }
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "PROCESSLIST" => {
+                self.next();
+                Ok(Statement::Show(ShowStatement::Processlist))
             }
             Some(t) => Err(format!("Unexpected token after SHOW: {:?}", t)),
             None => Err("Unexpected end of input after SHOW".to_string()),
