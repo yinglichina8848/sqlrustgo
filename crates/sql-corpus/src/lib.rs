@@ -514,10 +514,14 @@ impl SimpleExecutor {
                     info.columns
                         .iter()
                         .map(|c| {
+                            // MySQL 5.7 SHOW COLUMNS format: Field, Type, Null, Key, Default, Extra
                             vec![
                                 Value::Text(c.name.clone()),
                                 Value::Text(c.data_type.clone()),
                                 Value::Text(if c.nullable { "YES" } else { "NO" }.to_string()),
+                                Value::Text(if c.primary_key { "PRI".to_string() } else { String::new() }),
+                                Value::Null,
+                                Value::Text("".to_string()),
                             ]
                         })
                         .collect()
