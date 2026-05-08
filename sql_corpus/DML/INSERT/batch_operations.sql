@@ -9,6 +9,22 @@ INSERT INTO users (id, name, email) VALUES
   (204, 'Batch4', 'batch4@example.com'),
   (205, 'Batch5', 'batch5@example.com');
 
+-- === CASE: Batch INSERT with 10+ rows (ISSUE-470) ===
+-- EXPECT: 12 rows affected
+INSERT INTO users (id, name, email) VALUES
+  (401, 'Row01', 'row01@example.com'),
+  (402, 'Row02', 'row02@example.com'),
+  (403, 'Row03', 'row03@example.com'),
+  (404, 'Row04', 'row04@example.com'),
+  (405, 'Row05', 'row05@example.com'),
+  (406, 'Row06', 'row06@example.com'),
+  (407, 'Row07', 'row07@example.com'),
+  (408, 'Row08', 'row08@example.com'),
+  (409, 'Row09', 'row09@example.com'),
+  (410, 'Row10', 'row10@example.com'),
+  (411, 'Row11', 'row11@example.com'),
+  (412, 'Row12', 'row12@example.com');
+
 -- === CASE: Batch INSERT with SELECT ===
 -- EXPECT: 5 rows affected
 INSERT INTO users (id, name, email)
