@@ -24,7 +24,7 @@ notify = "6.0"  # file system watcher for incremental updates
 walkdir = "2.4"  # directory traversal
 
 # Hashing (stable node IDs)
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 
 # CLI

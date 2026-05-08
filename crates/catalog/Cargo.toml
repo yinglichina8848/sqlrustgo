@@ -14,7 +14,7 @@ log.workspace = true
 hmac = "0.12"
 pbkdf2 = "0.12"
 rand = "0.8"
-sha2 = "0.10"
+sha2 = "0.11"
 
 [dev-dependencies]
 sqlrustgo-storage.workspace = true
