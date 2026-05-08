@@ -198,6 +198,27 @@ fn test_parse_show_index() {
     assert!(result.is_ok(), "Failed to parse SHOW INDEX: {:?}", result);
 }
 
+#[test]
+fn test_parse_show_table_status() {
+    let sql = "SHOW TABLE STATUS";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse SHOW TABLE STATUS: {:?}", result);
+}
+
+#[test]
+fn test_parse_show_table_status_from() {
+    let sql = "SHOW TABLE STATUS FROM mydb";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse SHOW TABLE STATUS FROM: {:?}", result);
+}
+
+#[test]
+fn test_parse_show_processlist() {
+    let sql = "SHOW PROCESSLIST";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse SHOW PROCESSLIST: {:?}", result);
+}
+
 // ============ CREATE PROCEDURE Tests ============
 
 #[test]

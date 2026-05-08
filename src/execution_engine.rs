@@ -2863,6 +2863,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 "SHOW INDEX not yet implemented".to_string(),
             )),
             ShowStatement::Variables { like } => self.execute_show_variables(like.as_deref()),
+            ShowStatement::TableStatus { database: _ } => self.execute_show_table_status(),
+            ShowStatement::Processlist => self.execute_show_processlist(),
         }
     }
 
@@ -2994,6 +2996,45 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .collect();
 
         Ok(ExecutorResult::new(rows, 4))
+    }
+
+    fn execute_show_table_status(&self) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+        let tables = storage.list_tables();
+        let rows: Vec<Vec<Value>> = tables
+            .into_iter()
+            .map(|name| {
+                vec![
+                    Value::Text(name),
+                    Value::Text("InnoDB".to_string()),
+                    Value::Text("10".to_string()),
+                    Value::Integer(0),
+                    Value::Integer(0),
+                    Value::Integer(0),
+                    Value::Null,
+                    Value::Null,
+                    Value::Text("utf8mb4".to_string()),
+                    Value::Text("utf8mb4_general_ci".to_string()),
+                    Value::Text("".to_string()),
+                    Value::Text("".to_string()),
+                ]
+            })
+            .collect();
+        Ok(ExecutorResult::new(rows, 0))
+    }
+
+    fn execute_show_processlist(&self) -> SqlResult<ExecutorResult> {
+        let rows = vec![vec![
+            Value::Integer(1),
+            Value::Text("system".to_string()),
+            Value::Text("localhost".to_string()),
+            Value::Null,
+            Value::Text("Daemon".to_string()),
+            Value::Text("0".to_string()),
+            Value::Text("".to_string()),
+            Value::Null,
+        ]];
+        Ok(ExecutorResult::new(rows, 1))
     }
 }
 
