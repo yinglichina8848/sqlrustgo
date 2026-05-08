@@ -24,13 +24,21 @@ fn test_before_insert_trigger_chain_order() {
     let result = engine.execute(
         "CREATE TRIGGER set_ts1 BEFORE INSERT ON events FOR EACH ROW BEGIN SET NEW.ts = 'first'; END"
     );
-    assert!(result.is_ok(), "CREATE TRIGGER set_ts1 failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "CREATE TRIGGER set_ts1 failed: {:?}",
+        result.err()
+    );
 
     // Create second trigger
     let result = engine.execute(
         "CREATE TRIGGER set_ts2 BEFORE INSERT ON events FOR EACH ROW BEGIN SET NEW.ts = 'second'; END"
     );
-    assert!(result.is_ok(), "CREATE TRIGGER set_ts2 failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "CREATE TRIGGER set_ts2 failed: {:?}",
+        result.err()
+    );
 
     // Insert - second trigger should override (last wins in chain)
     let result = engine.execute("INSERT INTO events VALUES (1, 'test', '')");
@@ -47,7 +55,8 @@ fn test_after_insert_trigger_chain() {
     let mut engine = create_engine();
 
     // Create tables
-    let result = engine.execute("CREATE TABLE orders (id INTEGER, product_id INTEGER, quantity INTEGER)");
+    let result =
+        engine.execute("CREATE TABLE orders (id INTEGER, product_id INTEGER, quantity INTEGER)");
     assert!(result.is_ok(), "CREATE TABLE failed: {:?}", result.err());
 
     let result = engine.execute("CREATE TABLE inventory (product_id INTEGER, stock INTEGER)");
@@ -58,7 +67,11 @@ fn test_after_insert_trigger_chain() {
 
     // Setup inventory
     let result = engine.execute("INSERT INTO inventory VALUES (1, 100)");
-    assert!(result.is_ok(), "INSERT inventory failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "INSERT inventory failed: {:?}",
+        result.err()
+    );
 
     // Create trigger to decrement stock
     let result = engine.execute(
@@ -77,7 +90,9 @@ fn test_after_insert_trigger_chain() {
     assert!(result.is_ok(), "INSERT orders failed: {:?}", result.err());
 
     // Verify both triggers worked
-    let inventory = engine.execute("SELECT stock FROM inventory WHERE product_id = 1").unwrap();
+    let inventory = engine
+        .execute("SELECT stock FROM inventory WHERE product_id = 1")
+        .unwrap();
     assert_eq!(inventory.rows.len(), 1);
 
     let order_log = engine.execute("SELECT * FROM order_log").unwrap();
@@ -93,7 +108,9 @@ fn test_update_trigger_chain() {
     let result = engine.execute("CREATE TABLE products (id INTEGER, name TEXT, price INTEGER)");
     assert!(result.is_ok(), "CREATE TABLE failed: {:?}", result.err());
 
-    let result = engine.execute("CREATE TABLE price_history (product_id INTEGER, old_price INTEGER, new_price INTEGER)");
+    let result = engine.execute(
+        "CREATE TABLE price_history (product_id INTEGER, old_price INTEGER, new_price INTEGER)",
+    );
     assert!(result.is_ok(), "CREATE TABLE failed: {:?}", result.err());
 
     let result = engine.execute("CREATE TABLE update_log (id INTEGER, message TEXT)");
@@ -176,7 +193,8 @@ fn test_before_trigger_modifies_new() {
     let mut engine = create_engine();
 
     // Create table
-    let result = engine.execute("CREATE TABLE items (id INTEGER, price INTEGER, discounted_price INTEGER)");
+    let result =
+        engine.execute("CREATE TABLE items (id INTEGER, price INTEGER, discounted_price INTEGER)");
     assert!(result.is_ok(), "CREATE TABLE failed: {:?}", result.err());
 
     // Create trigger to set discounted price
@@ -190,7 +208,9 @@ fn test_before_trigger_modifies_new() {
     assert!(result.is_ok(), "INSERT failed: {:?}", result.err());
 
     // Verify trigger set discounted price
-    let rows = engine.execute("SELECT discounted_price FROM items WHERE id = 1").unwrap();
+    let rows = engine
+        .execute("SELECT discounted_price FROM items WHERE id = 1")
+        .unwrap();
     assert_eq!(rows.rows.len(), 1);
 }
 
@@ -218,7 +238,9 @@ fn test_old_value_binding() {
     assert!(result.is_ok(), "UPDATE failed: {:?}", result.err());
 
     // Verify OLD name was captured
-    let rows = engine.execute("SELECT old_name FROM users WHERE id = 1").unwrap();
+    let rows = engine
+        .execute("SELECT old_name FROM users WHERE id = 1")
+        .unwrap();
     assert_eq!(rows.rows.len(), 1);
 }
 

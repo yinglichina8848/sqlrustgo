@@ -33,6 +33,10 @@ pub enum Statement {
     DropView(DropViewStatement),
     Truncate(TruncateStatement),
     Analyze(AnalyzeStatement),
+    Check(CheckStatement),
+    Optimize(OptimizeStatement),
+    Vacuum(VacuumStatement),
+    Repair(RepairStatement),
     WithSelect(WithSelect),
     AlterTable(AlterTableStatement),
     Call(CallStatement),
@@ -194,7 +198,22 @@ pub struct WithSelect {
 /// ANALYZE statement for collecting statistics
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalyzeStatement {
-    pub table_name: Option<String>,
+    pub table_names: Vec<String>,
+}
+
+/// Check option for CHECK TABLE
+#[derive(Debug, Clone, PartialEq)]
+pub enum CheckOption {
+    Quick,
+    Extended,
+}
+
+/// Vacuum mode for VACUUM
+#[derive(Debug, Clone, PartialEq)]
+pub enum VacuumMode {
+    Normal,
+    Full,
+    Analyze,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -435,6 +454,28 @@ pub struct DropTableStatement {
 /// TRUNCATE TABLE statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct TruncateStatement {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckStatement {
+    pub names: Vec<String>,
+    pub option: Option<CheckOption>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptimizeStatement {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VacuumStatement {
+    pub names: Vec<String>,
+    pub mode: VacuumMode,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RepairStatement {
     pub name: String,
 }
 
@@ -831,6 +872,10 @@ impl Parser {
             Some(Token::Drop) => self.parse_drop(),
             Some(Token::Truncate) => self.parse_truncate(),
             Some(Token::Analyze) => self.parse_analyze(),
+            Some(Token::Check) => self.parse_check(),
+            Some(Token::Optimize) => self.parse_optimize(),
+            Some(Token::Vacuum) => self.parse_vacuum(),
+            Some(Token::Repair) => self.parse_repair(),
             Some(Token::With) => self.parse_with_select(),
             Some(Token::Alter) => self.parse_alter_table(),
             Some(Token::Call) => self.parse_call(),
@@ -4019,21 +4064,118 @@ impl Parser {
     fn parse_analyze(&mut self) -> Result<Statement, String> {
         self.expect(Token::Analyze)?;
 
-        if self.current() == Some(&Token::Table) {
+        // Optional TABLE keyword
+        if matches!(self.current(), Some(Token::Table)) {
             self.next();
         }
 
-        let table_name = match self.current() {
-            Some(Token::Identifier(name)) => {
-                let n = name.clone();
-                self.next();
-                Some(n)
+        let mut table_names: Vec<String> = Vec::new();
+        while let Some(Token::Identifier(name)) = self.next() {
+            table_names.push(name);
+            if !matches!(self.current(), Some(Token::Comma)) {
+                break;
             }
-            Some(Token::Semicolon) | None => None,
-            _ => return Err("Expected table name or semicolon".to_string()),
+            self.next();
+        }
+
+        Ok(Statement::Analyze(AnalyzeStatement { table_names }))
+    }
+
+    fn parse_check(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Check)?;
+        self.expect(Token::Table)?;
+
+        let mut names: Vec<String> = Vec::new();
+        match self.next() {
+            Some(Token::Identifier(name)) => names.push(name),
+            _ => return Err("Expected table name".to_string()),
+        }
+        while matches!(self.current(), Some(Token::Comma)) {
+            self.next();
+            match self.next() {
+                Some(Token::Identifier(name)) => names.push(name),
+                _ => return Err("Expected table name after comma".to_string()),
+            }
+        }
+
+        let option = match self.current() {
+            Some(Token::Identifier(name)) if name.to_uppercase() == "QUICK" => {
+                self.next();
+                Some(CheckOption::Quick)
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() == "EXTENDED" => {
+                self.next();
+                Some(CheckOption::Extended)
+            }
+            _ => None,
         };
 
-        Ok(Statement::Analyze(AnalyzeStatement { table_name }))
+        Ok(Statement::Check(CheckStatement { names, option }))
+    }
+
+    fn parse_optimize(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Optimize)?;
+        self.expect(Token::Table)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+        Ok(Statement::Optimize(OptimizeStatement { name }))
+    }
+
+    fn parse_vacuum(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Vacuum)?;
+
+        match self.current() {
+            Some(Token::Analyze) => {
+                self.next();
+                let name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected table name".to_string()),
+                };
+                return Ok(Statement::Vacuum(VacuumStatement {
+                    names: vec![name],
+                    mode: VacuumMode::Analyze,
+                }));
+            }
+            Some(Token::Table) => {
+                self.next();
+            }
+            _ => return Err("Expected TABLE or ANALYZE after VACUUM".to_string()),
+        }
+
+        let mut names: Vec<String> = Vec::new();
+        match self.next() {
+            Some(Token::Identifier(name)) => names.push(name),
+            _ => return Err("Expected table name".to_string()),
+        }
+        while matches!(self.current(), Some(Token::Comma)) {
+            self.next();
+            match self.next() {
+                Some(Token::Identifier(name)) => names.push(name),
+                _ => return Err("Expected table name after comma".to_string()),
+            }
+        }
+
+        let mode = match self.current() {
+            Some(Token::Identifier(name)) if name.to_uppercase() == "FULL" => {
+                self.next();
+                VacuumMode::Full
+            }
+            _ => VacuumMode::Normal,
+        };
+
+        Ok(Statement::Vacuum(VacuumStatement { names, mode }))
+    }
+
+    fn parse_repair(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Repair)?;
+        self.expect(Token::Table)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+        Ok(Statement::Repair(RepairStatement { name }))
     }
 
     fn parse_grant(&mut self) -> Result<Statement, String> {
@@ -5017,9 +5159,93 @@ mod tests {
         assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
             Statement::Analyze(a) => {
-                assert_eq!(a.table_name, Some("users".to_string()));
+                assert_eq!(a.table_names, vec!["users".to_string()]);
             }
             _ => panic!("Expected ANALYZE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_analyze_table() {
+        let result = parse("ANALYZE TABLE users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Analyze(a) => {
+                assert_eq!(a.table_names, vec!["users".to_string()]);
+            }
+            _ => panic!("Expected ANALYZE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_check_table() {
+        let result = parse("CHECK TABLE t1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Check(c) => {
+                assert_eq!(c.names, vec!["t1".to_string()]);
+                assert_eq!(c.option, None);
+            }
+            _ => panic!("Expected CHECK TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_check_table_quick() {
+        let result = parse("CHECK TABLE t1 QUICK");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Check(c) => {
+                assert_eq!(c.names, vec!["t1".to_string()]);
+                assert_eq!(c.option, Some(CheckOption::Quick));
+            }
+            _ => panic!("Expected CHECK TABLE QUICK statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_optimize_table() {
+        let result = parse("OPTIMIZE TABLE t1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Optimize(_) => {}
+            _ => panic!("Expected OPTIMIZE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_vacuum_table() {
+        let result = parse("VACUUM TABLE t1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Vacuum(v) => {
+                assert_eq!(v.names, vec!["t1".to_string()]);
+                assert_eq!(v.mode, VacuumMode::Normal);
+            }
+            _ => panic!("Expected VACUUM TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_vacuum_analyze() {
+        let result = parse("VACUUM ANALYZE t1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Vacuum(v) => {
+                assert_eq!(v.names, vec!["t1".to_string()]);
+                assert_eq!(v.mode, VacuumMode::Analyze);
+            }
+            _ => panic!("Expected VACUUM ANALYZE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_repair_table() {
+        let result = parse("REPAIR TABLE t1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Repair(_) => {}
+            _ => panic!("Expected REPAIR TABLE statement"),
         }
     }
 

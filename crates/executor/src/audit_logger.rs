@@ -141,13 +141,31 @@ impl AuditLogEntry {
             Value::Integer(self.timestamp),
             Value::Integer(self.tx_id),
             Value::Text(self.user.clone()),
-            self.client_ip.as_ref().map(|s| Value::Text(s.clone())).unwrap_or(Value::Null),
+            self.client_ip
+                .as_ref()
+                .map(|s| Value::Text(s.clone()))
+                .unwrap_or(Value::Null),
             Value::Text(self.operation.clone()),
-            self.table_name.as_ref().map(|s| Value::Text(s.clone())).unwrap_or(Value::Null),
-            self.row_id.as_ref().map(|s| Value::Text(s.clone())).unwrap_or(Value::Null),
-            self.old_value.as_ref().map(|s| Value::Text(s.clone())).unwrap_or(Value::Null),
-            self.new_value.as_ref().map(|s| Value::Text(s.clone())).unwrap_or(Value::Null),
-            self.sql_text.as_ref().map(|s| Value::Text(s.clone())).unwrap_or(Value::Null),
+            self.table_name
+                .as_ref()
+                .map(|s| Value::Text(s.clone()))
+                .unwrap_or(Value::Null),
+            self.row_id
+                .as_ref()
+                .map(|s| Value::Text(s.clone()))
+                .unwrap_or(Value::Null),
+            self.old_value
+                .as_ref()
+                .map(|s| Value::Text(s.clone()))
+                .unwrap_or(Value::Null),
+            self.new_value
+                .as_ref()
+                .map(|s| Value::Text(s.clone()))
+                .unwrap_or(Value::Null),
+            self.sql_text
+                .as_ref()
+                .map(|s| Value::Text(s.clone()))
+                .unwrap_or(Value::Null),
             self.session_id.map(Value::Integer).unwrap_or(Value::Null),
             Value::Text(self.checksum.clone()),
         ]
@@ -468,13 +486,25 @@ fn record_audit_log_impl(
         Value::Integer(timestamp),
         Value::Integer(tx_id),
         Value::Text(user.to_string()),
-        client_ip.map(|s| Value::Text(s.to_string())).unwrap_or(Value::Null),
+        client_ip
+            .map(|s| Value::Text(s.to_string()))
+            .unwrap_or(Value::Null),
         Value::Text(operation.to_string()),
-        table_name.map(|s| Value::Text(s.to_string())).unwrap_or(Value::Null),
-        row_id.map(|s| Value::Text(s.to_string())).unwrap_or(Value::Null),
-        old_value.map(|s| Value::Text(s.to_string())).unwrap_or(Value::Null),
-        new_value.map(|s| Value::Text(s.to_string())).unwrap_or(Value::Null),
-        sql_text.map(|s| Value::Text(s.to_string())).unwrap_or(Value::Null),
+        table_name
+            .map(|s| Value::Text(s.to_string()))
+            .unwrap_or(Value::Null),
+        row_id
+            .map(|s| Value::Text(s.to_string()))
+            .unwrap_or(Value::Null),
+        old_value
+            .map(|s| Value::Text(s.to_string()))
+            .unwrap_or(Value::Null),
+        new_value
+            .map(|s| Value::Text(s.to_string()))
+            .unwrap_or(Value::Null),
+        sql_text
+            .map(|s| Value::Text(s.to_string()))
+            .unwrap_or(Value::Null),
         session_id.map(Value::Integer).unwrap_or(Value::Null),
         Value::Text(checksum),
     ];
@@ -770,8 +800,14 @@ mod tests {
 
         let logs = query_audit_logs(&storage, None, None, None, Some("UPDATE"), None).unwrap();
         assert_eq!(logs.len(), 1);
-        assert_eq!(logs[0].old_value, Some(r#"{"id":1,"name":"old"}"#.to_string()));
-        assert_eq!(logs[0].new_value, Some(r#"{"id":1,"name":"new"}"#.to_string()));
+        assert_eq!(
+            logs[0].old_value,
+            Some(r#"{"id":1,"name":"old"}"#.to_string())
+        );
+        assert_eq!(
+            logs[0].new_value,
+            Some(r#"{"id":1,"name":"new"}"#.to_string())
+        );
     }
 
     #[test]
@@ -862,7 +898,8 @@ mod tests {
         assert_eq!(t1_logs.len(), 2);
 
         // Filter by operation
-        let insert_logs = query_audit_logs(&storage, None, None, None, Some("INSERT"), None).unwrap();
+        let insert_logs =
+            query_audit_logs(&storage, None, None, None, Some("INSERT"), None).unwrap();
         assert_eq!(insert_logs.len(), 3);
     }
 
@@ -874,12 +911,16 @@ mod tests {
         let mut logger = AuditLogger::new("test_user".to_string());
         logger.disable();
 
-        let result = logger.log_insert(&mut storage, 1, "t1", "r1", "{}", None).unwrap();
+        let result = logger
+            .log_insert(&mut storage, 1, "t1", "r1", "{}", None)
+            .unwrap();
         assert!(result.is_none());
 
         // Enable and try again
         logger.enable();
-        let result = logger.log_insert(&mut storage, 1, "t1", "r1", "{}", None).unwrap();
+        let result = logger
+            .log_insert(&mut storage, 1, "t1", "r1", "{}", None)
+            .unwrap();
         assert!(result.is_some());
 
         let logs = get_all_audit_logs(&storage).unwrap();

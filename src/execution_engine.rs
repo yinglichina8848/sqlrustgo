@@ -477,9 +477,12 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::Truncate(ref truncate) => self.execute_truncate(truncate),
             Statement::CreateIndex(ref idx) => self.execute_create_index(idx),
             Statement::Analyze(ref analyze) => {
-                let table_name = analyze.table_name.as_ref().ok_or_else(|| {
-                    SqlError::ExecutionError("ANALYZE: table name is required".to_string())
-                })?;
+                if analyze.table_names.is_empty() {
+                    return Err(SqlError::ExecutionError(
+                        "ANALYZE: table name is required".to_string(),
+                    ));
+                }
+                let table_name = &analyze.table_names[0];
                 let stats = self.collect_table_stats(table_name)?;
                 let row_count = stats.row_count;
 
