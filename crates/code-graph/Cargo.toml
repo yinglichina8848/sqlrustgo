@@ -20,7 +20,7 @@ rustc-hash = "1.1"  # faster hashing for large graphs
 smallvec = "1.10"  # small stack-allocated vectors
 
 # File watching / incremental
-notify = "6.0"  # file system watcher for incremental updates
+notify = "8.2"  # file system watcher for incremental updates
 walkdir = "2.4"  # directory traversal
 
 # Hashing (stable node IDs)
