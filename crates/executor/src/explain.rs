@@ -4,7 +4,9 @@
 //! with estimated costs and actual execution times (when ANALYZE is used).
 
 use sqlrustgo_planner::PhysicalPlan;
-use sqlrustgo_planner::{Expr, FilterExec, HashJoinExec, IndexScanExec, LimitExec, ProjectionExec, SeqScanExec, SortExec};
+use sqlrustgo_planner::{
+    Expr, FilterExec, HashJoinExec, IndexScanExec, LimitExec, ProjectionExec, SeqScanExec, SortExec,
+};
 use sqlrustgo_types::Value;
 use std::time::Instant;
 
@@ -193,7 +195,8 @@ impl ExplainExecutor {
         }
 
         // Then explain this node
-        let (name, details, estimated_rows, actual_rows, exec_time, loops) = self.extract_node_info(plan);
+        let (name, details, estimated_rows, actual_rows, exec_time, loops) =
+            self.extract_node_info(plan);
 
         let line = ExplainLine {
             indent: depth,
@@ -212,7 +215,14 @@ impl ExplainExecutor {
     fn extract_node_info(
         &self,
         plan: &dyn PhysicalPlan,
-    ) -> (String, Vec<String>, u64, Option<u64>, Option<u64>, Option<u64>) {
+    ) -> (
+        String,
+        Vec<String>,
+        u64,
+        Option<u64>,
+        Option<u64>,
+        Option<u64>,
+    ) {
         let name = plan.name().to_string();
         let estimated_rows = plan.row_count();
         let mut details = Vec::new();
@@ -237,7 +247,7 @@ impl ExplainExecutor {
             details.push(format!("filter=[{}]", pred));
         } else if let Some(_hash_join) = plan.as_any().downcast_ref::<HashJoinExec>() {
             // HashJoinExec fields are private, so we just show the operator name
-            details.push(format!("type=HashJoin"));
+            details.push("type=HashJoin".to_string());
         } else if let Some(sort) = plan.as_any().downcast_ref::<SortExec>() {
             let sort_str = sort
                 .sort_expr()

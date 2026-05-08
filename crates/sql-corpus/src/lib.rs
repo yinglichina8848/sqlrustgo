@@ -533,7 +533,9 @@ impl SimpleExecutor {
             }
             ShowStatement::Variables { .. } => vec![],
             ShowStatement::Grants { .. } => {
-                vec![vec![Value::Text("GRANT ALL ON *.* TO current_user".to_string())]]
+                vec![vec![Value::Text(
+                    "GRANT ALL ON *.* TO current_user".to_string(),
+                )]]
             }
         }
     }
@@ -543,14 +545,12 @@ impl SimpleExecutor {
             TransactionStatement::Begin { .. } => Ok(()),
             TransactionStatement::Commit { .. } => Ok(()),
             TransactionStatement::Rollback { .. } => Ok(()),
-            TransactionStatement::SetTransaction { isolation_level } => {
-                match isolation_level {
-                    IsolationLevel::ReadCommitted
-                    | IsolationLevel::ReadUncommitted
-                    | IsolationLevel::SnapshotIsolation
-                    | IsolationLevel::Serializable => Ok(()),
-                }
-            }
+            TransactionStatement::SetTransaction { isolation_level } => match isolation_level {
+                IsolationLevel::ReadCommitted
+                | IsolationLevel::ReadUncommitted
+                | IsolationLevel::SnapshotIsolation
+                | IsolationLevel::Serializable => Ok(()),
+            },
             TransactionStatement::StartTransaction { .. } => Ok(()),
         }
     }

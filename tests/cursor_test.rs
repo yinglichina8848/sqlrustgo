@@ -33,7 +33,11 @@ fn test_cursor_basic_lifecycle() {
         CLOSE cur; \
     END";
     let result = engine.execute(sql);
-    assert!(result.is_ok(), "CREATE PROCEDURE failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "CREATE PROCEDURE failed: {:?}",
+        result.err()
+    );
 
     // Call procedure
     let result = engine.execute("CALL cursor_test()");
@@ -69,7 +73,11 @@ fn test_cursor_with_loop() {
         CLOSE cur; \
     END";
     let result = engine.execute(sql);
-    assert!(result.is_ok(), "CREATE PROCEDURE failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "CREATE PROCEDURE failed: {:?}",
+        result.err()
+    );
 
     // Call procedure
     let result = engine.execute("CALL loop_cursor()");
@@ -98,7 +106,11 @@ fn test_cursor_fetch_into() {
         CLOSE cur; \
     END";
     let result = engine.execute(sql);
-    assert!(result.is_ok(), "CREATE PROCEDURE failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "CREATE PROCEDURE failed: {:?}",
+        result.err()
+    );
 
     // Call procedure
     let result = engine.execute("CALL fetch_test()");
@@ -135,7 +147,11 @@ fn test_multiple_cursors() {
         CLOSE cur2; \
     END";
     let result = engine.execute(sql);
-    assert!(result.is_ok(), "CREATE PROCEDURE failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "CREATE PROCEDURE failed: {:?}",
+        result.err()
+    );
 
     // Call procedure
     let result = engine.execute("CALL multi_cursor()");
@@ -166,7 +182,11 @@ fn test_cursor_with_order_by() {
         CLOSE cur; \
     END";
     let result = engine.execute(sql);
-    assert!(result.is_ok(), "CREATE PROCEDURE failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "CREATE PROCEDURE failed: {:?}",
+        result.err()
+    );
 
     // Call procedure
     let result = engine.execute("CALL ordered_cursor()");
@@ -195,7 +215,11 @@ fn test_cursor_with_where() {
         CLOSE cur; \
     END";
     let result = engine.execute(sql);
-    assert!(result.is_ok(), "CREATE PROCEDURE failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "CREATE PROCEDURE failed: {:?}",
+        result.err()
+    );
 
     // Call procedure
     let result = engine.execute("CALL filtered_cursor()");
