@@ -15,5 +15,5 @@ anyhow = "1"
 prost = "0.13"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-build = "0.14"
 http-body-util = "0.1"

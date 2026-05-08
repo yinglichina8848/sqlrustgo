@@ -6,7 +6,7 @@ authors = ["SQLRustGo Team"]
 description = "Distributed database support with sharding and 2PC"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-build = "0.14"
 prost-build = "0.13"
 
 [dependencies]
