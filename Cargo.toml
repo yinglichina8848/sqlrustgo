@@ -93,7 +93,7 @@ zstd = "0.13"
 rand = "0.8"
 sha2 = "0.10"
 hmac = "0.12"
-pbkdf2 = { version = "0.12", features = ["simple"] }
+pbkdf2 = { version = "0.13", features = ["simple"] }
 fnv = "1.0"
 proptest = "1.1"
 arrow = { version = "58.1.0" }
