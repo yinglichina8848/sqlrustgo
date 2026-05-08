@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     parse, AlterTableOperation, Expression, InsertStatement, SelectStatement, ShowStatement,
-    Statement, WithSelect,
+    Statement, TruncateStatement, WithSelect,
 };
 use sqlrustgo_parser::transaction::{IsolationLevel, TransactionStatement};
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
@@ -224,6 +224,11 @@ impl SimpleExecutor {
                         ));
                     }
                 }
+                Ok(ExecutorResult::new(vec![], 0))
+            }
+            Statement::Truncate(truncate) => {
+                // TRUNCATE TABLE - delete all rows from table
+                self.execute_truncate(&truncate)?;
                 Ok(ExecutorResult::new(vec![], 0))
             }
             Statement::CreateIndex(_) => Ok(ExecutorResult::new(vec![], 0)),
@@ -535,6 +540,8 @@ impl SimpleExecutor {
             ShowStatement::Grants { .. } => {
                 vec![vec![Value::Text("GRANT ALL ON *.* TO current_user".to_string())]]
             }
+            ShowStatement::TableStatus { .. } => vec![],
+            ShowStatement::Processlist => vec![],
         }
     }
 
@@ -599,6 +606,13 @@ impl SimpleExecutor {
             }
         }
         self.execute_select(&with_select.select)?;
+        Ok(())
+    }
+
+    fn execute_truncate(&mut self, truncate: &TruncateStatement) -> Result<(), String> {
+        self.storage
+            .delete(&truncate.name, &[])
+            .map_err(|e| format!("Truncate table error: {:?}", e))?;
         Ok(())
     }
 }
