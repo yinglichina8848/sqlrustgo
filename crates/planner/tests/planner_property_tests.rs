@@ -1,5 +1,5 @@
 use sqlrustgo_planner::Expr;
-use sqlrustgo_planner::{AggregateFunction, JoinType, LogicalPlan, Operator, PhysicalPlan, Schema};
+use sqlrustgo_planner::{AggregateFunction, JoinType, LogicalPlan, Operator, Schema};
 use sqlrustgo_types::Value;
 
 #[cfg(test)]
@@ -418,6 +418,169 @@ mod operator_tests {
             Operator::Divide,
         ];
         assert_eq!(operators.len(), 12);
+    }
+}
+
+#[cfg(test)]
+mod logical_plan_variant_tests {
+    use super::*;
+    use sqlrustgo_planner::LogicalPlan;
+
+    #[test]
+    fn test_logical_plan_subquery() {
+        let inner = LogicalPlan::TableScan {
+            table_name: "inner".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Subquery {
+            subquery: Box::new(inner),
+            alias: "sq".to_string(),
+        };
+        assert!(matches!(plan, LogicalPlan::Subquery { .. } ));
+    }
+
+    #[test]
+    fn test_logical_plan_union() {
+        let left = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let right = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Union {
+            left: Box::new(left),
+            right: Box::new(right),
+        };
+        assert!(matches!(plan, LogicalPlan::Union { .. }));
+    }
+
+    #[test]
+    fn test_logical_plan_update() {
+        let plan = LogicalPlan::Update {
+            table_name: "users".to_string(),
+            updates: vec![
+                ("age".to_string(), Expr::Literal(Value::Integer(30))),
+            ],
+            predicate: Some(Expr::Literal(Value::Boolean(true))),
+        };
+        assert!(matches!(plan, LogicalPlan::Update { .. } ));
+    }
+
+    #[test]
+    fn test_logical_plan_delete() {
+        let plan = LogicalPlan::Delete {
+            table_name: "users".to_string(),
+            predicate: Some(Expr::Literal(Value::Boolean(true))),
+        };
+        assert!(matches!(plan, LogicalPlan::Delete { .. } ));
+    }
+
+    #[test]
+    fn test_logical_plan_create_table() {
+        let plan = LogicalPlan::CreateTable {
+            table_name: "users".to_string(),
+            schema: Schema::empty(),
+            if_not_exists: true,
+        };
+        assert!(matches!(plan, LogicalPlan::CreateTable { .. } ));
+    }
+
+    #[test]
+    fn test_logical_plan_drop_table() {
+        let plan = LogicalPlan::DropTable {
+            table_name: "users".to_string(),
+            if_exists: true,
+        };
+        assert!(matches!(plan, LogicalPlan::DropTable { .. } ));
+    }
+
+    #[test]
+    fn test_logical_plan_values() {
+        let plan = LogicalPlan::Values {
+            values: vec![
+                vec![Value::Integer(1), Value::Text("a".to_string())],
+                vec![Value::Integer(2), Value::Text("b".to_string())],
+            ],
+            schema: Schema::empty(),
+        };
+        assert!(matches!(plan, LogicalPlan::Values { .. } ));
+        if let LogicalPlan::Values { values, .. } = plan {
+            assert_eq!(values.len(), 2);
+        }
+    }
+
+    #[test]
+    fn test_logical_plan_empty_relation() {
+        let plan = LogicalPlan::EmptyRelation;
+        assert!(matches!(plan, LogicalPlan::EmptyRelation));
+    }
+
+    #[test]
+    fn test_logical_plan_join() {
+        let left = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let right = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Join {
+            left: Box::new(left),
+            right: Box::new(right),
+            join_type: JoinType::Inner,
+            condition: None,
+        };
+        assert!(matches!(plan, LogicalPlan::Join { join_type: JoinType::Inner, .. }));
+    }
+
+    #[test]
+    fn test_logical_plan_join_left() {
+        let left = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let right = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Join {
+            left: Box::new(left),
+            right: Box::new(right),
+            join_type: JoinType::Left,
+            condition: None,
+        };
+        assert!(matches!(plan, LogicalPlan::Join { join_type: JoinType::Left, .. }));
+    }
+
+    #[test]
+    fn test_logical_plan_join_right() {
+        let left = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let right = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: Schema::empty(),
+            projection: None,
+        };
+        let plan = LogicalPlan::Join {
+            left: Box::new(left),
+            right: Box::new(right),
+            join_type: JoinType::Right,
+            condition: None,
+        };
+        assert!(matches!(plan, LogicalPlan::Join { join_type: JoinType::Right, .. }));
     }
 }
 
