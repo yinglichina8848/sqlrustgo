@@ -119,7 +119,7 @@ else
 fi
 
 # B6: Security Audit
-check "B6: cargo audit" "cargo audit 2>/dev/null || true" "B6"
+check "B6: cargo audit" "cargo audit" "B6"
 
 # B7: Documentation Links
 check "B7: check_docs_links.sh" "bash scripts/gate/check_docs_links.sh" "B7"

@@ -89,7 +89,7 @@ else
 fi
 
 # A7: Security Audit
-check "A7: cargo audit" "cargo audit 2>/dev/null || true"
+check "A7: cargo audit" "cargo audit"
 
 echo ""
 echo "=== Alpha Gate Results: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="

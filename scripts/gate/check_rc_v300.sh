@@ -64,7 +64,7 @@ else
 fi
 
 # R6: Security Audit
-check "R6: cargo audit" "cargo audit 2>/dev/null || true" "R6"
+check "R6: cargo audit" "cargo audit" "R6"
 
 # R7: Docs Links + version consistency
 check "R7: check_docs_links.sh" "bash scripts/gate/check_docs_links.sh" "R7"

@@ -84,39 +84,39 @@ echo "[✓] Baseline file found"
 if [ "$SKIP_RUN" = false ]; then
     echo ""
     echo "[1/9] Running benchmark: simple_select..."
-    SIMPLE_SELECT=$(cargo test --test qps_benchmark_test test_qps_simple_select -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    SIMPLE_SELECT=$(cargo test --release --test qps_benchmark_test test_qps_simple_select -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${SIMPLE_SELECT:-N/A} qps"
 
     echo "[2/9] Running benchmark: insert..."
-    INSERT=$(cargo test --test qps_benchmark_test test_qps_insert -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    INSERT=$(cargo test --release --test qps_benchmark_test test_qps_insert -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${INSERT:-N/A} qps"
 
     echo "[3/9] Running benchmark: update (E-09)..."
-    UPDATE=$(cargo test --test qps_benchmark_test test_qps_update -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    UPDATE=$(cargo test --release --test qps_benchmark_test test_qps_update -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${UPDATE:-N/A} qps"
 
     echo "[4/9] Running benchmark: delete (E-09)..."
-    DELETE=$(cargo test --test qps_benchmark_test test_qps_delete -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    DELETE=$(cargo test --release --test qps_benchmark_test test_qps_delete -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${DELETE:-N/A} qps"
 
     echo "[5/9] Running benchmark: join..."
-    JOIN=$(cargo test --test qps_benchmark_test test_qps_join -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    JOIN=$(cargo test --release --test qps_benchmark_test test_qps_join -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${JOIN:-N/A} qps"
 
     echo "[6/9] Running benchmark: aggregation..."
-    AGG=$(cargo test --test qps_benchmark_test test_qps_aggregation -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    AGG=$(cargo test --release --test qps_benchmark_test test_qps_aggregation -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${AGG:-N/A} qps"
 
     echo "[7/9] Running benchmark: order_by..."
-    ORDER_BY=$(cargo test --test qps_benchmark_test test_qps_order_by -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    ORDER_BY=$(cargo test --release --test qps_benchmark_test test_qps_order_by -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${ORDER_BY:-N/A} qps"
 
     echo "[8/9] Running benchmark: concurrent_select_8t..."
-    CONC_SELECT=$(cargo test --test qps_benchmark_test test_qps_concurrent_select -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    CONC_SELECT=$(cargo test --release --test qps_benchmark_test test_qps_concurrent_select -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${CONC_SELECT:-N/A} qps"
 
     echo "[9/9] Running benchmark: complex_where..."
-    COMPLEX_WHERE=$(cargo test --test qps_benchmark_test test_qps_complex_where -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    COMPLEX_WHERE=$(cargo test --release --test qps_benchmark_test test_qps_complex_where -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${COMPLEX_WHERE:-N/A} qps"
 
     # Write current results

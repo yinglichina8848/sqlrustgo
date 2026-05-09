@@ -92,7 +92,7 @@ check "GA-5: fmt" "cargo fmt --all -- --check"
 check_output "GA-6: Coverage ≥ 85%" 85 "cargo llvm-cov --all-features --lcov --output-path /tmp/lcov-ga.info 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1"
 
 # GA-7: Security audit
-check "GA-7: cargo audit" "cargo audit 2>/dev/null || true"
+check "GA-7: cargo audit" "cargo audit"
 
 # GA-8: Docs links
 check "GA-8: docs links" "bash scripts/gate/check_docs_links.sh"
