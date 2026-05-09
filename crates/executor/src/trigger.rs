@@ -820,9 +820,9 @@ impl TriggerExecutionResult {
     }
 }
 
-    #[cfg(test)]
-    #[allow(clippy::approx_constant)]
-    mod tests {
+#[cfg(test)]
+#[allow(clippy::approx_constant)]
+mod tests {
     use super::*;
     use sqlrustgo_storage::{
         ColumnDefinition, MemoryStorage, TableInfo, TriggerInfo as StorageTriggerInfo,
