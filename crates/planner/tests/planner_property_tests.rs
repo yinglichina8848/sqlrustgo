@@ -437,7 +437,7 @@ mod logical_plan_variant_tests {
             subquery: Box::new(inner),
             alias: "sq".to_string(),
         };
-        assert!(matches!(plan, LogicalPlan::Subquery { .. } ));
+        assert!(matches!(plan, LogicalPlan::Subquery { .. }));
     }
 
     #[test]
@@ -463,12 +463,10 @@ mod logical_plan_variant_tests {
     fn test_logical_plan_update() {
         let plan = LogicalPlan::Update {
             table_name: "users".to_string(),
-            updates: vec![
-                ("age".to_string(), Expr::Literal(Value::Integer(30))),
-            ],
+            updates: vec![("age".to_string(), Expr::Literal(Value::Integer(30)))],
             predicate: Some(Expr::Literal(Value::Boolean(true))),
         };
-        assert!(matches!(plan, LogicalPlan::Update { .. } ));
+        assert!(matches!(plan, LogicalPlan::Update { .. }));
     }
 
     #[test]
@@ -477,7 +475,7 @@ mod logical_plan_variant_tests {
             table_name: "users".to_string(),
             predicate: Some(Expr::Literal(Value::Boolean(true))),
         };
-        assert!(matches!(plan, LogicalPlan::Delete { .. } ));
+        assert!(matches!(plan, LogicalPlan::Delete { .. }));
     }
 
     #[test]
@@ -487,7 +485,7 @@ mod logical_plan_variant_tests {
             schema: Schema::empty(),
             if_not_exists: true,
         };
-        assert!(matches!(plan, LogicalPlan::CreateTable { .. } ));
+        assert!(matches!(plan, LogicalPlan::CreateTable { .. }));
     }
 
     #[test]
@@ -496,7 +494,7 @@ mod logical_plan_variant_tests {
             table_name: "users".to_string(),
             if_exists: true,
         };
-        assert!(matches!(plan, LogicalPlan::DropTable { .. } ));
+        assert!(matches!(plan, LogicalPlan::DropTable { .. }));
     }
 
     #[test]
@@ -508,7 +506,7 @@ mod logical_plan_variant_tests {
             ],
             schema: Schema::empty(),
         };
-        assert!(matches!(plan, LogicalPlan::Values { .. } ));
+        assert!(matches!(plan, LogicalPlan::Values { .. }));
         if let LogicalPlan::Values { values, .. } = plan {
             assert_eq!(values.len(), 2);
         }
@@ -538,7 +536,13 @@ mod logical_plan_variant_tests {
             join_type: JoinType::Inner,
             condition: None,
         };
-        assert!(matches!(plan, LogicalPlan::Join { join_type: JoinType::Inner, .. }));
+        assert!(matches!(
+            plan,
+            LogicalPlan::Join {
+                join_type: JoinType::Inner,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -559,7 +563,13 @@ mod logical_plan_variant_tests {
             join_type: JoinType::Left,
             condition: None,
         };
-        assert!(matches!(plan, LogicalPlan::Join { join_type: JoinType::Left, .. }));
+        assert!(matches!(
+            plan,
+            LogicalPlan::Join {
+                join_type: JoinType::Left,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -580,7 +590,13 @@ mod logical_plan_variant_tests {
             join_type: JoinType::Right,
             condition: None,
         };
-        assert!(matches!(plan, LogicalPlan::Join { join_type: JoinType::Right, .. }));
+        assert!(matches!(
+            plan,
+            LogicalPlan::Join {
+                join_type: JoinType::Right,
+                ..
+            }
+        ));
     }
 }
 

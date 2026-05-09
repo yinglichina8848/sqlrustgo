@@ -170,10 +170,7 @@ fn test_explain_analyze_timing_collected() {
     let scan = create_test_seq_scan("users");
     let output = explain_analyze(&scan);
 
-    assert!(
-        output.total_time_us.is_some(),
-        "Should have total_time_us"
-    );
+    assert!(output.total_time_us.is_some(), "Should have total_time_us");
 
     for line in &output.lines {
         assert!(
@@ -190,7 +187,12 @@ fn test_explain_analyze_index_scan() {
         "id".to_string(),
         sqlrustgo_planner::DataType::Integer,
     )]);
-    let scan = IndexScanExec::new("users".to_string(), "id".to_string(), "idx_id".to_string(), schema);
+    let scan = IndexScanExec::new(
+        "users".to_string(),
+        "id".to_string(),
+        "idx_id".to_string(),
+        schema,
+    );
     let output = explain_analyze(&scan);
 
     assert_eq!(output.lines.len(), 1);
@@ -205,7 +207,10 @@ fn test_explain_analyze_index_scan() {
 #[test]
 fn test_explain_analyze_config() {
     let config = ExplainConfig::explain_analyze();
-    assert!(config.analyze, "EXPLAIN ANALYZE config should have analyze=true");
+    assert!(
+        config.analyze,
+        "EXPLAIN ANALYZE config should have analyze=true"
+    );
 }
 
 #[test]
