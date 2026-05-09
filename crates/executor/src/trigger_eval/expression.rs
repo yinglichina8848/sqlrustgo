@@ -424,4 +424,168 @@ mod tests {
         let eq_expr = binop(ident("NEW.b"), "=", lit("1"));
         assert!(!expression_to_bool(&eq_expr, &eval2, None));
     }
+
+    #[test]
+    fn test_evaluate_binary_op_less_than() {
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "<", &Value::Integer(5)),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(5), "<", &Value::Integer(3)),
+            Value::Boolean(false)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "<", &Value::Integer(3)),
+            Value::Boolean(false)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Float(1.5), "<", &Value::Float(2.5)),
+            Value::Boolean(true)
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_greater_than() {
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(5), ">", &Value::Integer(3)),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), ">", &Value::Integer(5)),
+            Value::Boolean(false)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), ">", &Value::Integer(3)),
+            Value::Boolean(false)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Float(2.5), ">", &Value::Float(1.5)),
+            Value::Boolean(true)
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_less_than_or_equal() {
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "<=", &Value::Integer(5)),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(5), "<=", &Value::Integer(3)),
+            Value::Boolean(false)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "<=", &Value::Integer(3)),
+            Value::Boolean(true)
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_greater_than_or_equal() {
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(5), ">=", &Value::Integer(3)),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), ">=", &Value::Integer(5)),
+            Value::Boolean(false)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), ">=", &Value::Integer(3)),
+            Value::Boolean(true)
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_equal() {
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "=", &Value::Integer(3)),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "=", &Value::Integer(5)),
+            Value::Boolean(false)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Float(3.0), "=", &Value::Float(3.0)),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            evaluate_binary_op(
+                &Value::Text("hello".into()),
+                "=",
+                &Value::Text("hello".into())
+            ),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            evaluate_binary_op(
+                &Value::Text("hello".into()),
+                "=",
+                &Value::Text("world".into())
+            ),
+            Value::Boolean(false)
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_not_equal() {
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "!=", &Value::Integer(5)),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "!=", &Value::Integer(3)),
+            Value::Boolean(false)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "<>", &Value::Integer(5)),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "<>", &Value::Integer(3)),
+            Value::Boolean(false)
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_mixed_type_comparison() {
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "<", &Value::Float(5.0)),
+            Value::Boolean(false)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Float(3.0), ">", &Value::Integer(2)),
+            Value::Boolean(false)
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "=", &Value::Float(3.0)),
+            Value::Boolean(false)
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_mul_mixed_types() {
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(3), "*", &Value::Float(2.5)),
+            Value::Null
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Float(3.0), "*", &Value::Integer(4)),
+            Value::Null
+        );
+    }
+
+    #[test]
+    fn test_evaluate_binary_op_div_mixed_types() {
+        assert_eq!(
+            evaluate_binary_op(&Value::Integer(10), "/", &Value::Float(2.0)),
+            Value::Null
+        );
+        assert_eq!(
+            evaluate_binary_op(&Value::Float(10.0), "/", &Value::Integer(2)),
+            Value::Null
+        );
+    }
 }
