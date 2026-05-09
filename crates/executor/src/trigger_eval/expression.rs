@@ -163,9 +163,9 @@ fn evaluate_binary_op(left: &Value, op: &str, right: &Value) -> Value {
     Value::Null
 }
 
-    #[cfg(test)]
-    #[allow(clippy::approx_constant)]
-    mod tests {
+#[cfg(test)]
+#[allow(clippy::approx_constant)]
+mod tests {
     use crate::trigger_eval::context::{EvalContext, TriggerContext};
     use crate::trigger_eval::expression::{
         evaluate_binary_op, expression_to_bool, expression_to_value, parse_literal,
