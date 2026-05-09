@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 //! SQLite Differential Testing Framework
 //!
 //! Compares SQLRustGo executor results against SQLite (ground truth).
@@ -135,7 +136,7 @@ fn value_to_string(v: &Value) -> String {
 fn parse_output(s: &str) -> Vec<Vec<String>> {
     s.lines()
         .map(|line| line.split('\t').map(|c| c.trim().to_lowercase()).collect())
-        .filter(|row: &Vec<String>| !row.is_empty() && !(row.len() == 1 && row[0].is_empty()))
+        .filter(|row: &Vec<String>| !(row.is_empty() || row.len() == 1 && row[0].is_empty()))
         .collect()
 }
 

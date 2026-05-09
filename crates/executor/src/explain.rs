@@ -412,7 +412,7 @@ mod tests {
     }
 
     fn create_test_filter() -> FilterExec {
-        let schema = Schema::new(vec![
+        let _schema = Schema::new(vec![
             Field::new("id".to_string(), sqlrustgo_planner::DataType::Integer),
             Field::new("name".to_string(), sqlrustgo_planner::DataType::Text),
         ]);

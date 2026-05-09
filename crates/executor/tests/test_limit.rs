@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use sqlrustgo::ExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use std::sync::{Arc, RwLock};
