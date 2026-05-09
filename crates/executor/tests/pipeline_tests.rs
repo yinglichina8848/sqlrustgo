@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use sqlrustgo::ExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use sqlrustgo_types::Value;
@@ -58,8 +59,7 @@ fn test_pipeline_join_aggregate() {
     let mut engine = setup_staff();
     let result = engine
         .execute("SELECT teams.team_name, COUNT(*) FROM staff INNER JOIN teams ON staff.dept_id = teams.id GROUP BY teams.team_name");
-    if result.is_ok() {
-        let rows = result.unwrap();
+    if let Ok(rows) = result {
         assert_eq!(rows.rows.len(), 2);
     }
 }

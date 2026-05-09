@@ -263,7 +263,7 @@ mod tests {
     fn test_executor_metrics_timer() {
         let mut metrics = ExecutorMetrics::new();
         {
-            let mut timer = ExecutorMetricsTimer::new(&mut metrics, "SELECT");
+            let timer = ExecutorMetricsTimer::new(&mut metrics, "SELECT");
             std::thread::sleep(std::time::Duration::from_millis(10));
             timer.stop();
         }
@@ -477,11 +477,11 @@ mod tests {
     fn test_executor_metrics_timer_multiple() {
         let mut metrics = ExecutorMetrics::new();
         {
-            let mut timer1 = ExecutorMetricsTimer::new(&mut metrics, "SELECT");
+            let timer1 = ExecutorMetricsTimer::new(&mut metrics, "SELECT");
             std::thread::sleep(std::time::Duration::from_millis(5));
             timer1.stop();
 
-            let mut timer2 = ExecutorMetricsTimer::new(&mut metrics, "INSERT");
+            let timer2 = ExecutorMetricsTimer::new(&mut metrics, "INSERT");
             std::thread::sleep(std::time::Duration::from_millis(5));
             timer2.stop();
         }

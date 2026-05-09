@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 //! Full Outer Join Tests
 //!
 //! These tests verify the FULL OUTER JOIN implementation in the planner and optimizer.

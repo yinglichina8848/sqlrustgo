@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn test_executor_result_with_float() {
         let rows = vec![
-            vec![Value::Float(3.14), Value::Integer(1)],
+            vec![Value::Float(std::f64::consts::PI), Value::Integer(1)],
             vec![Value::Float(-2.5), Value::Integer(2)],
         ];
         let result = ExecutorResult::new(rows, 0);
