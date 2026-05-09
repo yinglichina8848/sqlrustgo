@@ -519,7 +519,11 @@ impl SimpleExecutor {
                                 Value::Text(c.name.clone()),
                                 Value::Text(c.data_type.clone()),
                                 Value::Text(if c.nullable { "YES" } else { "NO" }.to_string()),
-                                Value::Text(if c.primary_key { "PRI".to_string() } else { String::new() }),
+                                Value::Text(if c.primary_key {
+                                    "PRI".to_string()
+                                } else {
+                                    String::new()
+                                }),
                                 Value::Null,
                                 Value::Text("".to_string()),
                             ]
@@ -542,7 +546,9 @@ impl SimpleExecutor {
             }
             ShowStatement::Variables { .. } => vec![],
             ShowStatement::Grants { .. } => {
-                vec![vec![Value::Text("GRANT ALL ON *.* TO current_user".to_string())]]
+                vec![vec![Value::Text(
+                    "GRANT ALL ON *.* TO current_user".to_string(),
+                )]]
             }
             ShowStatement::TableStatus { .. } => vec![],
             ShowStatement::Processlist => vec![],
@@ -554,14 +560,12 @@ impl SimpleExecutor {
             TransactionStatement::Begin { .. } => Ok(()),
             TransactionStatement::Commit { .. } => Ok(()),
             TransactionStatement::Rollback { .. } => Ok(()),
-            TransactionStatement::SetTransaction { isolation_level } => {
-                match isolation_level {
-                    IsolationLevel::ReadCommitted
-                    | IsolationLevel::ReadUncommitted
-                    | IsolationLevel::SnapshotIsolation
-                    | IsolationLevel::Serializable => Ok(()),
-                }
-            }
+            TransactionStatement::SetTransaction { isolation_level } => match isolation_level {
+                IsolationLevel::ReadCommitted
+                | IsolationLevel::ReadUncommitted
+                | IsolationLevel::SnapshotIsolation
+                | IsolationLevel::Serializable => Ok(()),
+            },
             TransactionStatement::StartTransaction { .. } => Ok(()),
         }
     }
