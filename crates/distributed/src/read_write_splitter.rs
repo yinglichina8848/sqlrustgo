@@ -148,6 +148,8 @@ impl ReadWriteSplitter {
             sqlrustgo_parser::Statement::Optimize(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::Vacuum(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::Repair(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::Backup(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::Restore(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::CreateRole(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::DropRole(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::GrantRole(_) => QueryClass::Write,

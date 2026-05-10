@@ -4343,30 +4343,42 @@ impl Parser {
         Ok(Statement::Repair(RepairStatement { name }))
     }
 
-    fn parse_backup(&mut self) -> Result<Statement, String> {
+fn parse_backup(&mut self) -> Result<Statement, String> {
         self.expect(Token::Backup)?;
-        self.expect(Token::Database)?;
 
         let mut database = None;
-        let mut destination = String::new();
         let mut incremental = false;
         let mut differential = false;
         let mut compressed = false;
 
-        // Optional database name
-        if let Some(Token::Identifier(name)) = self.next() {
-            database = Some(name);
+        // Optional DATABASE keyword or database name
+        match self.current() {
+            Some(Token::Identifier(name)) if name.to_uppercase() == "DATABASE" => {
+                self.next();
+                // Check if there's a database name after DATABASE
+                if let Some(Token::Identifier(db_name)) = self.current() {
+                    if db_name.to_uppercase() != "TO" {
+                        database = Some(db_name.clone());
+                        self.next();
+                    }
+                }
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() != "TO" => {
+                database = Some(name.clone());
+                self.next();
+            }
+            _ => {}
         }
 
         // Expect TO
         self.expect(Token::To)?;
 
         // Expect destination path
-        match self.next() {
-            Some(Token::StringLiteral(path)) => destination = path,
-            Some(Token::Identifier(path)) => destination = path,
+        let destination: String = match self.next() {
+            Some(Token::StringLiteral(path)) => path,
+            Some(Token::Identifier(path)) => path,
             _ => return Err("Expected destination path".to_string()),
-        }
+        };
 
         // Parse optional modifiers
         while let Some(token) = self.current() {
@@ -4397,29 +4409,41 @@ impl Parser {
         }))
     }
 
-    fn parse_restore(&mut self) -> Result<Statement, String> {
+fn parse_restore(&mut self) -> Result<Statement, String> {
         self.expect(Token::Restore)?;
-        self.expect(Token::Database)?;
 
         let mut database = None;
-        let mut source = String::new();
         let mut to_database = None;
         let mut point_in_time = None;
 
-        // Optional database name
-        if let Some(Token::Identifier(name)) = self.next() {
-            database = Some(name);
+        // Optional DATABASE keyword or database name
+        match self.current() {
+            Some(Token::Identifier(name)) if name.to_uppercase() == "DATABASE" => {
+                self.next();
+                // Check if there's a database name after DATABASE
+                if let Some(Token::Identifier(db_name)) = self.current() {
+                    if db_name.to_uppercase() != "FROM" {
+                        database = Some(db_name.clone());
+                        self.next();
+                    }
+                }
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() != "FROM" => {
+                database = Some(name.clone());
+                self.next();
+            }
+            _ => {}
         }
 
         // Expect FROM
         self.expect(Token::From)?;
 
         // Expect source path
-        match self.next() {
-            Some(Token::StringLiteral(path)) => source = path,
-            Some(Token::Identifier(path)) => source = path,
+        let source: String = match self.next() {
+            Some(Token::StringLiteral(path)) => path,
+            Some(Token::Identifier(path)) => path,
             _ => return Err("Expected source path".to_string()),
-        }
+        };
 
         // Parse optional TO database
         if let Some(Token::Identifier(name)) = self.current() {

@@ -251,6 +251,8 @@ impl SimpleExecutor {
             Statement::Optimize(_) => Ok(ExecutorResult::new(vec![], 0)),
             Statement::Vacuum(_) => Ok(ExecutorResult::new(vec![], 0)),
             Statement::Repair(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Backup(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Restore(_) => Ok(ExecutorResult::new(vec![], 0)),
             Statement::Explain(_) => Ok(ExecutorResult::new(vec![], 0)),
             Statement::Show(show) => {
                 let rows = self.execute_show(&show);
