@@ -23,7 +23,9 @@ oo/
 │   ├── UPDATE_EXECUTION.md          # UPDATE 执行链路
 │   └── DELETE_EXECUTION.md          # DELETE 执行链路
 ├── ddl/                               # DDL 语句
-│   └── DDL_EXECUTION.md            # CREATE/DROP/ALTER 执行链路
+│   ├── DDL_EXECUTION.md            # CREATE/DROP/ALTER 执行链路
+│   ├── ALTER_EXECUTION.md          # ALTER TABLE 详细执行
+│   └── INDEX_EXECUTION.md          # INDEX CREATE/DROP/维护
 ├── dcl/                               # DCL 语句
 │   └── DCL_EXECUTION.md            # GRANT/REVOKE 执行链路
 ├── join/                               # JOIN 算法
@@ -39,6 +41,13 @@ oo/
 │   ├── SEMISYNC.md                 # 半同步复制
 │   ├── XA_TRANSACTION.md           # XA 事务
 │   └── MTS.md                      # 多线程复制
+├── query/                            # SQL 查询
+│   ├── SUBQUERY_EXECUTION.md      # 标量/EXISTS/IN/CTE
+│   ├── WINDOW_FUNCTIONS.md        # ROW_NUMBER/RANK/LEAD/LAG
+│   └── RECURSIVE_CTE.md          # 递归 CTE 执行链路
+├── advanced/                         # 高级特性
+│   ├── TRIGGER_EXECUTION.md       # 触发器执行
+│   └── STORED_PROCEDURE.md        # 存储过程执行
 └── coverage/                        # 覆盖率提升
     ├── COVERAGE_GAPS.md            # 覆盖率差距分析
     └── COVERAGE_IMPROVEMENT_PLAN.md # 覆盖率提升计划
@@ -68,11 +77,21 @@ oo/
 |------|--------|------|
 | `dml/DML_EXECUTION.md` | ✅ | INSERT/UPDATE/DELETE/SELECT 执行链路 |
 | `ddl/DDL_EXECUTION.md` | ✅ | CREATE/DROP/ALTER TABLE 执行链路 |
+| `ddl/ALTER_EXECUTION.md` | ✅ | ALTER TABLE 详细执行链路 |
+| `ddl/INDEX_EXECUTION.md` | ✅ | INDEX CREATE/DROP/维护链路 |
 | `dcl/DCL_EXECUTION.md` | ✅ | GRANT/REVOKE/用户管理/角色 |
 | `join/JOIN_ALGORITHMS.md` | ✅ | Hash/NestLoop/MergeJoin 算法 |
 | `wal/WAL_PROTOCOL.md` | ✅ | WAL 协议/崩溃恢复/检查点 |
 | `recovery/CRASH_RECOVERY.md` | ✅ | 崩溃恢复链路/2PC/XA |
 | `distributed/DISTRIBUTED_SYNC.md` | ✅ | 复制/半同步/XA/MTS |
+| `transaction/TX_MANAGEMENT.md` | ✅ | TCL 事务管理 |
+| `transaction/MVCC_IMPLEMENTATION.md` | ✅ | MVCC 快照隔离实现 |
+| `query/SUBQUERY_EXECUTION.md` | ✅ | 标量/EXISTS/IN/CTE |
+| `query/WINDOW_FUNCTIONS.md` | ✅ | ROW_NUMBER/RANK/LEAD/LAG |
+| `query/RECURSIVE_CTE.md` | ✅ | 递归 CTE 执行链路 |
+| `cbo/CBO_DESIGN.md` | ✅ | CBO 架构与策略选取 |
+| `cbo/CBO_COST_MODEL.md` | ✅ | CBO 代价模型详解 |
+| `cbo/CBO_JOIN_ORDERING.md` | ✅ | Join Order 算法 |
 
 ## 文档更新记录
 
@@ -81,3 +100,8 @@ oo/
 | 2026-05-11 | 初始化 OO 设计文档结构 | ✅ |
 | 2026-05-11 | 补充 DML/DDL 执行链路 | ✅ |
 | 2026-05-11 | 补充 DCL/JOIN/WAL/Recovery/Distributed | ✅ |
+| 2026-05-11 | 补充 TCL/MVCC 事务文档 | ✅ |
+| 2026-05-11 | 补充子查询/窗口函数/触发器/存储过程 | ✅ |
+| 2026-05-11 | 补充 DDL 专项 (ALTER/INDEX) | ✅ |
+| 2026-05-11 | 补充 CBO 优化 (代价模型/Join排序) | ✅ |
+| 2026-05-11 | 补充递归 CTE 文档 | ✅ |
