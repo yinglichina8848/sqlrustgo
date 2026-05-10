@@ -1500,6 +1500,29 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             storage.get_table_info(&table_name)?.clone()
         };
 
+        // Find AUTO_INCREMENT columns
+        let auto_increment_cols: Vec<usize> = table_info
+            .columns
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.auto_increment)
+            .map(|(i, _)| i)
+            .collect();
+
+        // Determine which columns are specified in INSERT
+        let specified_cols: Vec<usize> = if insert.columns.is_empty() {
+            // If no columns specified, all columns are specified
+            (0..table_info.columns.len()).collect()
+        } else {
+            table_info
+                .columns
+                .iter()
+                .enumerate()
+                .filter(|(i, c)| insert.columns.contains(&c.name))
+                .map(|(i, _)| i)
+                .collect()
+        };
+
         // Convert expressions to records (INSERT ... VALUES) or execute SELECT (INSERT ... SELECT)
         let mut all_records: Vec<Vec<Value>> = if let Some(ref select) = insert.select {
             let result = self.execute_select(select)?;
@@ -1507,13 +1530,51 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         } else {
             Vec::new()
         };
+
         if !insert.values.is_empty() {
             for row_exprs in &insert.values {
-                let mut record = Vec::with_capacity(row_exprs.len());
-                for (_i, expr) in row_exprs.iter().enumerate() {
-                    let val = expression_to_value(expr);
-                    record.push(val);
+                let mut record = Vec::with_capacity(table_info.columns.len());
+                let mut auto_inc_idx = 0;
+
+                for col_idx in 0..table_info.columns.len() {
+                    if specified_cols.contains(&col_idx) {
+                        // User specified this column - find its value
+                        let col_name = &table_info.columns[col_idx].name;
+                        let value_idx = insert
+                            .columns
+                            .iter()
+                            .position(|c| c == col_name)
+                            .unwrap_or(col_idx);
+                        if let Some(expr) = row_exprs.get(value_idx) {
+                            let val = expression_to_value(expr);
+                            record.push(val);
+                        } else {
+                            record.push(Value::Null);
+                        }
+                    } else {
+                        // Column not specified - check if AUTO_INCREMENT
+                        if auto_increment_cols.contains(&col_idx) {
+                            // This should not happen with standard INSERT, but handle it
+                            record.push(Value::Null);
+                        } else {
+                            record.push(Value::Null);
+                        }
+                    }
                 }
+
+                // Generate AUTO_INCREMENT values where needed
+                {
+                    let mut storage = self.storage.write().unwrap();
+                    for col_idx in &auto_increment_cols {
+                        if !specified_cols.contains(col_idx) || *col_idx >= record.len() || matches!(record[*col_idx], Value::Null) {
+                            let auto_val = storage.get_next_auto_increment(&table_name)?;
+                            if *col_idx < record.len() {
+                                record[*col_idx] = Value::Integer(auto_val);
+                            }
+                        }
+                    }
+                }
+
                 all_records.push(record);
             }
         }
@@ -2136,6 +2197,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     data_type: ct.to_uppercase(),
                     nullable: *nullable,
                     primary_key: false,
+                    auto_increment: false,
                 });
                 cols
             }
@@ -2233,6 +2295,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 data_type: c.data_type.clone(),
                 nullable: !c.primary_key,
                 primary_key: c.primary_key,
+                auto_increment: c.auto_increment,
             })
             .collect();
         let info = TableInfo {
@@ -3977,6 +4040,7 @@ fn build_combined_schema(
             data_type: c.data_type.clone(),
             nullable: c.nullable,
             primary_key: c.primary_key,
+            auto_increment: c.auto_increment,
         });
     }
 
@@ -3986,6 +4050,7 @@ fn build_combined_schema(
             data_type: c.data_type.clone(),
             nullable: c.nullable,
             primary_key: c.primary_key,
+            auto_increment: c.auto_increment,
         });
     }
 
@@ -4011,6 +4076,7 @@ fn build_aggregate_schema(
             data_type: "INTEGER".to_string(),
             nullable: false,
             primary_key: false,
+            auto_increment: false,
         });
     }
 
@@ -4076,6 +4142,7 @@ fn build_aggregate_schema(
             data_type: "INTEGER".to_string(),
             nullable: false,
             primary_key: false,
+            auto_increment: false,
         });
     }
 

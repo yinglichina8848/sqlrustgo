@@ -239,6 +239,7 @@ impl DataRestorer {
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     primary_key: false,
+                    auto_increment: false,
                 })
                 .collect(),
             foreign_keys: vec![],
@@ -307,6 +308,7 @@ impl DataRestorer {
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     primary_key: false,
+                    auto_increment: false,
                 })
                 .collect(),
             foreign_keys: vec![],

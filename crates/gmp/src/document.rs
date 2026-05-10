@@ -225,48 +225,56 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: true,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "title".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "doc_type".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "version".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "created_at".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "updated_at".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "effective_date".to_string(),
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "status".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             },
         ];
         storage.create_table(&sqlrustgo_storage::TableInfo {
@@ -287,18 +295,21 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: true,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "section".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 primary_key: true,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "content".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             },
         ];
         storage.create_table(&sqlrustgo_storage::TableInfo {
@@ -319,12 +330,14 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: true,
+                auto_increment: false,
             },
             ColumnDefinition {
                 name: "keyword".to_string(),
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 primary_key: true,
+                auto_increment: false,
             },
         ];
         storage.create_table(&sqlrustgo_storage::TableInfo {

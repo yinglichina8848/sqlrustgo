@@ -1148,6 +1148,7 @@ impl StoredProcExecutor {
                             data_type: data_type.clone(),
                             nullable: *nullable,
                             primary_key: false,
+                            auto_increment: false,
                         };
                         storage
                             .add_column(table_name, column)

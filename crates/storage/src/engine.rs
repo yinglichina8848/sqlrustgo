@@ -548,6 +548,8 @@ pub struct ColumnDefinition {
     pub nullable: bool,
     #[serde(default)]
     pub primary_key: bool,
+    #[serde(default)]
+    pub auto_increment: bool,
 }
 
 impl ColumnDefinition {
@@ -557,6 +559,7 @@ impl ColumnDefinition {
             data_type: data_type.to_string(),
             nullable: false,
             primary_key: false,
+            auto_increment: false,
         }
     }
 }
@@ -675,6 +678,13 @@ pub trait StorageEngine: Send + Sync {
 
     /// Get the number of index pages for an index on a table
     fn get_index_page_count(&self, table: &str, column_index: usize) -> SqlResult<u64>;
+
+    /// Get next auto-increment value and increment counter
+    /// Returns the next auto-increment value for the table
+    fn get_next_auto_increment(&mut self, _table: &str) -> SqlResult<i64> {
+        // Default implementation: auto-increment not supported
+        Err(SqlError::ExecutionError("Auto-increment not supported by this storage engine".to_string()))
+    }
 }
 
 /// In-memory storage implementation for testing and caching
@@ -689,6 +699,8 @@ pub struct MemoryStorage {
     indexes: HashMap<String, (usize, HashMap<i64, Vec<usize>>)>,
     /// Cache for parsed predicates: (table_name, predicate_str) -> (columns, parsed_predicate)
     predicate_cache: HashMap<String, (Vec<String>, Predicate)>,
+    /// Auto-increment counters: table_name -> next auto-increment value
+    auto_increment_counters: HashMap<String, i64>,
 }
 
 impl MemoryStorage {
@@ -700,6 +712,7 @@ impl MemoryStorage {
             views: HashSet::new(),
             indexes: HashMap::new(),
             predicate_cache: HashMap::new(),
+            auto_increment_counters: HashMap::new(),
         }
     }
 
@@ -831,6 +844,14 @@ impl StorageEngine for MemoryStorage {
         self.table_infos.insert(info.name.clone(), info.clone());
         self.tables.entry(info.name.clone()).or_default();
 
+        // Initialize auto-increment counters for tables with auto_increment columns
+        for col in &info.columns {
+            if col.auto_increment {
+                self.auto_increment_counters.insert(info.name.clone(), 1);
+                break;
+            }
+        }
+
         // Auto-create index for primary key column
         for (col_idx, col) in info.columns.iter().enumerate() {
             if col.primary_key {
@@ -855,6 +876,7 @@ impl StorageEngine for MemoryStorage {
     fn drop_table(&mut self, table: &str) -> SqlResult<()> {
         self.tables.remove(table);
         self.table_infos.remove(table);
+        self.auto_increment_counters.remove(table);
         Ok(())
     }
 
@@ -1091,6 +1113,16 @@ impl StorageEngine for MemoryStorage {
             self.clear_predicate_cache(table);
         }
         Ok(count)
+    }
+
+    fn get_next_auto_increment(&mut self, table: &str) -> SqlResult<i64> {
+        let counter = self
+            .auto_increment_counters
+            .entry(table.to_string())
+            .or_insert(1);
+        let value = *counter;
+        *counter += 1;
+        Ok(value)
     }
 }
 
