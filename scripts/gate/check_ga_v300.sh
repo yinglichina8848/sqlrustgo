@@ -44,7 +44,7 @@ check_output() {
     echo -n "[ga-v3.0.0] $name ... "
     local output result
     output=$(eval "$cmd" 2>&1) || true
-    result=$(echo "$output" | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%' || echo "0")
+    result=$(echo "$output" | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%' || true)
     if (( $(echo "$result >= $threshold" | bc -l) )); then
         echo "PASS (${result}%)"; PASS=$((PASS+1))
     else
@@ -114,7 +114,7 @@ fi
 # GA-7/8/9: Actual QPS measurement (Point Select ≥10K, UPDATE ≥5K, DELETE ≥2K)
 echo -n "[ga-v3.0.0] GA-7: Point Select QPS ≥10,000 ... "
 TOTAL=$((TOTAL+1))
-POINT_QPS=$(cargo test --release --test qps_benchmark_test test_qps_simple_select -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1 || echo "0")
+POINT_QPS=$(cargo test --release --test qps_benchmark_test test_qps_simple_select -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1 || true)
 if (( $(echo "$POINT_QPS >= 10000" | bc -l) )); then
     echo "PASS (${POINT_QPS} ops/s)"; PASS=$((PASS+1))
 else
@@ -124,7 +124,7 @@ fi
 # GA-11: Formal proofs ≥ 10 files valid (all formats: .json, .dfy, .tla, .formalog, .formulog)
 echo -n "[ga-v3.0.0] GA-11: Formal proofs ... "
 TOTAL=$((TOTAL+1))
-PROOF_COUNT=$(find docs/proof -type f \( -name "*.json" -o -name "*.dfy" -o -name "*.tla" -o -name "*.formalog" -o -name "*.formulog" \) 2>/dev/null | wc -l || echo "0")
+PROOF_COUNT=$(find docs/proof -type f \( -name "*.json" -o -name "*.dfy" -o -name "*.tla" -o -name "*.formalog" -o -name "*.formulog" \) 2>/dev/null | wc -l || true)
 INVALID_PROOF=0
 # Validate JSON files
 for pf in $(find docs/proof -name "*.json" -type f 2>/dev/null); do
@@ -149,14 +149,14 @@ QPS_OUTPUT=$(cargo test --test qps_benchmark_test -- --ignored --nocapture 2>&1 
 
 # Parse QPS values from output
 # Map test output to baseline keys
-SIMPLE_SELECT=$(echo "$QPS_OUTPUT" | grep "Simple SELECT QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
-INSERT_QPS=$(echo "$QPS_OUTPUT" | grep "INSERT QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
-UPDATE_QPS=$(echo "$QPS_OUTPUT" | grep "UPDATE QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
-DELETE_QPS=$(echo "$QPS_OUTPUT" | grep "DELETE QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
-JOIN_QPS=$(echo "$QPS_OUTPUT" | grep "JOIN QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
-AGGREGATION_QPS=$(echo "$QPS_OUTPUT" | grep "Aggregation QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
-ORDER_BY_QPS=$(echo "$QPS_OUTPUT" | grep "ORDER BY QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
-COMPLEX_WHERE_QPS=$(echo "$QPS_OUTPUT" | grep "Complex WHERE QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+SIMPLE_SELECT=$(echo "$QPS_OUTPUT" | grep "Simple SELECT QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)
+INSERT_QPS=$(echo "$QPS_OUTPUT" | grep "INSERT QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)
+UPDATE_QPS=$(echo "$QPS_OUTPUT" | grep "UPDATE QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)
+DELETE_QPS=$(echo "$QPS_OUTPUT" | grep "DELETE QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)
+JOIN_QPS=$(echo "$QPS_OUTPUT" | grep "JOIN QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)
+AGGREGATION_QPS=$(echo "$QPS_OUTPUT" | grep "Aggregation QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)
+ORDER_BY_QPS=$(echo "$QPS_OUTPUT" | grep "ORDER BY QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)
+COMPLEX_WHERE_QPS=$(echo "$QPS_OUTPUT" | grep "Complex WHERE QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)
 
 # Save current results
 cat > "$RESULT_FILE" <<EOF
@@ -191,7 +191,7 @@ for key in simple_select insert update delete join aggregation order_by complex_
         order_by) current="$ORDER_BY_QPS" ;;
         complex_where) current="$COMPLEX_WHERE_QPS" ;;
     esac
-    baseline=$(python3 -c "import json; d=json.load(open('$BASELINE_FILE')); print(d['benchmarks']['$key']['qps'])" 2>/dev/null || echo "0")
+    baseline=$(python3 -c "import json; d=json.load(open('$BASELINE_FILE')); print(d['benchmarks']['$key']['qps'])" 2>/dev/null || true)
 
     if (( $(echo "$current > 0" | bc -l) )) && (( $(echo "$baseline > 0" | bc -l) )); then
         ratio=$(python3 -c "print($current / $baseline)")
@@ -278,12 +278,12 @@ fi
 # GA-14: SQL Corpus ≥ 95%
 echo -n "[ga-v3.0.0] GA-14: SQL Corpus ≥ 95% ... "
 TOTAL=$((TOTAL+1))
-CORPUS_OUTPUT=$(cargo test -p sqlrustgo-sql-corpus 2>&1 || true)
-CORPUS_PCT=$(echo "$CORPUS_OUTPUT" | grep -oE '[0-9]+\.[0-9]+%' | tail -1 | tr -d '%' || echo "0")
-if (( $(echo "$CORPUS_PCT >= 98" | bc -l) )); then
+CORPUS_OUTPUT=$(cargo test -p sqlrustgo-sql-corpus -- --nocapture 2>&1 || true)
+CORPUS_PCT=$(echo "$CORPUS_OUTPUT" | grep "Final Summary" | grep -oE '[0-9]+\.[0-9]+%' | tr -d '%' || true)
+if (( $(echo "$CORPUS_PCT >= 95" | bc -l) )); then
     echo "PASS (${CORPUS_PCT}%)"; PASS=$((PASS+1))
 else
-    echo "FAIL (${CORPUS_PCT}% < 98%)"; BLOCKERS=$((BLOCKERS+1))
+    echo "FAIL (${CORPUS_PCT}% < 95%)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
 # GA-15: Version consistency
