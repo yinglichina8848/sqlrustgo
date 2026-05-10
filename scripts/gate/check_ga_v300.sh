@@ -89,8 +89,8 @@ check "GA-4: clippy" "cargo clippy --all-features -- -D warnings"
 # GA-5: Format
 check "GA-5: fmt" "cargo fmt --all -- --check"
 
-# GA-6: Coverage ≥ 40%
-check_output "GA-6: Coverage ≥ 40%" 40 "cargo llvm-cov report --summary-only 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1"
+# GA-6: Coverage ≥ 40% (run fresh test to generate profraw)
+check_output "GA-6: Coverage ≥ 40%" 40 "cargo llvm-cov --all-features --lib --summary-only 2>&1 | grep -oE '[0-9]+\\.[0-9]+%' | head -1"
 
 # GA-7: Security audit (允许网络失败，不 block GA)
 check "GA-7: cargo audit" "cargo audit || echo 'cargo audit skipped (network issue)'"
@@ -145,7 +145,7 @@ BASELINE_FILE="$PROJECT_ROOT/perf_baselines/v3.0.0/baseline.json"
 RESULT_FILE="$PROJECT_ROOT/perf_baselines/v3.0.0/qps_current.json"
 
 # Run cargo bench QPS tests
-QPS_OUTPUT=$(cargo test --test qps_benchmark_test -- --ignored --nocapture 2>&1 || true)
+QPS_OUTPUT=$(cargo test --release --test qps_benchmark_test -- --ignored --nocapture 2>&1 || true)
 
 # Parse QPS values from output
 # Map test output to baseline keys
@@ -200,7 +200,8 @@ for key in simple_select insert update delete join aggregation order_by complex_
         else
             FAIL_COUNT=$((FAIL_COUNT+1))
             echo ""
-            echo "  ⚠️ $key: ${current} QPS < baseline ${baseline} QPS (regression: $(python3 -c "print(f'{(1-$ratio)*100:.1f}%'))")"
+            regress_pct=$(python3 -c "print('%.1f' % ((1-$ratio)*100))")
+            echo "  ⚠️ $key: ${current} QPS < baseline ${baseline} QPS (regression: ${regress_pct}%)"
         fi
     fi
 done
