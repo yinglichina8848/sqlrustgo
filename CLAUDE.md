@@ -177,7 +177,7 @@ cargo run --bin bench-cli -- tpch bench --queries Q1,Q3,Q6,Q10 --iterations 3 --
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **sqlrustgo** (52324 symbols, 80141 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **sqlrustgo** (54444 symbols, 83246 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
