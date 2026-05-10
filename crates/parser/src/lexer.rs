@@ -343,6 +343,8 @@ impl<'a> Lexer<'a> {
                     "OPTIMIZE" => Token::Optimize,
                     "VACUUM" => Token::Vacuum,
                     "REPAIR" => Token::Repair,
+                    "BACKUP" => Token::Backup,
+                    "RESTORE" => Token::Restore,
                     "WINDOW" => Token::Window,
                     "PARTITION" => Token::Partition,
                     "RANGE" => Token::Range,

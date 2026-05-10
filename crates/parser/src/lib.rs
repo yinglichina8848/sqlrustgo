@@ -13,10 +13,12 @@ pub use token::Token;
 pub use parser::parse;
 pub use parser::{
     AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, CallStatement,
-    ColumnDefinition, CommonTableExpression, CreateProcedureStatement, CreateTableStatement,
-    CreateTriggerStatement, CreateViewStatement, DeleteStatement, DropIndexStatement,
-    DropTableStatement, DropViewStatement, Expression, ForeignKeyRef, InsertStatement, JoinClause,
-    JoinType, SelectColumn, SelectStatement, Statement, StoredProcParam, StoredProcParamMode,
-    StoredProcStatement, TableConstraint, UpdateStatement, WithClause, WithSelect,
+    CheckOption, CheckStatement, ColumnDefinition, CommonTableExpression, CreateProcedureStatement,
+    CreateTableStatement, CreateTriggerStatement, CreateViewStatement, DeleteStatement,
+    DropIndexStatement, DropTableStatement, DropViewStatement, Expression, ForeignKeyRef,
+    InsertStatement, JoinClause, JoinType, ObjectType, OptimizeStatement, RepairStatement,
+    SelectColumn, SelectStatement, Statement, StoredProcParam, StoredProcParamMode,
+    StoredProcStatement, TableConstraint, TruncateStatement, UpdateStatement, VacuumMode,
+    VacuumStatement, WithClause, WithSelect,
 };
 pub use transaction::TransactionStatement;

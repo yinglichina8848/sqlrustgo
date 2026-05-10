@@ -27,6 +27,15 @@ pub enum TransactionStatement {
     StartTransaction {
         isolation_level: Option<IsolationLevel>,
     },
+    Savepoint {
+        name: String,
+    },
+    RollbackToSavepoint {
+        name: String,
+    },
+    ReleaseSavepoint {
+        name: String,
+    },
 }
 
 #[cfg(test)]
@@ -171,7 +180,10 @@ mod tests {
                 | TransactionStatement::Commit { .. }
                 | TransactionStatement::Rollback { .. }
                 | TransactionStatement::SetTransaction { .. }
-                | TransactionStatement::StartTransaction { .. } => {}
+                | TransactionStatement::StartTransaction { .. }
+                | TransactionStatement::Savepoint { .. }
+                | TransactionStatement::RollbackToSavepoint { .. }
+                | TransactionStatement::ReleaseSavepoint { .. } => {}
             }
         }
     }
