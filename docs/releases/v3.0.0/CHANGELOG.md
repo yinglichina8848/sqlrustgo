@@ -2,6 +2,20 @@
 
 > **版本**: v3.0.0
 > **发布日期**: 2026-05-07
+> **阶段**: GA (General Availability)
+
+---
+
+## 元数据
+
+| 字段 | 值 |
+|------|-----|
+| 工作目录 | /Users/liying/workspace/dev/yinglichina163/sqlrustgo |
+| GitHub 身份 | openclaw |
+| AI 工具 | OpenCode (Sisyphus Agent) |
+| 当前版本 | v3.0.0 (GA) |
+| 工作分支 | develop/v3.0.0 |
+| 时间段 | 2026-05-10 |
 
 ---
 

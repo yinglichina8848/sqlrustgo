@@ -1,15 +1,34 @@
-# v3.0.0 Alpha Release Notes
+# v3.0.0 GA Release Notes
 
-> **版本**: v3.0.0-alpha
-> **日期**: 2026-05-06
+> **版本**: v3.0.0
+> **发布日期**: 2026-05-07
+> **阶段**: GA (General Availability)
 > **代号**: Performance Core
 > **从**: v2.9.0
 
 ---
 
+## 元数据
+
+| 字段 | 值 |
+|------|-----|
+| 工作目录 | /Users/liying/workspace/dev/yinglichina163/sqlrustgo |
+| GitHub 身份 | openclaw |
+| AI 工具 | OpenCode (Sisyphus Agent) |
+| 当前版本 | v3.0.0 (GA) |
+| 工作分支 | develop/v3.0.0 |
+| 时间段 | 2026-05-10 |
+
+---
+
 ## 变更概述
 
-v3.0.0-alpha 是进入 **Alpha 阶段** 的第一个版本，聚焦于优化器激活、SQL 兼容性补全和事务隔离级别正确性验证。
+v3.0.0 是 **GA (General Availability)** 正式发布版本，聚焦于全面测试覆盖和性能基线验证。主要里程碑：
+
+- ✅ Beta Gate 全部通过 (B-S1 ~ B-S6)
+- ✅ RC Gate 全部通过 (R1 ~ R10)
+- ✅ GA Gate 全部通过 (G1 ~ G7)
+- ✅ 性能基线建立 (QPS + TPC-H)
 
 ---
 
