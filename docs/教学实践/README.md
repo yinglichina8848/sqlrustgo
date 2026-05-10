@@ -67,7 +67,7 @@ docs/教学实践/
 | 测试 | `cargo test --all-features` | 全部通过 |
 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 |
 | 格式化 | `cargo fmt --check` | 通过 |
-| 覆盖率 | `cargo tarpaulin` 或 `cargo llvm-cov` | ≥ 80% |
+| 覆盖率 | `cargo tarpaulin` 或 `cargo llvm-cov` | Alpha≥70%, Beta≥75%, RC1≥80% |
 
 ---
 
@@ -81,4 +81,4 @@ docs/教学实践/
 ---
 
 *本文档由 yinglichina8848 创建*
-*最后更新: 2026-03-05*
+*最后更新: 2026-05-10*

@@ -83,7 +83,7 @@ git branch -r
 | 分支名 | 用途 | 保护状态 |
 |--------|------|---------|
 | main | 生产分支 | 已保护 |
-| develop/v2.6.0 | 开发分支 | 已保护 |
+| develop/v3.0.0 | 开发分支 | 已保护 |
 | feature/* | 功能开发 | 未保护 |
 
 ---
@@ -93,8 +93,8 @@ git branch -r
 #### 2.1 确保本地develop分支最新
 
 ```bash
-git checkout develop/v2.6.0
-git pull origin develop/v2.6.0
+git checkout develop/v3.0.0
+git pull origin develop/v3.0.0
 ```
 
 #### 2.2 创建功能分支
@@ -131,7 +131,7 @@ git push origin feature/week9-lab
 #### 3.2 配置保护规则
 
 ```
-Branch name pattern: develop/v2.6.0
+Branch name pattern: develop/v3.0.0
 
 ✅ Require pull request reviews before merging
    - Required approving reviews: 1
@@ -160,10 +160,10 @@ Branch name pattern: develop/v2.6.0
 #### 4.1 尝试直接推送develop分支（应该失败）
 
 ```bash
-git checkout develop/v2.6.0
+git checkout develop/v3.0.0
 echo "test" >> README.md
 git commit -m "test: direct commit attempt"
-git push origin develop/v2.6.0  # 应该被拒绝！
+git push origin develop/v3.0.0  # 应该被拒绝！
 ```
 
 **预期结果**：推送被拒绝，显示分支受保护
@@ -225,7 +225,7 @@ git push origin feature/week9-lab
 ### 5.3 工作流程
 
 ```
-develop/v2.6.0 ←←←←←←←←←←←←←←←←←←←←
+develop/v3.0.0 ←←←←←←←←←←←←←←←←←←←←
      ↑                                     
      │ 1. 创建功能分支                     
      │    git checkout -b feature/xxx      

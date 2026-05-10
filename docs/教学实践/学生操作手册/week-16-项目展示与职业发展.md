@@ -190,7 +190,7 @@
 ```bash
 git add reports/
 git commit -m "docs: add final project report"
-git push origin develop/v2.6.0
+git push origin develop/v3.0.0
 ```
 
 ---
