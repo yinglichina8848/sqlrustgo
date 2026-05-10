@@ -137,6 +137,7 @@ impl RustEngine {
                             data_type: c.data_type,
                             nullable: c.nullable,
                             primary_key: c.primary_key,
+                            auto_increment: c.auto_increment,
                         })
                         .collect(),
                     foreign_keys: vec![],

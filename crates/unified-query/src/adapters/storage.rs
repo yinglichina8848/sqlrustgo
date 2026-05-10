@@ -114,6 +114,7 @@ impl StorageAdapter {
                     data_type: dtype.to_string(),
                     nullable: true,
                     primary_key: false,
+                    auto_increment: false,
                 })
                 .collect(),
             foreign_keys: vec![],
