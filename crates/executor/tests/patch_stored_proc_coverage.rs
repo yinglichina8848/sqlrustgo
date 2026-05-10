@@ -1234,8 +1234,11 @@ fn test_sp_update_with_row_count() {
             ..Default::default()
         })
         .unwrap();
-        st.insert("t_update", vec![vec![Value::Integer(1), Value::Integer(100)]])
-            .unwrap();
+        st.insert(
+            "t_update",
+            vec![vec![Value::Integer(1), Value::Integer(100)]],
+        )
+        .unwrap();
     }
     let mut c = (*catalog).clone();
     c.add_stored_procedure(StoredProcedure::new(
@@ -1243,7 +1246,9 @@ fn test_sp_update_with_row_count() {
         vec![],
         vec![
             StoredProcStatement::RawSql("UPDATE t_update SET val = 200 WHERE id = 1".to_string()),
-            StoredProcStatement::Return { value: "@ROW_COUNT".to_string() },
+            StoredProcStatement::Return {
+                value: "@ROW_COUNT".to_string(),
+            },
         ],
     ))
     .unwrap();
@@ -1279,7 +1284,9 @@ fn test_sp_delete_with_row_count() {
         vec![],
         vec![
             StoredProcStatement::RawSql("DELETE FROM t_delete WHERE id = 1".to_string()),
-            StoredProcStatement::Return { value: "@ROW_COUNT".to_string() },
+            StoredProcStatement::Return {
+                value: "@ROW_COUNT".to_string(),
+            },
         ],
     ))
     .unwrap();
@@ -1304,8 +1311,7 @@ fn test_sp_rawsql_update_no_match() {
             ..Default::default()
         })
         .unwrap();
-        st.insert("t_upd2", vec![vec![Value::Integer(1)]])
-            .unwrap();
+        st.insert("t_upd2", vec![vec![Value::Integer(1)]]).unwrap();
     }
     let mut c = (*catalog).clone();
     c.add_stored_procedure(StoredProcedure::new(
@@ -1313,13 +1319,19 @@ fn test_sp_rawsql_update_no_match() {
         vec![],
         vec![
             StoredProcStatement::RawSql("UPDATE t_upd2 SET id = 999 WHERE id = 999".to_string()),
-            StoredProcStatement::Return { value: "@ROW_COUNT".to_string() },
+            StoredProcStatement::Return {
+                value: "@ROW_COUNT".to_string(),
+            },
         ],
     ))
     .unwrap();
     let exec = StoredProcExecutor::new(Arc::new(c), storage);
     let r = exec.execute_call("sp_upd2", vec![]);
-    assert!(r.is_ok(), "UPDATE no match should succeed with ROW_COUNT=0: {:?}", r);
+    assert!(
+        r.is_ok(),
+        "UPDATE no match should succeed with ROW_COUNT=0: {:?}",
+        r
+    );
 }
 
 #[test]
@@ -1338,8 +1350,7 @@ fn test_sp_rawsql_delete_no_match() {
             ..Default::default()
         })
         .unwrap();
-        st.insert("t_del2", vec![vec![Value::Integer(1)]])
-            .unwrap();
+        st.insert("t_del2", vec![vec![Value::Integer(1)]]).unwrap();
     }
     let mut c = (*catalog).clone();
     c.add_stored_procedure(StoredProcedure::new(
@@ -1347,13 +1358,19 @@ fn test_sp_rawsql_delete_no_match() {
         vec![],
         vec![
             StoredProcStatement::RawSql("DELETE FROM t_del2 WHERE id = 999".to_string()),
-            StoredProcStatement::Return { value: "@ROW_COUNT".to_string() },
+            StoredProcStatement::Return {
+                value: "@ROW_COUNT".to_string(),
+            },
         ],
     ))
     .unwrap();
     let exec = StoredProcExecutor::new(Arc::new(c), storage);
     let r = exec.execute_call("sp_del2", vec![]);
-    assert!(r.is_ok(), "DELETE no match should succeed with ROW_COUNT=0: {:?}", r);
+    assert!(
+        r.is_ok(),
+        "DELETE no match should succeed with ROW_COUNT=0: {:?}",
+        r
+    );
 }
 
 // P8: ALTER TABLE Coverage
@@ -1379,9 +1396,9 @@ fn test_sp_rawsql_alter_add_column() {
     c.add_stored_procedure(StoredProcedure::new(
         "sp_alt".to_string(),
         vec![],
-        vec![
-            StoredProcStatement::RawSql("ALTER TABLE t_alt ADD COLUMN new_col TEXT".to_string()),
-        ],
+        vec![StoredProcStatement::RawSql(
+            "ALTER TABLE t_alt ADD COLUMN new_col TEXT".to_string(),
+        )],
     ))
     .unwrap();
     let exec = StoredProcExecutor::new(Arc::new(c), storage);
@@ -1410,9 +1427,9 @@ fn test_sp_rawsql_alter_rename_table() {
     c.add_stored_procedure(StoredProcedure::new(
         "sp_rename".to_string(),
         vec![],
-        vec![
-            StoredProcStatement::RawSql("ALTER TABLE t_rename RENAME TO t_renamed".to_string()),
-        ],
+        vec![StoredProcStatement::RawSql(
+            "ALTER TABLE t_rename RENAME TO t_renamed".to_string(),
+        )],
     ))
     .unwrap();
     let exec = StoredProcExecutor::new(Arc::new(c), storage);
@@ -1444,17 +1461,19 @@ fn test_sp_cursor_not_found() {
     c.add_stored_procedure(StoredProcedure::new(
         "sp_cur".to_string(),
         vec![],
-        vec![
-            StoredProcStatement::OpenCursor {
-                name: "nonexistent".to_string(),
-            },
-        ],
+        vec![StoredProcStatement::OpenCursor {
+            name: "nonexistent".to_string(),
+        }],
     ))
     .unwrap();
     let exec = StoredProcExecutor::new(Arc::new(c), storage);
     let r = exec.execute_call("sp_cur", vec![]);
     // Should return error for cursor not found
-    assert!(r.is_err(), "Opening nonexistent cursor should fail: {:?}", r);
+    assert!(
+        r.is_err(),
+        "Opening nonexistent cursor should fail: {:?}",
+        r
+    );
 }
 
 #[test]
@@ -1465,14 +1484,18 @@ fn test_sp_update_table_not_found() {
     c.add_stored_procedure(StoredProcedure::new(
         "sp_upd_err".to_string(),
         vec![],
-        vec![
-            StoredProcStatement::RawSql("UPDATE nonexistent SET col = 1".to_string()),
-        ],
+        vec![StoredProcStatement::RawSql(
+            "UPDATE nonexistent SET col = 1".to_string(),
+        )],
     ))
     .unwrap();
     let exec = StoredProcExecutor::new(Arc::new(c), storage);
     let r = exec.execute_call("sp_upd_err", vec![]);
-    assert!(r.is_err(), "UPDATE on nonexistent table should fail: {:?}", r);
+    assert!(
+        r.is_err(),
+        "UPDATE on nonexistent table should fail: {:?}",
+        r
+    );
 }
 
 #[test]
@@ -1483,14 +1506,18 @@ fn test_sp_delete_table_not_found() {
     c.add_stored_procedure(StoredProcedure::new(
         "sp_del_err".to_string(),
         vec![],
-        vec![
-            StoredProcStatement::RawSql("DELETE FROM nonexistent".to_string()),
-        ],
+        vec![StoredProcStatement::RawSql(
+            "DELETE FROM nonexistent".to_string(),
+        )],
     ))
     .unwrap();
     let exec = StoredProcExecutor::new(Arc::new(c), storage);
     let r = exec.execute_call("sp_del_err", vec![]);
-    assert!(r.is_err(), "DELETE on nonexistent table should fail: {:?}", r);
+    assert!(
+        r.is_err(),
+        "DELETE on nonexistent table should fail: {:?}",
+        r
+    );
 }
 
 // P10: Block and Label Coverage
@@ -1503,14 +1530,14 @@ fn test_sp_block_with_label() {
         vec![
             StoredProcStatement::Block {
                 label: Some("myblock".to_string()),
-                body: vec![
-                    StoredProcStatement::Set {
-                        variable: "@x".to_string(),
-                        value: "42".to_string(),
-                    },
-                ],
+                body: vec![StoredProcStatement::Set {
+                    variable: "@x".to_string(),
+                    value: "42".to_string(),
+                }],
             },
-            StoredProcStatement::Return { value: "@x".to_string() },
+            StoredProcStatement::Return {
+                value: "@x".to_string(),
+            },
         ],
     ));
     let r = exec.execute_call("sp_block_label", vec![]);
@@ -1532,16 +1559,16 @@ fn test_sp_nested_blocks_with_labels() {
                     },
                     StoredProcStatement::Block {
                         label: Some("inner".to_string()),
-                        body: vec![
-                            StoredProcStatement::Set {
-                                variable: "@y".to_string(),
-                                value: "2".to_string(),
-                            },
-                        ],
+                        body: vec![StoredProcStatement::Set {
+                            variable: "@y".to_string(),
+                            value: "2".to_string(),
+                        }],
                     },
                 ],
             },
-            StoredProcStatement::Return { value: "@x".to_string() },
+            StoredProcStatement::Return {
+                value: "@x".to_string(),
+            },
         ],
     ));
 

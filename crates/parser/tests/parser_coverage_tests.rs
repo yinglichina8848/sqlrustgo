@@ -474,7 +474,11 @@ fn test_parse_limit_offset_count_mysql_syntax() {
     // MySQL's LIMIT offset, count syntax
     let sql = "SELECT * FROM users LIMIT 5, 10";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse LIMIT offset, count: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse LIMIT offset, count: {:?}",
+        result
+    );
     let stmt = result.unwrap();
     if let Statement::Select(select) = stmt {
         assert_eq!(select.limit, Some(10));
@@ -489,7 +493,11 @@ fn test_parse_limit_zero_offset_mysql_syntax() {
     // LIMIT 0, 10 is equivalent to LIMIT 10
     let sql = "SELECT * FROM users LIMIT 0, 10";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse LIMIT 0, count: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse LIMIT 0, count: {:?}",
+        result
+    );
     let stmt = result.unwrap();
     if let Statement::Select(select) = stmt {
         assert_eq!(select.limit, Some(10));
