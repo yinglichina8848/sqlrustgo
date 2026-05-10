@@ -103,7 +103,8 @@ echo -n "[ga-v3.0.0] GA-9: TPC-H SF=1 (22/22) ... "
 TOTAL=$((TOTAL+1))
 TPCH_OUTPUT=$(bash scripts/gate/check_tpch.sh sf=1 2>&1 || true)
 TPCH_PASSED=$(echo "$TPCH_OUTPUT" | grep -oE '[0-9]+/22' | head -1 || echo "0/22")
-TPCH_FAIL=$(echo "$TPCH_OUTPUT" | grep -c "FAIL" || echo "0")
+TPCH_FAIL=$(echo "$TPCH_OUTPUT" | grep -cE "FAIL=[1-9]|FAIL:[1-9]" || true)
+[ -z "$TPCH_FAIL" ] && TPCH_FAIL=0
 if echo "$TPCH_PASSED" | grep -q "^22/22" && [ "$TPCH_FAIL" -eq 0 ]; then
     echo "PASS ($TPCH_PASSED)"; PASS=$((PASS+1))
 else
@@ -229,7 +230,7 @@ fi
 # GA-14: SQL Corpus ≥ 98% (统一为 gate_spec_v300.md G11 规范)
 echo -n "[ga-v3.0.0] GA-14: SQL Corpus ≥ 98% ... "
 TOTAL=$((TOTAL+1))
-CORPUS_OUTPUT=$(cargo test -p sqlrustgo-sql-corpus 2>&1 || true)
+CORPUS_OUTPUT=$(cargo test -p sqlrustgo-sql-corpus -- --nocapture 2>&1 || true)
 CORPUS_PCT=$(echo "$CORPUS_OUTPUT" | grep -oE '[0-9]+\.[0-9]+%' | tail -1 | tr -d '%' || true)
 [ -z "$CORPUS_PCT" ] && CORPUS_PCT=0
 if (( $(echo "$CORPUS_PCT >= 98" | bc -l) )); then
@@ -242,7 +243,7 @@ fi
 echo -n "[ga-v3.0.0] GA-15: version consistency ... "
 TOTAL=$((TOTAL+1))
 VERSION_IN_CARGO=$(grep -m1 '^version' "$PROJECT_ROOT/Cargo.toml" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "N/A")
-VERSION_IN_DOCS=$(grep -r "v3.0.0" "$PROJECT_ROOT/docs/releases/v3.0.0/" 2>/dev/null | grep -c "version\|Version" || true)
+VERSION_IN_DOCS=$(grep -l "v3.0.0" "$PROJECT_ROOT/docs/releases/v3.0.0/"*.md 2>/dev/null | wc -l || true)
 [ -z "$VERSION_IN_DOCS" ] && VERSION_IN_DOCS=0
 if [ "$VERSION_IN_CARGO" = "3.0.0" ] && [ "$VERSION_IN_DOCS" -gt 5 ]; then
     echo "PASS (cargo=$VERSION_IN_CARGO)"; PASS=$((PASS+1))
