@@ -1,9 +1,22 @@
 # v3.0.0 测试计划
 
 > **版本**: v3.0.0
-> **日期**: 2026-05-08
-> **状态**: Beta 阶段
-> **综合自**: v1.9.0 / v2.7.0 / v2.9.0 历史测试文档 + gate_spec_v300.md
+> **发布日期**: 2026-05-07
+> **阶段**: GA (General Availability)
+> **综合自**: v1.9.0 / v2.7.0 / v2.9.0 历史测试文档 + gate_spec.md
+
+---
+
+## 元数据
+
+| 字段 | 值 |
+|------|-----|
+| 工作目录 | /Users/liying/workspace/dev/yinglichina163/sqlrustgo |
+| GitHub 身份 | openclaw |
+| AI 工具 | OpenCode (Sisyphus Agent) |
+| 当前版本 | v3.0.0 (GA) |
+| 工作分支 | develop/v3.0.0 |
+| 时间段 | 2026-05-10 |
 
 ---
 

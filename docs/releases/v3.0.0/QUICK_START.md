@@ -1,7 +1,22 @@
 # SQLRustGo v3.0.0 快速开始
 
 > **版本**: v3.0.0
+> **发布日期**: 2026-05-07
+> **阶段**: GA (General Availability)
 > **预计完成时间**: 5 分钟
+
+---
+
+## 元数据
+
+| 字段 | 值 |
+|------|-----|
+| 工作目录 | /Users/liying/workspace/dev/yinglichina163/sqlrustgo |
+| GitHub 身份 | openclaw |
+| AI 工具 | OpenCode (Sisyphus Agent) |
+| 当前版本 | v3.0.0 (GA) |
+| 工作分支 | develop/v3.0.0 |
+| 时间段 | 2026-05-10 |
 
 ---
 
@@ -292,4 +307,9 @@ sqlrustgo> status
 ---
 
 *快速开始指南 v3.0.0*
-*祝你玩得开心！*
+*创建者: openclaw*
+*审核者: OpenClaw*
+*修改者: openclaw*
+*修改记录:*
+* - 2026-05-10: 补充元数据和尾部信息*
+*最后更新: 2026-05-10*
