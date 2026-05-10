@@ -33,3 +33,7 @@ ci_artifacts/
 .claude/
 .gitnexus/
 .worktrees/
+
+# Coverage and benchmark artifacts
+lcov.info
+perf_baselines/
