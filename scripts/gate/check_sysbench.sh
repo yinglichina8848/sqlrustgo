@@ -95,16 +95,16 @@ echo "[2/5] Starting SQLRustGo server on port 15995..."
 lsof -ti:15995 | xargs kill -9 2>/dev/null || true
 sleep 1
 
-SQLRUSTGO_BIN="$PROJECT_ROOT/target/release/sqlrustgo"
+SQLRUSTGO_BIN="$PROJECT_ROOT/target/release/sqlrustgo-mysql-server"
 
 if [ ! -f "$SQLRUSTGO_BIN" ]; then
-    echo "❌ sqlrustgo binary not found at $SQLRUSTGO_BIN"
-    echo "   Build with: cargo build --release"
+    echo "❌ sqlrustgo-mysql-server binary not found at $SQLRUSTGO_BIN"
+    echo "   Build with: cargo build --release -p sqlrustgo-mysql-server"
     exit 1
 fi
 
 # Start server in background
-$SQLRUSTGO_BIN --server-port 15995 &
+$SQLRUSTGO_BIN --port 15995 &
 SQLRUSTGO_PID=$!
 sleep 3
 
@@ -124,95 +124,78 @@ trap cleanup EXIT
 
 echo "[✓] Server running on port 15995"
 
-# ---------- Step 3: Run sysbench if available ----------
-run_sysbench() {
-    local test_name="$1"
-    local script_path="$2"
+# ---------- Step 3: Run sysbench benchmarks ----------
+echo ""
+echo "[3/5] Running sysbench benchmarks..."
 
-    if ! command -v sysbench &>/dev/null; then
-        echo "⚠️  sysbench not installed, using direct SQL measurement"
-        return 1
+# Find sysbench scripts
+SYSBENCH_LUA="/opt/homebrew/share/sysbench"
+if [ ! -d "$SYSBENCH_LUA" ]; then
+    SYSBENCH_LUA="/usr/share/sysbench"
+fi
+
+if ! command -v sysbench &>/dev/null; then
+    echo "❌ sysbench not installed"
+    exit 1
+fi
+
+# Always prepare fresh data (fast if tables already exist)
+echo "  Preparing test data..."
+sysbench --db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=15995 \
+    --mysql-user=root --mysql-password="" \
+    --mysql-db=sbtest \
+    --tables=1 --table_size=10000 \
+    "$SYSBENCH_LUA/oltp_common.lua" prepare >/dev/null 2>&1
+
+BENCHMARK_RESULTS="{}"
+
+run_sysbench_test() {
+    local name="$1"
+    local script="$2"
+    local threads="${3:-4}"
+    local time_sec="${4:-10}"
+
+    echo -n "  $name (threads=$threads, time=${time_sec}s) ... "
+
+    # Check if script exists
+    if [ ! -f "$script" ]; then
+        echo "SKIP (script not found: $script)"
+        return
     fi
 
-    sysbench "$script_path" \
+    local output
+    output=$(sysbench \
         --db-driver=mysql \
         --mysql-host=127.0.0.1 \
         --mysql-port=15995 \
         --mysql-user=root \
         --mysql-password="" \
         --mysql-db=sbtest \
-        --time=10 \
-        --threads=4 \
-        run 2>&1 | grep -oE 'transactions:[^)]+\([0-9]+\.[0-9]+ per sec\)' || true
-}
+        --time="$time_sec" \
+        --threads="$threads" \
+        "$script" run 2>&1)
 
-# ---------- Step 4: Direct SQL measurement (fallback / primary) ----------
-echo ""
-echo "[3/5] Running benchmark queries directly..."
+    local qps
+    qps=$(echo "$output" | grep -oE '[0-9]+\.[0-9]+ per sec' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+    local tps
+    tps=$(echo "$output" | grep 'transactions:' | grep -oE '[0-9]+[.][0-9]+ per sec' | head -1 | grep -oE '[0-9]+[.][0-9]+' || echo "0")
 
-BENCHMARK_RESULTS="{}"
+    echo "QPS=$qps TPS=$tps"
 
-measure_qps() {
-    local name="$1"
-    local sql="$2"
-    local threads="${3:-4}"
-
-    echo -n "  $name ... "
-
-    # Warmup
-    for _ in {1..2}; do
-        echo "$sql" | mysql -h 127.0.0.1 -P 15995 --protocol=tcp -u root 2>/dev/null > /dev/null || true
-    done
-
-    # Measure
-    local start end elapsed qps rows
-    start=$(python3 -c 'import time; print(time.time())')
-    # Run N threads concurrently using background jobs
-    local pids=()
-    for ((i=0; i<threads; i++)); do
-        (
-            for _ in {1..50}; do
-                echo "$sql" | mysql -h 127.0.0.1 -P 15995 --protocol=tcp -u root 2>/dev/null > /dev/null || true
-            done
-        ) &
-        pids+=($!)
-    done
-    # Wait for all background jobs
-    for pid in "${pids[@]}"; do
-        wait "$pid" 2>/dev/null || true
-    done
-    end=$(python3 -c 'import time; print(time.time())')
-    elapsed=$(python3 -c "print(round($end - $start, 3))")
-    # Total ops = threads * 50
-    local total_ops=$((threads * 50))
-    qps=$(python3 -c "print(round($total_ops / $elapsed, 0))" 2>/dev/null || echo "0")
-
-    echo "${qps} QPS (${elapsed}s)"
-
-    # Update JSON
+    # Store results (use qps for comparison)
     BENCHMARK_RESULTS=$(python3 -c "
 import json, sys
 d = json.loads('$BENCHMARK_RESULTS')
-d['$name'] = {'qps': $qps, 'elapsed': $elapsed, 'threads': $threads}
+d['$name'] = {'qps': float($qps), 'tps': float($tps), 'threads': $threads}
 print(json.dumps(d))
 " 2>/dev/null || echo "{}")
 }
 
-# point_select: simple PK lookup
-measure_qps "point_select" \
-    "SELECT c FROM t1 WHERE id=$(shuf -i 1-10000 -n 1) LIMIT 1" 8
-
-# oltp_read_write: range scan + aggregate
-measure_qps "oltp_read_write" \
-    "SELECT SUM(c) FROM t1 WHERE id BETWEEN 1 AND 100" 4
-
-# oltp_write_only: INSERT (use a temp table to avoid conflicts)
-measure_qps "oltp_write_only" \
-    "INSERT INTO t1 VALUES (99999, 'bench', 123)" 2
-
-# update_index: UPDATE by indexed column
-measure_qps "update_index" \
-    "UPDATE t1 SET c=456 WHERE id=5000" 4
+# Run actual sysbench tests
+run_sysbench_test "point_select" "$SYSBENCH_LUA/oltp_point_select.lua" 4 10
+run_sysbench_test "oltp_read_write" "$SYSBENCH_LUA/oltp_read_write.lua" 4 10
+run_sysbench_test "oltp_write_only" "$SYSBENCH_LUA/oltp_write_only.lua" 4 10
+run_sysbench_test "update_index" "$SYSBENCH_LUA/oltp_update_index.lua" 4 10
 
 # ---------- Step 5: Evaluate against thresholds ----------
 echo ""
