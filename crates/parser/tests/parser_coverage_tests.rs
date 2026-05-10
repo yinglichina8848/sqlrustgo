@@ -1300,6 +1300,8 @@ fn test_parse_create_table_with_key() {
     );
 }
 
+=======
+>>>>>>> d1c7cafc (feat(parser): add ROLE/ROLES keywords and 11 coverage tests)
 // ============ SET ROLE Tests ============
 
 #[test]
@@ -1414,7 +1416,6 @@ fn test_parse_if_expression_in_where() {
         result
     );
 }
-
 // ============ Phase 1: BEGIN / Transaction Tests ============
 
 #[test]
@@ -2173,3 +2174,5 @@ fn test_parse_shift_with_multiplication() {
         result
     );
 }
+=======
+>>>>>>> d1c7cafc (feat(parser): add ROLE/ROLES keywords and 11 coverage tests)
