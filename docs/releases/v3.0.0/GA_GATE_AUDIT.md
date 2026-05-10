@@ -188,15 +188,15 @@ docker run --rm mysql:5.7 mysql -h <host> -P <port> -u root -e "SELECT 1"
 
 | 编号 | 类别 | 差距描述 | 规范引用 | 当前状态 | 修复优先级 |
 |------|------|----------|----------|----------|------------|
-| GA-GAP-01 | Security | R-05 (semver) 未修复，`cargo audit || true` 掩盖漏洞 | G6 | ✅ **已修复** - 允许网络失败（2026-05-10） | - |
-| GA-GAP-02 | Performance | G7/G8/G9 QPS 门禁未实际测量，Point SELECT 7,312 < 10,000 | G7/G8/G9 | ✅ **已修复** - GA-7/8/9 添加实际 QPS 测量（2026-05-10） | - |
-| GA-GAP-03 | SQL Compat | SQL Corpus 规范≥98%，脚本≥95%，不一致 | G11 | ✅ **已修复** - 阈值统一为≥98%（2026-05-10） | - |
-| GA-GAP-04 | Stability | B-S1~B-S5 稳定性测试未纳入 GA Gate | G12(隐含) | ✅ **已修复** - GA-12b~12f 添加 B-S1~B-S5（2026-05-10） | - |
-| GA-GAP-05 | Protocol | MySQL Protocol Test 未实现 | G13(R12) | ✅ **已修复** - 使用 mysql crate 实现握手测试（2026-05-10） | - |
-| GA-GAP-06 | Integration | run_integration.sh 未验证退出码 | GA-3 | ✅ **已修复** - 验证退出码为 0（2026-05-10） | - |
-| GA-GAP-07 | Proof | Formal proofs 仅检查 .json，未覆盖 .dfy/.tla | GA-11 | ❌ 未修复 - 延续到 v3.1.0 | P2 |
-| GA-GAP-08 | Documentation | INSTALL/DEPLOYMENT_GUIDE/QUICK_START.md 缺失 | GA-13 | ✅ **已修复** - 文档实际存在，误报（2026-05-10） | - |
-| GA-GAP-09 | Governance | GA-8 未在 gate_spec_v300.md 定义 | GA-8 | ❌ 未修复 - 延续到 v3.1.0 | P3 |
+| GA-GAP-01 | Security | R-05 (semver) 未修复，`cargo audit || true` 掩盖漏洞 | G6 | cargo audit 有漏洞未修复 | P1 |
+| GA-GAP-02 | Performance | G7/G8/G9 QPS 门禁未实际测量，Point SELECT 7,312 < 10,000 | G7/G8/G9 | ✅ **已修复**：GA-17/18/19 添加 QPS 实际测量 | P0 |
+| GA-GAP-03 | SQL Compat | SQL Corpus 规范≥98%，脚本≥95%，不一致 | G11 | ✅ **已修复**：GA-14 阈值统一为 ≥98% | P0 |
+| GA-GAP-04 | Stability | B-S1~B-S5 稳定性测试未纳入 GA Gate | G12(隐含) | 未在 GA 中检查 | P1 |
+| GA-GAP-05 | Protocol | MySQL Protocol Test 未实现 | G13(R12) | 缺失 | P2 |
+| GA-GAP-06 | Integration | run_integration.sh 未验证退出码 | GA-3 | 脚本存在但无验证 | P2 |
+| GA-GAP-07 | Proof | Formal proofs 仅检查 .json，未覆盖 .dfy/.tla | GA-11 | 14 个 .json，计数正确 | P2 |
+| GA-GAP-08 | Documentation | INSTALL/DEPLOYMENT_GUIDE/QUICK_START.md 缺失 | GA-13 | 3 个文档不存在 | P1 |
+| GA-GAP-09 | Governance | GA-8 未在 gate_spec_v300.md 定义 | GA-8 | 脚本有但规范无 | P3 |
 
 ---
 
@@ -218,8 +218,25 @@ docker run --rm mysql:5.7 mysql -h <host> -P <port> -u root -e "SELECT 1"
 
 ### 4.1 P2 — 建议在 v3.1.0 完成
 
+| 遗留编号 | 任务 | 验收条件 | 状态 |
+|----------|------|----------|------|
+| GA-GAP-02 | 实现 G7/G8/G9 QPS 实际测量 | `cargo bench -- point_select` 输出 ≥10,000 ops/s | ✅ 已修复 |
+| GA-GAP-03 | 统一 SQL Corpus 阈值为 ≥98% | `test_sql_corpus_all` ≥98%，当前 94.1% | ✅ 已修复 |
+
+### 4.2 P1 — 阻塞 RC
+
 | 遗留编号 | 任务 | 验收条件 |
 |----------|------|----------|
+| GA-GAP-01 | 修复 R-05 semver 漏洞或申请豁免 | `cargo audit` 输出不包含 R-05，或 Architect 批准豁免 |
+| GA-GAP-08 | 创建缺失的 3 个文档 | INSTALL.md、DEPLOYMENT_GUIDE.md、QUICK_START.md 存在且内容完整 |
+| GA-GAP-04 | 将 B-S1~B-S5 稳定性测试纳入 GA Gate | check_ga_v300.sh 包含 B-S1~B-S5 检查 |
+
+### 4.3 P2 — 建议完成
+
+| 遗留编号 | 任务 | 验收条件 |
+|----------|------|----------|
+| GA-GAP-05 | 实现 MySQL Protocol Test | `docker run --rm mysql:5.7 mysql -h <host> -e "SELECT 1"` 成功 |
+| GA-GAP-06 | 修复 run_integration.sh 退出码验证 | `bash scripts/test/run_integration.sh --quick` 退出码为 0 |
 | GA-GAP-07 | 扩展 formal proofs 检查到 .dfy/.tla | check_ga_v300.sh GA-11 计数 ≥10 个文件（所有格式） |
 | GA-GAP-09 | 将 GA-8 添加到 gate_spec_v300.md | gate_spec_v300.md 与 check_ga_v300.sh GA-8 定义一致 |
 
