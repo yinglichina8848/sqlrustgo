@@ -243,6 +243,8 @@ impl<'a> Lexer<'a> {
                     "TO" => Token::To,
                     "BEGIN" => Token::Begin,
                     "COMMIT" => Token::Commit,
+                    "COMMITTED" => Token::Committed,
+                    "UNCOMMITTED" => Token::Uncommitted,
                     "ROLLBACK" => Token::Rollback,
                     "GRANT" => Token::Grant,
                     "REVOKE" => Token::Revoke,

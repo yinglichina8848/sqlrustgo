@@ -787,6 +787,17 @@ impl Packet {
         w.write_u24::<LittleEndian>(self.length)?;
         w.write_u8(self.sequence)?;
         w.write_all(&self.payload)?;
+        // Note: flush() removed for performance. Caller should flush after
+        // batching multiple packets. See Packet::write_all_to for batched writes.
+        Ok(())
+    }
+
+    /// Write multiple packets with a single flush at the end.
+    /// More efficient than calling write_to repeatedly.
+    pub fn write_all_to<W: Write>(packets: &[Packet], w: &mut W) -> MySqlResult<()> {
+        for pkt in packets {
+            pkt.write_to(w)?;
+        }
         w.flush()?;
         Ok(())
     }
@@ -1110,7 +1121,7 @@ fn write_text_row<W: Write>(w: &mut W, row: &[Value]) -> MySqlResult<()> {
     Ok(())
 }
 
-fn write_column_def<W: Write>(w: &mut W, name: &str, sql_type: &str, seq: u8) -> MySqlResult<()> {
+fn build_column_def_packet(name: &str, sql_type: &str, seq: u8) -> Packet {
     let mut p = Vec::new();
     write_lenenc_string(&mut p, b"def").unwrap();
     write_lenenc_string(&mut p, b"").unwrap();
@@ -1131,8 +1142,6 @@ fn write_column_def<W: Write>(w: &mut W, name: &str, sql_type: &str, seq: u8) ->
         sequence: seq,
         payload: p,
     }
-    .write_to(w)?;
-    Ok(())
 }
 
 fn send_result_set<W: Write>(
@@ -1149,49 +1158,63 @@ fn send_result_set<W: Write>(
         rows.len(),
         seq
     );
+
+    // Batch all packets for efficient writing
+    let mut packets: Vec<Packet> = Vec::with_capacity(2 + cols.len() + rows.len());
+
+    // Column count packet
     {
         let mut p = Vec::new();
         write_lenenc_int(&mut p, cols.len() as u64).unwrap();
-        Packet {
+        packets.push(Packet {
             length: p.len() as u32,
             sequence: seq,
             payload: p,
-        }
-        .write_to(w)?;
+        });
         seq = seq.wrapping_add(1);
     }
+
+    // Column definition packets
     for (i, n) in cols.iter().enumerate() {
-        write_column_def(
-            w,
+        let col_packet = build_column_def_packet(
             n,
             ctypes.get(i).map(|s| s.as_str()).unwrap_or("VARCHAR(255)"),
             seq,
-        )?;
+        );
+        packets.push(col_packet);
         seq = seq.wrapping_add(1);
     }
+
+    // EOF packet (if not deprecated)
     if cap & capability::DEPRECATE_EOF == 0 {
-        make_eof_packet(seq, 0x0002).write_to(w)?;
+        packets.push(make_eof_packet(seq, 0x0002));
         seq = seq.wrapping_add(1);
     }
+
+    // Row packets
     for (ri, r) in rows.iter().enumerate() {
         let mut p = Vec::new();
         write_text_row(&mut p, r)?;
         tracing::debug!("Row {}: {} bytes, seq={}", ri, p.len(), seq);
-        Packet {
+        packets.push(Packet {
             length: p.len() as u32,
             sequence: seq,
             payload: p,
-        }
-        .write_to(w)?;
+        });
         seq = seq.wrapping_add(1);
     }
+
+    // Final EOF or OK packet
     if cap & capability::DEPRECATE_EOF == 0 {
-        make_eof_packet(seq, 0x0002).write_to(w)?;
-        seq = seq.wrapping_add(1);
+        packets.push(make_eof_packet(seq, 0x0002));
     } else {
-        make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(w)?;
-        seq = seq.wrapping_add(1);
+        packets.push(make_ok_packet(seq, 0, 0, 0x0002, 0));
     }
+
+    // Write all packets with single flush
+    Packet::write_all_to(&packets, w)?;
+    seq = seq.wrapping_add(1);
+
     tracing::info!("send_result_set done: final_seq={}", seq);
     Ok(seq)
 }
@@ -1272,12 +1295,26 @@ fn parse_stmt_execute_params(payload: &[u8], param_count: usize) -> Vec<Vec<u8>>
         return vec![Vec::new(); param_count];
     }
 
-    // Skip new_params_bound_flag (must be 0x01 for type info to follow)
-    let _new_params_bound_flag = payload[null_bitmap_end];
-    let type_start = null_bitmap_end + 1; // skip the flag byte
+    // Read new_params_bound_flag to determine if type info follows
+    let new_params_bound_flag = payload[null_bitmap_end];
 
-    // Types are 2 bytes per param (type + unsigned_flag)
-    let value_start = type_start + param_count * 2;
+    // Calculate where value data and type info start based on whether type info is present
+    let type_start = if new_params_bound_flag == 0x01 {
+        // Type info present: skip flag byte + type bytes
+        null_bitmap_end + 1
+    } else {
+        // No type info: values directly follow null_bitmap
+        null_bitmap_end + 1
+    };
+
+    let value_start = if new_params_bound_flag == 0x01 {
+        // Type info present: skip flag byte + type bytes
+        null_bitmap_end + 1 + param_count * 2
+    } else {
+        // No type info: values directly follow null_bitmap (skip flag byte only)
+        null_bitmap_end + 1
+    };
+
     if payload.len() < value_start {
         return vec![Vec::new(); param_count];
     }
@@ -1301,9 +1338,14 @@ fn parse_stmt_execute_params(payload: &[u8], param_count: usize) -> Vec<Vec<u8>>
             continue;
         }
 
-        // Read 2-byte type definition: [type_byte, unsigned_flag]
-        let type_base = type_start + i * 2;
-        let param_type = payload.get(type_base).copied().unwrap_or(0);
+        // Read 2-byte type definition: [type_byte, unsigned_flag] (only when new_params_bound_flag == 0x01)
+        let param_type = if new_params_bound_flag == 0x01 {
+            let type_base = type_start + i * 2;
+            payload.get(type_base).copied().unwrap_or(0)
+        } else {
+            // When no type info, assume LONG (i32) as default
+            0x03
+        };
 
         // Parse value based on MySQL binary protocol encoding
         match param_type {
@@ -2041,7 +2083,7 @@ fn do_command_loop<S: Read + Write>(
                 if column_count > 0 {
                     for i in 0..column_count {
                         let col_name = format!("col_{}", i + 1);
-                        write_column_def(stream, &col_name, "VARCHAR(255)", seq)?;
+                        build_column_def_packet(&col_name, "VARCHAR(255)", seq).write_to(stream)?;
                         seq = seq.wrapping_add(1);
                     }
                     if cap & capability::DEPRECATE_EOF != 0 {
@@ -2185,6 +2227,11 @@ fn handle_connection(
 
     if let Err(e) = make_handshake_packet(0, &scramble).write_to(&mut &stream) {
         tracing::error!("Handshake send: {}", e);
+        return;
+    }
+    // Flush immediately - client needs handshake packet before responding
+    if let Err(e) = stream.flush() {
+        tracing::error!("Handshake flush: {}", e);
         return;
     }
 

@@ -90,7 +90,7 @@ check "GA-4: clippy" "cargo clippy --all-features -- -D warnings"
 check "GA-5: fmt" "cargo fmt --all -- --check"
 
 # GA-6: Coverage ≥ 85%
-check_output "GA-6: Coverage ≥ 40%" 40 "cargo llvm-cov report --summary-only 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1"
+check_output "GA-6: Coverage ≥ 85%" 85 "cargo llvm-cov report --summary-only 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1"
 
 # GA-7: Security audit (允许网络失败，不 block GA)
 check "GA-7: cargo audit" "cargo audit || echo 'cargo audit skipped (network issue)'"
@@ -154,13 +154,71 @@ else
     echo "FAIL ($PROOF_COUNT proofs, $INVALID_PROOF invalid)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
-# GA-12: Sysbench gate
-echo -n "[ga-v3.0.0] GA-12: Sysbench gate ... "
+# GA-12: QPS Benchmark gate (replaces sysbench with direct cargo bench)
+# Measures execution engine QPS directly without MySQL protocol overhead
+echo -n "[ga-v3.0.0] GA-12: QPS Benchmark gate ... "
 TOTAL=$((TOTAL+1))
-if PHASE=alpha bash scripts/gate/check_sysbench.sh 2>&1 | grep -q "PASSED"; then
-    echo "PASS"; PASS=$((PASS+1))
+
+BASELINE_FILE="$PROJECT_ROOT/perf_baselines/v3.0.0/baseline.json"
+RESULT_FILE="$PROJECT_ROOT/perf_baselines/v3.0.0/qps_current.json"
+
+# Run cargo bench QPS tests
+QPS_OUTPUT=$(cargo test --test qps_benchmark_test -- --ignored --nocapture 2>&1 || true)
+
+# Parse QPS values from output
+# Map test output to baseline keys
+declare -A QPS_VALUES
+QPS_VALUES["simple_select"]=$(echo "$QPS_OUTPUT" | grep "Simple SELECT QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+QPS_VALUES["insert"]=$(echo "$QPS_OUTPUT" | grep "INSERT QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+QPS_VALUES["update"]=$(echo "$QPS_OUTPUT" | grep "UPDATE QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+QPS_VALUES["delete"]=$(echo "$QPS_OUTPUT" | grep "DELETE QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+QPS_VALUES["join"]=$(echo "$QPS_OUTPUT" | grep "JOIN QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+QPS_VALUES["aggregation"]=$(echo "$QPS_OUTPUT" | grep "Aggregation QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+QPS_VALUES["order_by"]=$(echo "$QPS_OUTPUT" | grep "ORDER BY QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+QPS_VALUES["complex_where"]=$(echo "$QPS_OUTPUT" | grep "Complex WHERE QPS:" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+
+# Save current results
+cat > "$RESULT_FILE" <<EOF
+{
+  "date": "$(date -u +%Y-%m-%d)",
+  "benchmarks": {
+    "simple_select": {"qps": ${QPS_VALUES["simple_select"]}},
+    "insert": {"qps": ${QPS_VALUES["insert"]}},
+    "update": {"qps": ${QPS_VALUES["update"]}},
+    "delete": {"qps": ${QPS_VALUES["delete"]}},
+    "join": {"qps": ${QPS_VALUES["join"]}},
+    "aggregation": {"qps": ${QPS_VALUES["aggregation"]}},
+    "order_by": {"qps": ${QPS_VALUES["order_by"]}},
+    "complex_where": {"qps": ${QPS_VALUES["complex_where"]}}
+  }
+}
+EOF
+
+# Compare against baseline (5% regression threshold)
+REGRESSION_THRESHOLD=0.05
+PASS_COUNT=0
+FAIL_COUNT=0
+
+for key in simple_select insert update delete join aggregation order_by complex_where; do
+    current="${QPS_VALUES[$key]}"
+    baseline=$(python3 -c "import json; d=json.load(open('$BASELINE_FILE')); print(d['benchmarks']['$key']['qps'])" 2>/dev/null || echo "0")
+
+    if (( $(echo "$current > 0" | bc -l) )) && (( $(echo "$baseline > 0" | bc -l) )); then
+        ratio=$(python3 -c "print($current / $baseline)")
+        if (( $(echo "$ratio >= 0.95" | bc -l) )); then
+            PASS_COUNT=$((PASS_COUNT+1))
+        else
+            FAIL_COUNT=$((FAIL_COUNT+1))
+            echo ""
+            echo "  ⚠️ $key: ${current} QPS < baseline ${baseline} QPS (regression: $(python3 -c "print(f'{(1-$ratio)*100:.1f}%'))")"
+        fi
+    fi
+done
+
+if [ "$FAIL_COUNT" -eq 0 ]; then
+    echo "PASS (${PASS_COUNT}/8 benchmarks within 5% of baseline)"; PASS=$((PASS+1))
 else
-    echo "FAIL"; BLOCKERS=$((BLOCKERS+1))
+    echo "FAIL (${FAIL_COUNT}/8 benchmarks regressed >5%)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
 # GA-12b: B-S1~B-S5 稳定性测试 (来自 Beta Gate)

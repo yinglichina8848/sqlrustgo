@@ -904,7 +904,9 @@ impl Parser {
             | Some(Token::Commit)
             | Some(Token::Rollback)
             | Some(Token::Set)
-            | Some(Token::Start) => self.parse_transaction(),
+            | Some(Token::Start)
+            | Some(Token::Savepoint)
+            | Some(Token::Release) => self.parse_transaction(),
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
             Some(Token::Show) => self.parse_show(),
@@ -1038,12 +1040,14 @@ impl Parser {
 
         // Check for ROLLBACK TO SAVEPOINT
         if self.current() == Some(&Token::To) {
-            self.next();
-            let name = match self.next() {
-                Some(Token::Identifier(name)) => name,
-                Some(Token::StringLiteral(s)) => s,
+            self.expect(Token::To)?;
+            self.expect(Token::Savepoint)?;
+            let name = match self.current() {
+                Some(Token::Identifier(name)) => name.clone(),
+                Some(Token::StringLiteral(s)) => s.clone(),
                 _ => return Err("Expected savepoint name".to_string()),
             };
+            self.next(); // Advance past the name
             return Ok(Statement::Transaction(
                 TransactionStatement::RollbackToSavepoint { name },
             ));

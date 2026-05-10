@@ -1446,8 +1446,8 @@ fn test_parse_begin_read_uncommitted() {
     let sql = "BEGIN READ UNCOMMITTED";
     let result = parse(sql);
     assert!(
-        result.is_err(),
-        "BEGIN READ UNCOMMITTED should fail (parser expects ISOLATION LEVEL): {:?}",
+        result.is_ok(),
+        "BEGIN READ UNCOMMITTED should parse now that COMMITTED/UNCOMMITTED are keywords: {:?}",
         result
     );
 }
@@ -1457,8 +1457,8 @@ fn test_parse_begin_read_committed() {
     let sql = "BEGIN READ COMMITTED";
     let result = parse(sql);
     assert!(
-        result.is_err(),
-        "BEGIN READ COMMITTED should fail (parser expects ISOLATION LEVEL): {:?}",
+        result.is_ok(),
+        "BEGIN READ COMMITTED should parse now that COMMITTED/UNCOMMITTED are keywords: {:?}",
         result
     );
 }
@@ -1479,8 +1479,8 @@ fn test_parse_begin_isolation_level_read_committed() {
     let sql = "BEGIN ISOLATION LEVEL READ COMMITTED";
     let result = parse(sql);
     assert!(
-        result.is_err(),
-        "READ COMMITTED syntax not fully supported: {:?}",
+        result.is_ok(),
+        "BEGIN ISOLATION LEVEL READ COMMITTED should parse now that COMMITTED/UNCOMMITTED are keywords: {:?}",
         result
     );
 }
@@ -1490,8 +1490,8 @@ fn test_parse_begin_isolation_level_read_uncommitted() {
     let sql = "BEGIN ISOLATION LEVEL READ UNCOMMITTED";
     let result = parse(sql);
     assert!(
-        result.is_err(),
-        "READ UNCOMMITTED syntax not fully supported: {:?}",
+        result.is_ok(),
+        "BEGIN ISOLATION LEVEL READ UNCOMMITTED should parse now that COMMITTED/UNCOMMITTED are keywords: {:?}",
         result
     );
 }
