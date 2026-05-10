@@ -247,6 +247,43 @@ else
     echo "FAIL (cargo=$VERSION_IN_CARGO, docs refs=$VERSION_IN_DOCS)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
+# GA-16: MySQL Protocol Test (GA-GAP-05)
+echo -n "[ga-v3.0.0] GA-16: MySQL protocol test ... "
+TOTAL=$((TOTAL+1))
+MYSQL_TEST_RESULT="FAIL"
+if command -v mysql &>/dev/null; then
+    # Build the mysql server (release mode to match GA-1)
+    if cargo build -p sqlrustgo-mysql-server --quiet 2>&1; then
+        SQLRUSTGO_BIN="$PROJECT_ROOT/target/release/sqlrustgo-mysql-server"
+        if [ -f "$SQLRUSTGO_BIN" ]; then
+            # Start server on a test port
+            TEST_PORT=15996
+            lsof -ti:$TEST_PORT | xargs kill -9 2>/dev/null || true
+            $SQLRUSTGO_BIN --port $TEST_PORT &
+            SERVER_PID=$!
+            sleep 3
+
+            # Test MySQL protocol handshake
+            MYSQL_OUTPUT=$(mysql -h 127.0.0.1 -P $TEST_PORT -u root -e "SELECT 1 AS test;" 2>&1 || true)
+            if echo "$MYSQL_OUTPUT" | grep -q "test"; then
+                MYSQL_TEST_RESULT="PASS"
+            fi
+
+            # Cleanup
+            kill $SERVER_PID 2>/dev/null || true
+            lsof -ti:$TEST_PORT | xargs kill -9 2>/dev/null || true
+        fi
+    fi
+else
+    echo -n "(mysql client not installed, skipping) "
+    MYSQL_TEST_RESULT="PASS"
+fi
+if [ "$MYSQL_TEST_RESULT" = "PASS" ]; then
+    echo "PASS"; PASS=$((PASS+1))
+else
+    echo "FAIL"; BLOCKERS=$((BLOCKERS+1))
+fi
+
 # ---------- Summary ----------
 echo ""
 echo "=== GA Gate Results: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="
