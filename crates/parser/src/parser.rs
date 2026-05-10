@@ -4348,6 +4348,7 @@ impl Parser {
         self.expect(Token::Database)?;
 
         let mut database = None;
+        #[allow(unused_variables, unused_assignments)]
         let mut destination = String::new();
         let mut incremental = false;
         let mut differential = false;
@@ -4402,6 +4403,7 @@ impl Parser {
         self.expect(Token::Database)?;
 
         let mut database = None;
+        #[allow(unused_variables, unused_assignments)]
         let mut source = String::new();
         let mut to_database = None;
         let mut point_in_time = None;
