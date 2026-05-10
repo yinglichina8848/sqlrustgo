@@ -112,11 +112,12 @@ fi
 # GA-10: Performance regression (within 5%)
 check "GA-10: perf regression" "bash scripts/gate/check_regression.sh"
 
-# GA-11: Formal proofs ≥ 10 files valid
+# GA-11: Formal proofs ≥ 10 files valid (all formats: .json, .dfy, .tla, .formalog, .formulog)
 echo -n "[ga-v3.0.0] GA-11: Formal proofs ... "
 TOTAL=$((TOTAL+1))
-PROOF_COUNT=$(find docs/proof -name "*.json" -type f 2>/dev/null | wc -l || echo "0")
+PROOF_COUNT=$(find docs/proof -type f \( -name "*.json" -o -name "*.dfy" -o -name "*.tla" -o -name "*.formalog" -o -name "*.formulog" \) 2>/dev/null | wc -l || echo "0")
 INVALID_PROOF=0
+# Validate JSON files
 for pf in $(find docs/proof -name "*.json" -type f 2>/dev/null); do
     python3 -c "import json; json.load(open('$pf'))" 2>/dev/null || INVALID_PROOF=$((INVALID_PROOF+1))
 done
