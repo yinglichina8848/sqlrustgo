@@ -16,9 +16,9 @@ use sqlrustgo_executor::trigger::{
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, CallStatement,
-    CheckOption, CheckStatement, CreateIndexStatement, CreateProcedureStatement, CreateRoleStatement,
-    CreateTableStatement, CreateTriggerStatement, DropRoleStatement, DropTableStatement,
-    ExplainStatement, GrantRoleStatement, GrantStatement, InsertStatement,
+    CheckOption, CheckStatement, CreateIndexStatement, CreateProcedureStatement,
+    CreateRoleStatement, CreateTableStatement, CreateTriggerStatement, DropRoleStatement,
+    DropTableStatement, ExplainStatement, GrantRoleStatement, GrantStatement, InsertStatement,
     ObjectType as ParserObjectType, OptimizeStatement, OrderByExpression,
     Privilege as ParserPrivilege, RepairStatement, RevokeRoleStatement, RevokeStatement,
     SelectStatement, SetRoleStatement, ShowStatement, StoredProcParam as ParserStoredProcParam,
@@ -1571,7 +1571,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 {
                     let mut storage = self.storage.write().unwrap();
                     for col_idx in &auto_increment_cols {
-                        if !specified_cols.contains(col_idx) || *col_idx >= record.len() || matches!(record[*col_idx], Value::Null) {
+                        if !specified_cols.contains(col_idx)
+                            || *col_idx >= record.len()
+                            || matches!(record[*col_idx], Value::Null)
+                        {
                             let auto_val = storage.get_next_auto_increment(&table_name)?;
                             if *col_idx < record.len() {
                                 record[*col_idx] = Value::Integer(auto_val);
@@ -2525,6 +2528,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     .unwrap_or(self.default_isolation);
                 self.begin_transaction(iso)
             }
+            TransactionStatement::Savepoint { name: _ } => Ok(ExecutorResult::empty()),
+            TransactionStatement::RollbackToSavepoint { name: _ } => Ok(ExecutorResult::empty()),
+            TransactionStatement::ReleaseSavepoint { name: _ } => Ok(ExecutorResult::empty()),
         }
     }
 
@@ -3112,13 +3118,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     fn execute_check(&self, check: &CheckStatement) -> SqlResult<ExecutorResult> {
         let storage = self.storage.read().unwrap();
         let mut rows = vec![];
-        let mut ok_count = 0;
-        let mut error_count = 0;
 
         for table_name in &check.names {
             match storage.get_table_info(table_name) {
                 Ok(info) => {
-                    let status = if check.option == Some(CheckOption::Extended) {
+                    let _status = if check.option == Some(CheckOption::Extended) {
                         // Extended check would scan all rows for corruption
                         "OK (Extended check not fully implemented)"
                     } else {
@@ -3130,7 +3134,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         Value::Text("OK".to_string()),
                         Value::Text(format!("Table is usable. Columns: {}", info.columns.len())),
                     ]);
-                    ok_count += 1;
                 }
                 Err(e) => {
                     rows.push(vec![
@@ -3139,7 +3142,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         Value::Text("error".to_string()),
                         Value::Text(format!("Table not found or error: {}", e)),
                     ]);
-                    error_count += 1;
                 }
             }
         }
@@ -3175,7 +3177,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     fn execute_vacuum(&self, vacuum: &VacuumStatement) -> SqlResult<ExecutorResult> {
         let storage = self.storage.read().unwrap();
         let mut rows = vec![];
-        let mut processed = 0;
 
         // If no specific tables, vacuum all
         let tables_to_vacuum = if vacuum.names.is_empty() {
@@ -3198,7 +3199,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         Value::Text("OK".to_string()),
                         Value::Text(format!("{} mode completed", mode_str)),
                     ]);
-                    processed += 1;
                 }
                 Err(_e) => {
                     // Skip tables that don't exist

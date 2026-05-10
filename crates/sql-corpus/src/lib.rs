@@ -569,6 +569,9 @@ impl SimpleExecutor {
                 | IsolationLevel::Serializable => Ok(()),
             },
             TransactionStatement::StartTransaction { .. } => Ok(()),
+            TransactionStatement::Savepoint { .. } => Ok(()),
+            TransactionStatement::RollbackToSavepoint { .. } => Ok(()),
+            TransactionStatement::ReleaseSavepoint { .. } => Ok(()),
         }
     }
 

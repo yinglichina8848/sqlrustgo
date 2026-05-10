@@ -145,6 +145,9 @@ pub enum Token {
     Duplicate,
     Modify,
     View,
+    Backup,
+    Restore,
+    Database,
 
     // Transaction keywords
     Transaction,
@@ -276,6 +279,9 @@ impl fmt::Display for Token {
             Token::Duplicate => write!(f, "DUPLICATE"),
             Token::Modify => write!(f, "MODIFY"),
             Token::View => write!(f, "VIEW"),
+            Token::Backup => write!(f, "BACKUP"),
+            Token::Restore => write!(f, "RESTORE"),
+            Token::Database => write!(f, "DATABASE"),
             // Constraint keywords
             Token::Foreign => write!(f, "FOREIGN"),
             Token::References => write!(f, "REFERENCES"),
@@ -527,6 +533,9 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "DUPLICATE" => Some(Token::Duplicate),
         "MODIFY" => Some(Token::Modify),
         "VIEW" => Some(Token::View),
+        "BACKUP" => Some(Token::Backup),
+        "RESTORE" => Some(Token::Restore),
+        "DATABASE" => Some(Token::Database),
         "SHOW" => Some(Token::Show),
         "DESCRIBE" => Some(Token::Describe),
         "ROLE" => Some(Token::Role),
