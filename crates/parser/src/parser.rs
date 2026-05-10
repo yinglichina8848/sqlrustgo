@@ -908,6 +908,15 @@ impl Parser {
                 }
             }
             Some(Token::Start) => self.parse_start_transaction(),
+            Some(Token::Savepoint) => self.parse_savepoint(),
+            Some(Token::Release) => {
+                // Check if this is RELEASE SAVEPOINT
+                if let Some(Token::Savepoint) = self.peek() {
+                    self.parse_release_savepoint()
+                } else {
+                    Err("Unexpected token after RELEASE".to_string())
+                }
+            }
             Some(t) => Err(format!("Unexpected transaction token: {:?}", t)),
             None => Err("Unexpected end of input".to_string()),
         }
@@ -959,6 +968,31 @@ impl Parser {
         }))
     }
 
+    fn parse_savepoint(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Savepoint)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            _ => return Err("Expected savepoint name".to_string()),
+        };
+        Ok(Statement::Transaction(TransactionStatement::Savepoint {
+            name,
+        }))
+    }
+
+    fn parse_release_savepoint(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Release)?;
+        self.expect(Token::Savepoint)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            _ => return Err("Expected savepoint name".to_string()),
+        };
+        Ok(Statement::Transaction(
+            TransactionStatement::ReleaseSavepoint { name },
+        ))
+    }
+
     fn parse_commit(&mut self) -> Result<Statement, String> {
         self.expect(Token::Commit)?;
         let work = if self.current() == Some(&Token::Work) {
@@ -980,6 +1014,20 @@ impl Parser {
         } else {
             false
         };
+
+        // Check for ROLLBACK TO SAVEPOINT
+        if self.current() == Some(&Token::To) {
+            self.next();
+            let name = match self.next() {
+                Some(Token::Identifier(name)) => name,
+                Some(Token::StringLiteral(s)) => s,
+                _ => return Err("Expected savepoint name".to_string()),
+            };
+            return Ok(Statement::Transaction(
+                TransactionStatement::RollbackToSavepoint { name },
+            ));
+        }
+
         Ok(Statement::Transaction(TransactionStatement::Rollback {
             work,
         }))

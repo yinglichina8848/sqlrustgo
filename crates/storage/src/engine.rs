@@ -683,7 +683,9 @@ pub trait StorageEngine: Send + Sync {
     /// Returns the next auto-increment value for the table
     fn get_next_auto_increment(&mut self, _table: &str) -> SqlResult<i64> {
         // Default implementation: auto-increment not supported
-        Err(SqlError::ExecutionError("Auto-increment not supported by this storage engine".to_string()))
+        Err(SqlError::ExecutionError(
+            "Auto-increment not supported by this storage engine".to_string(),
+        ))
     }
 }
 
