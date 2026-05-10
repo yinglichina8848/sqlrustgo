@@ -3,6 +3,7 @@
 //! Only tests that successfully parse are included.
 
 use sqlrustgo_parser::parse;
+use sqlrustgo_parser::Statement;
 
 // ============ CREATE TRIGGER Tests ============
 
@@ -466,6 +467,36 @@ fn test_parse_limit_offset() {
     let sql = "SELECT * FROM users LIMIT 10 OFFSET 5";
     let result = parse(sql);
     assert!(result.is_ok(), "Failed to parse LIMIT OFFSET: {:?}", result);
+}
+
+#[test]
+fn test_parse_limit_offset_count_mysql_syntax() {
+    // MySQL's LIMIT offset, count syntax
+    let sql = "SELECT * FROM users LIMIT 5, 10";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LIMIT offset, count: {:?}", result);
+    let stmt = result.unwrap();
+    if let Statement::Select(select) = stmt {
+        assert_eq!(select.limit, Some(10));
+        assert_eq!(select.offset, Some(5));
+    } else {
+        panic!("Expected SELECT statement");
+    }
+}
+
+#[test]
+fn test_parse_limit_zero_offset_mysql_syntax() {
+    // LIMIT 0, 10 is equivalent to LIMIT 10
+    let sql = "SELECT * FROM users LIMIT 0, 10";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LIMIT 0, count: {:?}", result);
+    let stmt = result.unwrap();
+    if let Statement::Select(select) = stmt {
+        assert_eq!(select.limit, Some(10));
+        assert_eq!(select.offset, Some(0));
+    } else {
+        panic!("Expected SELECT statement");
+    }
 }
 
 // ============ GROUP BY, HAVING Tests ============
