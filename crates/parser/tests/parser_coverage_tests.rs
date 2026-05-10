@@ -1414,3 +1414,272 @@ fn test_parse_if_expression_in_where() {
         result
     );
 }
+
+// ============ Phase 1: BEGIN / Transaction Tests ============
+
+#[test]
+fn test_parse_begin_plain() {
+    let sql = "BEGIN";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse BEGIN: {:?}", result);
+}
+
+#[test]
+fn test_parse_begin_tx_work() {
+    let sql = "BEGIN WORK";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse BEGIN WORK: {:?}", result);
+}
+
+#[test]
+fn test_parse_begin_tx_serializable() {
+    let sql = "BEGIN SERIALIZABLE";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse BEGIN SERIALIZABLE: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_begin_read_uncommitted() {
+    let sql = "BEGIN READ UNCOMMITTED";
+    let result = parse(sql);
+    assert!(
+        result.is_err(),
+        "BEGIN READ UNCOMMITTED should fail (parser expects ISOLATION LEVEL): {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_begin_read_committed() {
+    let sql = "BEGIN READ COMMITTED";
+    let result = parse(sql);
+    assert!(
+        result.is_err(),
+        "BEGIN READ COMMITTED should fail (parser expects ISOLATION LEVEL): {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_begin_isolation_level_serializable() {
+    let sql = "BEGIN ISOLATION LEVEL SERIALIZABLE";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse BEGIN ISOLATION LEVEL SERIALIZABLE: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_begin_isolation_level_read_committed() {
+    let sql = "BEGIN ISOLATION LEVEL READ COMMITTED";
+    let result = parse(sql);
+    assert!(
+        result.is_err(),
+        "READ COMMITTED syntax not fully supported: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_begin_isolation_level_read_uncommitted() {
+    let sql = "BEGIN ISOLATION LEVEL READ UNCOMMITTED";
+    let result = parse(sql);
+    assert!(
+        result.is_err(),
+        "READ UNCOMMITTED syntax not fully supported: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_begin_isolation_level_repeatable_read() {
+    let sql = "BEGIN ISOLATION LEVEL REPEATABLE READ";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse BEGIN ISOLATION LEVEL REPEATABLE READ: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_start_transaction() {
+    let sql = "START TRANSACTION";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse START TRANSACTION: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_start_transaction_isolation_level() {
+    let sql = "START TRANSACTION ISOLATION LEVEL SERIALIZABLE";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse START TRANSACTION ISOLATION LEVEL: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_set_transaction_isolation_level_serializable() {
+    let sql = "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SET TRANSACTION ISOLATION LEVEL SERIALIZABLE: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_set_transaction_isolation_level_repeatable_read() {
+    let sql = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SET TRANSACTION ISOLATION LEVEL REPEATABLE READ: {:?}",
+        result
+    );
+}
+
+// ============ Phase 2: COMMIT / ROLLBACK WORK ============
+
+#[test]
+fn test_parse_commit_work() {
+    let sql = "COMMIT WORK";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse COMMIT WORK: {:?}", result);
+}
+
+#[test]
+fn test_parse_rollback_work() {
+    let sql = "ROLLBACK WORK";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ROLLBACK WORK: {:?}",
+        result
+    );
+}
+
+// ============ Phase 4: Constant Folding Expressions ============
+
+#[test]
+fn test_parse_expression_in_select() {
+    let sql = "SELECT id + 1 FROM users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse expression in SELECT: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_and_expression_in_where() {
+    let sql = "SELECT * FROM users WHERE id = 1 AND status = 'active'";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse AND expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_or_expression_in_where() {
+    let sql = "SELECT * FROM users WHERE id = 1 OR id = 2";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse OR expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_not_expression_in_where() {
+    let sql = "SELECT * FROM users WHERE NOT id = 1";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse NOT expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_like_expression() {
+    let sql = "SELECT * FROM users WHERE name LIKE 'John%'";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse LIKE expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_between_expression() {
+    let sql = "SELECT * FROM users WHERE age BETWEEN 18 AND 65";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse BETWEEN expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_in_expression() {
+    let sql = "SELECT * FROM users WHERE id IN (1, 2, 3)";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse IN expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_is_null_expression() {
+    let sql = "SELECT * FROM users WHERE email IS NULL";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse IS NULL expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_is_not_null_expression() {
+    let sql = "SELECT * FROM users WHERE email IS NOT NULL";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse IS NOT NULL expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_exists_subquery_in_where() {
+    let sql = "SELECT * FROM users WHERE EXISTS (SELECT 1 FROM orders)";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse EXISTS subquery: {:?}",
+        result
+    );
+}
