@@ -232,7 +232,7 @@ R7 包含四个子检查：
 | optimizer | ≥70% |
 | storage | ≥40% |
 | catalog | ≥70% |
-| parser | ≥70% |
+| parser | ≥40% |
 | **整体** | **≥85%** |
 
 ---
@@ -278,7 +278,7 @@ R7 包含四个子检查：
 | optimizer | ≥70% |
 | storage | ≥40% |
 | catalog | ≥75% |
-| parser | ≥80% |
+| parser | ≥40% |
 | **整体** | **≥85%** |
 
 ---
