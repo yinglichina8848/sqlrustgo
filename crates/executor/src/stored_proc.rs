@@ -1835,9 +1835,12 @@ impl StoredProcExecutor {
                     if i >= t_bytes.len() {
                         return true;
                     }
-                    // Try to backtrack
+                    // Try to backtrack: pop saved state, advance i by 1
                     if let Some((prev_i, prev_j)) = stack.pop() {
-                        i = prev_i;
+                        if prev_i < t_bytes.len() {
+                            stack.push((prev_i + 1, prev_j)); // re-push for next try
+                        }
+                        i = prev_i + 1;
                         j = prev_j + 1;
                         if j < p_bytes.len() && p_bytes[j] == b'%' {
                             j += 1;
@@ -1847,7 +1850,7 @@ impl StoredProcExecutor {
                         }
                         continue;
                     }
-                    return i >= t_bytes.len();
+                    return false;
                 }
                 if i >= t_bytes.len() {
                     // Only % can match empty string at end of pattern
@@ -1859,7 +1862,7 @@ impl StoredProcExecutor {
 
                 match p_bytes[j] {
                     b'%' => {
-                        // Try matching 0 chars, and save state to try more
+                        // Save state so backtracking can try matching more chars
                         stack.push((i, j));
                         j += 1;
                         if j >= p_bytes.len() {
@@ -1878,9 +1881,12 @@ impl StoredProcExecutor {
                             i += 1;
                             j += 1;
                         } else {
-                            // Try backtracking
+                            // Try backtracking: pop saved state, advance i by 1
                             if let Some((prev_i, prev_j)) = stack.pop() {
-                                i = prev_i;
+                                if prev_i < t_bytes.len() {
+                                    stack.push((prev_i + 1, prev_j));
+                                }
+                                i = prev_i + 1;
                                 j = prev_j + 1;
                                 if j < p_bytes.len() && p_bytes[j] == b'%' {
                                     j += 1;
@@ -1977,11 +1983,8 @@ impl StoredProcExecutor {
             return Ok(Value::Float(float));
         }
 
-        // Handle variables (starting with @)
-        if let Some(var_name) = expr.strip_prefix('@') {
-            if let Some(val) = ctx.get_var(var_name) {
-                return Ok(val.clone());
-            }
+        if ctx.has_var(expr) {
+            return Ok(self.expand_variable(expr, ctx));
         }
 
         // Handle simple arithmetic: var + value, var - value, etc.
@@ -3190,5 +3193,187 @@ mod tests {
         ctx.set_var("x", Value::Null);
         let sql = "@x";
         assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "NULL");
+    }
+
+    // ── like_match tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_like_match_exact() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("hello".into()), &Value::Text("hello".into())));
+    }
+
+    #[test]
+    fn test_like_match_percent_prefix() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("hello".into()), &Value::Text("h%".into())));
+    }
+
+    #[test]
+    fn test_like_match_percent_suffix() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("hello".into()), &Value::Text("%o".into())));
+    }
+
+    #[test]
+    fn test_like_match_percent_middle() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("hello".into()), &Value::Text("%ell%".into())));
+    }
+
+    #[test]
+    fn test_like_match_underscore() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("hello".into()), &Value::Text("h_llo".into())));
+    }
+
+    #[test]
+    fn test_like_match_underscore_too_long() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.like_match(&Value::Text("hello".into()), &Value::Text("h____o".into())));
+    }
+
+    #[test]
+    fn test_like_match_non_text() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.like_match(&Value::Integer(42), &Value::Text("42".into())));
+    }
+
+    #[test]
+    fn test_like_match_case_insensitive() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("HELLO".into()), &Value::Text("hello".into())));
+    }
+
+    #[test]
+    fn test_like_match_no_match() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.like_match(&Value::Text("hello".into()), &Value::Text("world".into())));
+    }
+
+    #[test]
+    fn test_like_match_multi_percent() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(
+            &Value::Text("a quick brown fox".into()),
+            &Value::Text("%quick%brown%".into()),
+        ));
+    }
+
+    #[test]
+    fn test_like_match_only_percent() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("anything".into()), &Value::Text("%".into())));
+    }
+
+    #[test]
+    fn test_like_match_backtrack() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        // Pattern "a%b" must backtrack through "aXbYb" to match at "aXb"
+        assert!(executor.like_match(&Value::Text("aXbYb".into()), &Value::Text("a%b".into())));
+    }
+
+    #[test]
+    fn test_like_match_empty_text() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("".into()), &Value::Text("".into())));
+        assert!(executor.like_match(&Value::Text("".into()), &Value::Text("%".into())));
+        assert!(!executor.like_match(&Value::Text("".into()), &Value::Text("_".into())));
+    }
+
+    // ── between_match tests ──────────────────────────────────────
+
+    #[test]
+    fn test_between_match_in_range() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.between_match(
+            &Value::Integer(5),
+            &Value::Integer(1),
+            &Value::Integer(10)
+        ));
+    }
+
+    #[test]
+    fn test_between_match_below_range() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.between_match(
+            &Value::Integer(0),
+            &Value::Integer(1),
+            &Value::Integer(10)
+        ));
+    }
+
+    #[test]
+    fn test_between_match_above_range() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.between_match(
+            &Value::Integer(15),
+            &Value::Integer(1),
+            &Value::Integer(10)
+        ));
+    }
+
+    #[test]
+    fn test_between_match_boundary() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.between_match(
+            &Value::Integer(1),
+            &Value::Integer(1),
+            &Value::Integer(10)
+        ));
+        assert!(executor.between_match(
+            &Value::Integer(10),
+            &Value::Integer(1),
+            &Value::Integer(10)
+        ));
+    }
+
+    #[test]
+    fn test_between_match_float() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.between_match(&Value::Float(3.5), &Value::Float(1.0), &Value::Float(5.0)));
+        assert!(!executor.between_match(
+            &Value::Float(7.5),
+            &Value::Float(1.0),
+            &Value::Float(5.0)
+        ));
+    }
+
+    // ── regexp_match tests ───────────────────────────────────────
+
+    #[test]
+    fn test_regexp_match_basic() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.regexp_match(
+            &Value::Text("hello world".into()),
+            &Value::Text("hello".into())
+        ));
+    }
+
+    #[test]
+    fn test_regexp_match_no_match() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.regexp_match(&Value::Text("hello".into()), &Value::Text("xyz".into())));
+    }
+
+    #[test]
+    fn test_regexp_match_non_text() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.regexp_match(&Value::Integer(42), &Value::Text("42".into())));
+    }
+
+    #[test]
+    fn test_regexp_match_case_insensitive() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.regexp_match(&Value::Text("HELLO".into()), &Value::Text("hello".into())));
+    }
+
+    #[test]
+    fn test_regexp_match_partial() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.regexp_match(
+            &Value::Text("the quick brown fox".into()),
+            &Value::Text("brown".into())
+        ));
     }
 }

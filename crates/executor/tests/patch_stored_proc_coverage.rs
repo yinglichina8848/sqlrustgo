@@ -160,11 +160,11 @@ fn test_sp_loop_leave() {
             StoredProcStatement::Loop {
                 body: vec![
                     StoredProcStatement::Set {
-                        variable: "@i".to_string(),
-                        value: "@i + 1".to_string(),
+                        variable: "i".to_string(),
+                        value: "i + 1".to_string(),
                     },
                     StoredProcStatement::If {
-                        condition: "@i >= 2".to_string(),
+                        condition: "i >= 2".to_string(),
                         then_body: vec![StoredProcStatement::Leave {
                             label: "myloop".to_string(),
                         }],
@@ -793,4 +793,418 @@ fn test_sp_catalog_ops() {
     let names = exec.list_procedures();
     assert!(names.contains(&"proc1"));
     assert!(names.contains(&"proc2"));
+}
+
+// ── RawSql Expression Coverage Tests ────────────────────────────
+
+use sqlrustgo_executor::stored_proc::StoredProcExecutor;
+use sqlrustgo_storage::{
+    ColumnDefinition, ForeignKeyConstraint, StorageEngine, TableInfo, UniqueConstraint,
+};
+
+fn make_exec_with_table(
+    name: &str,
+    cols: Vec<(&str, &str)>,
+) -> (Arc<sqlrustgo_catalog::Catalog>, Arc<RwLock<MemoryStorage>>) {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let col_defs: Vec<ColumnDefinition> = cols
+        .iter()
+        .map(|(n, dt)| ColumnDefinition {
+            name: n.to_string(),
+            data_type: dt.to_string(),
+            ..Default::default()
+        })
+        .collect();
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: name.to_string(),
+            columns: col_defs,
+            ..Default::default()
+        })
+        .unwrap();
+    }
+    (catalog, storage)
+}
+
+fn add_sp_and_exec(
+    cat: Arc<sqlrustgo_catalog::Catalog>,
+    st: Arc<RwLock<MemoryStorage>>,
+    sp_name: &str,
+    statements: Vec<StoredProcStatement>,
+) -> StoredProcExecutor {
+    let mut c = (*cat).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        sp_name.to_string(),
+        vec![],
+        statements,
+    ))
+    .unwrap();
+    StoredProcExecutor::new(Arc::new(c), st)
+}
+
+#[test]
+fn test_sp_rawsql_like() {
+    let (cat, st) = make_exec_with_table("t_like", vec![("name", "TEXT")]);
+    let exec = add_sp_and_exec(
+        cat,
+        st,
+        "sp_like",
+        vec![
+            StoredProcStatement::RawSql("SELECT * FROM t_like WHERE name LIKE 'h%'".to_string()),
+            StoredProcStatement::Return {
+                value: "@@__found_rows".to_string(),
+            },
+        ],
+    );
+    assert!(exec.execute_call("sp_like", vec![]).is_ok());
+}
+
+#[test]
+fn test_sp_rawsql_between() {
+    let (cat, st) = make_exec_with_table("t_btwn", vec![("val", "INTEGER")]);
+    let exec = add_sp_and_exec(
+        cat,
+        st,
+        "sp_btwn",
+        vec![
+            StoredProcStatement::RawSql(
+                "SELECT * FROM t_btwn WHERE val BETWEEN 1 AND 10".to_string(),
+            ),
+            StoredProcStatement::Return {
+                value: "@@__found_rows".to_string(),
+            },
+        ],
+    );
+    assert!(exec.execute_call("sp_btwn", vec![]).is_ok());
+}
+
+#[test]
+fn test_sp_rawsql_is_null() {
+    let (cat, st) = make_exec_with_table("t_null", vec![("name", "TEXT")]);
+    let exec = add_sp_and_exec(
+        cat,
+        st,
+        "sp_null",
+        vec![
+            StoredProcStatement::RawSql("SELECT * FROM t_null WHERE name IS NULL".to_string()),
+            StoredProcStatement::Return {
+                value: "@@__found_rows".to_string(),
+            },
+        ],
+    );
+    assert!(exec.execute_call("sp_null", vec![]).is_ok());
+}
+
+#[test]
+fn test_sp_rawsql_in_list() {
+    let (cat, st) = make_exec_with_table("t_in", vec![("val", "INTEGER")]);
+    let exec = add_sp_and_exec(
+        cat,
+        st,
+        "sp_in",
+        vec![
+            StoredProcStatement::RawSql("SELECT * FROM t_in WHERE val IN (1, 2, 3)".to_string()),
+            StoredProcStatement::Return {
+                value: "@@__found_rows".to_string(),
+            },
+        ],
+    );
+    assert!(exec.execute_call("sp_in", vec![]).is_ok());
+}
+
+#[test]
+fn test_sp_rawsql_insert() {
+    let (cat, st) = make_exec_with_table("t_ins", vec![("val", "INTEGER")]);
+    let exec = add_sp_and_exec(
+        cat,
+        st,
+        "sp_ins",
+        vec![
+            StoredProcStatement::RawSql("INSERT INTO t_ins VALUES (42)".to_string()),
+            StoredProcStatement::Return {
+                value: "1".to_string(),
+            },
+        ],
+    );
+    assert!(exec.execute_call("sp_ins", vec![]).is_ok());
+}
+
+#[test]
+fn test_sp_rawsql_update() {
+    let (cat, st) = make_exec_with_table("t_upd", vec![("id", "INTEGER"), ("val", "INTEGER")]);
+    let exec = add_sp_and_exec(
+        cat,
+        st,
+        "sp_upd",
+        vec![StoredProcStatement::RawSql(
+            "UPDATE t_upd SET val = 100 WHERE id = 1".to_string(),
+        )],
+    );
+    assert!(exec.execute_call("sp_upd", vec![]).is_ok());
+}
+
+#[test]
+fn test_sp_rawsql_delete() {
+    let (cat, st) = make_exec_with_table("t_del", vec![("id", "INTEGER")]);
+    let exec = add_sp_and_exec(
+        cat,
+        st,
+        "sp_del",
+        vec![StoredProcStatement::RawSql(
+            "DELETE FROM t_del WHERE id = 1".to_string(),
+        )],
+    );
+    assert!(exec.execute_call("sp_del", vec![]).is_ok());
+}
+
+#[test]
+fn test_sp_rawsql_select_star() {
+    let (cat, st) = make_exec_with_table("t_sel", vec![("val", "INTEGER")]);
+    let exec = add_sp_and_exec(
+        cat,
+        st,
+        "sp_sel",
+        vec![
+            StoredProcStatement::RawSql("SELECT * FROM t_sel".to_string()),
+            StoredProcStatement::Return {
+                value: "@@__found_rows".to_string(),
+            },
+        ],
+    );
+    assert!(exec.execute_call("sp_sel", vec![]).is_ok());
+}
+
+#[test]
+fn test_sp_rawsql_create_table() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_create_tbl".to_string(),
+        vec![],
+        vec![StoredProcStatement::RawSql(
+            "CREATE TABLE created_tbl (id INTEGER, val TEXT)".to_string(),
+        )],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    assert!(exec.execute_call("sp_create_tbl", vec![]).is_ok());
+}
+
+// ── Constraint Validation Tests ─────────────────────────────────
+
+#[test]
+fn test_sp_insert_fk_violation() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        // Parent table
+        st.create_table(&TableInfo {
+            name: "parent".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            foreign_keys: vec![],
+            ..Default::default()
+        })
+        .unwrap();
+        // Child table with FK referencing parent
+        st.create_table(&TableInfo {
+            name: "child".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "pid".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            foreign_keys: vec![ForeignKeyConstraint {
+                name: None,
+                columns: vec!["pid".to_string()],
+                referenced_table: "parent".to_string(),
+                referenced_columns: vec!["id".to_string()],
+                on_delete: None,
+                on_update: None,
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_fk_violation".to_string(),
+        vec![],
+        vec![StoredProcStatement::RawSql(
+            "INSERT INTO child (pid) VALUES (999)".to_string(),
+        )],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_fk_violation", vec![]);
+    assert!(r.is_err(), "FK violation should fail: {:?}", r);
+    assert!(
+        r.unwrap_err().contains("Foreign key constraint failed"),
+        "Should mention FK failure"
+    );
+}
+
+#[test]
+fn test_sp_insert_fk_valid() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: "parent_ok".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+        st.create_table(&TableInfo {
+            name: "child_ok".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "pid".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            foreign_keys: vec![ForeignKeyConstraint {
+                name: None,
+                columns: vec!["pid".to_string()],
+                referenced_table: "parent_ok".to_string(),
+                referenced_columns: vec!["id".to_string()],
+                on_delete: None,
+                on_update: None,
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_fk_insert".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::RawSql("INSERT INTO parent_ok (id) VALUES (1)".to_string()),
+            StoredProcStatement::RawSql("INSERT INTO child_ok (pid) VALUES (1)".to_string()),
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    assert!(
+        exec.execute_call("sp_fk_insert", vec![]).is_ok(),
+        "Valid FK insert should succeed"
+    );
+}
+
+#[test]
+fn test_sp_insert_unique_valid() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: "uniq_ok".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "val".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            unique_constraints: vec![UniqueConstraint {
+                name: None,
+                columns: vec!["val".to_string()],
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_uniq_ok".to_string(),
+        vec![],
+        vec![StoredProcStatement::RawSql(
+            "INSERT INTO uniq_ok (val) VALUES (1)".to_string(),
+        )],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    assert!(
+        exec.execute_call("sp_uniq_ok", vec![]).is_ok(),
+        "Unique valid insert should succeed"
+    );
+}
+
+#[test]
+fn test_sp_insert_unique_violation() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: "uniq_viol".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "val".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            unique_constraints: vec![UniqueConstraint {
+                name: None,
+                columns: vec!["val".to_string()],
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_uniq_viol".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::RawSql("INSERT INTO uniq_viol (val) VALUES (1)".to_string()),
+            StoredProcStatement::RawSql("INSERT INTO uniq_viol (val) VALUES (1)".to_string()),
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_uniq_viol", vec![]);
+    assert!(r.is_err(), "Unique violation should fail: {:?}", r);
+}
+
+#[test]
+fn test_sp_insert_pk_violation() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: "pk_tbl".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                primary_key: true,
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_pk".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::RawSql("INSERT INTO pk_tbl (id) VALUES (1)".to_string()),
+            StoredProcStatement::RawSql("INSERT INTO pk_tbl (id) VALUES (1)".to_string()),
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_pk", vec![]);
+    assert!(r.is_err(), "PK violation should fail: {:?}", r);
 }
