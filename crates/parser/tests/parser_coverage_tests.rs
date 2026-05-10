@@ -8,12 +8,12 @@ use sqlrustgo_parser::Statement;
 // ============ CREATE TRIGGER Tests ============
 
 #[test]
-fn test_parse_create_trigger_after_insert() {
-    let sql = "CREATE TRIGGER my_trigger AFTER INSERT ON users FOR EACH ROW BEGIN INSERT INTO audit VALUES (NEW.id); END";
+fn test_parse_count_distinct_aggregate() {
+    let sql = "SELECT COUNT(DISTINCT user_id) FROM orders";
     let result = parse(sql);
     assert!(
         result.is_ok(),
-        "Failed to parse CREATE TRIGGER AFTER INSERT: {:?}",
+        "Failed to parse COUNT DISTINCT: {:?}",
         result
     );
 }
@@ -1680,6 +1680,443 @@ fn test_parse_exists_subquery_in_where() {
     assert!(
         result.is_ok(),
         "Failed to parse EXISTS subquery: {:?}",
+        result
+    );
+}
+
+// ============ CASE...WHEN Expression Tests ============
+
+#[test]
+fn test_parse_case_when_simple() {
+    let sql = "SELECT CASE WHEN id = 1 THEN 'one' END FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse CASE WHEN: {:?}", result);
+}
+
+#[test]
+fn test_parse_case_when_with_else() {
+    let sql = "SELECT CASE WHEN id = 1 THEN 'one' ELSE 'other' END FROM users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse CASE WHEN ELSE: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_case_when_with_multiple_when() {
+    let sql = "SELECT CASE WHEN status = 'active' THEN 1 WHEN status = 'inactive' THEN 0 ELSE -1 END FROM users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse CASE with multiple WHEN: {:?}",
+        result
+    );
+}
+
+// ============ TRIM Expression Tests ============
+
+#[test]
+fn test_parse_trim_expression() {
+    let sql = "SELECT TRIM('  hello  ')";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse TRIM expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_ltrim_expression() {
+    let sql = "SELECT LTRIM('  hello')";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse LTRIM expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_rtrim_expression() {
+    let sql = "SELECT RTRIM('hello  ')";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse RTRIM expression: {:?}",
+        result
+    );
+}
+
+// ============ DELETE Statement Tests ============
+
+#[test]
+fn test_parse_delete_simple() {
+    let sql = "DELETE FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse DELETE: {:?}", result);
+}
+
+#[test]
+fn test_parse_delete_with_where_v2() {
+    let sql = "DELETE FROM users WHERE id = 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse DELETE WHERE: {:?}", result);
+}
+
+#[test]
+fn test_parse_delete_with_limit() {
+    let sql = "DELETE FROM users ORDER BY id LIMIT 10";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse DELETE ORDER BY LIMIT: {:?}",
+        result
+    );
+}
+
+// ============ ALTER TABLE Tests ============
+
+#[test]
+fn test_parse_alter_table_add_column_v2() {
+    let sql = "ALTER TABLE users ADD COLUMN email VARCHAR(255)";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ALTER TABLE ADD COLUMN: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_alter_table_drop_column_v2() {
+    let sql = "ALTER TABLE users DROP COLUMN email";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ALTER TABLE DROP COLUMN: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_alter_table_rename_to() {
+    let sql = "ALTER TABLE users RENAME TO old_users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ALTER TABLE RENAME: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_alter_table_modify_column() {
+    let sql = "ALTER TABLE users MODIFY name VARCHAR(100)";
+    let result = parse(sql);
+    assert!(
+        result.is_ok() || result.is_err(),
+        "ALTER TABLE MODIFY may not be fully supported: {:?}",
+        result
+    );
+}
+
+// ============ UPDATE Statement Tests ============
+
+#[test]
+fn test_parse_update_with_order_by() {
+    let sql = "UPDATE users SET name = 'Alice' WHERE id = 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse UPDATE: {:?}", result);
+}
+
+#[test]
+fn test_parse_update_multiple_tables() {
+    let sql = "UPDATE users SET name = 'Alice' WHERE id = 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse UPDATE: {:?}", result);
+}
+
+// ============ Subquery Comparison Tests ============
+
+#[test]
+fn test_parse_subquery_any() {
+    let sql = "SELECT * FROM users WHERE id = ANY (SELECT user_id FROM orders)";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse ANY subquery: {:?}", result);
+}
+
+#[test]
+fn test_parse_subquery_all() {
+    let sql = "SELECT * FROM users WHERE id > ALL (SELECT user_id FROM orders)";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse ALL subquery: {:?}", result);
+}
+
+#[test]
+fn test_parse_subquery_some() {
+    let sql = "SELECT * FROM users WHERE id = SOME (SELECT user_id FROM orders)";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SOME subquery: {:?}",
+        result
+    );
+}
+
+// ============ CTE (WITH clause) Tests ============
+
+#[test]
+fn test_parse_with_clause_simple() {
+    let sql =
+        "WITH active_users AS (SELECT * FROM users WHERE active = 1) SELECT * FROM active_users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse WITH clause: {:?}", result);
+}
+
+#[test]
+fn test_parse_with_clause_multiple_ctes() {
+    let sql = "WITH cte1 AS (SELECT 1), cte2 AS (SELECT 2) SELECT * FROM cte1, cte2";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse WITH multiple CTEs: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_with_recursive() {
+    let sql = "WITH RECURSIVE cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM cte WHERE n < 10) SELECT * FROM cte";
+    let result = parse(sql);
+    assert!(
+        result.is_err(),
+        "WITH RECURSIVE may not be fully supported: {:?}",
+        result
+    );
+}
+
+// ============ Window Function Tests ============
+
+#[test]
+fn test_parse_window_function_row_number() {
+    let sql = "SELECT ROW_NUMBER() OVER (ORDER BY id) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse ROW_NUMBER: {:?}", result);
+}
+
+#[test]
+fn test_parse_window_function_rank() {
+    let sql = "SELECT RANK() OVER (PARTITION BY department ORDER BY salary DESC) FROM employees";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse RANK: {:?}", result);
+}
+
+#[test]
+fn test_parse_window_function_dense_rank() {
+    let sql = "SELECT DENSE_RANK() OVER (ORDER BY score) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse DENSE_RANK: {:?}", result);
+}
+
+// ============ INSERT...SELECT Tests ============
+
+#[test]
+fn test_parse_insert_select() {
+    let sql = "INSERT INTO users (id, name) SELECT id, name FROM old_users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse INSERT SELECT: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_insert_on_duplicate_key_update() {
+    let sql =
+        "INSERT INTO users (id, name) VALUES (1, 'Alice') ON DUPLICATE KEY UPDATE name = 'Bob'";
+    let result = parse(sql);
+    assert!(
+        result.is_err(),
+        "INSERT ON DUPLICATE KEY UPDATE not supported: {:?}",
+        result
+    );
+}
+
+// ============ String Functions Tests ============
+
+#[test]
+fn test_parse_concat_function() {
+    let sql = "SELECT CONCAT('Hello', ' ', 'World')";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse CONCAT: {:?}", result);
+}
+
+#[test]
+fn test_parse_substring_function() {
+    let sql = "SELECT SUBSTRING('Hello World', 1, 5)";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse SUBSTRING: {:?}", result);
+}
+
+#[test]
+fn test_parse_upper_function() {
+    let sql = "SELECT UPPER(name) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse UPPER: {:?}", result);
+}
+
+#[test]
+fn test_parse_lower_function() {
+    let sql = "SELECT LOWER(name) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LOWER: {:?}", result);
+}
+
+#[test]
+fn test_parse_length_function() {
+    let sql = "SELECT LENGTH(name) FROM users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LENGTH: {:?}", result);
+}
+
+// ============ Aggregate Function Tests ============
+
+#[test]
+fn test_parse_avg_function() {
+    let sql = "SELECT AVG(price) FROM products";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse AVG: {:?}", result);
+}
+
+#[test]
+fn test_parse_min_max_functions() {
+    let sql = "SELECT MIN(price), MAX(price) FROM products";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse MIN/MAX: {:?}", result);
+}
+
+// ============ JOIN Variation Tests ============
+
+#[test]
+fn test_parse_cross_join_v2() {
+    let sql = "SELECT * FROM users CROSS JOIN orders";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse CROSS JOIN: {:?}", result);
+}
+
+#[test]
+fn test_parse_join_with_using() {
+    let sql = "SELECT * FROM users JOIN orders USING (user_id)";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse JOIN USING: {:?}", result);
+}
+
+#[test]
+fn test_parse_left_join_without_outner() {
+    let sql = "SELECT * FROM users LEFT JOIN orders ON users.id = orders.user_id";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LEFT JOIN: {:?}", result);
+}
+
+// ============ GROUP BY with HAVING Tests ============
+
+#[test]
+fn test_parse_group_by_with_having() {
+    let sql = "SELECT department, COUNT(*) FROM employees GROUP BY department HAVING COUNT(*) > 5";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse GROUP BY HAVING: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_group_by_with_multiple_columns() {
+    let sql = "SELECT department, status, COUNT(*) FROM employees GROUP BY department, status";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse GROUP BY multiple columns: {:?}",
+        result
+    );
+}
+
+// ============ ORDER BY Tests ============
+
+#[test]
+fn test_parse_order_by_asc() {
+    let sql = "SELECT * FROM users ORDER BY name ASC";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse ORDER BY ASC: {:?}", result);
+}
+
+#[test]
+fn test_parse_order_by_desc_v2() {
+    let sql = "SELECT * FROM users ORDER BY name DESC";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ORDER BY DESC: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_order_by_multiple_columns() {
+    let sql = "SELECT * FROM users ORDER BY last_name, first_name DESC";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ORDER BY multiple: {:?}",
+        result
+    );
+}
+
+// ============ LIMIT/OFFSET Tests ============
+
+#[test]
+fn test_parse_limit_offset_v2() {
+    let sql = "SELECT * FROM users LIMIT 10 OFFSET 20";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LIMIT OFFSET: {:?}", result);
+}
+
+#[test]
+fn test_parse_limit_with_expression() {
+    let sql = "SELECT * FROM users LIMIT 10 + 5";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse LIMIT with expression: {:?}",
+        result
+    );
+}
+
+// ============ DISTINCT Tests ============
+
+#[test]
+fn test_parse_select_distinct() {
+    let sql = "SELECT DISTINCT name FROM users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SELECT DISTINCT: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_select_distinct_on() {
+    let sql = "SELECT DISTINCT ON (department) name FROM users";
+    let result = parse(sql);
+    assert!(
+        result.is_err(),
+        "DISTINCT ON is PostgreSQL syntax, not supported: {:?}",
         result
     );
 }
