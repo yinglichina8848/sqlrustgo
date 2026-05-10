@@ -2202,16 +2202,65 @@ impl Parser {
             Vec::new()
         };
 
-        // Parse LIMIT clause
-        let limit = if matches!(self.current(), Some(Token::Limit)) {
+        // Parse LIMIT clause (supports MySQL's "LIMIT offset, count" syntax)
+        let mut limit: Option<u64> = None;
+        let mut offset: Option<u64> = None;
+        if matches!(self.current(), Some(Token::Limit)) {
             self.next();
             match self.current() {
                 Some(Token::NumberLiteral(n)) => {
-                    let val = n
+                    let first_val = n
                         .parse::<u64>()
                         .map_err(|e| format!("Invalid LIMIT: {}", e))?;
                     self.next();
-                    Some(val)
+                    // Check for MySQL's LIMIT offset, count syntax
+                    if matches!(self.current(), Some(Token::Comma)) {
+                        self.next();
+                        // First value is offset, now parse limit
+                        match self.current() {
+                            Some(Token::NumberLiteral(m)) => {
+                                let val = m
+                                    .parse::<u64>()
+                                    .map_err(|e| format!("Invalid LIMIT: {}", e))?;
+                                self.next();
+                                limit = Some(val);
+                                offset = Some(first_val);
+                            }
+                            Some(Token::Identifier(ref s)) => {
+                                let val = s
+                                    .parse::<u64>()
+                                    .map_err(|e| format!("Invalid LIMIT: {}", e))?;
+                                self.next();
+                                limit = Some(val);
+                                offset = Some(first_val);
+                            }
+                            _ => return Err("Expected count after comma in LIMIT".to_string()),
+                        }
+                    } else {
+                        // Standard syntax: LIMIT count [OFFSET offset]
+                        limit = Some(first_val);
+                        // Parse OFFSET clause if present
+                        if matches!(self.current(), Some(Token::Offset)) {
+                            self.next();
+                            match self.current() {
+                                Some(Token::NumberLiteral(o)) => {
+                                    let val = o
+                                        .parse::<u64>()
+                                        .map_err(|e| format!("Invalid OFFSET: {}", e))?;
+                                    self.next();
+                                    offset = Some(val);
+                                }
+                                Some(Token::Identifier(ref s)) => {
+                                    let val = s
+                                        .parse::<u64>()
+                                        .map_err(|e| format!("Invalid OFFSET: {}", e))?;
+                                    self.next();
+                                    offset = Some(val);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
                 }
                 Some(Token::Identifier(ref s)) => {
                     // Support LIMIT variable (e.g., @limit)
@@ -2219,37 +2268,11 @@ impl Parser {
                         .parse::<u64>()
                         .map_err(|e| format!("Invalid LIMIT: {}", e))?;
                     self.next();
-                    Some(val)
+                    limit = Some(val);
                 }
-                _ => None,
+                _ => {}
             }
-        } else {
-            None
-        };
-
-        // Parse OFFSET clause
-        let offset = if matches!(self.current(), Some(Token::Offset)) {
-            self.next();
-            match self.current() {
-                Some(Token::NumberLiteral(n)) => {
-                    let val = n
-                        .parse::<u64>()
-                        .map_err(|e| format!("Invalid OFFSET: {}", e))?;
-                    self.next();
-                    Some(val)
-                }
-                Some(Token::Identifier(ref s)) => {
-                    let val = s
-                        .parse::<u64>()
-                        .map_err(|e| format!("Invalid OFFSET: {}", e))?;
-                    self.next();
-                    Some(val)
-                }
-                _ => None,
-            }
-        } else {
-            None
-        };
+        }
 
         Ok(SelectStatement {
             columns,
