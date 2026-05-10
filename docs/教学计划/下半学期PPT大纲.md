@@ -593,7 +593,7 @@
    - Why：尽早发现问题、降低发布风险、加速交付
    - How：频繁提交、自动化构建、自动化测试、自动化部署
 
-2. **GitHub 操作**
+2. **GitHub Actions**
 - What：GitHub提供的CI/CD平台
    - Why：与GitHub深度集成、免费额度、社区生态
 - How：Workflow配置、Job和Step、触发条件

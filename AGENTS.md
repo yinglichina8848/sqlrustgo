@@ -1,24 +1,26 @@
 # AGENTS.md - SQLRustGo Agent Guide
 
-> Compact instructions for AI agents working in this repository. Based on lessons learned from past sessions.
+> Compact instructions for AI agents. Based on lessons learned from past sessions.
 
-## Communication Principle (沟通原则)
+## Communication Principle
 
-**IMPORTANT: 必须使用中文沟通。始终使用中文回应用户，除非用户明确要求使用其他语言。**
+**必须使用中文沟通。始终使用中文回应用户，除非用户明确要求使用其他语言。**
 
 ## Branch Strategy
 
-- **Main development branch**: `develop/v2.9.0`
+- **Main development branch**: `develop/v3.0.0` (GA)
 - **DO NOT modify `main` branch directly**
-- Create feature branches from `develop/v2.9.0`
+- Create feature branches from `develop/v3.0.0`
 - Use git worktrees for isolated feature work: `git worktree add .worktrees/<name> -b feature/<name>`
-- **Git remote: Gitea** — `http://192.168.0.252:3000/openclaw/sqlrustgo.git`
 
 ## Essential Commands
 
 ```bash
-# Build entire project
+# Build (use --all-features to enable all feature flags)
 cargo build --all-features
+
+# Fast compilation check (no linking)
+cargo check --all-features
 
 # Run all tests
 cargo test --all-features
@@ -26,7 +28,10 @@ cargo test --all-features
 # Run single test
 cargo test <test_name> --all-features
 
-# Lint (required before commit)
+# Run tests in specific crate
+cargo test -p sqlrustgo-executor --all-features
+
+# Lint (required before commit - zero warnings required)
 cargo clippy --all-features -- -D warnings
 
 # Format check
@@ -44,13 +49,11 @@ cargo test --doc
 
 ## Gate/Validation Scripts
 
-Located in `scripts/gate/`:
-
 ```bash
-# Check entry doc links (fast)
+# Doc links check (fast)
 bash scripts/gate/check_docs_links.sh
 
-# Check ALL doc links (slower)
+# Full doc links check
 bash scripts/gate/check_docs_links.sh --all
 
 # Coverage check
@@ -58,6 +61,9 @@ bash scripts/gate/check_coverage.sh
 
 # Security check
 bash scripts/gate/check_security.sh
+
+# L0 smoke test
+bash scripts/gate/check_l0_smoke.sh
 ```
 
 ## Architecture
@@ -66,18 +72,20 @@ bash scripts/gate/check_security.sh
 ┌─────────────────────────────────────┐
 │           main.rs (REPL)             │
 ├─────────────────────────────────────┤
-│           executor/                 │  ← Query execution
-├─────────────────────────────────────┤
-│           parser/                    │  ← SQL → AST
+│           executor/                  │  ← Query execution
+│           parser/                   │  ← SQL → AST
 │           lexer/                    │  ← SQL → Tokens
 ├─────────────────────────────────────┤
-│           storage/                   │  ← Page, BufferPool, B+ Tree
+│           planner/                   │  ← AST → Logical plan
+│           optimizer/                 │  ← Query optimization (CBO)
 ├─────────────────────────────────────┤
-│         transaction/                 │  ← WAL, TxManager
+│           storage/                  │  ← Page, BufferPool, B+ Tree
 ├─────────────────────────────────────┤
-│           network/                   │  ← TCP server/client
+│         transaction/                │  ← WAL, MVCC, TxManager
 ├─────────────────────────────────────┤
-│           types/                     │  ← Value, SqlError
+│           network/                   │  ← TCP server/MySQL protocol
+├─────────────────────────────────────┤
+│           types/                    │  ← Value, SqlError
 └─────────────────────────────────────┘
 ```
 
@@ -86,213 +94,166 @@ bash scripts/gate/check_security.sh
 Key crates in `crates/`:
 - `parser`, `planner`, `optimizer`, `executor` - Query processing
 - `storage` - Buffer pool, file storage, B+ tree, columnar storage
-- `transaction` - WAL, MVCC, transaction manager
+- `transaction` - WAL, MVCC (Snapshot Isolation), transaction manager
 - `network` - TCP server with MySQL-style protocol
 - `vector`, `graph` - Advanced storage (vector index, graph store)
 - `catalog`, `types` - Schema and type system
+- `server` - Database server entry point
 
 ## Important Constraints
 
-1. **Clippy must pass**: `cargo clippy --all-features -- -D warnings` (no warnings allowed)
+1. **Clippy must pass**: `cargo clippy --all-features -- -D warnings` (zero warnings allowed)
 2. **Format must pass**: `cargo fmt --check --all`
 3. **Doc links must be valid**: Run `check_docs_links.sh` before committing doc changes
 4. **Test memory limit**: 8GB per test (configured in Cargo.toml)
 5. **Rust edition**: 2021 with Tokio async runtime
+6. **Workspace packages**: Use `-p <package>` flag for single crate operations
 
 ## Common Pitfalls
 
 | Issue | Prevention |
 |-------|------------|
-| Broken doc links | Always run `scripts/gate/check_docs_links.sh` after modifying markdown |
+| Broken doc links | Run `scripts/gate/check_docs_links.sh` after modifying markdown |
 | Missing workspace deps | Use `-p <package>` flag for single crate operations |
-| Slow builds | Use `cargo check` for fast compilation checks |
-| Missing features | Use `--all-features` to enable all feature flags |
+| Slow builds | Use `cargo check --all-features` for fast compilation checks |
+| Missing features | Use `--all-features` flag for all cargo commands |
+| Wrong branch | Branch is `develop/v3.0.0`, not `develop/v2.9.0` |
 
 ## Existing Instruction Files
 
-- `.claude/CLAUDE.md` - Claude Code specific guidance
-- `AGENT.md` - Issue-specific guide (DiskGraphStore implementation)
+- `.claude/CLAUDE.md` - Claude Code specific guidance (includes GitNexus)
 - `ARCHITECTURE_RULES.md` - Architecture decisions
 - `BRANCH_GOVERNANCE.md` - Branch and release workflow
-- `docs/governance/ISSUE_CLOSING_VERIFICATION.md` - **Issue 关闭验证流程 (强制执行)**
+- `docs/governance/ISSUE_CLOSING_VERIFICATION.md` - Issue closing verification
 
-## Issue 关闭规则 (强制)
+## Issue 关闭规则
 
 **禁止手动关闭没有 PR 合并的 Issue。**
 
 关闭 Issue 前必须验证：
 ```bash
-# 1. 检查是否有 PR 关闭该 Issue
 gh issue view <id> --json closedByPullRequestsReferences
-
 # 结果非空 → 可以关闭
-# 结果为空 → 禁止手动关闭，除非任务取消
+# 结果为空 → 禁止手动关闭
 ```
 
-详见: `docs/governance/ISSUE_CLOSING_VERIFICATION.md`
+## Git Remote
 
-## Gitea DevStack Remote
+**Primary remote: Gitea** — `http://192.168.0.252:3000/openclaw/sqlrustgo.git`
 
-本项目使用自托管 Gitea，CI/CD 和代码托管均在此。
+| Remote | Purpose |
+|--------|---------|
+| origin | Gitea (primary) |
+| github | GitHub mirror (read-only) |
+| gitee | Gitee mirror (read-only) |
+| gitcode | GitCode mirror (read-only) |
 
-### Git Remote (SSH)
+## Testing Notes
 
-```bash
-git remote set-url origin git@gitea-devstack:openclaw/sqlrustgo.git
-```
-
-SSH 别名 `gitea-devstack` 已配置在 `~/.ssh/config`（指向 `192.168.0.252:222`）。
-
-### Git 身份
-
-```bash
-git config user.name "openclaw"
-git config user.email "openclaw@gaoyuanyiyao.com"
-git config commit.gpgsign true   # 用 ~/.ssh/id_ed25519_openheart 签名
-```
-
-### 本机 SSH Key
-
-- 私钥: `~/.ssh/id_ed25519_openheart`
-- 公钥已绑定到 openclaw 用户（key ID: `opencode-agent (openheart key)`）
-- Gitea SSH 端口: **222**（不是 22）
-- 测试: `ssh -T gitea-devstack`
-
-### 测试连通性
-
-```bash
-# SSH 认证测试
-ssh -T gitea-devstack
-
-# Git push 测试
-git push origin develop/v2.8.0
-```
-
-### Gitea Web UI
-
-- URL: http://192.168.0.252:3000/openclaw/sqlrustgo
-- 用户: openclaw / details8848
-
-## Test Execution Notes
-
-- Integration tests are in `tests/` directory
+- Integration tests in `tests/` directory
 - E2E tests in `tests/e2e/`
 - Crate-specific tests in each crate's `tests/` or `src/`
 - Use `--test <test_name>` to run specific test files
+- Test memory limit: 8GB (configured in `Cargo.toml`)
 
-<<<<<<< Updated upstream
-## Gitea Identity (Z6G4/250)
+## Version
 
-本机使用独立的 Gitea 账户：
-- 用户: hermes-z6g4
-- SSH 密钥: ~/.ssh/id_ed25519_z6g4
-- SSH 别名: gitea-z6g4 (port 222)
-- Git email: hermes-z6g4@gaoyuanyiyao.com
-=======
----
-
-## Gitea DevStack Remote
-
-本项目使用自托管 Gitea，CI/CD 和代码托管均在此。
-
-### Git Remote (SSH)
-
-```bash
-# 方式 A：SSH 别名（推荐）
-git remote set-url origin git@gitea-macmini:openclaw/sqlrustgo.git
-
-# 方式 B：完整 SSH URL
-git remote set-url origin ssh://git@192.168.0.252:222/openclaw/sqlrustgo.git
-```
-
-### Git 身份
-
-```bash
-git config user.name "yinglichina8848"
-git config user.email "openheart@gaoyuanyiyao.com"  # pre-commit 强制
-git config commit.gpgsign false
-```
-
-### Gitea SSH Key
-
-- 私钥: `~/.ssh/id_ed25519_macmini`
-- 公钥已绑定到 hermes-macmini 用户（Key ID 4: "Mac Mini Hermes Agent"）
-- Gitea SSH 端口: **222**（不是 22）
-
-### Gitea PAT
-
-```bash
-# API 操作 Token（read/write）
-cat ~/.ssh/openclaw-gitea-write.PAT
-
-# Hermes CLI 只读 Token
-cat ~/.ssh/hermes-cli-gitea.PAT
-```
-
-### 测试连通性
-
-```bash
-# 1. SSH 认证测试
-ssh -p 222 -i ~/.ssh/id_ed25519_macmini git@192.168.0.252
-
-# 2. Git ls-remote 测试
-git ls-remote origin refs/heads/develop/v2.8.0
-
-# 3. Gitea Web UI
-open http://192.168.0.252:3000/openclaw/sqlrustgo
-```
-
-### 相关 Wiki 页面
-
-- [Git Remote Configuration](http://192.168.0.252:3000/openclaw/sqlrustgo/wiki/Git-Remote-Configuration)
-- [Multi Agent Orchestration](http://192.168.0.252:3000/openclaw/sqlrustgo/wiki/Multi-Agent-Orchestration-2026-04)
-- [Gitea Infrastructure](http://192.168.0.252:3000/openclaw/sqlrustgo/wiki/Gitea-Infrastructure)
+Current: **v3.0.0 GA** (Enterprise Resilience)
+- Version file: `VERSION`
+- Current branch: `develop/v3.0.0`
+- Previous stable: v2.9.0 (RC)
 
 ---
 
-提醒：pre-commit hook 强制邮箱为 openheart@gaoyuanyiyao.com，在本地 git config 中设置好。
->>>>>>> Stashed changes
+## LLM-Wiki 与 GBrain 知识管理
 
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+### 外部知识库
 
-This project is indexed by GitNexus as **sqlrustgo** (54499 symbols, 83406 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+| 资源 | 地址 | 用途 |
+|------|------|------|
+| **LLM-Wiki** | `ssh://git@192.168.0.252:222/openclaw/sqlrustgo-wiki.git` | 项目文档、架构决策记录 |
+| **GBrain** | `ssh://git@192.168.0.252:222/openclaw/ai-brain.git` | 可检索知识图谱、规则、模式库 |
 
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+### 本地知识库结构
 
-## Always Do
+```
+~/wiki/gbrain/sqlrustgo/    # GBrain 本地克隆（从 ai-brain.git 克隆）
+├── rules/                   # 治理规则、编码规范
+├── patterns/                # 重复问题模式（如 Gitea Actions Cache 卡死）
+├── architecture/            # 架构决策记录 (ADR)
+└── decisions/               # 具体决策备忘
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+docs/wiki/                   # QMD Wiki（结构化流程文档）
+```
 
-## Never Do
+### 知识沉淀流程
 
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+每次完成复杂任务后：
+1. 首次解决某类问题 → 创建 GBrain Pattern
+2. 学到项目规则 → 更新 Hermes Memory
+3. 流程改进 → 更新 ADR
+4. 对外接口变更 → 更新 GitHub Wiki
 
-## Resources
+---
 
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/sqlrustgo/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/sqlrustgo/clusters` | All functional areas |
-| `gitnexus://repo/sqlrustgo/processes` | All execution flows |
-| `gitnexus://repo/sqlrustgo/process/{name}` | Step-by-step execution trace |
+## Harness Engineering 体系
 
-## CLI
+### Gate 脚本 (`scripts/gate/`)
 
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| 脚本 | 用途 |
+|------|------|
+| `check_beta_v300.sh` | v3.0.0 Beta Gate |
+| `check_rc_v300.sh` | v3.0.0 RC Gate |
+| `check_ga_v300.sh` | v3.0.0 GA Gate |
+| `check_coverage.sh` | 覆盖率检查 (≥75%/85%) |
+| `check_security.sh` | 安全扫描 |
+| `check_sql_compat.sh` | SQL 兼容性检查 |
+| `check_l0_smoke.sh` | L0 smoke 测试 |
+| `gate_lifecycle_check.sh` | 生命周期追踪 |
 
-<!-- gitnexus:end -->
+### Beta Gate 要求 (B1-B9)
+
+| 检查项 | 要求 |
+|--------|------|
+| B1 Build | 编译通过 |
+| B2 Test ≥90% | L1 core crates 通过率 ≥90% |
+| B3 Clippy | 零警告 |
+| B4 Format | `cargo fmt --check` 通过 |
+| B5 Coverage ≥75% | 覆盖率 ≥75% (Beta) / 85% (GA) |
+| B6 Security | 无已知漏洞 |
+| B7 SQL Compat | SQL Corpus ≥80% |
+| B8 TPC-H SF=1 | TPC-H 基准可运行 |
+| B9 Proof | 证明文件存在 |
+
+### CI/CD 基础设施
+
+- **Runner**: Nomad + Gitea Actions
+- **Runner 标签**: `hp-z6g4`, `z440`
+- **SSH 用户**: `openclaw`（不是 `admin`）
+- **验证命令**: `ssh openclaw@192.168.0.252 "nomad node status"`
+
+---
+
+## 多平台协作架构
+
+### 三平台角色
+
+| 平台 | 角色 | 主要职责 |
+|------|------|---------|
+| **Mac Mini (Brain)** | Orchestrator | 任务编排、PR 合并、知识管理 |
+| **Z6G4** | Heavy Worker | 大规模编译、测试、性能基准 |
+| **ai@250** | Light Worker | 辅助编译、文档生成 |
+
+### Git 身份要求
+
+允许的 Email（pre-commit hook 强制检查）：
+- `openheart@gaoyuanyiyao.com`
+- `hermes-macmini@gaoyuanyiyao.com`
+- `hermes-z6g4@gaoyuanyiyao.com`
+- `ci@example.com` (CI Bot)
+
+### 分支保护规则
+
+- `develop/v3.0.0`: 禁止直接推送，必须通过 PR
+- 使用 `force_merge=true` 绕过保护合并（需 API）
+

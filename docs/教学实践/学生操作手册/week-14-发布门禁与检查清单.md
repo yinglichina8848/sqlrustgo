@@ -170,8 +170,8 @@ git commit -m "docs: add v2.6.0 release gate checklist"
 #### 4.1 确保代码最新
 
 ```bash
-git checkout develop/v2.6.0
-git pull origin develop/v2.6.0
+git checkout develop/v3.0.0
+git pull origin develop/v3.0.0
 ```
 
 #### 4.2 运行完整门禁

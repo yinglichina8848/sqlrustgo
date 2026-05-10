@@ -30,8 +30,8 @@
 #### 1.1 确保代码最新
 
 ```bash
-git checkout develop/v2.6.0
-git pull origin develop/v2.6.0
+git checkout develop/v3.0.0
+git pull origin develop/v3.0.0
 ```
 
 #### 1.2 运行所有门禁检查
@@ -98,7 +98,7 @@ git show v1.0.0
 2. 点击 "Draft a new release"
 3. 填写Release信息：
    - Tag: v1.0.0
-   - Target: main 或 develop/v2.6.0
+   - Target: main 或 develop/v3.0.0
    - Title: SQLRustGo v1.0.0 - 首个稳定版本
 
 #### 3.2 编写Release Notes
@@ -192,7 +192,7 @@ SQLRustGo v1.0.0 是首个稳定版本，标志着项目从开发阶段进入生
 ```bash
 git add docs/releases/v2.6.0/
 git commit -m "docs: add v1.0.0 release notes"
-git push origin develop/v2.6.0
+git push origin develop/v3.0.0
 ```
 
 #### ✅ 检查点4：保存Release Notes

@@ -40,7 +40,7 @@
 | Rust工具链 | 1.75+ |
 | 开发工具 | TRAE IDE / VS Code |
 | Git | 最新版本 |
-| 项目代码 | SQLRustGo develop/v2.6.0分支 |
+| 项目代码 | SQLRustGo develop/v3.0.0分支 |
 
 ---
 
@@ -52,8 +52,8 @@
 
 ```bash
 # 确保在开发分支上
-git checkout develop/v2.6.0
-git pull origin develop/v2.6.0
+git checkout develop/v3.0.0
+git pull origin develop/v3.0.0
 ```
 
 #### 1.2 运行所有测试
@@ -238,7 +238,7 @@ cargo fmt --check --all
 
 ```bash
 git status
-git pull origin develop/v2.6.0
+git pull origin develop/v3.0.0
 ```
 
 #### 5.2 创建Alpha版本标签

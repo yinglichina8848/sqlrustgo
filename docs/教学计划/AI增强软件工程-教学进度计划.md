@@ -625,9 +625,9 @@
 - 项目文档: docs/AI增强软件工程/
 
 ### AI 工具
-- 带来IDE
-——克劳德·代码
-- GitHub 副驾驶
+- TRAE IDE
+——Claude Code
+- GitHub Copilot
 
 ---
 
