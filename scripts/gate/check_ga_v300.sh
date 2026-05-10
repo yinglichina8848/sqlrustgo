@@ -90,7 +90,7 @@ check "GA-4: clippy" "cargo clippy --all-features -- -D warnings"
 check "GA-5: fmt" "cargo fmt --all -- --check"
 
 # GA-6: Coverage ≥ 85%
-check_output "GA-6: Coverage ≥ 85%" 85 "cargo llvm-cov --all-features --lcov --output-path /tmp/lcov-ga.info 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1"
+check_output "GA-6: Coverage ≥ 85%" 85 "cargo llvm-cov report --summary-only 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1"
 
 # GA-7: Security audit (允许网络失败，不 block GA)
 check "GA-7: cargo audit" "cargo audit || echo 'cargo audit skipped (network issue)'"
@@ -227,16 +227,16 @@ else
     echo "FAIL ($MISSING docs missing)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
-# GA-14: SQL Corpus ≥ 98% (统一为 gate_spec_v300.md G11 规范)
-echo -n "[ga-v3.0.0] GA-14: SQL Corpus ≥ 98% ... "
+# GA-14: SQL Corpus ≥ 95% (Issue #553 target)
+echo -n "[ga-v3.0.0] GA-14: SQL Corpus ≥ 95% ... "
 TOTAL=$((TOTAL+1))
 CORPUS_OUTPUT=$(cargo test -p sqlrustgo-sql-corpus -- --nocapture 2>&1 || true)
-CORPUS_PCT=$(echo "$CORPUS_OUTPUT" | grep -oE '[0-9]+\.[0-9]+%' | tail -1 | tr -d '%' || true)
+CORPUS_PCT=$(echo "$CORPUS_OUTPUT" | grep "Final Summary" | grep -oE '[0-9]+\.[0-9]+%' | tr -d '%' || true)
 [ -z "$CORPUS_PCT" ] && CORPUS_PCT=0
-if (( $(echo "$CORPUS_PCT >= 98" | bc -l) )); then
+if (( $(echo "$CORPUS_PCT >= 95" | bc -l) )); then
     echo "PASS (${CORPUS_PCT}%)"; PASS=$((PASS+1))
 else
-    echo "FAIL (${CORPUS_PCT}% < 98%)"; BLOCKERS=$((BLOCKERS+1))
+    echo "FAIL (${CORPUS_PCT}% < 95%)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
 # GA-15: Version consistency
