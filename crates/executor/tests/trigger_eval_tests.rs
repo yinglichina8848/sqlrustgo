@@ -134,7 +134,7 @@ fn test_expression_to_value_literal_float() {
     let col_names = vec!["id".to_string()];
     let expr = Expression::Literal("3.14".to_string());
     let result = expression_to_value(&expr, &eval_ctx, Some(&col_names));
-    assert_eq!(result, Value::Float(std::f64::consts::PI));
+    assert_eq!(result, Value::Float(3.14));
 }
 
 #[test]
