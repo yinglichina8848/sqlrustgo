@@ -543,6 +543,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::Show(ref show) => self.execute_show(show),
             Statement::ShowRoles => self.execute_show_roles(),
             Statement::ShowGrantsFor(ref user) => self.execute_show_grants_for(user),
+            Statement::Describe(ref desc) => self.execute_describe(&desc.table),
             Statement::AlterTable(ref alter) => self.execute_alter_table(alter),
             Statement::Explain(ref explain) => self.execute_explain(explain),
             Statement::WithSelect(ref ws) => {
@@ -4422,5 +4423,42 @@ mod tests {
         assert_eq!(result.rows.len(), 1);
         assert_eq!(result.rows[0][0], Value::Integer(42));
         assert_eq!(result.rows[0][1], Value::Text("user42".to_string()));
+    }
+
+    #[test]
+    fn test_describe_table() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
+            .unwrap();
+
+        // DESCRIBE should work same as DESCRIBE
+        let result = engine.execute("DESCRIBE users").unwrap();
+        assert_eq!(result.rows.len(), 3);
+
+        // First column: id, INTEGER, NO, PRI
+        assert_eq!(result.rows[0][0], Value::Text("id".to_string()));
+        assert_eq!(result.rows[0][1], Value::Text("INTEGER".to_string()));
+        assert_eq!(result.rows[0][2], Value::Text("NO".to_string()));
+        assert_eq!(result.rows[0][3], Value::Text("PRI".to_string()));
+
+        // Second column: name, TEXT, YES, (empty)
+        assert_eq!(result.rows[1][0], Value::Text("name".to_string()));
+        assert_eq!(result.rows[1][1], Value::Text("TEXT".to_string()));
+        assert_eq!(result.rows[1][2], Value::Text("YES".to_string()));
+        assert_eq!(result.rows[1][3], Value::Text("".to_string()));
+
+        // Third column: age, INTEGER, YES, (empty)
+        assert_eq!(result.rows[2][0], Value::Text("age".to_string()));
+        assert_eq!(result.rows[2][1], Value::Text("INTEGER".to_string()));
+        assert_eq!(result.rows[2][2], Value::Text("YES".to_string()));
+        assert_eq!(result.rows[2][3], Value::Text("".to_string()));
+
+        // DESC shorthand should also work
+        let result = engine.execute("DESC users").unwrap();
+        assert_eq!(result.rows.len(), 3);
+        assert_eq!(result.rows[0][0], Value::Text("id".to_string()));
     }
 }
