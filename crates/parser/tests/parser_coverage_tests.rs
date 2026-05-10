@@ -2120,3 +2120,56 @@ fn test_parse_select_distinct_on() {
         result
     );
 }
+
+// ============ Bitwise Shift Operator Tests ============
+
+#[test]
+fn test_parse_left_shift() {
+    let sql = "SELECT 5 << 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse LEFT SHIFT: {:?}", result);
+}
+
+#[test]
+fn test_parse_right_shift() {
+    let sql = "SELECT 5 >> 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse RIGHT SHIFT: {:?}", result);
+}
+
+#[test]
+fn test_parse_shift_in_expression() {
+    let sql = "SELECT id << 2 FROM users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse shift in expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_shift_with_addition() {
+    // Addition has higher precedence than shift
+    // So a + b << c should parse as (a + b) << c
+    let sql = "SELECT 1 + 2 << 3";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse shift with addition: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_shift_with_multiplication() {
+    // Multiplication has higher precedence than shift
+    // So a * b << c should parse as (a * b) << c
+    let sql = "SELECT 2 * 3 << 4";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse shift with multiplication: {:?}",
+        result
+    );
+}

@@ -16,13 +16,14 @@ use sqlrustgo_executor::trigger::{
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, CallStatement,
-    CreateIndexStatement, CreateProcedureStatement, CreateRoleStatement, CreateTableStatement,
-    CreateTriggerStatement, DropRoleStatement, DropTableStatement, ExplainStatement,
-    GrantRoleStatement, GrantStatement, InsertStatement, ObjectType as ParserObjectType,
-    OrderByExpression, Privilege as ParserPrivilege, RevokeRoleStatement, RevokeStatement,
+    CheckOption, CheckStatement, CreateIndexStatement, CreateProcedureStatement, CreateRoleStatement,
+    CreateTableStatement, CreateTriggerStatement, DropRoleStatement, DropTableStatement,
+    ExplainStatement, GrantRoleStatement, GrantStatement, InsertStatement,
+    ObjectType as ParserObjectType, OptimizeStatement, OrderByExpression,
+    Privilege as ParserPrivilege, RepairStatement, RevokeRoleStatement, RevokeStatement,
     SelectStatement, SetRoleStatement, ShowStatement, StoredProcParam as ParserStoredProcParam,
     StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
-    TruncateStatement,
+    TruncateStatement, VacuumMode, VacuumStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::JoinType; // For join type matching
@@ -3192,7 +3193,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         VacuumMode::Analyze => "ANALYZE",
                     };
                     rows.push(vec![
-                        Value::Text(table_name),
+                        Value::Text(table_name.to_string()),
                         Value::Text("vacuum".to_string()),
                         Value::Text("OK".to_string()),
                         Value::Text(format!("{} mode completed", mode_str)),

@@ -338,6 +338,7 @@ fn execute_create_table(
             data_type: col.data_type.clone(),
             nullable: col.nullable,
             primary_key: false,
+            auto_increment: col.auto_increment,
         })
         .collect();
 
