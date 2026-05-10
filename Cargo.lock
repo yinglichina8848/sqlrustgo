@@ -5004,6 +5004,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "clap 4.6.1",
+ "mysql",
  "rand 0.8.6",
  "rcgen",
  "rustls",
