@@ -1138,3 +1138,164 @@ fn test_parse_boolean_in_where() {
     // Parser doesn't support TRUE boolean literal
     assert!(result.is_err(), "TRUE not supported: {:?}", result);
 }
+
+// ============ ALTER TABLE DROP COLUMN ============
+
+#[test]
+fn test_parse_alter_table_drop_column() {
+    let sql = "ALTER TABLE users DROP COLUMN email";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ALTER TABLE DROP COLUMN: {:?}",
+        result
+    );
+}
+
+// ============ CREATE VIEW ============
+
+#[test]
+fn test_parse_create_view() {
+    let sql = "CREATE VIEW active_users AS SELECT * FROM users WHERE active = 1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse CREATE VIEW: {:?}", result);
+}
+
+#[test]
+fn test_parse_create_view_with_join() {
+    let sql = "CREATE VIEW user_orders AS SELECT u.name, o.total FROM users u JOIN orders o ON u.id = o.user_id";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse CREATE VIEW with JOIN: {:?}",
+        result
+    );
+}
+
+// ============ DROP VIEW ============
+
+#[test]
+fn test_parse_drop_view() {
+    let sql = "DROP VIEW active_users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse DROP VIEW: {:?}", result);
+}
+
+#[test]
+fn test_parse_drop_view_if_exists() {
+    let sql = "DROP VIEW IF EXISTS old_view";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse DROP VIEW IF EXISTS: {:?}",
+        result
+    );
+}
+
+// ============ DROP INDEX ============
+
+#[test]
+fn test_parse_drop_index() {
+    let sql = "DROP INDEX idx_user_email ON users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse DROP INDEX: {:?}", result);
+}
+
+#[test]
+fn test_parse_drop_index_if_exists() {
+    let sql = "DROP INDEX IF EXISTS idx_old ON users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse DROP INDEX IF EXISTS: {:?}",
+        result
+    );
+}
+
+// ============ ANALYZE ============
+
+#[test]
+fn test_parse_analyze_table() {
+    let sql = "ANALYZE TABLE users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse ANALYZE TABLE: {:?}",
+        result
+    );
+}
+
+// ============ CHECK ============
+
+#[test]
+fn test_parse_check_table() {
+    let sql = "CHECK TABLE users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse CHECK TABLE: {:?}", result);
+}
+
+// ============ OPTIMIZE ============
+
+#[test]
+fn test_parse_optimize_table() {
+    let sql = "OPTIMIZE TABLE users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse OPTIMIZE TABLE: {:?}",
+        result
+    );
+}
+
+// ============ VACUUM ============
+
+#[test]
+fn test_parse_vacuum_table() {
+    let sql = "VACUUM TABLE users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse VACUUM TABLE: {:?}", result);
+}
+
+// ============ REPAIR ============
+
+#[test]
+fn test_parse_repair_table() {
+    let sql = "REPAIR TABLE users";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse REPAIR TABLE: {:?}", result);
+}
+
+// ============ SHOW GRANTS FOR ============
+
+#[test]
+fn test_parse_show_grants_for() {
+    let sql = "SHOW GRANTS FOR user1";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SHOW GRANTS FOR: {:?}",
+        result
+    );
+}
+
+// ============ REPLACE INTO ============
+
+#[test]
+fn test_parse_replace_into_values() {
+    let sql = "REPLACE INTO users (id, name) VALUES (1, 'Alice')";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse REPLACE INTO: {:?}", result);
+}
+
+// ============ CREATE TABLE WITH KEY ============
+
+#[test]
+fn test_parse_create_table_with_key() {
+    let sql = "CREATE TABLE t (id INT, name TEXT, KEY idx_name (name))";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse CREATE TABLE WITH KEY: {:?}",
+        result
+    );
+}
