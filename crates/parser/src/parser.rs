@@ -37,6 +37,8 @@ pub enum Statement {
     Optimize(OptimizeStatement),
     Vacuum(VacuumStatement),
     Repair(RepairStatement),
+    Backup(BackupStatement),
+    Restore(RestoreStatement),
     WithSelect(WithSelect),
     AlterTable(AlterTableStatement),
     Call(CallStatement),
