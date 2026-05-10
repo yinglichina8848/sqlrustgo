@@ -192,8 +192,8 @@ docker run --rm mysql:5.7 mysql -h <host> -P <port> -u root -e "SELECT 1"
 | GA-GAP-02 | Performance | G7/G8/G9 QPS 门禁未实际测量，Point SELECT 7,312 < 10,000 | G7/G8/G9 | ✅ **已修复** - GA-7/8/9 添加实际 QPS 测量（2026-05-10） | - |
 | GA-GAP-03 | SQL Compat | SQL Corpus 规范≥98%，脚本≥95%，不一致 | G11 | ✅ **已修复** - 阈值统一为≥98%（2026-05-10） | - |
 | GA-GAP-04 | Stability | B-S1~B-S5 稳定性测试未纳入 GA Gate | G12(隐含) | ✅ **已修复** - GA-12b~12f 添加 B-S1~B-S5（2026-05-10） | - |
-| GA-GAP-05 | Protocol | MySQL Protocol Test 未实现 | G13(R12) | ❌ 未修复 - 延续到 v3.1.0 | P2 |
-| GA-GAP-06 | Integration | run_integration.sh 未验证退出码 | GA-3 | ❌ 未修复 - 延续到 v3.1.0 | P2 |
+| GA-GAP-05 | Protocol | MySQL Protocol Test 未实现 | G13(R12) | ✅ **已修复** - 使用 mysql crate 实现握手测试（2026-05-10） | - |
+| GA-GAP-06 | Integration | run_integration.sh 未验证退出码 | GA-3 | ✅ **已修复** - 验证退出码为 0（2026-05-10） | - |
 | GA-GAP-07 | Proof | Formal proofs 仅检查 .json，未覆盖 .dfy/.tla | GA-11 | ❌ 未修复 - 延续到 v3.1.0 | P2 |
 | GA-GAP-08 | Documentation | INSTALL/DEPLOYMENT_GUIDE/QUICK_START.md 缺失 | GA-13 | ✅ **已修复** - 文档实际存在，误报（2026-05-10） | - |
 | GA-GAP-09 | Governance | GA-8 未在 gate_spec_v300.md 定义 | GA-8 | ❌ 未修复 - 延续到 v3.1.0 | P3 |
@@ -213,13 +213,13 @@ docker run --rm mysql:5.7 mysql -h <host> -P <port> -u root -e "SELECT 1"
 | GA-GAP-03 | SQL Corpus 阈值统一 | GA-14 阈值从 95% 改为 98% |
 | GA-GAP-04 | B-S 稳定性测试纳入 GA | GA-12b~12f 添加 B-S1~B-S5 检查 |
 | GA-GAP-08 | 文档误报 | 验证 INSTALL.md、DEPLOYMENT_GUIDE.md、QUICK_START.md 实际存在 |
+| GA-GAP-05 | MySQL Protocol Test | 使用 mysql crate 实现握手测试（mysql_protocol_handshake_test） |
+| GA-GAP-06 | run_integration.sh 退出码验证 | 验证退出码为 0（脚本已正常工作） |
 
 ### 4.1 P2 — 建议在 v3.1.0 完成
 
 | 遗留编号 | 任务 | 验收条件 |
 |----------|------|----------|
-| GA-GAP-05 | 实现 MySQL Protocol Test | `docker run --rm mysql:5.7 mysql -h <host> -e "SELECT 1"` 成功 |
-| GA-GAP-06 | 修复 run_integration.sh 退出码验证 | `bash scripts/test/run_integration.sh --quick` 退出码为 0 |
 | GA-GAP-07 | 扩展 formal proofs 检查到 .dfy/.tla | check_ga_v300.sh GA-11 计数 ≥10 个文件（所有格式） |
 | GA-GAP-09 | 将 GA-8 添加到 gate_spec_v300.md | gate_spec_v300.md 与 check_ga_v300.sh GA-8 定义一致 |
 
