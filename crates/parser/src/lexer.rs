@@ -190,7 +190,10 @@ impl<'a> Lexer<'a> {
                 }
             }
             '>' => {
-                if self.input[self.position..].starts_with(">=") {
+                if self.input[self.position..].starts_with(">>") {
+                    self.position += 2;
+                    Token::RShift
+                } else if self.input[self.position..].starts_with(">=") {
                     self.position += 2;
                     Token::GreaterEqual
                 } else {
@@ -199,7 +202,10 @@ impl<'a> Lexer<'a> {
                 }
             }
             '<' => {
-                if self.input[self.position..].starts_with("<=") {
+                if self.input[self.position..].starts_with("<<") {
+                    self.position += 2;
+                    Token::LShift
+                } else if self.input[self.position..].starts_with("<=") {
                     self.position += 2;
                     Token::LessEqual
                 } else if self.input[self.position..].starts_with("<>") {

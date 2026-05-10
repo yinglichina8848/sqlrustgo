@@ -69,6 +69,7 @@ impl SimpleExecutor {
                             data_type: c.data_type,
                             nullable: c.nullable,
                             primary_key: c.primary_key,
+                            auto_increment: c.auto_increment,
                         })
                         .collect(),
                     foreign_keys: vec![],
@@ -199,6 +200,7 @@ impl SimpleExecutor {
                             data_type: data_type.clone(),
                             nullable: *nullable,
                             primary_key: false,
+                            auto_increment: false,
                         };
                         self.storage
                             .add_column(&alter.table_name, col)
@@ -593,6 +595,7 @@ impl SimpleExecutor {
                         data_type: "TEXT".to_string(),
                         nullable: true,
                         primary_key: false,
+                        auto_increment: false,
                     })
                     .collect();
                 let table_info = TableInfo {

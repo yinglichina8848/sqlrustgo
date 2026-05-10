@@ -1833,12 +1833,67 @@ impl Parser {
                 }
                 // Handle NumberLiteral in SELECT (e.g., SELECT 123, SELECT 3.14)
                 Some(Token::NumberLiteral(ref n)) => {
-                    columns.push(SelectColumn {
-                        name: n.to_string(),
-                        alias: None,
-                        expression: Some(Expression::Literal(n.to_string())),
-                    });
-                    self.next();
+                    let is_operator = matches!(self.peek(), Some(Token::Plus))
+                        || matches!(self.peek(), Some(Token::Minus))
+                        || matches!(self.peek(), Some(Token::Star))
+                        || matches!(self.peek(), Some(Token::Slash))
+                        || matches!(self.peek(), Some(Token::Percent))
+                        || matches!(self.peek(), Some(Token::Equal))
+                        || matches!(self.peek(), Some(Token::NotEqual))
+                        || matches!(self.peek(), Some(Token::Greater))
+                        || matches!(self.peek(), Some(Token::Less))
+                        || matches!(self.peek(), Some(Token::GreaterEqual))
+                        || matches!(self.peek(), Some(Token::LessEqual))
+                        || matches!(self.peek(), Some(Token::LShift))
+                        || matches!(self.peek(), Some(Token::RShift));
+                    if is_operator {
+                        let left = Expression::Literal(n.to_string());
+                        self.next();
+                        let op = match self.current() {
+                            Some(Token::Plus) => "+",
+                            Some(Token::Minus) => "-",
+                            Some(Token::Star) => "*",
+                            Some(Token::Slash) => "/",
+                            Some(Token::Percent) => "%",
+                            Some(Token::Equal) => "=",
+                            Some(Token::NotEqual) => "<>",
+                            Some(Token::Greater) => ">",
+                            Some(Token::Less) => "<",
+                            Some(Token::GreaterEqual) => ">=",
+                            Some(Token::LessEqual) => "<=",
+                            Some(Token::LShift) => "<<",
+                            Some(Token::RShift) => ">>",
+                            _ => return Err("Expected operator".to_string()),
+                        };
+                        self.next();
+                        let right = self.parse_expression()?;
+                        let expr = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+                        let alias = if matches!(self.current(), Some(Token::As)) {
+                            self.next();
+                            match self.current() {
+                                Some(Token::Identifier(name)) => {
+                                    let alias_name = name.clone();
+                                    self.next();
+                                    Some(alias_name)
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
+                        columns.push(SelectColumn {
+                            name: format!("{:?}", expr),
+                            alias,
+                            expression: Some(expr),
+                        });
+                    } else {
+                        columns.push(SelectColumn {
+                            name: n.to_string(),
+                            alias: None,
+                            expression: Some(Expression::Literal(n.to_string())),
+                        });
+                        self.next();
+                    }
                 }
                 // Handle StringLiteral in SELECT (e.g., SELECT 'hello')
                 Some(Token::StringLiteral(s)) => {
@@ -3004,12 +3059,29 @@ impl Parser {
     }
 
     fn parse_additive_expression(&mut self) -> Result<Expression, String> {
-        let mut left = self.parse_multiplicative_expression()?;
+        let mut left = self.parse_shift_expression()?;
 
         while let Some(Token::Plus) | Some(Token::Minus) = self.current() {
             let op = match self.current() {
                 Some(Token::Plus) => "+",
                 Some(Token::Minus) => "-",
+                _ => break,
+            };
+            self.next();
+            let right = self.parse_shift_expression()?;
+            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    fn parse_shift_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_multiplicative_expression()?;
+
+        while let Some(Token::LShift) | Some(Token::RShift) = self.current() {
+            let op = match self.current() {
+                Some(Token::LShift) => "<<",
+                Some(Token::RShift) => ">>",
                 _ => break,
             };
             self.next();
