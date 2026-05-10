@@ -1299,3 +1299,118 @@ fn test_parse_create_table_with_key() {
         result
     );
 }
+
+// ============ SET ROLE Tests ============
+
+#[test]
+fn test_parse_set_role() {
+    let sql = "SET ROLE admin";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse SET ROLE: {:?}", result);
+}
+
+#[test]
+fn test_parse_set_role_with_string() {
+    let sql = "SET ROLE 'admin'";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SET ROLE with string: {:?}",
+        result
+    );
+}
+
+// ============ CREATE ROLE Tests ============
+
+#[test]
+fn test_parse_create_role() {
+    let sql = "CREATE ROLE admin";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse CREATE ROLE: {:?}", result);
+}
+
+#[test]
+fn test_parse_create_role_with_parent() {
+    let sql = "CREATE ROLE admin WITH PARENT super_admin";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse CREATE ROLE WITH PARENT: {:?}",
+        result
+    );
+}
+
+// ============ DROP ROLE Tests ============
+
+#[test]
+fn test_parse_drop_role() {
+    let sql = "DROP ROLE admin";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse DROP ROLE: {:?}", result);
+}
+
+#[test]
+fn test_parse_drop_role_with_string() {
+    let sql = "DROP ROLE 'admin'";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse DROP ROLE with string: {:?}",
+        result
+    );
+}
+
+// ============ GRANT ROLE Tests ============
+
+#[test]
+fn test_parse_grant_role() {
+    let sql = "GRANT admin TO user1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse GRANT role: {:?}", result);
+}
+
+// ============ REVOKE ROLE Tests ============
+
+#[test]
+fn test_parse_revoke_role() {
+    let sql = "REVOKE admin FROM user1";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse REVOKE role: {:?}", result);
+}
+
+// ============ POSITION Expression Tests ============
+
+#[test]
+fn test_parse_position_expression() {
+    let sql = "SELECT POSITION('test' IN 'test_string')";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse POSITION expression: {:?}",
+        result
+    );
+}
+
+// ============ IF Expression Tests ============
+
+#[test]
+fn test_parse_if_expression() {
+    let sql = "SELECT IF(1 > 0, 'yes', 'no')";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse IF expression: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_if_expression_in_where() {
+    let sql = "SELECT IF(age > 18, 'adult', 'minor') FROM users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse IF expression in WHERE: {:?}",
+        result
+    );
+}
