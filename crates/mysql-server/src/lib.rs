@@ -1552,31 +1552,47 @@ fn replace_placeholders(sql: &str, params: &[Vec<u8>]) -> String {
 }
 
 fn extract_table_name(sql: &str) -> Option<String> {
-    let u = sql.trim().to_uppercase();
-    if let Some(rest) = u.strip_prefix("SELECT") {
-        if let Some(from_pos) = rest.find("FROM") {
-            let after_from = rest[from_pos + 4..].trim();
-            let table_end = after_from
-                .find(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == ')')
-                .unwrap_or(after_from.len());
-            let table = after_from[..table_end].trim();
-            if !table.is_empty() {
-                let orig_after = sql.to_uppercase().find("FROM").unwrap();
-                let orig_from = sql[orig_after + 4..].trim();
-                let orig_end = orig_from
-                    .find(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == ')')
-                    .unwrap_or(orig_from.len());
-                return Some(orig_from[..orig_end].trim().to_string());
-            }
-        }
+    let trimmed = sql.trim();
+    let upper = trimmed.to_uppercase();
+    // Find "SELECT" position in uppercased string
+    let select_pos = upper.find("SELECT")?;
+    // Find "FROM" after SELECT in uppercased string
+    let from_pos = upper[select_pos..].find("FROM")? + select_pos;
+    // Extract from original string using these positions
+    let after_from = trimmed[from_pos + 4..].trim();
+    let table_end = after_from
+        .find(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == ')')
+        .unwrap_or(after_from.len());
+    let table = after_from[..table_end].trim();
+    if table.is_empty() {
+        None
+    } else {
+        Some(table.to_string())
     }
-    None
 }
 
 fn extract_column_names(sql: &str, storage: &Arc<RwLock<MemoryStorage>>) -> Vec<String> {
-    let u = sql.trim().to_uppercase();
-    if u.starts_with("SHOW") || u.starts_with("DESCRIBE") || u.starts_with("EXPLAIN") {
-        return vec![];
+    // Fast path: check first char to avoid allocation
+    let trimmed = sql.trim();
+    match trimmed.as_bytes().first().copied() {
+        Some(b'S') | Some(b's') => {
+            if trimmed.starts_with("SHOW") || trimmed.starts_with("show") {
+                return vec![];
+            }
+        }
+        Some(b'D') | Some(b'd') => {
+            if trimmed.starts_with("DESCRIBE") || trimmed.starts_with("describe")
+                || trimmed.starts_with("DESC") || trimmed.starts_with("desc")
+            {
+                return vec![];
+            }
+        }
+        Some(b'E') | Some(b'e') => {
+            if trimmed.starts_with("EXPLAIN") || trimmed.starts_with("explain") {
+                return vec![];
+            }
+        }
+        _ => {}
     }
     if let Some(table_name) = extract_table_name(sql) {
         if let Ok(storage_guard) = storage.try_read() {
@@ -1671,11 +1687,23 @@ fn execute_select_statement(
 }
 
 fn is_select(sql: &str) -> bool {
-    let u = sql.trim().to_uppercase();
-    u.starts_with("SELECT")
-        || u.starts_with("SHOW")
-        || u.starts_with("DESCRIBE")
-        || u.starts_with("EXPLAIN")
+    let trimmed = sql.trim();
+    // Fast path: check first char to avoid allocation in common case
+    // MySQL protocol typically sends uppercase commands
+    match trimmed.as_bytes().first().copied() {
+        Some(b'S') | Some(b's') => {
+            trimmed.starts_with("SELECT") || trimmed.starts_with("select")
+                || trimmed.starts_with("SHOW") || trimmed.starts_with("show")
+        }
+        Some(b'D') | Some(b'd') => {
+            trimmed.starts_with("DESCRIBE") || trimmed.starts_with("describe")
+                || trimmed.starts_with("DESC") || trimmed.starts_with("desc")
+        }
+        Some(b'E') | Some(b'e') => {
+            trimmed.starts_with("EXPLAIN") || trimmed.starts_with("explain")
+        }
+        _ => false,
+    }
 }
 
 const SERVER_MORE_RESULTS_EXISTS: u16 = 0x0008;
@@ -1747,20 +1775,42 @@ fn execute_transaction_queries<S: Read + Write>(
 }
 
 fn is_transaction_cmd(sql: &str) -> bool {
-    let u = sql.trim().to_uppercase();
-    u == "BEGIN" || u == "COMMIT" || u == "ROLLBACK" || u == "START TRANSACTION"
+    let trimmed = sql.trim();
+    // Fast path: check first char to avoid allocation
+    match trimmed.as_bytes().first().copied() {
+        Some(b'B') | Some(b'b') => {
+            trimmed.eq_ignore_ascii_case("BEGIN")
+        }
+        Some(b'C') | Some(b'c') => {
+            trimmed.eq_ignore_ascii_case("COMMIT")
+        }
+        Some(b'R') | Some(b'r') => {
+            trimmed.eq_ignore_ascii_case("ROLLBACK")
+        }
+        Some(b'S') | Some(b's') => {
+            trimmed.eq_ignore_ascii_case("START TRANSACTION")
+        }
+        _ => false,
+    }
 }
 
 pub fn parse_transaction_command(sql: &str) -> TransactionCommand {
-    let u = sql.trim().to_uppercase();
-    if u == "BEGIN" || u == "START TRANSACTION" {
-        TransactionCommand::Begin
-    } else if u == "COMMIT" {
-        TransactionCommand::Commit
-    } else if u == "ROLLBACK" {
-        TransactionCommand::Rollback
-    } else {
-        TransactionCommand::None
+    let trimmed = sql.trim();
+    // Fast path: check first char to avoid allocation
+    match trimmed.as_bytes().first().copied() {
+        Some(b'B') | Some(b'b') if trimmed.eq_ignore_ascii_case("BEGIN") => {
+            TransactionCommand::Begin
+        }
+        Some(b'S') | Some(b's') if trimmed.eq_ignore_ascii_case("START TRANSACTION") => {
+            TransactionCommand::Begin
+        }
+        Some(b'C') | Some(b'c') if trimmed.eq_ignore_ascii_case("COMMIT") => {
+            TransactionCommand::Commit
+        }
+        Some(b'R') | Some(b'r') if trimmed.eq_ignore_ascii_case("ROLLBACK") => {
+            TransactionCommand::Rollback
+        }
+        _ => TransactionCommand::None,
     }
 }
 
