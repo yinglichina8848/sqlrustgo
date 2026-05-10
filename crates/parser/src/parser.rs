@@ -4343,7 +4343,7 @@ impl Parser {
         Ok(Statement::Repair(RepairStatement { name }))
     }
 
-fn parse_backup(&mut self) -> Result<Statement, String> {
+    fn parse_backup(&mut self) -> Result<Statement, String> {
         self.expect(Token::Backup)?;
 
         let mut database = None;
@@ -4411,7 +4411,7 @@ fn parse_backup(&mut self) -> Result<Statement, String> {
         }))
     }
 
-fn parse_restore(&mut self) -> Result<Statement, String> {
+    fn parse_restore(&mut self) -> Result<Statement, String> {
         self.expect(Token::Restore)?;
 
         let mut database = None;

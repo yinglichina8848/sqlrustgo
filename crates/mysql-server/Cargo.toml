@@ -31,3 +31,6 @@ path = "src/lib.rs"
 [[bin]]
 name = "sqlrustgo-mysql-server"
 path = "src/main.rs"
+
+[dev-dependencies]
+mysql = "25"
