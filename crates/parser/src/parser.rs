@@ -1915,7 +1915,8 @@ impl Parser {
                         };
                         self.next();
                         let right = self.parse_expression()?;
-                        let expr = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+                        let expr =
+                            Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
                         let alias = if matches!(self.current(), Some(Token::As)) {
                             self.next();
                             match self.current() {
