@@ -265,8 +265,10 @@ R7 包含四个子检查：
 | G11 | SQL Corpus | `cargo test -p sqlrustgo-sql-corpus` | **≥98%**（统一阈值） | `{passed, total, pct}` |
 | G12 | B-S 稳定性测试 | `scripts/gate/check_beta_v300.sh` B-S1~B-S5 | 全部 PASS | `{b_s1_pass, b_s2_pass, ...}` |
 | G13 | MySQL Protocol | mysql:5.7 容器握手测试 | 连接成功 | `{handshake, query_response}` |
+| G14 | Doc Links | `bash scripts/gate/check_docs_links.sh` | 无死链 | `{broken_links}` |
 
 > **注**: G7/G8/G9 要求实际运行 `cargo bench` 并解析 ops/s 输出，禁止仅依赖 check_regression.sh 的回归检测。
+> **注**: G14 与 A5 (Alpha Gate) 一致，GA 门禁重复检查以确保文档完整性。
 
 ### 6.3 覆盖率要求
 
