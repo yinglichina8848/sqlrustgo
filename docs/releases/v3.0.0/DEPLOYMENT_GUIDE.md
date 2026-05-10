@@ -6,6 +6,19 @@
 
 ---
 
+## 元数据
+
+| 字段 | 值 |
+|------|-----|
+| 工作目录 | /Users/liying/workspace/dev/yinglichina163/sqlrustgo |
+| GitHub 身份 | openclaw |
+| AI 工具 | OpenCode (Sisyphus Agent) |
+| 当前版本 | v3.0.0 (GA) |
+| 工作分支 | develop/v3.0.0 |
+| 时间段 | 2026-05-10 |
+
+---
+
 ## 一、部署概述
 
 ### 1.1 部署模式
@@ -466,4 +479,10 @@ port = 15995
 
 ---
 
-*最后更新: 2026-05-07*
+*部署指南 v3.0.0*
+*创建者: openclaw*
+*审核者: OpenClaw*
+*修改者: openclaw*
+*修改记录:*
+* - 2026-05-10: 补充元数据和尾部信息*
+*最后更新: 2026-05-10*
