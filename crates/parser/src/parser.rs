@@ -481,6 +481,23 @@ pub struct RepairStatement {
     pub name: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct BackupStatement {
+    pub database: Option<String>,
+    pub destination: String,
+    pub incremental: bool,
+    pub differential: bool,
+    pub compressed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RestoreStatement {
+    pub database: Option<String>,
+    pub source: String,
+    pub to_database: Option<String>,
+    pub point_in_time: Option<String>,
+}
+
 /// SHOW statement variants
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShowStatement {
@@ -878,6 +895,8 @@ impl Parser {
             Some(Token::Optimize) => self.parse_optimize(),
             Some(Token::Vacuum) => self.parse_vacuum(),
             Some(Token::Repair) => self.parse_repair(),
+            Some(Token::Backup) => self.parse_backup(),
+            Some(Token::Restore) => self.parse_restore(),
             Some(Token::With) => self.parse_with_select(),
             Some(Token::Alter) => self.parse_alter_table(),
             Some(Token::Call) => self.parse_call(),
@@ -4322,6 +4341,122 @@ impl Parser {
             _ => return Err("Expected table name".to_string()),
         };
         Ok(Statement::Repair(RepairStatement { name }))
+    }
+
+    fn parse_backup(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Backup)?;
+        self.expect(Token::Database)?;
+
+        let mut database = None;
+        let mut destination = String::new();
+        let mut incremental = false;
+        let mut differential = false;
+        let mut compressed = false;
+
+        // Optional database name
+        if let Some(Token::Identifier(name)) = self.next() {
+            database = Some(name);
+        }
+
+        // Expect TO
+        self.expect(Token::To)?;
+
+        // Expect destination path
+        match self.next() {
+            Some(Token::StringLiteral(path)) => destination = path,
+            Some(Token::Identifier(path)) => destination = path,
+            _ => return Err("Expected destination path".to_string()),
+        }
+
+        // Parse optional modifiers
+        while let Some(token) = self.current() {
+            match token {
+                Token::Identifier(name) => {
+                    let upper = name.to_uppercase();
+                    if upper == "INCREMENTAL" {
+                        incremental = true;
+                    } else if upper == "DIFFERENTIAL" {
+                        differential = true;
+                    } else if upper == "COMPRESSED" {
+                        compressed = true;
+                    } else {
+                        break;
+                    }
+                    self.next();
+                }
+                _ => break,
+            }
+        }
+
+        Ok(Statement::Backup(BackupStatement {
+            database,
+            destination,
+            incremental,
+            differential,
+            compressed,
+        }))
+    }
+
+    fn parse_restore(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Restore)?;
+        self.expect(Token::Database)?;
+
+        let mut database = None;
+        let mut source = String::new();
+        let mut to_database = None;
+        let mut point_in_time = None;
+
+        // Optional database name
+        if let Some(Token::Identifier(name)) = self.next() {
+            database = Some(name);
+        }
+
+        // Expect FROM
+        self.expect(Token::From)?;
+
+        // Expect source path
+        match self.next() {
+            Some(Token::StringLiteral(path)) => source = path,
+            Some(Token::Identifier(path)) => source = path,
+            _ => return Err("Expected source path".to_string()),
+        }
+
+        // Parse optional TO database
+        if let Some(Token::Identifier(name)) = self.current() {
+            if name.to_uppercase() == "TO" {
+                self.next();
+                if let Some(Token::StringLiteral(db)) = self.next() {
+                    to_database = Some(db);
+                }
+            }
+        }
+
+        // Parse optional POINT IN TIME
+        if let Some(Token::Identifier(name)) = self.current() {
+            if name.to_uppercase() == "POINT" {
+                self.next();
+                if let Some(Token::Identifier(name)) = self.current() {
+                    if name.to_uppercase() == "IN" {
+                        self.next();
+                        if let Some(Token::Identifier(name)) = self.current() {
+                            if name.to_uppercase() == "TIME" {
+                                self.next();
+                                if let Some(Token::StringLiteral(ts)) = self.next() {
+                                    point_in_time = Some(ts);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(Statement::Restore(RestoreStatement {
+            database,
+            source,
+            to_database,
+            point_in_time,
+        }))
     }
 
     fn parse_grant(&mut self) -> Result<Statement, String> {
