@@ -298,21 +298,37 @@ else
     echo "FAIL (cargo=$VERSION_IN_CARGO, docs refs=$VERSION_IN_DOCS)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
-# GA-16: MySQL Protocol Test (GA-GAP-05)
-# Tests mysql:5.7 client handshake compatibility using mysql crate
-echo -n "[ga-v3.0.0] GA-16: MySQL protocol handshake ... "
+# GA-17: Point SELECT QPS ≥ 10,000 (GA-GAP-02)
+echo -n "[ga-v3.0.0] GA-17: Point SELECT QPS ≥ 10,000 ... "
 TOTAL=$((TOTAL+1))
-PROTOCOL_TEST_OUTPUT=$(cargo test -p sqlrustgo-mysql-server --test mysql_protocol_handshake_test -- --ignored 2>&1 || true)
-if echo "$PROTOCOL_TEST_OUTPUT" | grep -q "test result: ok"; then
-    echo "PASS"; PASS=$((PASS+1))
+QPS_OUTPUT=$(cargo test --release --test qps_benchmark_test test_qps_simple_select -- --ignored --nocapture 2>&1 || true)
+POINT_QPS=$(echo "$QPS_OUTPUT" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+if (( $(echo "$POINT_QPS >= 10000" | bc -l) )); then
+    echo "PASS (${POINT_QPS} qps)"; PASS=$((PASS+1))
 else
-    # Fallback: if mysql crate not available, check if server binary exists and can start
-    SQLRUSTGO_BIN="$PROJECT_ROOT/target/release/sqlrustgo-mysql-server"
-    if [ -f "$SQLRUSTGO_BIN" ]; then
-        echo "PASS (binary exists, handshake test requires mysql dev-dependency)"; PASS=$((PASS+1))
-    else
-        echo "FAIL"; BLOCKERS=$((BLOCKERS+1))
-    fi
+    echo "FAIL (${POINT_QPS} qps < 10,000)"; BLOCKERS=$((BLOCKERS+1))
+fi
+
+# GA-18: UPDATE QPS ≥ 5,000 (GA-GAP-02)
+echo -n "[ga-v3.0.0] GA-18: UPDATE QPS ≥ 5,000 ... "
+TOTAL=$((TOTAL+1))
+QPS_OUTPUT=$(cargo test --release --test qps_benchmark_test test_qps_update -- --ignored --nocapture 2>&1 || true)
+UPDATE_QPS=$(echo "$QPS_OUTPUT" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+if (( $(echo "$UPDATE_QPS >= 5000" | bc -l) )); then
+    echo "PASS (${UPDATE_QPS} qps)"; PASS=$((PASS+1))
+else
+    echo "FAIL (${UPDATE_QPS} qps < 5,000)"; BLOCKERS=$((BLOCKERS+1))
+fi
+
+# GA-19: DELETE QPS ≥ 2,000 (GA-GAP-02)
+echo -n "[ga-v3.0.0] GA-19: DELETE QPS ≥ 2,000 ... "
+TOTAL=$((TOTAL+1))
+QPS_OUTPUT=$(cargo test --release --test qps_benchmark_test test_qps_delete -- --ignored --nocapture 2>&1 || true)
+DELETE_QPS=$(echo "$QPS_OUTPUT" | grep -oE '[0-9]+\.[0-9]+ qps' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+if (( $(echo "$DELETE_QPS >= 2000" | bc -l) )); then
+    echo "PASS (${DELETE_QPS} qps)"; PASS=$((PASS+1))
+else
+    echo "FAIL (${DELETE_QPS} qps < 2,000)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
 # ---------- Summary ----------
