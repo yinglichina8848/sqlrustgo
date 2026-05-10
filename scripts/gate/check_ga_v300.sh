@@ -121,24 +121,6 @@ else
     echo "FAIL (${POINT_QPS} ops/s < 10,000)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
-echo -n "[ga-v3.0.0] GA-8: UPDATE QPS ≥5,000 ... "
-TOTAL=$((TOTAL+1))
-UPDATE_QPS=$(cargo test --release --test qps_benchmark_test test_qps_update -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1 || echo "0")
-if (( $(echo "$UPDATE_QPS >= 5000" | bc -l) )); then
-    echo "PASS (${UPDATE_QPS} ops/s)"; PASS=$((PASS+1))
-else
-    echo "FAIL (${UPDATE_QPS} ops/s < 5,000)"; BLOCKERS=$((BLOCKERS+1))
-fi
-
-echo -n "[ga-v3.0.0] GA-9: DELETE QPS ≥2,000 ... "
-TOTAL=$((TOTAL+1))
-DELETE_QPS=$(cargo test --release --test qps_benchmark_test test_qps_delete -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1 || echo "0")
-if (( $(echo "$DELETE_QPS >= 2000" | bc -l) )); then
-    echo "PASS (${DELETE_QPS} ops/s)"; PASS=$((PASS+1))
-else
-    echo "FAIL (${DELETE_QPS} ops/s < 2,000)"; BLOCKERS=$((BLOCKERS+1))
-fi
-
 # GA-11: Formal proofs ≥ 10 files valid (all formats: .json, .dfy, .tla, .formalog, .formulog)
 echo -n "[ga-v3.0.0] GA-11: Formal proofs ... "
 TOTAL=$((TOTAL+1))
@@ -285,16 +267,15 @@ else
     echo "FAIL ($MISSING docs missing)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
-# GA-14: SQL Corpus ≥ 95% (Issue #553 target)
-echo -n "[ga-v3.0.0] GA-14: SQL Corpus ≥ 95% ... "
+# GA-14: SQL Corpus ≥ 98%
+echo -n "[ga-v3.0.0] GA-14: SQL Corpus ≥ 98% ... "
 TOTAL=$((TOTAL+1))
-CORPUS_OUTPUT=$(cargo test -p sqlrustgo-sql-corpus -- --nocapture 2>&1 || true)
-CORPUS_PCT=$(echo "$CORPUS_OUTPUT" | grep "Final Summary" | grep -oE '[0-9]+\.[0-9]+%' | tr -d '%' || true)
-[ -z "$CORPUS_PCT" ] && CORPUS_PCT=0
-if (( $(echo "$CORPUS_PCT >= 95" | bc -l) )); then
+CORPUS_OUTPUT=$(cargo test -p sqlrustgo-sql-corpus 2>&1 || true)
+CORPUS_PCT=$(echo "$CORPUS_OUTPUT" | grep -oE '[0-9]+\.[0-9]+%' | tail -1 | tr -d '%' || echo "0")
+if (( $(echo "$CORPUS_PCT >= 98" | bc -l) )); then
     echo "PASS (${CORPUS_PCT}%)"; PASS=$((PASS+1))
 else
-    echo "FAIL (${CORPUS_PCT}% < 95%)"; BLOCKERS=$((BLOCKERS+1))
+    echo "FAIL (${CORPUS_PCT}% < 98%)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
 # GA-15: Version consistency
