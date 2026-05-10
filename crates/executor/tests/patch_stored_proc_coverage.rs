@@ -1208,3 +1208,375 @@ fn test_sp_insert_pk_violation() {
     let r = exec.execute_call("sp_pk", vec![]);
     assert!(r.is_err(), "PK violation should fail: {:?}", r);
 }
+
+// P7: UPDATE/DELETE Statement Coverage
+
+#[test]
+fn test_sp_update_with_row_count() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: "t_update".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "id".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    ..Default::default()
+                },
+                ColumnDefinition {
+                    name: "val".to_string(),
+                    data_type: "INTEGER".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        })
+        .unwrap();
+        st.insert("t_update", vec![vec![Value::Integer(1), Value::Integer(100)]])
+            .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_update".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::RawSql("UPDATE t_update SET val = 200 WHERE id = 1".to_string()),
+            StoredProcStatement::Return { value: "@ROW_COUNT".to_string() },
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_update", vec![]);
+    assert!(r.is_ok(), "UPDATE with ROW_COUNT should succeed: {:?}", r);
+}
+
+#[test]
+fn test_sp_delete_with_row_count() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: "t_delete".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+        st.insert("t_delete", vec![vec![Value::Integer(1)]])
+            .unwrap();
+        st.insert("t_delete", vec![vec![Value::Integer(2)]])
+            .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_delete".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::RawSql("DELETE FROM t_delete WHERE id = 1".to_string()),
+            StoredProcStatement::Return { value: "@ROW_COUNT".to_string() },
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_delete", vec![]);
+    assert!(r.is_ok(), "DELETE with ROW_COUNT should succeed: {:?}", r);
+}
+
+#[test]
+fn test_sp_rawsql_update_no_match() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: "t_upd2".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+        st.insert("t_upd2", vec![vec![Value::Integer(1)]])
+            .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_upd2".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::RawSql("UPDATE t_upd2 SET id = 999 WHERE id = 999".to_string()),
+            StoredProcStatement::Return { value: "@ROW_COUNT".to_string() },
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_upd2", vec![]);
+    assert!(r.is_ok(), "UPDATE no match should succeed with ROW_COUNT=0: {:?}", r);
+}
+
+#[test]
+fn test_sp_rawsql_delete_no_match() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: "t_del2".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+        st.insert("t_del2", vec![vec![Value::Integer(1)]])
+            .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_del2".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::RawSql("DELETE FROM t_del2 WHERE id = 999".to_string()),
+            StoredProcStatement::Return { value: "@ROW_COUNT".to_string() },
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_del2", vec![]);
+    assert!(r.is_ok(), "DELETE no match should succeed with ROW_COUNT=0: {:?}", r);
+}
+
+// P8: ALTER TABLE Coverage
+
+#[test]
+fn test_sp_rawsql_alter_add_column() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: "t_alt".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_alt".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::RawSql("ALTER TABLE t_alt ADD COLUMN new_col TEXT".to_string()),
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_alt", vec![]);
+    assert!(r.is_ok(), "ALTER TABLE ADD COLUMN should succeed: {:?}", r);
+}
+
+#[test]
+fn test_sp_rawsql_alter_rename_table() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: "t_rename".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_rename".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::RawSql("ALTER TABLE t_rename RENAME TO t_renamed".to_string()),
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_rename", vec![]);
+    assert!(r.is_ok(), "ALTER TABLE RENAME should succeed: {:?}", r);
+}
+
+// P9: Error Path Coverage
+
+#[test]
+fn test_sp_cursor_not_found() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    {
+        let mut st = storage.write().unwrap();
+        st.create_table(&TableInfo {
+            name: "t_cursor".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "INTEGER".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+    }
+    let mut c = (*catalog).clone();
+    // Open a cursor that doesn't exist - should handle error
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_cur".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::OpenCursor {
+                name: "nonexistent".to_string(),
+            },
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_cur", vec![]);
+    // Should return error for cursor not found
+    assert!(r.is_err(), "Opening nonexistent cursor should fail: {:?}", r);
+}
+
+#[test]
+fn test_sp_update_table_not_found() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_upd_err".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::RawSql("UPDATE nonexistent SET col = 1".to_string()),
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_upd_err", vec![]);
+    assert!(r.is_err(), "UPDATE on nonexistent table should fail: {:?}", r);
+}
+
+#[test]
+fn test_sp_delete_table_not_found() {
+    let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let mut c = (*catalog).clone();
+    c.add_stored_procedure(StoredProcedure::new(
+        "sp_del_err".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::RawSql("DELETE FROM nonexistent".to_string()),
+        ],
+    ))
+    .unwrap();
+    let exec = StoredProcExecutor::new(Arc::new(c), storage);
+    let r = exec.execute_call("sp_del_err", vec![]);
+    assert!(r.is_err(), "DELETE on nonexistent table should fail: {:?}", r);
+}
+
+// P10: Block and Label Coverage
+
+#[test]
+fn test_sp_block_with_label() {
+    let (_, exec) = with_proc(StoredProcedure::new(
+        "sp_block_label".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::Block {
+                label: Some("myblock".to_string()),
+                body: vec![
+                    StoredProcStatement::Set {
+                        variable: "@x".to_string(),
+                        value: "42".to_string(),
+                    },
+                ],
+            },
+            StoredProcStatement::Return { value: "@x".to_string() },
+        ],
+    ));
+    let r = exec.execute_call("sp_block_label", vec![]);
+    assert!(r.is_ok(), "Block with label should work: {:?}", r);
+}
+
+#[test]
+fn test_sp_nested_blocks_with_labels() {
+    let (_, exec) = with_proc(StoredProcedure::new(
+        "sp_nested".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::Block {
+                label: Some("outer".to_string()),
+                body: vec![
+                    StoredProcStatement::Set {
+                        variable: "@x".to_string(),
+                        value: "1".to_string(),
+                    },
+                    StoredProcStatement::Block {
+                        label: Some("inner".to_string()),
+                        body: vec![
+                            StoredProcStatement::Set {
+                                variable: "@y".to_string(),
+                                value: "2".to_string(),
+                            },
+                        ],
+                    },
+                ],
+            },
+            StoredProcStatement::Return { value: "@x".to_string() },
+        ],
+    ));
+
+    let r = exec.execute_call("sp_nested", vec![]);
+    assert!(r.is_ok(), "Nested blocks should work: {:?}", r);
+}
+
+#[test]
+fn test_sp_early_leave_from_block() {
+    let (_, exec) = with_proc(StoredProcedure::new(
+        "sp_early_leave".to_string(),
+        vec![],
+        vec![
+            StoredProcStatement::Declare {
+                name: "cnt".to_string(),
+                data_type: "INTEGER".to_string(),
+                default_value: Some("0".to_string()),
+            },
+            StoredProcStatement::Loop {
+                body: vec![
+                    StoredProcStatement::Set {
+                        variable: "cnt".to_string(),
+                        value: "cnt + 1".to_string(),
+                    },
+                    StoredProcStatement::If {
+                        condition: "cnt >= 1".to_string(),
+                        then_body: vec![StoredProcStatement::Leave {
+                            label: "myloop".to_string(),
+                        }],
+                        elseif_body: vec![],
+                        else_body: vec![],
+                    },
+                ],
+            },
+        ],
+    ));
+    assert!(exec.execute_call("sp_early_leave", vec![]).is_ok());
+}
