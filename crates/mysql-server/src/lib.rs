@@ -1581,8 +1581,10 @@ fn extract_column_names(sql: &str, storage: &Arc<RwLock<MemoryStorage>>) -> Vec<
             }
         }
         Some(b'D') | Some(b'd') => {
-            if trimmed.starts_with("DESCRIBE") || trimmed.starts_with("describe")
-                || trimmed.starts_with("DESC") || trimmed.starts_with("desc")
+            if trimmed.starts_with("DESCRIBE")
+                || trimmed.starts_with("describe")
+                || trimmed.starts_with("DESC")
+                || trimmed.starts_with("desc")
             {
                 return vec![];
             }
@@ -1692,16 +1694,18 @@ fn is_select(sql: &str) -> bool {
     // MySQL protocol typically sends uppercase commands
     match trimmed.as_bytes().first().copied() {
         Some(b'S') | Some(b's') => {
-            trimmed.starts_with("SELECT") || trimmed.starts_with("select")
-                || trimmed.starts_with("SHOW") || trimmed.starts_with("show")
+            trimmed.starts_with("SELECT")
+                || trimmed.starts_with("select")
+                || trimmed.starts_with("SHOW")
+                || trimmed.starts_with("show")
         }
         Some(b'D') | Some(b'd') => {
-            trimmed.starts_with("DESCRIBE") || trimmed.starts_with("describe")
-                || trimmed.starts_with("DESC") || trimmed.starts_with("desc")
+            trimmed.starts_with("DESCRIBE")
+                || trimmed.starts_with("describe")
+                || trimmed.starts_with("DESC")
+                || trimmed.starts_with("desc")
         }
-        Some(b'E') | Some(b'e') => {
-            trimmed.starts_with("EXPLAIN") || trimmed.starts_with("explain")
-        }
+        Some(b'E') | Some(b'e') => trimmed.starts_with("EXPLAIN") || trimmed.starts_with("explain"),
         _ => false,
     }
 }
@@ -1778,18 +1782,10 @@ fn is_transaction_cmd(sql: &str) -> bool {
     let trimmed = sql.trim();
     // Fast path: check first char to avoid allocation
     match trimmed.as_bytes().first().copied() {
-        Some(b'B') | Some(b'b') => {
-            trimmed.eq_ignore_ascii_case("BEGIN")
-        }
-        Some(b'C') | Some(b'c') => {
-            trimmed.eq_ignore_ascii_case("COMMIT")
-        }
-        Some(b'R') | Some(b'r') => {
-            trimmed.eq_ignore_ascii_case("ROLLBACK")
-        }
-        Some(b'S') | Some(b's') => {
-            trimmed.eq_ignore_ascii_case("START TRANSACTION")
-        }
+        Some(b'B') | Some(b'b') => trimmed.eq_ignore_ascii_case("BEGIN"),
+        Some(b'C') | Some(b'c') => trimmed.eq_ignore_ascii_case("COMMIT"),
+        Some(b'R') | Some(b'r') => trimmed.eq_ignore_ascii_case("ROLLBACK"),
+        Some(b'S') | Some(b's') => trimmed.eq_ignore_ascii_case("START TRANSACTION"),
         _ => false,
     }
 }

@@ -54,7 +54,7 @@ E-09 硬性地板：DELETE/UPDATE 必须 ≥ 10,000 QPS。
 |------|------|
 | Rust 工具链 | 1.75+ |
 | 项目代码 | SQLRustGo（develop/v3.0.0 分支） |
-| AI 工具 | Claude Code / OpenCode |
+| AI 工具 | Claude Code / OpenClaw |
 
 ---
 
