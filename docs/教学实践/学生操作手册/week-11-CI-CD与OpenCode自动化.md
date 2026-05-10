@@ -1,4 +1,4 @@
-# 第11周：CI/CD与OpenCode自动化
+# 第11周：CI/CD与OpenClaw自动化
 
 > 实验时间：2学时（🕹️ 手动档第4周）
 > 实验类型：设计性+验证性
@@ -14,7 +14,7 @@
 
 ---
 
-## 二、🕹️ 手动档深入：使用OpenCode配置自动化
+## 二、🕹️ 手动档深入：使用OpenClaw配置自动化
 
 **本周重点：使用AI工具配置自动化流程**
 
@@ -54,9 +54,9 @@ name: CI
 
 on:
   push:
-    branches: [ develop/v2.6.0 ]
+    branches: [ develop/v3.0.0 ]
   pull_request:
-    branches: [ develop/v2.6.0 ]
+    branches: [ develop/v3.0.0 ]
 
 env:
   CARGO_TERM_COLOR: always

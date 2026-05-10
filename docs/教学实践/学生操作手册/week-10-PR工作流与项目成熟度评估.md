@@ -32,8 +32,8 @@
 
 ```bash
 # 确保develop分支最新
-git checkout develop/v2.6.0
-git pull origin develop/v2.6.0
+git checkout develop/v3.0.0
+git pull origin develop/v3.0.0
 
 # 创建新功能分支
 git checkout -b feature/add-uppercase-function
