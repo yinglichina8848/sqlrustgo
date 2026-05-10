@@ -1775,20 +1775,42 @@ fn execute_transaction_queries<S: Read + Write>(
 }
 
 fn is_transaction_cmd(sql: &str) -> bool {
-    let u = sql.trim().to_uppercase();
-    u == "BEGIN" || u == "COMMIT" || u == "ROLLBACK" || u == "START TRANSACTION"
+    let trimmed = sql.trim();
+    // Fast path: check first char to avoid allocation
+    match trimmed.as_bytes().first().copied() {
+        Some(b'B') | Some(b'b') => {
+            trimmed.eq_ignore_ascii_case("BEGIN")
+        }
+        Some(b'C') | Some(b'c') => {
+            trimmed.eq_ignore_ascii_case("COMMIT")
+        }
+        Some(b'R') | Some(b'r') => {
+            trimmed.eq_ignore_ascii_case("ROLLBACK")
+        }
+        Some(b'S') | Some(b's') => {
+            trimmed.eq_ignore_ascii_case("START TRANSACTION")
+        }
+        _ => false,
+    }
 }
 
 pub fn parse_transaction_command(sql: &str) -> TransactionCommand {
-    let u = sql.trim().to_uppercase();
-    if u == "BEGIN" || u == "START TRANSACTION" {
-        TransactionCommand::Begin
-    } else if u == "COMMIT" {
-        TransactionCommand::Commit
-    } else if u == "ROLLBACK" {
-        TransactionCommand::Rollback
-    } else {
-        TransactionCommand::None
+    let trimmed = sql.trim();
+    // Fast path: check first char to avoid allocation
+    match trimmed.as_bytes().first().copied() {
+        Some(b'B') | Some(b'b') if trimmed.eq_ignore_ascii_case("BEGIN") => {
+            TransactionCommand::Begin
+        }
+        Some(b'S') | Some(b's') if trimmed.eq_ignore_ascii_case("START TRANSACTION") => {
+            TransactionCommand::Begin
+        }
+        Some(b'C') | Some(b'c') if trimmed.eq_ignore_ascii_case("COMMIT") => {
+            TransactionCommand::Commit
+        }
+        Some(b'R') | Some(b'r') if trimmed.eq_ignore_ascii_case("ROLLBACK") => {
+            TransactionCommand::Rollback
+        }
+        _ => TransactionCommand::None,
     }
 }
 
