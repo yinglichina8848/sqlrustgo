@@ -537,6 +537,12 @@ pub struct TableInfo {
     pub check_constraints: Vec<CheckConstraint>,
     #[serde(skip)]
     pub partition_info: Option<PartitionInfo>,
+    /// Whether this table uses a hidden rowid for tables without explicit PK
+    #[serde(default)]
+    pub has_hidden_rowid: bool,
+    /// Next auto-incrementing rowid value for tables with hidden rowid
+    #[serde(default)]
+    pub next_rowid: u64,
 }
 
 /// Column definition for table schema
@@ -686,6 +692,14 @@ pub trait StorageEngine: Send + Sync {
         Err(SqlError::ExecutionError(
             "Auto-increment not supported by this storage engine".to_string(),
         ))
+    }
+
+    /// Get next hidden rowid value and increment counter
+    /// Returns the next rowid for a table with hidden rowid support
+    /// Returns None if the table doesn't have hidden rowid enabled
+    fn get_and_increment_next_rowid(&mut self, _table: &str) -> SqlResult<Option<u64>> {
+        // Default implementation: hidden rowid not supported
+        Ok(None)
     }
 }
 
@@ -1160,6 +1174,8 @@ mod tests {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&info).unwrap();
         let tables = storage.list_tables();
@@ -1204,6 +1220,8 @@ mod tests {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
 
         storage.create_table(&info).unwrap();
@@ -1224,11 +1242,14 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: true,
+                ..Default::default()
             }],
             foreign_keys: vec![],
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
 
         storage.create_table(&info).unwrap();
@@ -1285,6 +1306,8 @@ mod tests {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         let info2 = TableInfo {
             name: "orders".to_string(),
@@ -1293,6 +1316,8 @@ mod tests {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&info1).unwrap();
         storage.create_table(&info2).unwrap();
@@ -1315,6 +1340,8 @@ mod tests {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&info).unwrap();
         assert!(storage.has_table("users"));

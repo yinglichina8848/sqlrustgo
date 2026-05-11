@@ -322,6 +322,7 @@ impl<'a> InformationSchema<'a> {
             DataType::Uuid => (None, Some(128), None),
             DataType::Array => (None, None, None),
             DataType::Enum => (None, None, None),
+            DataType::RowId => (None, Some(64), Some(0)),
         }
     }
 
