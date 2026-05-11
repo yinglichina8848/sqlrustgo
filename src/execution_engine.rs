@@ -2925,9 +2925,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     fn execute_show(&self, show: &ShowStatement) -> SqlResult<ExecutorResult> {
         match show {
             ShowStatement::Tables => self.execute_show_tables(),
-            ShowStatement::Columns { table, pattern } => {
-                self.execute_show_columns(table, pattern.as_deref())
-            }
+            ShowStatement::Columns {
+                table,
+                pattern,
+                full: _,
+            } => self.execute_show_columns(table, pattern.as_deref()),
             ShowStatement::Databases => Ok(ExecutorResult::new(
                 vec![vec![Value::Text("public".to_string())]],
                 1,
@@ -2941,6 +2943,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 "SHOW INDEX not yet implemented".to_string(),
             )),
             ShowStatement::Variables { like } => self.execute_show_variables(like.as_deref()),
+            ShowStatement::Status { like: _ } => Err(SqlError::ExecutionError(
+                "SHOW STATUS not yet implemented".to_string(),
+            )),
             ShowStatement::TableStatus { database: _ } => self.execute_show_table_status(),
             ShowStatement::Processlist => self.execute_show_processlist(),
         }

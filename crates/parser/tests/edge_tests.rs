@@ -73,7 +73,11 @@ fn test_many_digits_in_number() {
 #[test]
 fn test_negative_number() {
     let result = parse("SELECT -1 FROM t");
-    assert!(result.is_ok(), "Negative numbers should be supported: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Negative numbers should be supported: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -485,7 +489,11 @@ fn test_explain_select() {
     let result = parse("EXPLAIN SELECT * FROM t");
     assert!(result.is_ok(), "EXPLAIN should parse: {:?}", result);
     match result.unwrap() {
-        Statement::Explain(ExplainStatement { analyze, statement }) => {
+        Statement::Explain(ExplainStatement {
+            analyze,
+            statement,
+            format: _,
+        }) => {
             assert!(!analyze);
             match *statement {
                 Statement::Select(s) => assert_eq!(s.table, "t"),

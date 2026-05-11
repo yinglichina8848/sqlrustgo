@@ -506,6 +506,7 @@ pub enum ShowStatement {
     Columns {
         table: String,
         pattern: Option<String>,
+        full: bool,
     },
     Index {
         table: String,
@@ -517,6 +518,9 @@ pub enum ShowStatement {
         table: String,
     },
     Variables {
+        like: Option<String>,
+    },
+    Status {
         like: Option<String>,
     },
     TableStatus {
@@ -536,6 +540,7 @@ pub struct DescribeStatement {
 pub struct ExplainStatement {
     pub analyze: bool,
     pub statement: Box<Statement>,
+    pub format: Option<String>,
 }
 
 /// Column definition
@@ -974,9 +979,13 @@ impl Parser {
                     self.next();
                     Some(IsolationLevel::ReadUncommitted)
                 }
+                Some(Token::Only) => {
+                    self.next();
+                    None
+                }
                 Some(t) => {
                     return Err(format!(
-                        "Expected COMMITTED or UNCOMMITTED after READ, got {:?}",
+                        "Expected COMMITTED, UNCOMMITTED, or ONLY after READ, got {:?}",
                         t
                     ))
                 }
@@ -1123,6 +1132,14 @@ impl Parser {
                     )),
                     None => Err("Unexpected end of input after READ".to_string()),
                 }
+            }
+            Some(Token::Default) => {
+                self.next();
+                Ok(IsolationLevel::Serializable)
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "SNAPSHOT" => {
+                self.next();
+                Ok(IsolationLevel::SnapshotIsolation)
             }
             Some(t) => Err(format!("Unexpected isolation level keyword: {:?}", t)),
             None => Err("Unexpected end of input after READ".to_string()),
@@ -1872,7 +1889,8 @@ impl Parser {
                         };
                         self.next();
                         let right = self.parse_or_expression()?;
-                        expr = Expression::BinaryOp(Box::new(expr), op.to_string(), Box::new(right));
+                        expr =
+                            Expression::BinaryOp(Box::new(expr), op.to_string(), Box::new(right));
                     }
                     let alias = if matches!(self.current(), Some(Token::As)) {
                         self.next();
@@ -3496,6 +3514,11 @@ impl Parser {
                 self.next();
                 Ok(expr)
             }
+            Some(Token::Default) => {
+                let expr = Expression::Literal("DEFAULT".to_string());
+                self.next();
+                Ok(expr)
+            }
             Some(Token::Minus) => {
                 self.next();
                 if let Some(Token::NumberLiteral(n)) = self.current() {
@@ -4222,8 +4245,22 @@ impl Parser {
                 };
                 Ok(Statement::Show(ShowStatement::CreateTable { table }))
             }
+            Some(Token::Create) => {
+                self.next();
+                self.expect(Token::Table)?;
+                let table = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected table name".to_string()),
+                };
+                Ok(Statement::Show(ShowStatement::CreateTable { table }))
+            }
             Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "COLUMNS" => {
                 self.next();
+                let full = matches!(self.current(), Some(Token::Identifier(ref i)) if i.to_uppercase() == "FULL")
+                    || matches!(self.current(), Some(Token::Full));
+                if full {
+                    self.next();
+                }
                 self.expect(Token::From)?;
                 let table = match self.next() {
                     Some(Token::Identifier(name)) => name,
@@ -4239,9 +4276,34 @@ impl Parser {
                 } else {
                     None
                 };
-                Ok(Statement::Show(ShowStatement::Columns { table, pattern }))
+                Ok(Statement::Show(ShowStatement::Columns {
+                    table,
+                    pattern,
+                    full,
+                }))
             }
-            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "INDEX" => {
+            Some(Token::Full) => {
+                self.next();
+                match self.current() {
+                    Some(Token::Identifier(ref name)) if name.to_uppercase() == "COLUMNS" => {
+                        self.next();
+                        self.expect(Token::From)?;
+                        let table = match self.next() {
+                            Some(Token::Identifier(name)) => name,
+                            _ => return Err("Expected table name".to_string()),
+                        };
+                        Ok(Statement::Show(ShowStatement::Columns {
+                            table,
+                            pattern: None,
+                            full: true,
+                        }))
+                    }
+                    _ => Err("Expected FULL COLUMNS".to_string()),
+                }
+            }
+            Some(Token::Identifier(ref ident))
+                if ident.to_uppercase() == "INDEX" || ident.to_uppercase() == "INDEXES" =>
+            {
                 self.next();
                 self.expect(Token::From)?;
                 let table = match self.next() {
@@ -4306,6 +4368,19 @@ impl Parser {
                     _ => Err("Expected TABLE STATUS".to_string()),
                 }
             }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "STATUS" => {
+                self.next();
+                let like = if self.current() == Some(&Token::Like) {
+                    self.next();
+                    match self.next() {
+                        Some(Token::StringLiteral(s)) => Some(s),
+                        _ => return Err("Expected pattern after LIKE".to_string()),
+                    }
+                } else {
+                    None
+                };
+                Ok(Statement::Show(ShowStatement::Status { like }))
+            }
             Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "PROCESSLIST" => {
                 self.next();
                 Ok(Statement::Show(ShowStatement::Processlist))
@@ -4317,14 +4392,31 @@ impl Parser {
 
     fn parse_explain(&mut self) -> Result<Statement, String> {
         self.expect(Token::Explain)?;
-        let analyze = if self.current() == Some(&Token::Analyze) {
+
+        let mut analyze = false;
+        let mut format: Option<String> = None;
+
+        if self.current() == Some(&Token::Analyze) {
             self.next();
-            true
-        } else {
-            false
-        };
+            analyze = true;
+        } else if matches!(self.current(), Some(Token::Identifier(ref i)) if i.to_uppercase() == "FORMAT")
+        {
+            self.next();
+            self.expect(Token::Equal)?;
+            match self.next() {
+                Some(Token::Identifier(ref fmt)) => {
+                    format = Some(fmt.to_uppercase());
+                }
+                _ => return Err("Expected format identifier".to_string()),
+            }
+        }
+
         let statement = Box::new(self.parse_statement()?);
-        Ok(Statement::Explain(ExplainStatement { analyze, statement }))
+        Ok(Statement::Explain(ExplainStatement {
+            analyze,
+            statement,
+            format,
+        }))
     }
 
     fn parse_describe(&mut self) -> Result<Statement, String> {
@@ -5688,7 +5780,11 @@ mod tests {
         let result = parse("SHOW COLUMNS FROM users");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
-            Statement::Show(ShowStatement::Columns { table, pattern }) => {
+            Statement::Show(ShowStatement::Columns {
+                table,
+                pattern,
+                full: _,
+            }) => {
                 assert_eq!(table, "users");
                 assert!(pattern.is_none());
             }
@@ -5701,7 +5797,11 @@ mod tests {
         let result = parse("SHOW COLUMNS FROM users LIKE '%name%'");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
-            Statement::Show(ShowStatement::Columns { table, pattern }) => {
+            Statement::Show(ShowStatement::Columns {
+                table,
+                pattern,
+                full: _,
+            }) => {
                 assert_eq!(table, "users");
                 assert_eq!(pattern, Some("%name%".to_string()));
             }
