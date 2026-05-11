@@ -5,8 +5,8 @@
 use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
 use crate::physical_plan::{
-    AggregateExec, DeleteExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
-    ProjectionExec, SeqScanExec, SortExec,
+    AggregateExec, DeleteExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, MergeExec,
+    PhysicalPlan, ProjectionExec, SeqScanExec, SortExec,
 };
 use crate::Schema;
 use crate::{Expr, JoinType};
@@ -325,6 +325,19 @@ impl DefaultPlanner {
                 // DML statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
+            LogicalPlan::Merge {
+                target_table,
+                source_table,
+                on_condition,
+                matched_clause,
+                not_matched_clause,
+            } => Ok(Box::new(MergeExec::new(
+                target_table.clone(),
+                source_table.clone(),
+                on_condition.clone(),
+                matched_clause.clone(),
+                not_matched_clause.clone(),
+            ))),
             LogicalPlan::Delete {
                 table_name,
                 predicate,
@@ -509,6 +522,19 @@ impl DefaultPlanner {
             LogicalPlan::Update { .. } => {
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
+            LogicalPlan::Merge {
+                target_table,
+                source_table,
+                on_condition,
+                matched_clause,
+                not_matched_clause,
+            } => Ok(Box::new(MergeExec::new(
+                target_table.clone(),
+                source_table.clone(),
+                on_condition.clone(),
+                matched_clause.clone(),
+                not_matched_clause.clone(),
+            ))),
             LogicalPlan::CreateTrigger { .. }
             | LogicalPlan::CreateProcedure { .. }
             | LogicalPlan::Call { .. } => {

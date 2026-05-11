@@ -25,6 +25,7 @@ pub enum Statement {
     Insert(InsertStatement),
     Update(UpdateStatement),
     Delete(DeleteStatement),
+    Merge(MergeStatement),
     CreateTable(CreateTableStatement),
     CreateIndex(CreateIndexStatement),
     CreateView(CreateViewStatement),
@@ -435,6 +436,28 @@ pub struct UpdateStatement {
 pub struct DeleteStatement {
     pub table: String,
     pub where_clause: Option<Expression>,
+}
+
+/// MERGE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeStatement {
+    pub target_table: String,
+    pub source_table: String,
+    pub on_condition: Expression,
+    pub matched_clause: Option<MergeMatchedClause>,
+    pub not_matched_clause: Option<MergeNotMatchedClause>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeMatchedClause {
+    pub update_columns: Vec<String>,
+    pub update_values: Vec<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeNotMatchedClause {
+    pub insert_columns: Vec<String>,
+    pub insert_values: Vec<Expression>,
 }
 
 /// CREATE TABLE statement
@@ -887,6 +910,7 @@ impl Parser {
             Some(Token::Insert) | Some(Token::Replace) => self.parse_insert(),
             Some(Token::Update) => self.parse_update(),
             Some(Token::Delete) => self.parse_delete(),
+            Some(Token::Merge) => self.parse_merge(),
             Some(Token::Create) => self.parse_create(),
             Some(Token::Drop) => self.parse_drop(),
             Some(Token::Truncate) => self.parse_truncate(),
@@ -3650,6 +3674,102 @@ impl Parser {
         Ok(Statement::Delete(DeleteStatement {
             table,
             where_clause,
+        }))
+    }
+
+    fn parse_merge(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Merge)?;
+        self.expect(Token::Into)?;
+
+        let target_table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected target table name".to_string()),
+        };
+
+        self.expect(Token::Using)?;
+        let source_table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected source table name".to_string()),
+        };
+
+        self.expect(Token::On)?;
+        let on_condition = self.parse_expression()?;
+
+        let mut matched_clause = None;
+        let mut not_matched_clause = None;
+
+        while matches!(self.current(), Some(Token::When)) {
+            self.next();
+            if matches!(self.current(), Some(Token::Matched)) {
+                self.next();
+                self.expect(Token::Then)?;
+                if matches!(self.current(), Some(Token::Update)) {
+                    self.next();
+                    self.expect(Token::Set)?;
+                    let mut update_columns = Vec::new();
+                    let mut update_values = Vec::new();
+                    while let Some(Token::Identifier(col)) = self.next() {
+                        update_columns.push(col);
+                        if matches!(self.current(), Some(Token::Equal)) {
+                            self.next();
+                            update_values.push(self.parse_expression()?);
+                        }
+                        if matches!(self.current(), Some(Token::Comma)) {
+                            self.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    matched_clause = Some(MergeMatchedClause {
+                        update_columns,
+                        update_values,
+                    });
+                }
+            } else if matches!(self.current(), Some(Token::Not)) {
+                self.next();
+                self.expect(Token::Matched)?;
+                self.expect(Token::Then)?;
+                if matches!(self.current(), Some(Token::Insert)) {
+                    self.next();
+                    let mut insert_columns = Vec::new();
+                    let mut insert_values = Vec::new();
+                    if matches!(self.current(), Some(Token::LParen)) {
+                        self.next();
+                        while let Some(Token::Identifier(col)) = self.next() {
+                            insert_columns.push(col);
+                            if matches!(self.current(), Some(Token::Comma)) {
+                                self.next();
+                            } else {
+                                break;
+                            }
+                        }
+                        self.expect(Token::RParen)?;
+                    }
+                    self.expect(Token::Values)?;
+                    self.expect(Token::LParen)?;
+                    loop {
+                        insert_values.push(self.parse_expression()?);
+                        if matches!(self.current(), Some(Token::Comma)) {
+                            self.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    self.expect(Token::RParen)?;
+                    not_matched_clause = Some(MergeNotMatchedClause {
+                        insert_columns,
+                        insert_values,
+                    });
+                }
+            }
+        }
+
+        Ok(Statement::Merge(MergeStatement {
+            target_table,
+            source_table,
+            on_condition,
+            matched_clause,
+            not_matched_clause,
         }))
     }
 
