@@ -148,6 +148,9 @@ pub enum Token {
     Backup,
     Restore,
     Database,
+    Merge,
+    Matched,
+    Using,
 
     // Transaction keywords
     Transaction,
@@ -282,6 +285,9 @@ impl fmt::Display for Token {
             Token::Backup => write!(f, "BACKUP"),
             Token::Restore => write!(f, "RESTORE"),
             Token::Database => write!(f, "DATABASE"),
+            Token::Merge => write!(f, "MERGE"),
+            Token::Matched => write!(f, "MATCHED"),
+            Token::Using => write!(f, "USING"),
             // Constraint keywords
             Token::Foreign => write!(f, "FOREIGN"),
             Token::References => write!(f, "REFERENCES"),
