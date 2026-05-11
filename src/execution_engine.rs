@@ -1327,6 +1327,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     unique_constraints: vec![],
                     check_constraints: vec![],
                     partition_info: None,
+                    has_hidden_rowid: false,
+                    next_rowid: 1,
                 },
             ));
         }
@@ -2260,6 +2262,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 unique_constraints: old_info.unique_constraints.clone(),
                 check_constraints: old_info.check_constraints.clone(),
                 partition_info: None,
+                has_hidden_rowid: old_info.has_hidden_rowid,
+                next_rowid: old_info.next_rowid,
             })?;
             // Copy rows, pad with NULL for AddColumn
             let is_add = matches!(&alter.operation, AlterTableOperation::AddColumn { .. });
@@ -2313,6 +2317,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&info)?;
         self.query_cache
@@ -4193,6 +4199,8 @@ fn build_combined_schema(
         unique_constraints: vec![],
         check_constraints: vec![],
         partition_info: None,
+        has_hidden_rowid: false,
+        next_rowid: 1,
     })
 }
 
@@ -4285,6 +4293,8 @@ fn build_aggregate_schema(
         unique_constraints: vec![],
         check_constraints: vec![],
         partition_info: None,
+        has_hidden_rowid: false,
+        next_rowid: 1,
     })
 }
 

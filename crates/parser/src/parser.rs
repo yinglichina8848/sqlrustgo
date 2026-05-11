@@ -3074,6 +3074,7 @@ impl Parser {
             select,
             is_replace,
             on_duplicate_key_update,
+            with_clause: None,
         }))
     }
 

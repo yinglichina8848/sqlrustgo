@@ -959,6 +959,7 @@ impl StoredProcExecutor {
                 };
 
                 let num_columns = table_info.as_ref().map(|i| i.columns.len()).unwrap_or(0);
+                let has_hidden_rowid = table_info.as_ref().map(|i| i.has_hidden_rowid).unwrap_or(false);
                 let mut new_rows: Vec<Vec<Value>> = Vec::new();
                 let insert_count;
 
@@ -1077,7 +1078,13 @@ impl StoredProcExecutor {
 
                 {
                     let mut storage = self.storage.write().unwrap();
-                    for new_row in new_rows {
+                    for mut new_row in new_rows {
+                        // Add hidden rowid if table has hidden rowid support
+                        if has_hidden_rowid {
+                            if let Ok(Some(rowid)) = storage.get_and_increment_next_rowid(table_name) {
+                                new_row.insert(0, Value::Integer(rowid as i64));
+                            }
+                        }
                         storage
                             .insert(table_name, vec![new_row])
                             .map_err(|e| format!("Failed to insert: {}", e))?;

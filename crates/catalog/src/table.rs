@@ -53,6 +53,12 @@ pub struct Table {
     pub foreign_keys: Vec<ForeignKeyRef>,
     /// Current row count (estimated or actual)
     pub row_count: u64,
+    /// Whether this table uses a hidden rowid for tables without explicit PK
+    /// When true, rows are assigned a unique auto-incrementing rowid
+    pub has_hidden_rowid: bool,
+    /// Next auto-incrementing rowid value for tables with hidden rowid
+    /// Starts at 1 and increments after each INSERT
+    pub next_rowid: u64,
 }
 
 impl Table {
@@ -65,6 +71,8 @@ impl Table {
             indices: Vec::new(),
             foreign_keys: Vec::new(),
             row_count: 0,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         }
     }
 
@@ -117,7 +125,41 @@ impl Table {
         );
 
         self.primary_key = Some(column_names);
+        // Explicit PK means no hidden rowid needed
+        self.has_hidden_rowid = false;
         Ok(self)
+    }
+
+    /// Enable hidden rowid for this table (used when no explicit primary key is defined)
+    /// Returns error if table already has a primary key
+    pub fn enable_hidden_rowid(mut self) -> CatalogResult<Self> {
+        if self.primary_key.is_some() {
+            return Err(CatalogError::InvalidOperation(
+                "Cannot enable hidden rowid on table with explicit primary key".to_string(),
+            ));
+        }
+        self.has_hidden_rowid = true;
+        Ok(self)
+    }
+
+    /// Get the next auto-incrementing rowid and increment the counter
+    /// Returns None if hidden rowid is not enabled
+    pub fn get_next_rowid(&mut self) -> Option<u64> {
+        if !self.has_hidden_rowid {
+            return None;
+        }
+        let rowid = self.next_rowid;
+        self.next_rowid += 1;
+        Some(rowid)
+    }
+
+    /// Peek at the next rowid without incrementing
+    /// Returns None if hidden rowid is not enabled
+    pub fn peek_next_rowid(&self) -> Option<u64> {
+        if !self.has_hidden_rowid {
+            return None;
+        }
+        Some(self.next_rowid)
     }
 
     /// Add a foreign key constraint
@@ -515,5 +557,110 @@ mod tests {
         .primary_key(vec!["id".to_string()])
         .unwrap();
         assert_eq!(table.indices.len(), 2);
+    }
+
+    // Hidden rowid tests
+
+    #[test]
+    fn test_hidden_rowid_disabled_by_default() {
+        let table = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        );
+        assert!(!table.has_hidden_rowid);
+    }
+
+    #[test]
+    fn test_hidden_rowid_enabled_for_table_without_pk() {
+        let table = Table::new(
+            "logs",
+            vec![ColumnDefinition::new("message", DataType::Text)],
+        )
+        .enable_hidden_rowid()
+        .unwrap();
+        assert!(table.has_hidden_rowid);
+        assert!(table.primary_key.is_none());
+    }
+
+    #[test]
+    fn test_hidden_rowid_rejected_for_table_with_pk() {
+        let result = Table::new(
+            "users",
+            vec![
+                ColumnDefinition::new("id", DataType::Integer),
+                ColumnDefinition::new("name", DataType::Text),
+            ],
+        )
+        .primary_key(vec!["id".to_string()])
+        .unwrap()
+        .enable_hidden_rowid();
+
+        assert!(matches!(result, Err(CatalogError::InvalidOperation(_))));
+    }
+
+    #[test]
+    fn test_explicit_pk_disables_hidden_rowid() {
+        let table = Table::new(
+            "users",
+            vec![
+                ColumnDefinition::new("id", DataType::Integer),
+                ColumnDefinition::new("email", DataType::Text),
+            ],
+        )
+        .primary_key(vec!["id".to_string()])
+        .unwrap();
+
+        // Explicit PK means no hidden rowid needed
+        assert!(!table.has_hidden_rowid);
+        assert!(table.primary_key.is_some());
+    }
+
+    #[test]
+    fn test_hidden_rowid_survives_serialization() {
+        let table = Table::new("logs", vec![ColumnDefinition::new("msg", DataType::Text)])
+            .enable_hidden_rowid()
+            .unwrap();
+
+        // Round-trip through JSON serialization
+        let json = serde_json::to_string(&table).unwrap();
+        let deserialized: Table = serde_json::from_str(&json).unwrap();
+
+        assert!(deserialized.has_hidden_rowid);
+        assert!(deserialized.primary_key.is_none());
+        assert_eq!(deserialized.name, "logs");
+    }
+
+    #[test]
+    fn test_get_next_rowid() {
+        let mut table = Table::new("logs", vec![ColumnDefinition::new("msg", DataType::Text)])
+            .enable_hidden_rowid()
+            .unwrap();
+
+        assert_eq!(table.peek_next_rowid(), Some(1));
+        assert_eq!(table.get_next_rowid(), Some(1));
+        assert_eq!(table.peek_next_rowid(), Some(2));
+        assert_eq!(table.get_next_rowid(), Some(2));
+        assert_eq!(table.get_next_rowid(), Some(3));
+        assert_eq!(table.peek_next_rowid(), Some(4));
+    }
+
+    #[test]
+    fn test_get_next_rowid_requires_hidden_rowid() {
+        let mut table = Table::new("users", vec![ColumnDefinition::new("id", DataType::Integer)]);
+
+        assert_eq!(table.get_next_rowid(), None);
+        assert_eq!(table.peek_next_rowid(), None);
+    }
+
+    #[test]
+    fn test_next_rowid_survives_serialization() {
+        let table = Table::new("logs", vec![ColumnDefinition::new("msg", DataType::Text)])
+            .enable_hidden_rowid()
+            .unwrap();
+
+        let json = serde_json::to_string(&table).unwrap();
+        let deserialized: Table = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.next_rowid, 1);
     }
 }
