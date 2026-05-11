@@ -130,6 +130,75 @@ pub struct ColumnPrivilegeRow {
     pub is_grantable: String,
 }
 
+/// Row representing a character set in information_schema.character_sets
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterSetRow {
+    pub character_set_name: String,
+    pub default_collate_name: String,
+    pub description: String,
+}
+
+/// Row representing a collation in information_schema.collations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollationRow {
+    pub collation_name: String,
+    pub character_set_name: String,
+    pub is_default: String,
+    pub is_compiled: String,
+    pub sortlen: i32,
+}
+
+/// Row representing a referential constraint in information_schema.referential_constraints
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReferentialConstraintRow {
+    pub constraint_catalog: String,
+    pub constraint_schema: String,
+    pub constraint_name: String,
+    pub unique_constraint_catalog: String,
+    pub unique_constraint_schema: String,
+    pub unique_constraint_name: Option<String>,
+    pub match_option: String,
+    pub update_rule: String,
+    pub delete_rule: String,
+}
+
+/// Row representing a table constraint in information_schema.table_constraints
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableConstraintRow {
+    pub constraint_catalog: String,
+    pub constraint_schema: String,
+    pub constraint_name: String,
+    pub table_schema: String,
+    pub table_name: String,
+    pub constraint_type: String,
+    pub is_enforced: String,
+}
+
+/// Row representing key column usage in information_schema.key_column_usage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyColumnUsageRow {
+    pub constraint_catalog: String,
+    pub constraint_schema: String,
+    pub constraint_name: String,
+    pub table_catalog: String,
+    pub table_schema: String,
+    pub table_name: String,
+    pub column_name: String,
+    pub ordinal_position: i32,
+    pub position_in_unique_constraint: Option<i32>,
+}
+
+/// Row representing a view in information_schema.views
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewRow {
+    pub table_schema: String,
+    pub table_name: String,
+    pub view_definition: Option<String>,
+    pub check_option: String,
+    pub is_updatable: String,
+    pub is_insertable_into: String,
+}
+
 /// INFORMATION_SCHEMA providing standard SQL metadata views
 pub struct InformationSchema<'a> {
     catalog: &'a Catalog,
@@ -253,6 +322,7 @@ impl<'a> InformationSchema<'a> {
             DataType::Uuid => (None, Some(128), None),
             DataType::Array => (None, None, None),
             DataType::Enum => (None, None, None),
+            DataType::RowId => (None, Some(64), Some(0)),
         }
     }
 
@@ -417,6 +487,165 @@ impl<'a> InformationSchema<'a> {
         }
 
         rows
+    }
+
+    pub fn get_character_sets(&self) -> Vec<CharacterSetRow> {
+        vec![CharacterSetRow {
+            character_set_name: "utf8".to_string(),
+            default_collate_name: "utf8_general_ci".to_string(),
+            description: "UTF-8 Unicode".to_string(),
+        }]
+    }
+
+    pub fn get_collations(&self) -> Vec<CollationRow> {
+        vec![
+            CollationRow {
+                collation_name: "utf8_general_ci".to_string(),
+                character_set_name: "utf8".to_string(),
+                is_default: "Yes".to_string(),
+                is_compiled: "Yes".to_string(),
+                sortlen: 8,
+            },
+            CollationRow {
+                collation_name: "utf8_bin".to_string(),
+                character_set_name: "utf8".to_string(),
+                is_default: "No".to_string(),
+                is_compiled: "Yes".to_string(),
+                sortlen: 8,
+            },
+        ]
+    }
+
+    pub fn get_referential_constraints(&self) -> Vec<ReferentialConstraintRow> {
+        let mut rows = Vec::new();
+
+        for schema in self.catalog.schemas().values() {
+            for table_ref in schema.tables() {
+                for fk in &table_ref.foreign_keys {
+                    rows.push(ReferentialConstraintRow {
+                        constraint_catalog: "def".to_string(),
+                        constraint_schema: schema.name.clone(),
+                        constraint_name: format!("fk_{}_{}", table_ref.name, fk.columns.join("_")),
+                        unique_constraint_catalog: "def".to_string(),
+                        unique_constraint_schema: fk.referenced_schema.clone(),
+                        unique_constraint_name: Some(format!("pk_{}", fk.referenced_table)),
+                        match_option: "NONE".to_string(),
+                        update_rule: Self::fk_action_to_string(&fk.on_update),
+                        delete_rule: Self::fk_action_to_string(&fk.on_delete),
+                    });
+                }
+            }
+        }
+
+        rows
+    }
+
+    pub fn get_table_constraints(&self) -> Vec<TableConstraintRow> {
+        let mut rows = Vec::new();
+
+        for schema in self.catalog.schemas().values() {
+            for table_ref in schema.tables() {
+                if table_ref.primary_key.is_some() {
+                    rows.push(TableConstraintRow {
+                        constraint_catalog: "def".to_string(),
+                        constraint_schema: schema.name.clone(),
+                        constraint_name: format!("pk_{}", table_ref.name),
+                        table_schema: schema.name.clone(),
+                        table_name: table_ref.name.clone(),
+                        constraint_type: "PRIMARY KEY".to_string(),
+                        is_enforced: "YES".to_string(),
+                    });
+                }
+
+                for fk in &table_ref.foreign_keys {
+                    rows.push(TableConstraintRow {
+                        constraint_catalog: "def".to_string(),
+                        constraint_schema: schema.name.clone(),
+                        constraint_name: format!("fk_{}_{}", table_ref.name, fk.columns.join("_")),
+                        table_schema: schema.name.clone(),
+                        table_name: table_ref.name.clone(),
+                        constraint_type: "FOREIGN KEY".to_string(),
+                        is_enforced: "YES".to_string(),
+                    });
+                }
+
+                for index in &table_ref.indices {
+                    if index.is_unique && !index.is_primary_key {
+                        rows.push(TableConstraintRow {
+                            constraint_catalog: "def".to_string(),
+                            constraint_schema: schema.name.clone(),
+                            constraint_name: index.name.clone(),
+                            table_schema: schema.name.clone(),
+                            table_name: table_ref.name.clone(),
+                            constraint_type: "UNIQUE".to_string(),
+                            is_enforced: "YES".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        rows
+    }
+
+    pub fn get_key_column_usage(&self) -> Vec<KeyColumnUsageRow> {
+        let mut rows = Vec::new();
+
+        for schema in self.catalog.schemas().values() {
+            for table_ref in schema.tables() {
+                if let Some(ref pk_cols) = table_ref.primary_key {
+                    for (i, col) in pk_cols.iter().enumerate() {
+                        rows.push(KeyColumnUsageRow {
+                            constraint_catalog: "def".to_string(),
+                            constraint_schema: schema.name.clone(),
+                            constraint_name: format!("pk_{}", table_ref.name),
+                            table_catalog: "def".to_string(),
+                            table_schema: schema.name.clone(),
+                            table_name: table_ref.name.clone(),
+                            column_name: col.clone(),
+                            ordinal_position: (i + 1) as i32,
+                            position_in_unique_constraint: None,
+                        });
+                    }
+                }
+
+                for fk in &table_ref.foreign_keys {
+                    for (i, col) in fk.columns.iter().enumerate() {
+                        rows.push(KeyColumnUsageRow {
+                            constraint_catalog: "def".to_string(),
+                            constraint_schema: schema.name.clone(),
+                            constraint_name: format!(
+                                "fk_{}_{}",
+                                table_ref.name,
+                                fk.columns.join("_")
+                            ),
+                            table_catalog: "def".to_string(),
+                            table_schema: schema.name.clone(),
+                            table_name: table_ref.name.clone(),
+                            column_name: col.clone(),
+                            ordinal_position: (i + 1) as i32,
+                            position_in_unique_constraint: Some((i + 1) as i32),
+                        });
+                    }
+                }
+            }
+        }
+
+        rows
+    }
+
+    pub fn get_views(&self) -> Vec<ViewRow> {
+        Vec::new()
+    }
+
+    fn fk_action_to_string(action: &Option<sqlrustgo_catalog::ForeignKeyAction>) -> String {
+        match action {
+            Some(sqlrustgo_catalog::ForeignKeyAction::Cascade) => "CASCADE".to_string(),
+            Some(sqlrustgo_catalog::ForeignKeyAction::Restrict) => "RESTRICT".to_string(),
+            Some(sqlrustgo_catalog::ForeignKeyAction::SetNull) => "SET NULL".to_string(),
+            Some(sqlrustgo_catalog::ForeignKeyAction::NoAction) => "NO ACTION".to_string(),
+            None => "NO ACTION".to_string(),
+        }
     }
 }
 
@@ -664,7 +893,6 @@ mod tests {
         let catalog = Catalog::new("test");
         let info_schema = InformationSchema::new(&catalog);
 
-        // New tables should return empty
         assert!(info_schema.get_triggers().is_empty());
         assert!(info_schema.get_routines().is_empty());
         assert!(info_schema.get_parameters().is_empty());
@@ -672,5 +900,116 @@ mod tests {
         assert!(info_schema.get_schema_privileges().is_empty());
         assert!(info_schema.get_table_privileges().is_empty());
         assert!(info_schema.get_column_privileges().is_empty());
+        assert!(info_schema.get_views().is_empty());
+        assert!(info_schema.get_referential_constraints().is_empty());
+        assert!(info_schema.get_table_constraints().is_empty());
+        assert!(info_schema.get_key_column_usage().is_empty());
+    }
+
+    #[test]
+    fn test_character_sets_returns_defaults() {
+        let catalog = create_test_catalog();
+        let info_schema = InformationSchema::new(&catalog);
+
+        let charsets = info_schema.get_character_sets();
+
+        assert!(!charsets.is_empty());
+        let utf8 = charsets
+            .iter()
+            .find(|c| c.character_set_name == "utf8")
+            .unwrap();
+        assert_eq!(utf8.default_collate_name, "utf8_general_ci");
+    }
+
+    #[test]
+    fn test_collations_returns_defaults() {
+        let catalog = create_test_catalog();
+        let info_schema = InformationSchema::new(&catalog);
+
+        let collations = info_schema.get_collations();
+
+        assert!(collations.len() >= 2);
+        assert!(collations.iter().any(|c| c.character_set_name == "utf8"));
+    }
+
+    #[test]
+    fn test_referential_constraints_with_foreign_key() {
+        let catalog = create_test_catalog();
+        let info_schema = InformationSchema::new(&catalog);
+
+        let constraints = info_schema.get_referential_constraints();
+
+        assert!(!constraints.is_empty());
+
+        let fk = constraints
+            .iter()
+            .find(|c| c.constraint_name.contains("fk_"))
+            .unwrap();
+        assert_eq!(fk.match_option, "NONE");
+        assert_eq!(fk.delete_rule, "CASCADE");
+        assert_eq!(fk.update_rule, "CASCADE");
+    }
+
+    #[test]
+    fn test_table_constraints_includes_primary_key() {
+        let catalog = create_test_catalog();
+        let info_schema = InformationSchema::new(&catalog);
+
+        let constraints = info_schema.get_table_constraints();
+
+        assert!(constraints
+            .iter()
+            .any(|c| c.constraint_type == "PRIMARY KEY"));
+        assert!(constraints
+            .iter()
+            .any(|c| c.constraint_type == "FOREIGN KEY"));
+    }
+
+    #[test]
+    fn test_key_column_usage_for_primary_key() {
+        let catalog = create_test_catalog();
+        let info_schema = InformationSchema::new(&catalog);
+
+        let usage = info_schema.get_key_column_usage();
+
+        assert!(!usage.is_empty());
+
+        let pk_usage: Vec<_> = usage
+            .iter()
+            .filter(|k| k.constraint_name.contains("pk_"))
+            .collect();
+        assert!(!pk_usage.is_empty());
+
+        let id_pk = pk_usage.iter().find(|k| k.column_name == "id").unwrap();
+        assert_eq!(id_pk.ordinal_position, 1);
+        assert!(id_pk.position_in_unique_constraint.is_none());
+    }
+
+    #[test]
+    fn test_key_column_usage_for_foreign_key() {
+        let catalog = create_test_catalog();
+        let info_schema = InformationSchema::new(&catalog);
+
+        let usage = info_schema.get_key_column_usage();
+
+        let fk_usage: Vec<_> = usage
+            .iter()
+            .filter(|k| k.constraint_name.contains("fk_"))
+            .collect();
+        assert!(!fk_usage.is_empty());
+
+        let user_id_fk = fk_usage
+            .iter()
+            .find(|k| k.column_name == "user_id")
+            .unwrap();
+        assert!(user_id_fk.position_in_unique_constraint.is_some());
+    }
+
+    #[test]
+    fn test_views_returns_empty() {
+        let catalog = create_test_catalog();
+        let info_schema = InformationSchema::new(&catalog);
+
+        assert!(info_schema.get_views().is_empty());
     }
 }

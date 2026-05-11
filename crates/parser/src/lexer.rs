@@ -189,6 +189,15 @@ impl<'a> Lexer<'a> {
                     Token::Not
                 }
             }
+            '|' => {
+                if self.input[self.position..].starts_with("||") {
+                    self.position += 2;
+                    Token::Concat
+                } else {
+                    self.position += 1;
+                    Token::Not
+                }
+            }
             '>' => {
                 if self.input[self.position..].starts_with(">>") {
                     self.position += 2;
@@ -353,6 +362,9 @@ impl<'a> Lexer<'a> {
                     "REPAIR" => Token::Repair,
                     "BACKUP" => Token::Backup,
                     "RESTORE" => Token::Restore,
+                    "MERGE" => Token::Merge,
+                    "MATCHED" => Token::Matched,
+                    "USING" => Token::Using,
                     "WINDOW" => Token::Window,
                     "PARTITION" => Token::Partition,
                     "RANGE" => Token::Range,

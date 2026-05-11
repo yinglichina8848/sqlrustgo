@@ -173,6 +173,7 @@ impl<'a> LocalExecutor<'a> {
                 "Sort" => self.execute_sort(plan),
                 "Limit" => self.execute_limit(plan),
                 "Delete" => self.execute_delete(plan),
+                "Merge" => self.execute_merge(plan),
                 _ => Ok(ExecutorResult::empty()),
             }?;
             let duration_ms = start.elapsed().as_millis() as u64;
@@ -1275,6 +1276,102 @@ impl<'a> LocalExecutor<'a> {
                 Ok(ExecutorResult::new(vec![], deleted))
             }
             None => Ok(ExecutorResult::empty()),
+        }
+    }
+
+    /// Execute merge
+    fn execute_merge(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
+        use sqlrustgo_planner::MergeExec;
+
+        let merge_exec = plan.as_any().downcast_ref::<MergeExec>();
+
+        match merge_exec {
+            Some(merge_plan) => {
+                let target_table = merge_plan.target_table();
+                let source_table = merge_plan.source_table();
+
+                let source_records = self.storage.scan(source_table).unwrap_or_default();
+                let mut matched_count = 0u64;
+                let mut inserted_count = 0u64;
+
+                for source_record in source_records.iter() {
+                    let on_cond = merge_plan.on_condition();
+                    let matches = self.evaluate_merge_condition(on_cond, source_record);
+
+                    if matches {
+                        if let Some(ref clause) = merge_plan.matched_clause() {
+                            let updates: Vec<(String, sqlrustgo_types::Value)> = clause
+                                .update_columns
+                                .iter()
+                                .zip(clause.update_values.iter())
+                                .map(|(col, val)| {
+                                    let evaluated = self.evaluate_expression(val, source_record);
+                                    (col.clone(), evaluated)
+                                })
+                                .collect();
+                            self.storage.update(target_table, &[], &updates)?;
+                            matched_count += 1;
+                        }
+                    } else {
+                        if let Some(ref clause) = merge_plan.not_matched_clause() {
+                            let values: Vec<sqlrustgo_types::Value> = clause
+                                .insert_values
+                                .iter()
+                                .map(|val| self.evaluate_expression(val, source_record))
+                                .collect();
+                            self.storage.insert(target_table, vec![values])?;
+                            inserted_count += 1;
+                        }
+                    }
+                }
+
+                Ok(ExecutorResult::new(
+                    vec![],
+                    matched_count + inserted_count,
+                ))
+            }
+            None => Ok(ExecutorResult::empty()),
+        }
+    }
+
+    /// Evaluate merge condition against a source record
+    fn evaluate_merge_condition(
+        &self,
+        condition: &sqlrustgo_planner::Expr,
+        _record: &[sqlrustgo_types::Value],
+    ) -> bool {
+        use sqlrustgo_planner::Expr;
+
+        match condition {
+            Expr::Literal(sqlrustgo_types::Value::Boolean(b)) => *b,
+            Expr::BinaryExpr { left, op: _, right } => {
+                let left_val = match left.as_ref() {
+                    Expr::Literal(v) => v.clone(),
+                    _ => sqlrustgo_types::Value::Null,
+                };
+                let right_val = match right.as_ref() {
+                    Expr::Literal(v) => v.clone(),
+                    _ => sqlrustgo_types::Value::Null,
+                };
+                left_val == right_val
+            }
+            _ => false,
+        }
+    }
+
+    /// Evaluate an expression against a record
+    fn evaluate_expression(
+        &self,
+        expr: &sqlrustgo_planner::Expr,
+        _record: &[sqlrustgo_types::Value],
+    ) -> sqlrustgo_types::Value {
+        use sqlrustgo_planner::Expr;
+
+        match expr {
+            Expr::Literal(v) => v.clone(),
+            Expr::Column(_) => sqlrustgo_types::Value::Null,
+            Expr::BinaryExpr { .. } => sqlrustgo_types::Value::Null,
+            _ => sqlrustgo_types::Value::Null,
         }
     }
 

@@ -328,6 +328,8 @@ pub fn create_system_audit_log_table(storage: &mut dyn StorageEngine) -> SqlResu
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         })?;
     }
     Ok(())

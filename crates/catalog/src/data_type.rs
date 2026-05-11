@@ -33,6 +33,9 @@ pub enum DataType {
     Array,
     /// Enum type (enumeration with allowed values)
     Enum,
+    /// Hidden rowid type (auto-incrementing integer for tables without explicit PK)
+    /// This is an internal type, not exposed to users via CREATE TABLE
+    RowId,
 }
 
 impl DataType {
@@ -50,6 +53,7 @@ impl DataType {
             DataType::Uuid => "UUID",
             DataType::Array => "ARRAY",
             DataType::Enum => "ENUM",
+            DataType::RowId => "ROWID",
         }
     }
 
@@ -81,6 +85,7 @@ impl DataType {
                 | DataType::Boolean
                 | DataType::Date
                 | DataType::Uuid
+                | DataType::RowId
         )
     }
 

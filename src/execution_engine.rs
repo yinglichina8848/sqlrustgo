@@ -1327,6 +1327,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     unique_constraints: vec![],
                     check_constraints: vec![],
                     partition_info: None,
+                    has_hidden_rowid: false,
+                    next_rowid: 1,
                 },
             ));
         }
@@ -2260,6 +2262,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 unique_constraints: old_info.unique_constraints.clone(),
                 check_constraints: old_info.check_constraints.clone(),
                 partition_info: None,
+                has_hidden_rowid: old_info.has_hidden_rowid,
+                next_rowid: old_info.next_rowid,
             })?;
             // Copy rows, pad with NULL for AddColumn
             let is_add = matches!(&alter.operation, AlterTableOperation::AddColumn { .. });
@@ -2313,6 +2317,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&info)?;
         self.query_cache
@@ -2925,9 +2931,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     fn execute_show(&self, show: &ShowStatement) -> SqlResult<ExecutorResult> {
         match show {
             ShowStatement::Tables => self.execute_show_tables(),
-            ShowStatement::Columns { table, pattern } => {
-                self.execute_show_columns(table, pattern.as_deref())
-            }
+            ShowStatement::Columns {
+                table,
+                pattern,
+                full: _,
+            } => self.execute_show_columns(table, pattern.as_deref()),
             ShowStatement::Databases => Ok(ExecutorResult::new(
                 vec![vec![Value::Text("public".to_string())]],
                 1,
@@ -2941,6 +2949,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 "SHOW INDEX not yet implemented".to_string(),
             )),
             ShowStatement::Variables { like } => self.execute_show_variables(like.as_deref()),
+            ShowStatement::Status { like: _ } => Err(SqlError::ExecutionError(
+                "SHOW STATUS not yet implemented".to_string(),
+            )),
             ShowStatement::TableStatus { database: _ } => self.execute_show_table_status(),
             ShowStatement::Processlist => self.execute_show_processlist(),
         }
@@ -4188,6 +4199,8 @@ fn build_combined_schema(
         unique_constraints: vec![],
         check_constraints: vec![],
         partition_info: None,
+        has_hidden_rowid: false,
+        next_rowid: 1,
     })
 }
 
@@ -4280,6 +4293,8 @@ fn build_aggregate_schema(
         unique_constraints: vec![],
         check_constraints: vec![],
         partition_info: None,
+        has_hidden_rowid: false,
+        next_rowid: 1,
     })
 }
 

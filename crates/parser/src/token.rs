@@ -148,6 +148,9 @@ pub enum Token {
     Backup,
     Restore,
     Database,
+    Merge,
+    Matched,
+    Using,
 
     // Transaction keywords
     Transaction,
@@ -206,6 +209,7 @@ pub enum Token {
     And,
     Or,
     Not,
+    Concat,
     True,
     False,
     Plus,
@@ -282,6 +286,9 @@ impl fmt::Display for Token {
             Token::Backup => write!(f, "BACKUP"),
             Token::Restore => write!(f, "RESTORE"),
             Token::Database => write!(f, "DATABASE"),
+            Token::Merge => write!(f, "MERGE"),
+            Token::Matched => write!(f, "MATCHED"),
+            Token::Using => write!(f, "USING"),
             // Constraint keywords
             Token::Foreign => write!(f, "FOREIGN"),
             Token::References => write!(f, "REFERENCES"),
@@ -417,6 +424,7 @@ impl fmt::Display for Token {
             Token::And => write!(f, "AND"),
             Token::Or => write!(f, "OR"),
             Token::Not => write!(f, "NOT"),
+            Token::Concat => write!(f, "||"),
             Token::True => write!(f, "TRUE"),
             Token::False => write!(f, "FALSE"),
             Token::Plus => write!(f, "+"),

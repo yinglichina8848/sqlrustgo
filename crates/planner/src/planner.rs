@@ -5,8 +5,8 @@
 use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
 use crate::physical_plan::{
-    AggregateExec, DeleteExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
-    ProjectionExec, SeqScanExec, SortExec,
+    AggregateExec, DeleteExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, MergeExec,
+    PhysicalPlan, ProjectionExec, SeqScanExec, SortExec,
 };
 use crate::Schema;
 use crate::{Expr, JoinType};
@@ -87,9 +87,9 @@ impl DefaultPlanner {
                 let seq_cost = self.cost_model.seq_scan_cost(row_count, page_count);
                 let index_cost =
                     self.cost_model
-                        .index_scan_cost(row_count, index_pages, page_count);
+                        .index_scan_cost(3, index_pages, row_count, page_count);
 
-                if index_cost < seq_cost {
+                if index_cost.less_than(&seq_cost) {
                     let (column, index_name) = &indexes[0];
                     return Box::new(
                         IndexScanExec::new(
@@ -325,6 +325,19 @@ impl DefaultPlanner {
                 // DML statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
+            LogicalPlan::Merge {
+                target_table,
+                source_table,
+                on_condition,
+                matched_clause,
+                not_matched_clause,
+            } => Ok(Box::new(MergeExec::new(
+                target_table.clone(),
+                source_table.clone(),
+                on_condition.clone(),
+                matched_clause.clone(),
+                not_matched_clause.clone(),
+            ))),
             LogicalPlan::Delete {
                 table_name,
                 predicate,
@@ -509,6 +522,19 @@ impl DefaultPlanner {
             LogicalPlan::Update { .. } => {
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
+            LogicalPlan::Merge {
+                target_table,
+                source_table,
+                on_condition,
+                matched_clause,
+                not_matched_clause,
+            } => Ok(Box::new(MergeExec::new(
+                target_table.clone(),
+                source_table.clone(),
+                on_condition.clone(),
+                matched_clause.clone(),
+                not_matched_clause.clone(),
+            ))),
             LogicalPlan::CreateTrigger { .. }
             | LogicalPlan::CreateProcedure { .. }
             | LogicalPlan::Call { .. } => {

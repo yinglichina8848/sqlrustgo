@@ -79,6 +79,14 @@ pub enum LogicalPlan {
         table_name: String,
         predicate: Option<Expr>,
     },
+    /// Merge statement
+    Merge {
+        target_table: String,
+        source_table: String,
+        on_condition: Expr,
+        matched_clause: Option<MergeMatchedClause>,
+        not_matched_clause: Option<MergeNotMatchedClause>,
+    },
     /// Create table
     CreateTable {
         table_name: String,
@@ -164,6 +172,18 @@ pub enum ProcedureStatement {
     Select(String),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeMatchedClause {
+    pub update_columns: Vec<String>,
+    pub update_values: Vec<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeNotMatchedClause {
+    pub insert_columns: Vec<String>,
+    pub insert_values: Vec<Expr>,
+}
+
 impl LogicalPlan {
     /// Get the schema of this plan (cloned)
     pub fn schema(&self) -> Schema {
@@ -182,6 +202,7 @@ impl LogicalPlan {
             LogicalPlan::Union { left, .. } => left.schema(),
             LogicalPlan::Update { .. } => Schema::empty(),
             LogicalPlan::Delete { .. } => Schema::empty(),
+            LogicalPlan::Merge { .. } => Schema::empty(),
             LogicalPlan::DropTable { .. } => Schema::empty(),
             LogicalPlan::CreateTrigger { .. } => Schema::empty(),
             LogicalPlan::CreateProcedure { .. } => Schema::empty(),

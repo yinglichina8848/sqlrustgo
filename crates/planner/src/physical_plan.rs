@@ -486,6 +486,76 @@ impl PhysicalPlan for DeleteExec {
     }
 }
 
+use crate::logical_plan::{MergeMatchedClause, MergeNotMatchedClause};
+
+/// Merge execution operator
+#[allow(dead_code)]
+pub struct MergeExec {
+    target_table: String,
+    source_table: String,
+    on_condition: Expr,
+    matched_clause: Option<MergeMatchedClause>,
+    not_matched_clause: Option<MergeNotMatchedClause>,
+    schema: Schema,
+}
+
+impl MergeExec {
+    pub fn new(
+        target_table: String,
+        source_table: String,
+        on_condition: Expr,
+        matched_clause: Option<MergeMatchedClause>,
+        not_matched_clause: Option<MergeNotMatchedClause>,
+    ) -> Self {
+        Self {
+            target_table,
+            source_table,
+            on_condition,
+            matched_clause,
+            not_matched_clause,
+            schema: Schema::empty(),
+        }
+    }
+
+    pub fn target_table(&self) -> &str {
+        &self.target_table
+    }
+
+    pub fn source_table(&self) -> &str {
+        &self.source_table
+    }
+
+    pub fn on_condition(&self) -> &Expr {
+        &self.on_condition
+    }
+
+    pub fn matched_clause(&self) -> Option<&MergeMatchedClause> {
+        self.matched_clause.as_ref()
+    }
+
+    pub fn not_matched_clause(&self) -> Option<&MergeNotMatchedClause> {
+        self.not_matched_clause.as_ref()
+    }
+}
+
+impl PhysicalPlan for MergeExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![]
+    }
+
+    fn name(&self) -> &str {
+        "Merge"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
