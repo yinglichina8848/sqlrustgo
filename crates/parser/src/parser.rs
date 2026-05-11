@@ -1852,8 +1852,28 @@ impl Parser {
                     }
                 }
                 Some(Token::LParen) => {
-                    let expr = self.parse_expression()?;
+                    self.next();
+                    let inner_expr = self.parse_or_expression()?;
                     self.expect(Token::RParen)?;
+                    let mut expr = inner_expr;
+                    while matches!(self.current(), Some(Token::Plus))
+                        || matches!(self.current(), Some(Token::Minus))
+                        || matches!(self.current(), Some(Token::Star))
+                        || matches!(self.current(), Some(Token::Slash))
+                        || matches!(self.current(), Some(Token::Percent))
+                    {
+                        let op = match self.current() {
+                            Some(Token::Plus) => "+",
+                            Some(Token::Minus) => "-",
+                            Some(Token::Star) => "*",
+                            Some(Token::Slash) => "/",
+                            Some(Token::Percent) => "%",
+                            _ => break,
+                        };
+                        self.next();
+                        let right = self.parse_or_expression()?;
+                        expr = Expression::BinaryOp(Box::new(expr), op.to_string(), Box::new(right));
+                    }
                     let alias = if matches!(self.current(), Some(Token::As)) {
                         self.next();
                         match self.current() {
@@ -1897,12 +1917,39 @@ impl Parser {
                 }
                 // Handle NULL literal in SELECT
                 Some(Token::Null) => {
-                    columns.push(SelectColumn {
-                        name: "NULL".to_string(),
-                        alias: None,
-                        expression: Some(Expression::Literal("NULL".to_string())),
-                    });
-                    self.next();
+                    let is_operator = matches!(self.peek(), Some(Token::Plus))
+                        || matches!(self.peek(), Some(Token::Minus))
+                        || matches!(self.peek(), Some(Token::Star))
+                        || matches!(self.peek(), Some(Token::Slash))
+                        || matches!(self.peek(), Some(Token::Percent));
+                    if is_operator {
+                        let expr = self.parse_expression()?;
+                        let alias = if matches!(self.current(), Some(Token::As)) {
+                            self.next();
+                            match self.current() {
+                                Some(Token::Identifier(name)) => {
+                                    let alias_name = name.clone();
+                                    self.next();
+                                    Some(alias_name)
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
+                        columns.push(SelectColumn {
+                            name: format!("{:?}", expr),
+                            alias,
+                            expression: Some(expr),
+                        });
+                    } else {
+                        columns.push(SelectColumn {
+                            name: "NULL".to_string(),
+                            alias: None,
+                            expression: Some(Expression::Literal("NULL".to_string())),
+                        });
+                        self.next();
+                    }
                 }
                 // Handle NumberLiteral in SELECT (e.g., SELECT 123, SELECT 3.14)
                 Some(Token::NumberLiteral(ref n)) => {
@@ -2134,6 +2181,49 @@ impl Parser {
                 // Skip AS keyword in column list (alias handling is done by individual parsers)
                 Some(Token::As) => {
                     self.next();
+                }
+                // Handle unary +/- expressions at the start (e.g., SELECT -10 / 3, SELECT +5 * 2)
+                Some(Token::Minus) | Some(Token::Plus) => {
+                    let expr = self.parse_expression()?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias,
+                        expression: Some(expr),
+                    });
+                }
+                Some(Token::Exists) | Some(Token::Not) => {
+                    let expr = self.parse_expression()?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias,
+                        expression: Some(expr),
+                    });
                 }
                 _ => {
                     return Err("Expected FROM or column name".to_string());
@@ -3169,10 +3259,11 @@ impl Parser {
     fn parse_multiplicative_expression(&mut self) -> Result<Expression, String> {
         let mut left = self.parse_primary_expression()?;
 
-        while let Some(Token::Star) | Some(Token::Slash) = self.current() {
+        while let Some(Token::Star) | Some(Token::Slash) | Some(Token::Percent) = self.current() {
             let op = match self.current() {
                 Some(Token::Star) => "*",
                 Some(Token::Slash) => "/",
+                Some(Token::Percent) => "%",
                 _ => break,
             };
             self.next();
@@ -3410,9 +3501,29 @@ impl Parser {
                 if let Some(Token::NumberLiteral(n)) = self.current() {
                     let expr = Expression::Literal(format!("-{}", n));
                     self.next();
+                    if matches!(self.current(), Some(Token::Star))
+                        || matches!(self.current(), Some(Token::Slash))
+                        || matches!(self.current(), Some(Token::Percent))
+                    {
+                        let left = expr;
+                        let op = match self.current() {
+                            Some(Token::Star) => "*",
+                            Some(Token::Slash) => "/",
+                            Some(Token::Percent) => "%",
+                            _ => return Ok(left),
+                        };
+                        self.next();
+                        let right = self.parse_primary_expression()?;
+                        return Ok(Expression::BinaryOp(
+                            Box::new(left),
+                            op.to_string(),
+                            Box::new(right),
+                        ));
+                    }
                     Ok(expr)
                 } else {
-                    Err("Expected number after -".to_string())
+                    let expr = self.parse_multiplicative_expression()?;
+                    Ok(Expression::UnaryOp("-".to_string(), Box::new(expr)))
                 }
             }
             Some(Token::LParen) => {
