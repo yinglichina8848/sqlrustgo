@@ -87,9 +87,9 @@ impl DefaultPlanner {
                 let seq_cost = self.cost_model.seq_scan_cost(row_count, page_count);
                 let index_cost =
                     self.cost_model
-                        .index_scan_cost(row_count, index_pages, page_count);
+                        .index_scan_cost(3, index_pages, row_count, page_count);
 
-                if index_cost < seq_cost {
+                if index_cost.less_than(&seq_cost) {
                     let (column, index_name) = &indexes[0];
                     return Box::new(
                         IndexScanExec::new(

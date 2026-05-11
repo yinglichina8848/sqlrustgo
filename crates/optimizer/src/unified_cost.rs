@@ -143,9 +143,9 @@ impl UnifiedCostModel {
                 // Use actual statistics if available, otherwise use defaults
                 let row_count = self.get_row_count(table_name);
                 let page_count = self.get_page_count(table_name);
-                self.sql_cost_model.seq_scan_cost(row_count, page_count)
+                self.sql_cost_model.seq_scan_cost_f64(row_count, page_count)
             }
-            UnifiedPlan::IndexScan { .. } => self.sql_cost_model.index_scan_cost(100, 1, 10),
+            UnifiedPlan::IndexScan { .. } => self.sql_cost_model.index_scan_cost_f64(100, 1, 10, 1),
             UnifiedPlan::Filter { input, .. } => {
                 self.estimate_cost(input) * 1.1 // 10% overhead
             }
