@@ -5587,6 +5587,65 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_merge_basic() {
+        let result = parse("MERGE INTO target USING source ON condition");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Merge(m) => {
+                assert_eq!(m.target_table, "target");
+                assert_eq!(m.source_table, "source");
+            }
+            _ => panic!("Expected MERGE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_merge_matched() {
+        let result = parse("MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET name = s.name");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Merge(m) => {
+                assert_eq!(m.target_table, "t");
+                assert_eq!(m.source_table, "s");
+                assert!(m.matched_clause.is_some());
+                let clause = m.matched_clause.unwrap();
+                assert_eq!(clause.update_columns.len(), 1);
+                assert_eq!(clause.update_columns[0], "name");
+            }
+            _ => panic!("Expected MERGE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_merge_not_matched() {
+        let result = parse("MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Merge(m) => {
+                assert_eq!(m.target_table, "t");
+                assert_eq!(m.source_table, "s");
+                assert!(m.not_matched_clause.is_some());
+                let clause = m.not_matched_clause.unwrap();
+                assert_eq!(clause.insert_columns.len(), 2);
+            }
+            _ => panic!("Expected MERGE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_merge_both_clauses() {
+        let result = parse("MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET name = s.name WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Merge(m) => {
+                assert!(m.matched_clause.is_some());
+                assert!(m.not_matched_clause.is_some());
+            }
+            _ => panic!("Expected MERGE statement"),
+        }
+    }
+
+    #[test]
     fn test_parse_analyze() {
         let result = parse("ANALYZE users");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
