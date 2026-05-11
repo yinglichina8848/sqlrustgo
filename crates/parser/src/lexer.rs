@@ -189,6 +189,15 @@ impl<'a> Lexer<'a> {
                     Token::Not
                 }
             }
+            '|' => {
+                if self.input[self.position..].starts_with("||") {
+                    self.position += 2;
+                    Token::Concat
+                } else {
+                    self.position += 1;
+                    Token::Not
+                }
+            }
             '>' => {
                 if self.input[self.position..].starts_with(">>") {
                     self.position += 2;

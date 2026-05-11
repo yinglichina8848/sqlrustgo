@@ -420,6 +420,7 @@ pub struct InsertStatement {
     pub select: Option<Box<SelectStatement>>, // For INSERT SELECT
     pub is_replace: bool,                     // For REPLACE INTO (MySQL compatibility)
     pub on_duplicate_key_update: Option<Vec<(String, Expression)>>, // For ON DUPLICATE KEY UPDATE
+    pub with_clause: Option<WithClause>,      // For WITH ... INSERT
 }
 
 /// UPDATE statement
@@ -902,7 +903,13 @@ impl Parser {
             Some(Token::Repair) => self.parse_repair(),
             Some(Token::Backup) => self.parse_backup(),
             Some(Token::Restore) => self.parse_restore(),
-            Some(Token::With) => self.parse_with_select(),
+            Some(Token::With) => {
+                if let Some(Token::Insert) = self.peek() {
+                    self.parse_with_insert()
+                } else {
+                    self.parse_with_select()
+                }
+            }
             Some(Token::Alter) => self.parse_alter_table(),
             Some(Token::Call) => self.parse_call(),
             Some(Token::Begin)
@@ -1572,6 +1579,132 @@ impl Parser {
         Ok(Statement::WithSelect(WithSelect {
             with_clause: Some(WithClause { recursive, ctes }),
             select,
+        }))
+    }
+
+    fn parse_with_insert(&mut self) -> Result<Statement, String> {
+        self.expect(Token::With)?;
+
+        let recursive = if matches!(self.current(), Some(Token::Recursive)) {
+            self.next();
+            true
+        } else {
+            false
+        };
+
+        let mut ctes = Vec::new();
+        loop {
+            let cte_name = match self.next() {
+                Some(Token::Identifier(name)) => name,
+                _ => return Err("Expected CTE name".to_string()),
+            };
+
+            let columns = if matches!(self.current(), Some(Token::LParen)) {
+                self.next();
+                let mut cols = Vec::new();
+                loop {
+                    match self.current() {
+                        Some(Token::Identifier(name)) => {
+                            cols.push(name.clone());
+                            self.next();
+                        }
+                        Some(Token::Comma) => {
+                            self.next();
+                        }
+                        Some(Token::RParen) => {
+                            self.next();
+                            break;
+                        }
+                        _ => return Err("Expected column name".to_string()),
+                    }
+                }
+                cols
+            } else {
+                Vec::new()
+            };
+
+            self.expect(Token::As)?;
+            self.expect(Token::LParen)?;
+            let subquery = self.parse_select_or_union()?;
+            self.expect(Token::RParen)?;
+
+            ctes.push(CommonTableExpression {
+                name: cte_name,
+                columns,
+                subquery: Box::new(subquery),
+            });
+
+            if matches!(self.current(), Some(Token::Comma)) {
+                self.next();
+                continue;
+            }
+            break;
+        }
+
+        let with_clause = WithClause { recursive, ctes };
+
+        let insert = self.parse_insert_with_clause(with_clause)?;
+        Ok(insert)
+    }
+
+    fn parse_insert_with_clause(&mut self, with_clause: WithClause) -> Result<Statement, String> {
+        let is_replace = if matches!(self.current(), Some(Token::Replace)) {
+            self.next();
+            true
+        } else {
+            self.expect(Token::Insert)?;
+            false
+        };
+
+        self.expect(Token::Into)?;
+
+        let table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        let columns = if matches!(self.current(), Some(Token::LParen)) {
+            self.next();
+            let mut cols = Vec::new();
+            loop {
+                match self.current() {
+                    Some(Token::Identifier(name)) => {
+                        cols.push(name.clone());
+                        self.next();
+                    }
+                    Some(Token::RParen) => {
+                        self.next();
+                        break;
+                    }
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    _ => return Err("Expected column name".to_string()),
+                }
+            }
+            cols
+        } else {
+            Vec::new()
+        };
+
+        let select = if matches!(self.current(), Some(Token::Select)) {
+            let select_stmt = self.parse_select()?;
+            match select_stmt {
+                Statement::Select(s) => Some(Box::new(s)),
+                _ => return Err("Expected SELECT statement".to_string()),
+            }
+        } else {
+            None
+        };
+
+        Ok(Statement::Insert(InsertStatement {
+            table,
+            columns,
+            values: Vec::new(),
+            select,
+            is_replace,
+            on_duplicate_key_update: None,
+            with_clause: Some(with_clause),
         }))
     }
 
@@ -3243,10 +3376,11 @@ impl Parser {
     fn parse_additive_expression(&mut self) -> Result<Expression, String> {
         let mut left = self.parse_shift_expression()?;
 
-        while let Some(Token::Plus) | Some(Token::Minus) = self.current() {
+        while let Some(Token::Plus) | Some(Token::Minus) | Some(Token::Concat) = self.current() {
             let op = match self.current() {
                 Some(Token::Plus) => "+",
                 Some(Token::Minus) => "-",
+                Some(Token::Concat) => "||",
                 _ => break,
             };
             self.next();
