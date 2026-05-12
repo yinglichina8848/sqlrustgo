@@ -6,6 +6,7 @@
 
 use crate::Expr;
 use crate::Schema;
+use crate::SortExpr;
 use sqlrustgo_types::Value;
 use std::any::Any;
 use std::collections::HashMap;
@@ -487,6 +488,55 @@ impl PhysicalPlan for DeleteExec {
 }
 
 use crate::logical_plan::{MergeMatchedClause, MergeNotMatchedClause};
+
+/// Window function execution operator
+#[allow(dead_code)]
+pub struct WindowExec {
+    input: Box<dyn PhysicalPlan>,
+    window_exprs: Vec<Expr>,
+    schema: Schema,
+    input_schema: Schema,
+    partition_by: Vec<Expr>,
+    order_by: Vec<SortExpr>,
+}
+
+impl WindowExec {
+    pub fn new(
+        input: Box<dyn PhysicalPlan>,
+        window_exprs: Vec<Expr>,
+        schema: Schema,
+        input_schema: Schema,
+        partition_by: Vec<Expr>,
+        order_by: Vec<SortExpr>,
+    ) -> Self {
+        Self {
+            input,
+            window_exprs,
+            schema,
+            input_schema,
+            partition_by,
+            order_by,
+        }
+    }
+}
+
+impl PhysicalPlan for WindowExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.input.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "Window"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
 
 /// Merge execution operator
 #[allow(dead_code)]
