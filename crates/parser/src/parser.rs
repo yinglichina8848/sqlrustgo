@@ -592,6 +592,7 @@ pub enum ShowStatement {
         database: Option<String>,
     },
     Processlist,
+    Events,
 }
 
 /// DESCRIBE statement (aliased as DESC)
@@ -4999,6 +5000,10 @@ impl Parser {
             Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "PROCESSLIST" => {
                 self.next();
                 Ok(Statement::Show(ShowStatement::Processlist))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "EVENTS" => {
+                self.next();
+                Ok(Statement::Show(ShowStatement::Events))
             }
             Some(t) => Err(format!("Unexpected token after SHOW: {:?}", t)),
             None => Err("Unexpected end of input after SHOW".to_string()),
