@@ -1627,6 +1627,42 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
         }
 
+        // For INSERT ... ON DUPLICATE KEY UPDATE: update existing rows and skip their insertion
+        let mut records_to_skip: Vec<usize> = Vec::new();
+        if insert.on_duplicate_key_update.is_some() && !insert.is_replace {
+            let update_assignments = insert.on_duplicate_key_update.as_ref().unwrap();
+            let mut storage = self.storage.write().unwrap();
+            let records = storage.get_table_records_mut(&table_name)?;
+            for (record_idx, record) in all_records.iter().enumerate() {
+                for row_idx in 0..records.len() {
+                    if self.record_matches_unique_key(&records[row_idx], record, &table_info) {
+                        for (col_name, expr) in update_assignments {
+                            if let Some(col_idx) = find_column_index(col_name, &table_info) {
+                                let evaluated_val =
+                                    evaluate_expression(expr, &records[row_idx], &table_info)
+                                        .unwrap_or(Value::Null);
+                                if col_idx < records[row_idx].len() {
+                                    records[row_idx][col_idx] = evaluated_val;
+                                }
+                            }
+                        }
+                        records_to_skip.push(record_idx);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if !records_to_skip.is_empty() {
+            let mut modified_records = Vec::new();
+            for (idx, record) in all_records.into_iter().enumerate() {
+                if !records_to_skip.contains(&idx) {
+                    modified_records.push(record);
+                }
+            }
+            all_records = modified_records;
+        }
+
         // Execute BEFORE INSERT triggers
         let trigger_executor = TriggerExecutor::new(self.storage.clone());
         let before_triggers = trigger_executor.get_triggers_for_operation(

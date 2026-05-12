@@ -99,6 +99,8 @@ impl QueryCache {
                         self.current_memory_bytes.saturating_sub(entry.size_bytes);
                 }
             }
+        } else {
+            self.clear();
         }
     }
 
