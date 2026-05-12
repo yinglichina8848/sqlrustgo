@@ -58,3 +58,61 @@ fn test_fts_no_matching_documents() {
     let result = engine.execute("SELECT * FROM fts_test WHERE MATCH(content) AGAINST('xyz123')");
     assert!(result.is_ok(), "FTS search should work: {:?}", result);
 }
+
+#[test]
+fn test_fts_search_returns_correct_results() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE articles (id INTEGER, title TEXT, body TEXT)").unwrap();
+    engine.execute("INSERT INTO articles VALUES (1, 'Rust Programming', 'Learn Rust programming language')").unwrap();
+    engine.execute("INSERT INTO articles VALUES (2, 'Database Basics', 'Introduction to SQL databases')").unwrap();
+    engine.execute("INSERT INTO articles VALUES (3, 'Web Development', 'Building web apps with Rust')").unwrap();
+
+    // Search for 'rust' - should return rows 1 and 3
+    let result = engine.execute("SELECT id, title FROM articles WHERE MATCH(title, body) AGAINST('rust')");
+    assert!(result.is_ok(), "FTS query failed: {:?}", result);
+
+    let result = result.unwrap();
+    // Should find 2 matching documents (id=1 and id=3)
+    assert_eq!(result.rows.len(), 2, "Expected 2 matching rows, got {}", result.rows.len());
+
+    // Verify the IDs of returned rows
+    let ids: Vec<i64> = result.rows.iter()
+        .filter_map(|row| {
+            if let sqlrustgo_types::Value::Integer(n) = &row[0] {
+                Some(*n)
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert!(ids.contains(&1), "Should contain row with id=1");
+    assert!(ids.contains(&3), "Should contain row with id=3");
+    assert!(!ids.contains(&2), "Should NOT contain row with id=2");
+}
+
+#[test]
+fn test_fts_case_insensitive_search() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE docs (id INTEGER, content TEXT)").unwrap();
+    engine.execute("INSERT INTO docs VALUES (1, 'Hello World')").unwrap();
+    engine.execute("INSERT INTO docs VALUES (2, 'HELLO WORLD')").unwrap();
+    engine.execute("INSERT INTO docs VALUES (3, 'hello world')").unwrap();
+
+    // Search should be case-insensitive
+    let result = engine.execute("SELECT id FROM docs WHERE MATCH(content) AGAINST('hello')");
+    assert!(result.is_ok(), "FTS query failed: {:?}", result);
+
+    let result = result.unwrap();
+    assert_eq!(result.rows.len(), 3, "Case-insensitive search should find all 3 rows");
+}
+
+#[test]
+fn test_fts_empty_search_term() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE test (id INTEGER, content TEXT)").unwrap();
+    engine.execute("INSERT INTO test VALUES (1, 'Hello World')").unwrap();
+
+    // Empty search term should return no results
+    let result = engine.execute("SELECT * FROM test WHERE MATCH(content) AGAINST('')");
+    assert!(result.is_ok(), "FTS query should handle empty term");
+}
