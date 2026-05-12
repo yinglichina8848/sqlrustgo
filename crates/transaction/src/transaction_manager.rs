@@ -180,6 +180,16 @@ impl TransactionManager {
             .get(&tx_id)
             .map(|at| at.snapshot.clone())
     }
+
+    /// Get count of active transactions (for state leak detection)
+    pub fn active_transaction_count(&self) -> usize {
+        self.active_transactions.len()
+    }
+
+    /// Get all active transaction IDs (for debugging)
+    pub fn get_active_tx_ids(&self) -> Vec<TxId> {
+        self.active_transactions.keys().cloned().collect()
+    }
 }
 
 impl Default for TransactionManager {

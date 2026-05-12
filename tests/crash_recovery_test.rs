@@ -118,3 +118,55 @@ fn test_memory_cleanup_after_drops() {
     let result = engine.execute("SELECT 1");
     assert!(result.is_ok());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_transaction_state_stress_100_concurrent() {
+    use sqlrustgo_transaction::{IsolationLevel, TransactionManager};
+    use std::sync::Arc;
+    use std::sync::RwLock;
+
+    let num_tx = 100;
+    let manager: Arc<RwLock<TransactionManager>> = Arc::new(RwLock::new(TransactionManager::new()));
+
+    let mut handles = Vec::with_capacity(num_tx);
+    for i in 0..num_tx {
+        let mgr = Arc::clone(&manager);
+        let handle = tokio::spawn(async move {
+            let tx_id = {
+                let mut m = mgr.write().unwrap();
+                m.begin_transaction(IsolationLevel::SnapshotIsolation)
+                    .expect("begin_transaction should succeed")
+            };
+
+            let key = format!("key_{}", i);
+            {
+                let mut m = mgr.write().unwrap();
+                m.record_read(tx_id, key.clone().into_bytes())
+                    .expect("record_read should succeed");
+                m.record_write(tx_id, key.clone().into_bytes())
+                    .expect("record_write should succeed");
+            }
+
+            let result = {
+                let mut m = mgr.write().unwrap();
+                m.commit(tx_id)
+            };
+            result.expect("commit should succeed");
+        });
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        handle.await.expect("task should succeed");
+    }
+
+    let active_count = {
+        let m = manager.read().unwrap();
+        m.active_transaction_count()
+    };
+    assert_eq!(
+        active_count, 0,
+        "State leak detected: {} active transactions after 100 concurrent commits",
+        active_count
+    );
+}
