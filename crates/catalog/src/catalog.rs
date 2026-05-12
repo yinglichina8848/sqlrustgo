@@ -5,6 +5,7 @@
 
 use crate::auth::{AuthManager, ObjectType, Privilege, Role, UserIdentity};
 use crate::error::{CatalogError, CatalogResult};
+use crate::event::Event;
 use crate::schema::Schema;
 use crate::stored_proc::StoredProcedure;
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,8 @@ pub struct Catalog {
     default_schema: String,
     /// Stored procedures (name -> StoredProcedure)
     stored_procedures: HashMap<String, StoredProcedure>,
+    /// Events (name -> Event)
+    events: HashMap<String, Event>,
     #[serde(skip)]
     auth_manager: AuthManager,
 }
@@ -34,6 +37,7 @@ impl Catalog {
             schemas: HashMap::new(),
             default_schema: "public".to_string(),
             stored_procedures: HashMap::new(),
+            events: HashMap::new(),
             auth_manager: AuthManager::new(),
         }
     }
@@ -146,6 +150,40 @@ impl Catalog {
     /// List all stored procedures
     pub fn stored_procedures(&self) -> Vec<&StoredProcedure> {
         self.stored_procedures.values().collect()
+    }
+
+    // ============ Event operations ============
+
+    /// Add an event
+    pub fn add_event(&mut self, event: Event) -> CatalogResult<()> {
+        if self.events.contains_key(&event.name) {
+            return Err(CatalogError::DuplicateTable {
+                schema: event.schema.clone(),
+                table: event.name.clone(),
+            });
+        }
+        self.events.insert(event.name.clone(), event);
+        Ok(())
+    }
+
+    /// Get an event by name
+    pub fn get_event(&self, name: &str) -> Option<&Event> {
+        self.events.get(name)
+    }
+
+    /// Check if an event exists
+    pub fn has_event(&self, name: &str) -> bool {
+        self.events.contains_key(name)
+    }
+
+    /// Remove an event
+    pub fn remove_event(&mut self, name: &str) -> Option<Event> {
+        self.events.remove(name)
+    }
+
+    /// List all events
+    pub fn events(&self) -> Vec<&Event> {
+        self.events.values().collect()
     }
 
     /// Grant a privilege to a user

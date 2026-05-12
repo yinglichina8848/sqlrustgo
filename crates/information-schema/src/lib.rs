@@ -4,7 +4,7 @@
 //! This implementation is fully integrated with the Catalog system.
 
 use serde::{Deserialize, Serialize};
-use sqlrustgo_catalog::{Catalog, DataType};
+use sqlrustgo_catalog::{Catalog, DataType, EventSchedule};
 
 /// Row representing a schema in information_schema.schemata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -356,7 +356,46 @@ impl<'a> InformationSchema<'a> {
     }
 
     pub fn get_events(&self) -> Vec<EventRow> {
-        Vec::new()
+        self.catalog
+            .events()
+            .iter()
+            .map(|event| {
+                let (event_type, execute_at, interval_value, interval_field) = match &event.schedule {
+                    EventSchedule::OneTime => ("ONE TIME".to_string(), None, None, None),
+                    EventSchedule::Interval {
+                        interval_value,
+                        interval_unit,
+                    } => (
+                        "RECURRING".to_string(),
+                        None,
+                        Some(interval_value.clone()),
+                        Some(interval_unit.clone()),
+                    ),
+                };
+                EventRow {
+                    event_catalog: "def".to_string(),
+                    event_schema: event.schema.clone(),
+                    event_name: event.name.clone(),
+                    definer: event.definer.clone(),
+                    event_body: "SQL".to_string(),
+                    event_definition: Some(event.body.clone()),
+                    event_type,
+                    execute_at,
+                    interval_value,
+                    interval_field,
+                    sql_mode: event.sql_mode.clone(),
+                    starts: event.starts.clone(),
+                    ends: event.ends.clone(),
+                    status: event.status.clone(),
+                    on_completion: event.on_completion.clone(),
+                    created: Some(event.created.clone()),
+                    last_altered: Some(event.last_altered.clone()),
+                    event_comment: event.comment.clone(),
+                    originator: "0".to_string(),
+                    event_body_utf8: "SQL".to_string(),
+                }
+            })
+            .collect()
     }
 
     pub fn get_routines(&self) -> Vec<RoutineRow> {
