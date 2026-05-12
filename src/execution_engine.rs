@@ -19,7 +19,7 @@ use sqlrustgo_parser::parser::{
     CheckOption, CheckStatement, CreateIndexStatement, CreateProcedureStatement,
     CreateRoleStatement, CreateTableStatement, CreateTriggerStatement, DropRoleStatement,
     DropTableStatement, ExplainStatement, GrantRoleStatement, GrantStatement, InsertStatement,
-    ObjectType as ParserObjectType, OptimizeStatement, OrderByExpression,
+    MergeStatement, ObjectType as ParserObjectType, OptimizeStatement, OrderByExpression,
     Privilege as ParserPrivilege, RepairStatement, RevokeRoleStatement, RevokeStatement,
     SelectStatement, SetRoleStatement, ShowStatement, StoredProcParam as ParserStoredProcParam,
     StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
@@ -485,6 +485,30 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         })
     }
 
+    fn extract_table_names_from_statement(statement: &Statement) -> Vec<String> {
+        match statement {
+            Statement::Select(select) => vec![select.table.clone()],
+            Statement::Insert(insert) => vec![insert.table.clone()],
+            Statement::Update(update) => vec![update.table.clone()],
+            Statement::Delete(delete) => vec![delete.table.clone()],
+            Statement::Truncate(truncate) => vec![truncate.name.clone()],
+            Statement::CreateTable(create) => vec![create.name.clone()],
+            Statement::DropTable(drop) => vec![drop.name.clone()],
+            Statement::Union(union_stmt) => {
+                let mut tables = Vec::new();
+                if let Statement::Select(s) = union_stmt.left.as_ref() {
+                    tables.push(s.table.clone());
+                }
+                if let Statement::Select(s) = union_stmt.right.as_ref() {
+                    tables.push(s.table.clone());
+                }
+                tables
+            }
+            Statement::WithSelect(ws) => vec![ws.select.table.clone()],
+            _ => vec![],
+        }
+    }
+
     /// Execute a pre-parsed SQL statement and return results
     /// This avoids re-parsing on every execute for prepared statements
     pub fn execute_statement(&mut self, statement: Statement) -> SqlResult<ExecutorResult> {
@@ -493,6 +517,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::Insert(ref insert) => self.execute_insert(insert),
             Statement::Update(ref update) => self.execute_update(update),
             Statement::Delete(ref delete) => self.execute_delete(delete),
+            Statement::Merge(ref merge) => self.execute_merge(merge),
             Statement::CreateTable(ref create) => self.execute_create_table(create),
             Statement::DropTable(ref drop) => self.execute_drop_table(drop),
             Statement::Truncate(ref truncate) => self.execute_truncate(truncate),
@@ -591,12 +616,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
 
             let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+            let table_names = Self::extract_table_names_from_statement(&statement);
             let result = self.execute_statement(statement)?;
 
             if should_cache(&result) {
                 let entry = CacheEntry {
                     result: result.clone(),
-                    tables: vec![],
+                    tables: table_names.clone(),
                     created_at: std::time::Instant::now(),
                     size_bytes: result.rows.iter().map(|r| r.len()).sum(),
                     last_access: 0,
@@ -604,7 +630,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 self.query_cache
                     .write()
                     .unwrap()
-                    .put(cache_key, entry, vec![]);
+                    .put(cache_key, entry, table_names);
             }
 
             return Ok(result);
@@ -2233,6 +2259,146 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .unwrap()
             .invalidate_table(&table_name);
         Ok(ExecutorResult::new(vec![], count))
+    }
+
+    fn execute_merge(&self, merge: &MergeStatement) -> SqlResult<ExecutorResult> {
+        let target_table = &merge.target_table;
+        let source_table = &merge.source_table;
+
+        let source_rows = {
+            let storage = self.storage.read().unwrap();
+            storage.scan(source_table)?
+        };
+
+        let target_rows = {
+            let storage = self.storage.read().unwrap();
+            storage.scan(target_table)?
+        };
+
+        let target_table_info = {
+            let storage = self.storage.read().unwrap();
+            storage.get_table_info(target_table)?.clone()
+        };
+
+        let mut matched_count: usize = 0;
+        let mut inserted_count: usize = 0;
+
+        for source_row in source_rows.iter() {
+            let matching_target_idx = target_rows.iter().position(|target_row| {
+                self.eval_merge_condition(
+                    &merge.on_condition,
+                    source_row,
+                    target_row,
+                    &target_table_info,
+                )
+            });
+
+            if let Some(idx) = matching_target_idx {
+                if let Some(ref clause) = merge.matched_clause {
+                    let target_row = &target_rows[idx];
+                    // Convert column names to indices
+                    let updates: Vec<(usize, Value)> = clause
+                        .update_columns
+                        .iter()
+                        .zip(clause.update_values.iter())
+                        .filter_map(|(col, val)| {
+                            find_column_index(col, &target_table_info).map(|col_idx| {
+                                let evaluated = self.eval_merge_value(
+                                    val,
+                                    source_row,
+                                    target_row,
+                                    &target_table_info,
+                                );
+                                (col_idx, evaluated)
+                            })
+                        })
+                        .collect();
+
+                    let mut storage = self.storage.write().unwrap();
+                    let _ = storage.update(target_table, &[], &updates);
+                    matched_count += 1;
+                }
+            } else {
+                if let Some(ref clause) = merge.not_matched_clause {
+                    let values: Vec<Value> = clause
+                        .insert_values
+                        .iter()
+                        .map(|val| self.eval_merge_value(val, source_row, &[], &target_table_info))
+                        .collect();
+
+                    let mut storage = self.storage.write().unwrap();
+                    let _ = storage.insert(target_table, vec![values]);
+                    inserted_count += 1;
+                }
+            }
+        }
+
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(target_table);
+
+        Ok(ExecutorResult::new(vec![], matched_count + inserted_count))
+    }
+
+    fn eval_merge_condition(
+        &self,
+        condition: &Expression,
+        source_row: &[Value],
+        target_row: &[Value],
+        table_info: &TableInfo,
+    ) -> bool {
+        match condition {
+            Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
+                self.eval_merge_condition(left, source_row, target_row, table_info)
+                    && self.eval_merge_condition(right, source_row, target_row, table_info)
+            }
+            Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
+                self.eval_merge_condition(left, source_row, target_row, table_info)
+                    || self.eval_merge_condition(right, source_row, target_row, table_info)
+            }
+            Expression::BinaryOp(left, op, right) => {
+                let left_val = self.eval_merge_expr(left, source_row, target_row, table_info);
+                let right_val = self.eval_merge_expr(right, source_row, target_row, table_info);
+                sql_compare(op, &left_val, &right_val)
+            }
+            _ => false,
+        }
+    }
+
+    fn eval_merge_expr(
+        &self,
+        expr: &Expression,
+        source_row: &[Value],
+        target_row: &[Value],
+        table_info: &TableInfo,
+    ) -> Value {
+        match expr {
+            Expression::Literal(_) => expression_to_value(expr),
+            Expression::Identifier(name) => {
+                if let Some(idx) = find_column_index(name, table_info) {
+                    target_row.get(idx).cloned().unwrap_or(Value::Null)
+                } else {
+                    Value::Null
+                }
+            }
+            Expression::BinaryOp(left, op, right) => {
+                let l = self.eval_merge_expr(left, source_row, target_row, table_info);
+                let r = self.eval_merge_expr(right, source_row, target_row, table_info);
+                evaluate_binary_op(&l, &r, op)
+            }
+            _ => Value::Null,
+        }
+    }
+
+    fn eval_merge_value(
+        &self,
+        expr: &Expression,
+        source_row: &[Value],
+        target_row: &[Value],
+        table_info: &TableInfo,
+    ) -> Value {
+        self.eval_merge_expr(expr, source_row, target_row, table_info)
     }
 
     fn execute_alter_table(&self, alter: &AlterTableStatement) -> SqlResult<ExecutorResult> {

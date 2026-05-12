@@ -1392,20 +1392,27 @@ impl<'a> LocalExecutor<'a> {
     /// Execute delete
     fn execute_delete(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
         use sqlrustgo_planner::DeleteExec;
-        
+
         let delete_exec = plan.as_any().downcast_ref::<DeleteExec>();
-        
+
         match delete_exec {
             Some(delete_plan) => {
                 let table_name = delete_plan.table_name();
-                
-                // For now, delete all rows if no predicate
-                // Full predicate evaluation would require expression evaluation
-                if delete_plan.predicate().is_some() {
-                    // TODO: Implement predicate-based delete
-                    // For now, return empty result
-                    return Ok(ExecutorResult::empty());
-                }
+
+                let deleted = if let Some(predicate) = delete_plan.predicate() {
+                    let pred_sql = predicate.to_sql_string();
+                    eprintln!("DEBUG execute_delete: table={}, predicate={}", table_name, pred_sql);
+                    self.storage.delete_by_predicate(table_name, &pred_sql)?
+                } else {
+                    eprintln!("DEBUG execute_delete: table={}, no predicate, deleting all", table_name);
+                    self.storage.delete(table_name, &[])?
+                };
+                eprintln!("DEBUG execute_delete: deleted {} rows", deleted);
+                Ok(ExecutorResult::new(vec![], deleted))
+            }
+            None => Ok(ExecutorResult::empty()),
+        }
+    }
                 
                 // Delete all rows from table
                 let deleted = self.storage.delete(table_name, &[])?;
