@@ -26,5 +26,7 @@ pub use engine::{
     TriggerTiming, UniqueConstraint,
 };
 pub use file_storage::FileStorage;
-pub use fts::{InvertedIndex, MultiLanguageTokenizer, SimpleTokenizer, ChineseTokenizer, Tokenizer};
+pub use fts::{
+    ChineseTokenizer, InvertedIndex, MultiLanguageTokenizer, SimpleTokenizer, Tokenizer,
+};
 pub use page::Page;

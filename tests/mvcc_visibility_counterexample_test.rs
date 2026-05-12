@@ -78,7 +78,10 @@ fn test_snapshot_sees_committed_only() {
 
     let after_result = engine.execute("SELECT value FROM t WHERE id = 1");
     assert!(after_result.is_ok());
-    assert_eq!(after_result.unwrap().rows[0][0], sqlrustgo::Value::Integer(200));
+    assert_eq!(
+        after_result.unwrap().rows[0][0],
+        sqlrustgo::Value::Integer(200)
+    );
 }
 
 #[test]

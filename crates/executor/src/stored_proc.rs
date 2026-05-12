@@ -1278,7 +1278,8 @@ impl StoredProcExecutor {
                     ctx.get_var(stripped).cloned().unwrap_or(Value::Null)
                 } else {
                     // Try to get column value from current row (for FTS and other row-level expressions)
-                    ctx.get_column_value(name).unwrap_or(Value::Text(name.to_string()))
+                    ctx.get_column_value(name)
+                        .unwrap_or(Value::Text(name.to_string()))
                 }
             }
             sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {

@@ -8,7 +8,11 @@ use sqlrustgo_parser::Statement;
 fn test_parse_match_against_basic() {
     let sql = "SELECT * FROM articles WHERE MATCH(title, content) AGAINST('search query')";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse MATCH...AGAINST: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse MATCH...AGAINST: {:?}",
+        result
+    );
 
     let stmt = result.unwrap();
     match stmt {
@@ -30,21 +34,33 @@ fn test_parse_match_against_basic() {
 fn test_parse_match_against_single_column() {
     let sql = "SELECT * FROM t WHERE MATCH(title) AGAINST('hello')";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse single column MATCH: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse single column MATCH: {:?}",
+        result
+    );
 }
 
 #[test]
 fn test_parse_match_against_multiple_columns() {
     let sql = "SELECT * FROM t WHERE MATCH(col1, col2, col3) AGAINST('search term')";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse multi-column MATCH: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse multi-column MATCH: {:?}",
+        result
+    );
 }
 
 #[test]
 fn test_parse_match_against_subquery() {
     let sql = "SELECT * FROM (SELECT * FROM articles WHERE MATCH(title, content) AGAINST('sql')) AS results";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse MATCH in subquery: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse MATCH in subquery: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -56,9 +72,14 @@ fn test_parse_match_against_derived_table() {
 
 #[test]
 fn test_parse_match_against_boolean_mode() {
-    let sql = "SELECT * FROM articles WHERE MATCH(title, content) AGAINST('+rust -java' IN BOOLEAN MODE)";
+    let sql =
+        "SELECT * FROM articles WHERE MATCH(title, content) AGAINST('+rust -java' IN BOOLEAN MODE)";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse IN BOOLEAN MODE: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse IN BOOLEAN MODE: {:?}",
+        result
+    );
 
     let stmt = result.unwrap();
     match stmt {
@@ -66,7 +87,10 @@ fn test_parse_match_against_boolean_mode() {
             assert!(sel.where_clause.is_some(), "WHERE clause should exist");
             if let Some(expr) = &sel.where_clause {
                 assert!(
-                    matches!(expr, Expression::MatchAgainst(_, _, sqlrustgo_parser::FtsMode::Boolean)),
+                    matches!(
+                        expr,
+                        Expression::MatchAgainst(_, _, sqlrustgo_parser::FtsMode::Boolean)
+                    ),
                     "WHERE should contain MatchAgainst expression with Boolean mode"
                 );
             }
@@ -79,7 +103,11 @@ fn test_parse_match_against_boolean_mode() {
 fn test_parse_match_against_query_expansion() {
     let sql = "SELECT * FROM articles WHERE MATCH(title) AGAINST('database' WITH QUERY EXPANSION)";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse WITH QUERY EXPANSION: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse WITH QUERY EXPANSION: {:?}",
+        result
+    );
 
     let stmt = result.unwrap();
     match stmt {
@@ -87,7 +115,10 @@ fn test_parse_match_against_query_expansion() {
             assert!(sel.where_clause.is_some(), "WHERE clause should exist");
             if let Some(expr) = &sel.where_clause {
                 assert!(
-                    matches!(expr, Expression::MatchAgainst(_, _, sqlrustgo_parser::FtsMode::QueryExpansion)),
+                    matches!(
+                        expr,
+                        Expression::MatchAgainst(_, _, sqlrustgo_parser::FtsMode::QueryExpansion)
+                    ),
                     "WHERE should contain MatchAgainst expression with QueryExpansion mode"
                 );
             }
