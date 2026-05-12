@@ -47,6 +47,120 @@ impl MemoryTracker {
     }
 }
 
+/// Streaming aggregation accumulator - reduces memory from O(n_rows) to O(n_groups)
+struct GroupAccumulator {
+    count: i64,
+    sum: i64,
+    min_val: Option<i64>,
+    max_val: Option<i64>,
+    distinct_values: std::collections::HashSet<String>,
+}
+
+impl GroupAccumulator {
+    fn new() -> Self {
+        Self {
+            count: 0,
+            sum: 0,
+            min_val: None,
+            max_val: None,
+            distinct_values: std::collections::HashSet::new(),
+        }
+    }
+
+    fn accumulate(&mut self, func: &AggregateFunction, value: &Value) {
+        match func {
+            AggregateFunction::Count => {
+                self.count += 1;
+            }
+            AggregateFunction::Sum => {
+                if let Value::Integer(n) = value {
+                    self.sum += n;
+                }
+            }
+            AggregateFunction::Avg => {
+                if let Value::Integer(n) = value {
+                    self.sum += n;
+                    self.count += 1;
+                }
+            }
+            AggregateFunction::Min => {
+                if let Value::Integer(n) = value {
+                    match self.min_val {
+                        Some(m) if *n < m => self.min_val = Some(*n),
+                        None => self.min_val = Some(*n),
+                        _ => {}
+                    }
+                }
+            }
+            AggregateFunction::Max => {
+                if let Value::Integer(n) = value {
+                    match self.max_val {
+                        Some(m) if *n > m => self.max_val = Some(*n),
+                        None => self.max_val = Some(*n),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    fn add_distinct_value(&mut self, value: &Value) {
+        self.distinct_values.insert(format!("{:?}", value));
+    }
+
+    fn finalize(&self, func: &AggregateFunction) -> Value {
+        match func {
+            AggregateFunction::Count => Value::Integer(self.count),
+            AggregateFunction::Sum => Value::Integer(self.sum),
+            AggregateFunction::Avg => {
+                if self.count > 0 {
+                    Value::Integer(self.sum / self.count)
+                } else {
+                    Value::Null
+                }
+            }
+            AggregateFunction::Min => self.min_val.map(Value::Integer).unwrap_or(Value::Null),
+            AggregateFunction::Max => self.max_val.map(Value::Integer).unwrap_or(Value::Null),
+        }
+    }
+
+    fn finalize_distinct(&self, func: &AggregateFunction) -> Value {
+        let distinct_count = self.distinct_values.len() as i64;
+        match func {
+            AggregateFunction::Count => Value::Integer(distinct_count),
+            AggregateFunction::Sum | AggregateFunction::Avg => {
+                let mut sum: i64 = 0;
+                for v in &self.distinct_values {
+                    if let Ok(n) = v.parse::<i64>() {
+                        sum += n;
+                    }
+                }
+                if distinct_count > 0 {
+                    Value::Integer(sum / distinct_count)
+                } else {
+                    Value::Null
+                }
+            }
+            AggregateFunction::Min => {
+                self.distinct_values
+                    .iter()
+                    .filter_map(|v| v.parse::<i64>().ok())
+                    .min()
+                    .map(Value::Integer)
+                    .unwrap_or(Value::Null)
+            }
+            AggregateFunction::Max => {
+                self.distinct_values
+                    .iter()
+                    .filter_map(|v| v.parse::<i64>().ok())
+                    .max()
+                    .map(Value::Integer)
+                    .unwrap_or(Value::Null)
+            }
+        }
+    }
+}
+
 use parking_lot::RwLock;use query_stats::SlowQueryConfig;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -529,8 +643,10 @@ impl<'a> LocalExecutor<'a> {
 
             Ok(ExecutorResult::empty())
         } else {
-            let mut groups: std::collections::HashMap<Vec<Value>, Vec<Vec<Value>>> =
-                std::collections::HashMap::new();
+            let mut groups: std::collections::HashMap<
+                Vec<Value>,
+                GroupAccumulator,
+            > = std::collections::HashMap::new();
 
             for row in &child_result.rows {
                 let key: Vec<Value> = group_expr
@@ -540,34 +656,54 @@ impl<'a> LocalExecutor<'a> {
                             .unwrap_or(Value::Null)
                     })
                     .collect();
-                groups.entry(key).or_default().push(row.clone());
-            }
 
-            let mut results = vec![];
-            for (key, group_rows) in groups {
-                let mut row = key;
+                let accumulator = groups.entry(key).or_insert_with(GroupAccumulator::new);
+
                 for agg_expr in aggregate_expr {
                     if let sqlrustgo_planner::Expr::AggregateFunction {
                         func,
                         args,
+                        distinct: false,
+                    } = agg_expr
+                    {
+                        let value = if let Some(arg) = args.first() {
+                            arg.evaluate(row, children[0].schema()).unwrap_or(Value::Null)
+                        } else {
+                            Value::Integer(1)
+                        };
+                        accumulator.accumulate(func, &value);
+                    }
+                    if let sqlrustgo_planner::Expr::AggregateFunction {
+                        func: _,
+                        args: _,
+                        distinct: true,
+                    } = agg_expr
+                    {
+                        let value = if let Some(arg) = agg_expr.get_arg() {
+                            arg.evaluate(row, children[0].schema()).unwrap_or(Value::Null)
+                        } else {
+                            Value::Null
+                        };
+                        accumulator.add_distinct_value(&value);
+                    }
+                }
+            }
+
+            let mut results = vec![];
+            let mut results = vec![];
+            for (key, mut accumulator) in groups {
+                let mut row = key;
+                for agg_expr in aggregate_expr {
+                    if let sqlrustgo_planner::Expr::AggregateFunction {
+                        func,
+                        args: _,
                         distinct,
                     } = agg_expr
                     {
-                        let values: Vec<Value> = group_rows
-                            .iter()
-                            .map(|r| {
-                                if let Some(arg) = args.first() {
-                                    arg.evaluate(r, children[0].schema()).unwrap_or(Value::Null)
-                                } else {
-                                    Value::Integer(group_rows.len() as i64)
-                                }
-                            })
-                            .collect();
-
                         let result = if *distinct {
-                            self.compute_aggregate_distinct(func, &values)
+                            accumulator.finalize_distinct(func)
                         } else {
-                            self.compute_aggregate(func, &values)
+                            accumulator.finalize(func)
                         };
                         row.push(result);
                     }
