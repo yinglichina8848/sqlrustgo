@@ -59,6 +59,9 @@ pub enum Statement {
     SetRole(SetRoleStatement),
     ShowRoles,
     ShowGrantsFor(String),
+    CreateEvent(CreateEventStatement),
+    DropEvent(DropEventStatement),
+    AlterEvent(AlterEventStatement),
 }
 
 /// UNION statement
@@ -174,6 +177,44 @@ pub struct CreateViewStatement {
 pub struct DropViewStatement {
     pub name: String,
     pub if_exists: bool,
+}
+
+/// Event schedule timing (ONE TIME or AT interval)
+#[derive(Debug, Clone, PartialEq)]
+pub enum EventSchedule {
+    OneTime,
+    Interval {
+        interval_value: String,
+        interval_unit: String,
+    },
+}
+
+/// CREATE EVENT statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateEventStatement {
+    pub name: String,
+    pub schedule: EventSchedule,
+    pub body: String,
+    pub enable: bool,
+    pub comment: Option<String>,
+}
+
+/// DROP EVENT statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropEventStatement {
+    pub name: String,
+    pub if_exists: bool,
+}
+
+/// ALTER EVENT statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterEventStatement {
+    pub name: String,
+    pub new_name: Option<String>,
+    pub schedule: Option<EventSchedule>,
+    pub body: Option<String>,
+    pub enable: Option<bool>,
+    pub comment: Option<String>,
 }
 
 /// Common Table Expression (CTE)
@@ -951,7 +992,14 @@ impl Parser {
                     self.parse_with_select()
                 }
             }
-            Some(Token::Alter) => self.parse_alter_table(),
+            Some(Token::Alter) => {
+                // Peek to decide between ALTER TABLE vs ALTER EVENT
+                if let Some(Token::Event) = self.peek() {
+                    self.parse_alter_event()
+                } else {
+                    self.parse_alter_table()
+                }
+            }
             Some(Token::Call) => self.parse_call(),
             Some(Token::Begin)
             | Some(Token::Commit)
@@ -1211,12 +1259,13 @@ impl Parser {
             Some(Token::Trigger) => self.parse_create_trigger(),
             Some(Token::Role) => self.parse_create_role(),
             Some(Token::View) => self.parse_create_view(),
+            Some(Token::Event) => self.parse_create_event(),
             Some(t) => Err(format!(
-                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, or VIEW after CREATE, got {:?}",
+                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, VIEW, or EVENT after CREATE, got {:?}",
                 t
             )),
             None => Err(
-                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, or VIEW after CREATE".to_string(),
+                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, VIEW, or EVENT after CREATE".to_string(),
             ),
         }
     }
@@ -1463,6 +1512,124 @@ impl Parser {
         }))
     }
 
+    fn parse_create_event(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Event)?;
+
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected event name, got {:?}", t)),
+            None => return Err("Expected event name".to_string()),
+        };
+
+        // Parse ON SCHEDULE clause
+        self.expect(Token::On)?;
+        self.expect(Token::Schedule)?;
+
+        let schedule = if matches!(self.current(), Some(Token::At)) {
+            self.next();
+            let interval_value = match self.next() {
+                Some(Token::StringLiteral(s)) => s,
+                Some(Token::Identifier(s)) => s,
+                Some(Token::NumberLiteral(n)) => n,
+                Some(t) => return Err(format!("Expected interval value, got {:?}", t)),
+                None => return Err("Expected interval value".to_string()),
+            };
+            let interval_unit = match self.current() {
+                Some(Token::Identifier(ref s)) => {
+                    let unit = s.to_uppercase();
+                    self.next();
+                    unit
+                }
+                Some(t) => return Err(format!("Expected interval unit, got {:?}", t)),
+                None => "HOUR".to_string(),
+            };
+            EventSchedule::Interval {
+                interval_value,
+                interval_unit,
+            }
+        } else if matches!(self.current(), Some(Token::Every)) {
+            self.next();
+            let interval_value = match self.next() {
+                Some(Token::NumberLiteral(n)) => n,
+                Some(Token::StringLiteral(s)) => s,
+                Some(Token::Identifier(s)) => s,
+                Some(t) => return Err(format!("Expected interval value, got {:?}", t)),
+                None => return Err("Expected interval value".to_string()),
+            };
+            let interval_unit = match self.current() {
+                Some(Token::Identifier(ref s)) => {
+                    let unit = s.to_uppercase();
+                    self.next();
+                    unit
+                }
+                Some(t) => return Err(format!("Expected interval unit, got {:?}", t)),
+                None => "HOUR".to_string(),
+            };
+            EventSchedule::Interval {
+                interval_value,
+                interval_unit,
+            }
+        } else {
+            EventSchedule::OneTime
+        };
+
+        // Parse optional ENABLE/DISABLE
+        let enable = match self.current() {
+            Some(Token::Enable) => {
+                self.next();
+                true
+            }
+            Some(Token::Disable) => {
+                self.next();
+                false
+            }
+            _ => true,
+        };
+
+        // Parse optional COMMENT
+        let comment = if matches!(self.current(), Some(Token::Comment)) {
+            self.next();
+            match self.next() {
+                Some(Token::StringLiteral(s)) => Some(s),
+                Some(t) => return Err(format!("Expected comment string, got {:?}", t)),
+                None => return Err("Expected comment string".to_string()),
+            }
+        } else {
+            None
+        };
+
+        // Parse DO clause with body
+        self.expect(Token::Do)?;
+        self.expect(Token::Begin)?;
+        let mut body = String::new();
+        while !matches!(self.current(), Some(Token::End) | None) {
+            match self.next() {
+                Some(Token::Semicolon) => {
+                    body.push(';');
+                    body.push(' ');
+                }
+                Some(Token::Identifier(sql)) => {
+                    body.push_str(&sql);
+                    body.push(' ');
+                }
+                Some(t) => {
+                    body.push_str(&t.to_string());
+                    body.push(' ');
+                }
+                None => return Err("Expected END".to_string()),
+            }
+        }
+        self.expect(Token::End)?;
+
+        Ok(Statement::CreateEvent(CreateEventStatement {
+            name,
+            schedule,
+            body: body.trim().to_string(),
+            enable,
+            comment,
+        }))
+    }
+
     fn parse_drop_view(&mut self) -> Result<Statement, String> {
         self.expect(Token::View)?;
         let if_exists = if matches!(self.current(), Some(Token::If)) {
@@ -1483,6 +1650,28 @@ impl Parser {
             None => return Err("Expected view name".to_string()),
         };
         Ok(Statement::DropView(DropViewStatement { name, if_exists }))
+    }
+
+    fn parse_drop_event(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Event)?;
+        let if_exists = if matches!(self.current(), Some(Token::If)) {
+            self.next();
+            match self.current() {
+                Some(Token::Exists) => {
+                    self.next();
+                    true
+                }
+                _ => return Err("Expected 'EXISTS' after 'IF'".to_string()),
+            }
+        } else {
+            false
+        };
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected event name, got {:?}", t)),
+            None => return Err("Expected event name".to_string()),
+        };
+        Ok(Statement::DropEvent(DropEventStatement { name, if_exists }))
     }
 
     fn parse_trigger_events(&mut self) -> Result<Vec<String>, String> {
@@ -4549,11 +4738,12 @@ impl Parser {
             Some(Token::Index) => self.parse_drop_index(),
             Some(Token::View) => self.parse_drop_view(),
             Some(Token::Role) => self.parse_drop_role(),
+            Some(Token::Event) => self.parse_drop_event(),
             Some(t) => Err(format!(
-                "Expected TABLE, INDEX, VIEW or ROLE after DROP, got {:?}",
+                "Expected TABLE, INDEX, VIEW, ROLE or EVENT after DROP, got {:?}",
                 t
             )),
-            None => Err("Expected TABLE, INDEX, VIEW or ROLE after DROP".to_string()),
+            None => Err("Expected TABLE, INDEX, VIEW, ROLE or EVENT after DROP".to_string()),
         }
     }
 
@@ -5620,6 +5810,143 @@ impl Parser {
             }
             _ => Err("Expected ADD, DROP, MODIFY or RENAME".to_string()),
         }
+    }
+
+    fn parse_alter_event(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Alter)?;
+        self.expect(Token::Event)?;
+
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected event name, got {:?}", t)),
+            None => return Err("Expected event name".to_string()),
+        };
+
+        let mut new_name = None;
+        let mut schedule = None;
+        let mut body = None;
+        let mut enable = None;
+        let mut comment = None;
+
+        loop {
+            match self.current() {
+                Some(Token::Rename) => {
+                    self.next();
+                    self.expect(Token::To)?;
+                    new_name = match self.next() {
+                        Some(Token::Identifier(name)) => Some(name),
+                        Some(t) => return Err(format!("Expected new event name, got {:?}", t)),
+                        None => return Err("Expected new event name".to_string()),
+                    };
+                }
+                Some(Token::Enable) => {
+                    self.next();
+                    enable = Some(true);
+                }
+                Some(Token::Disable) => {
+                    self.next();
+                    enable = Some(false);
+                }
+                Some(Token::Comment) => {
+                    self.next();
+                    comment = match self.next() {
+                        Some(Token::StringLiteral(s)) => Some(s),
+                        Some(t) => return Err(format!("Expected comment string, got {:?}", t)),
+                        None => return Err("Expected comment string".to_string()),
+                    };
+                }
+                Some(Token::On) => {
+                    self.next();
+                    self.expect(Token::Schedule)?;
+                    schedule = Some(if matches!(self.current(), Some(Token::At)) {
+                        self.next();
+                        let interval_value = match self.next() {
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            Some(Token::NumberLiteral(n)) => n,
+                            Some(t) => return Err(format!("Expected interval value, got {:?}", t)),
+                            None => return Err("Expected interval value".to_string()),
+                        };
+                        let interval_unit = match self.current() {
+                            Some(Token::Identifier(ref s)) => {
+                                let unit = s.to_uppercase();
+                                self.next();
+                                unit
+                            }
+                            Some(t) => return Err(format!("Expected interval unit, got {:?}", t)),
+                            None => "HOUR".to_string(),
+                        };
+                        EventSchedule::Interval {
+                            interval_value,
+                            interval_unit,
+                        }
+                    } else if matches!(self.current(), Some(Token::Every)) {
+                        self.next();
+                        let interval_value = match self.next() {
+                            Some(Token::NumberLiteral(n)) => n,
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            Some(t) => return Err(format!("Expected interval value, got {:?}", t)),
+                            None => return Err("Expected interval value".to_string()),
+                        };
+                        let interval_unit = match self.current() {
+                            Some(Token::Identifier(ref s)) => {
+                                let unit = s.to_uppercase();
+                                self.next();
+                                unit
+                            }
+                            Some(t) => return Err(format!("Expected interval unit, got {:?}", t)),
+                            None => "HOUR".to_string(),
+                        };
+                        EventSchedule::Interval {
+                            interval_value,
+                            interval_unit,
+                        }
+                    } else {
+                        EventSchedule::OneTime
+                    });
+                }
+                Some(Token::Do) => {
+                    self.next();
+                    self.expect(Token::Begin)?;
+                    let mut body_str = String::new();
+                    while !matches!(self.current(), Some(Token::End) | None) {
+                        match self.next() {
+                            Some(Token::Semicolon) => {
+                                body_str.push(';');
+                                body_str.push(' ');
+                            }
+                            Some(Token::Identifier(sql)) => {
+                                body_str.push_str(&sql);
+                                body_str.push(' ');
+                            }
+                            Some(t) => {
+                                body_str.push_str(&t.to_string());
+                                body_str.push(' ');
+                            }
+                            None => return Err("Expected END".to_string()),
+                        }
+                    }
+                    self.expect(Token::End)?;
+                    body = Some(body_str.trim().to_string());
+                }
+                Some(Token::Identifier(_)) | None => {
+                    break;
+                }
+                Some(t) => {
+                    return Err(format!("Unexpected token in ALTER EVENT: {:?}", t));
+                }
+            }
+        }
+
+        Ok(Statement::AlterEvent(AlterEventStatement {
+            name,
+            new_name,
+            schedule,
+            body,
+            enable,
+            comment,
+        }))
     }
 }
 
