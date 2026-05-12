@@ -638,6 +638,14 @@ pub struct WindowCall {
     pub window_spec: WindowSpecification,
 }
 
+/// Full-text search mode for MATCH...AGAINST
+#[derive(Debug, Clone, PartialEq)]
+pub enum FtsMode {
+    Natural,           // Default: MATCH(col) AGAINST('search')
+    Boolean,           // MATCH(col) AGAINST('search' IN BOOLEAN MODE)
+    QueryExpansion,    // MATCH(col) AGAINST('search' WITH QUERY EXPANSION)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     Literal(String),
@@ -671,7 +679,7 @@ pub enum Expression {
         Box<Expression>,
     ), // INSERT(str, pos, len, newstr)
     Extract(String, Box<Expression>), // EXTRACT(YEAR FROM date)
-    MatchAgainst(Vec<String>, Box<Expression>), // MATCH(col1, col2) AGAINST(expr)
+    MatchAgainst(Vec<String>, Box<Expression>, FtsMode), // MATCH(col1, col2) AGAINST(expr) [IN BOOLEAN MODE | WITH QUERY EXPANSION]
 }
 
 impl Expression {
@@ -825,12 +833,12 @@ impl Expression {
                     Expression::CaseWhen(folded_clauses, else_folded.map(Box::new))
                 }
             }
-            Expression::MatchAgainst(cols, expr) => {
+            Expression::MatchAgainst(cols, expr, mode) => {
                 let expr_folded = expr.fold_constants();
                 if expr_folded == **expr {
                     self.clone()
                 } else {
-                    Expression::MatchAgainst(cols.clone(), Box::new(expr_folded))
+                    Expression::MatchAgainst(cols.clone(), Box::new(expr_folded), mode.clone())
                 }
             }
             _ => self.clone(),
@@ -2409,6 +2417,28 @@ impl Parser {
                         expression: Some(expr),
                     });
                 }
+                // Handle MATCH...AGAINST (Full-text search) in SELECT list
+                Some(Token::Match) => {
+                    let expr = self.parse_match_against()?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias,
+                        expression: Some(expr),
+                    });
+                }
                 _ => {
                     return Err("Expected FROM or column name".to_string());
                 }
@@ -3595,16 +3625,43 @@ impl Parser {
             }
         }
 
-        // Expect AGAINST (expr)
+        // Expect AGAINST (expr [IN BOOLEAN MODE | WITH QUERY EXPANSION])
         self.expect(Token::Against)?;
         self.expect(Token::LParen)?;
 
         // Parse the search expression
         let search_expr = self.parse_additive_expression()?;
 
+        // Parse optional mode: IN BOOLEAN MODE or WITH QUERY EXPANSION (comes AFTER the search expr, before final RParen)
+        let mode = if matches!(self.current(), Some(Token::In)) {
+            self.next();
+            if matches!(self.current(), Some(Token::Boolean)) {
+                self.next();
+                if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "MODE") {
+                    self.next();
+                }
+                FtsMode::Boolean
+            } else {
+                FtsMode::Natural
+            }
+        } else if matches!(self.current(), Some(Token::With)) {
+            self.next();
+            if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "QUERY") {
+                self.next();
+                if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "EXPANSION") {
+                    self.next();
+                }
+                FtsMode::QueryExpansion
+            } else {
+                FtsMode::Natural
+            }
+        } else {
+            FtsMode::Natural
+        };
+
         self.expect(Token::RParen)?;
 
-        Ok(Expression::MatchAgainst(columns, Box::new(search_expr)))
+        Ok(Expression::MatchAgainst(columns, Box::new(search_expr), mode))
     }
 
     /// Parse primary expression (identifier, literal, or parenthesized)
