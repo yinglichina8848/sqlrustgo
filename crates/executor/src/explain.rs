@@ -363,6 +363,30 @@ impl ExplainExecutor {
             Expr::Extract { field, expr } => {
                 format!("EXTRACT({} FROM {})", field, self.format_expr(expr))
             }
+            Expr::WindowFunction { func, args, .. } => {
+                let func_name = match func {
+                    sqlrustgo_planner::WindowFunction::RowNumber => "ROW_NUMBER",
+                    sqlrustgo_planner::WindowFunction::Rank => "RANK",
+                    sqlrustgo_planner::WindowFunction::DenseRank => "DENSE_RANK",
+                    sqlrustgo_planner::WindowFunction::Lead => "LEAD",
+                    sqlrustgo_planner::WindowFunction::Lag => "LAG",
+                    sqlrustgo_planner::WindowFunction::FirstValue => "FIRST_VALUE",
+                    sqlrustgo_planner::WindowFunction::LastValue => "LAST_VALUE",
+                    sqlrustgo_planner::WindowFunction::NthValue => "NTH_VALUE",
+                    sqlrustgo_planner::WindowFunction::Sum => "SUM",
+                    sqlrustgo_planner::WindowFunction::Avg => "AVG",
+                    sqlrustgo_planner::WindowFunction::Count => "COUNT",
+                    sqlrustgo_planner::WindowFunction::Min => "MIN",
+                    sqlrustgo_planner::WindowFunction::Max => "MAX",
+                    sqlrustgo_planner::WindowFunction::Ntile => "NTILE",
+                };
+                let args_str = args
+                    .iter()
+                    .map(|a| self.format_expr(a))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}({})", func_name, args_str)
+            }
         }
     }
 
