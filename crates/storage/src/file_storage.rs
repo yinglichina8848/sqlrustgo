@@ -215,6 +215,8 @@ impl FileStorage {
                 unique_constraints: stored.unique_constraints,
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: stored.rows,
         })
@@ -479,18 +481,22 @@ mod tests {
                             data_type: "INTEGER".to_string(),
                             nullable: false,
                             primary_key: true,
+                            ..Default::default()
                         },
                         ColumnDefinition {
                             name: "name".to_string(),
                             data_type: "TEXT".to_string(),
                             nullable: true,
                             primary_key: false,
+                            ..Default::default()
                         },
                     ],
                     foreign_keys: vec![],
                     unique_constraints: vec![],
                     check_constraints: vec![],
                     partition_info: None,
+                    has_hidden_rowid: false,
+                    next_rowid: 1,
                 },
                 rows: vec![vec![Value::Integer(1), Value::Text("Alice".to_string())]],
             };
@@ -529,6 +535,8 @@ mod tests {
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: vec![],
         };
@@ -574,6 +582,8 @@ mod tests {
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: vec![],
         };
@@ -614,6 +624,8 @@ mod tests {
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: vec![],
         };
@@ -662,6 +674,8 @@ mod tests {
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: vec![
                 vec![Value::Integer(1), Value::Integer(100)],
@@ -721,6 +735,8 @@ mod tests {
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: vec![],
         };
@@ -770,6 +786,8 @@ mod tests {
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: vec![],
         };
@@ -810,6 +828,8 @@ mod tests {
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: vec![vec![Value::Text("Alice".to_string())]],
         };
@@ -880,6 +900,8 @@ mod tests {
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: vec![],
         };
@@ -918,6 +940,8 @@ mod tests {
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: vec![],
         };
@@ -989,11 +1013,14 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     primary_key: true,
+                    ..Default::default()
                 }],
                 foreign_keys: vec![],
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: vec![],
         };
@@ -1007,6 +1034,7 @@ mod tests {
             data_type: "TEXT".to_string(),
             nullable: true,
             primary_key: false,
+            ..Default::default()
         };
         let result = storage.add_column("add_col_test", new_col);
         assert!(result.is_ok());
@@ -1039,6 +1067,8 @@ mod tests {
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             },
             rows: vec![],
         };
@@ -1131,11 +1161,14 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: true,
+                ..Default::default()
             }],
             foreign_keys: vec![],
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&table_info).unwrap();
 
@@ -1164,11 +1197,14 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: true,
+                ..Default::default()
             }],
             foreign_keys: vec![],
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&table_info).unwrap();
 
@@ -1197,11 +1233,14 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: true,
+                ..Default::default()
             }],
             foreign_keys: vec![],
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&table_info).unwrap();
 
@@ -1595,5 +1634,19 @@ impl StorageEngine for FileStorage {
                 table
             ))),
         }
+    }
+
+    fn get_and_increment_next_rowid(&mut self, table: &str) -> SqlResult<Option<u64>> {
+        if let Some(data) = self.tables.get_mut(table) {
+            if data.info.has_hidden_rowid {
+                let rowid = data.info.next_rowid;
+                data.info.next_rowid += 1;
+                // Save the updated table info
+                let table_data = data.clone();
+                self.save_table(table, &table_data)?;
+                return Ok(Some(rowid));
+            }
+        }
+        Ok(None)
     }
 }

@@ -284,6 +284,8 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         })?;
     }
 
@@ -319,6 +321,8 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         })?;
     }
 
@@ -347,6 +351,8 @@ pub fn create_gmp_tables(storage: &mut dyn StorageEngine) -> SqlResult<()> {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         })?;
     }
 

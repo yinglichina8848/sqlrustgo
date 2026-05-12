@@ -97,6 +97,8 @@ fn execute_sql(storage: &mut MemoryStorage, sql: &str) -> Result<ExecutorResult,
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             };
             storage
                 .create_table(&info)
