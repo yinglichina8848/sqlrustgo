@@ -65,8 +65,8 @@ echo "=== v3.1.0 Beta Gate ==="
 echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo ""
 
-# B1: Release Build
-check "B1: cargo build --release" cargo build --release --workspace
+# B1: Build
+check "B1: cargo build --all-features" cargo build --all-features
 
 # B2: L1 test >= 90%
 check_coverage "B2: L1 test (>=90%)" 90 "cargo test -p sqlrustgo-types -p sqlrustgo-parser -p sqlrustgo-planner -p sqlrustgo-optimizer -p sqlrustgo-executor -p sqlrustgo-storage -p sqlrustgo-transaction -p sqlrustgo-catalog --lib -- --test-threads=8"

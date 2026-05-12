@@ -2419,6 +2419,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn eval_merge_value(
         &self,
         expr: &Expression,

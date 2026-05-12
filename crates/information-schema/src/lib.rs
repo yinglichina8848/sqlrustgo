@@ -360,7 +360,8 @@ impl<'a> InformationSchema<'a> {
             .events()
             .iter()
             .map(|event| {
-                let (event_type, execute_at, interval_value, interval_field) = match &event.schedule {
+                let (event_type, execute_at, interval_value, interval_field) = match &event.schedule
+                {
                     EventSchedule::OneTime => ("ONE TIME".to_string(), None, None, None),
                     EventSchedule::Interval {
                         interval_value,
