@@ -2,9 +2,9 @@ name: Coverage
 
 on:
   push:
-    branches: [develop/v2.9.0]
+    branches: [develop/v3.1.0]
   pull_request:
-    branches: [develop/v2.9.0]
+    branches: [develop/v3.1.0]
 
 env:
   CARGO_TERM_COLOR: always
@@ -32,6 +32,10 @@ jobs:
       - name: Run coverage
         run: |
           cargo llvm-cov --all-features --json --output-path artifacts/coverage.json
+
+      - name: Scan coverage gaps
+        run: |
+          python3 scripts/coverage/scan_coverage_gaps.py || true
 
       - name: Upload coverage JSON
         uses: actions/upload-artifact@v4
