@@ -240,6 +240,7 @@ impl<'a> Lexer<'a> {
                     "CREATE" => Token::Create,
                     "TABLE" => Token::Table,
                     "DROP" => Token::Drop,
+                    "DUPLICATE" => Token::Duplicate,
                     "ALTER" => Token::Alter,
                     "INDEX" => Token::Index,
                     "EXPLAIN" => Token::Explain,
