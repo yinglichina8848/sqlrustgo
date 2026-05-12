@@ -355,6 +355,82 @@ impl PhysicalPlan for HashJoinExec {
     }
 }
 
+/// Sort-merge join execution operator
+#[allow(dead_code)]
+pub struct SortMergeJoinExec {
+    left: Box<dyn PhysicalPlan>,
+    right: Box<dyn PhysicalPlan>,
+    join_type: crate::JoinType,
+    condition: Option<Expr>,
+    schema: Schema,
+    left_sort_exprs: Vec<Expr>,
+    right_sort_exprs: Vec<Expr>,
+}
+
+impl SortMergeJoinExec {
+    pub fn new(
+        left: Box<dyn PhysicalPlan>,
+        right: Box<dyn PhysicalPlan>,
+        join_type: crate::JoinType,
+        condition: Option<Expr>,
+        schema: Schema,
+        left_sort_exprs: Vec<Expr>,
+        right_sort_exprs: Vec<Expr>,
+    ) -> Self {
+        Self {
+            left,
+            right,
+            join_type,
+            condition,
+            schema,
+            left_sort_exprs,
+            right_sort_exprs,
+        }
+    }
+
+    pub fn left(&self) -> &dyn PhysicalPlan {
+        self.left.as_ref()
+    }
+
+    pub fn right(&self) -> &dyn PhysicalPlan {
+        self.right.as_ref()
+    }
+
+    pub fn join_type(&self) -> &crate::JoinType {
+        &self.join_type
+    }
+
+    pub fn condition(&self) -> Option<&Expr> {
+        self.condition.as_ref()
+    }
+
+    pub fn left_sort_exprs(&self) -> &[Expr] {
+        &self.left_sort_exprs
+    }
+
+    pub fn right_sort_exprs(&self) -> &[Expr] {
+        &self.right_sort_exprs
+    }
+}
+
+impl PhysicalPlan for SortMergeJoinExec {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn children(&self) -> Vec<&dyn PhysicalPlan> {
+        vec![self.left.as_ref(), self.right.as_ref()]
+    }
+
+    fn name(&self) -> &str {
+        "SortMergeJoin"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// Sort execution operator
 #[allow(dead_code)]
 pub struct SortExec {
