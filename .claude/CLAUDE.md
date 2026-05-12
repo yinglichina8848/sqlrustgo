@@ -66,3 +66,38 @@ cargo run --bin sqlrustgo
 ## 铁锈版
 
 将 Rust 版本 2024 与 Tokio 异步运行时结合使用。
+
+## Gitea 工作流（关键）
+
+### Gitea API Token
+```
+04bcda86dd601364a53eec33dc37aa6efa98a5b7
+```
+
+### 创建 PR（API）
+```bash
+TOKEN=04bcda86dd601364a53eec33dc37aa6efa98a5b7
+curl -X POST http://192.168.0.252:3000/api/v1/repos/openclaw/sqlrustgo/pulls \
+  -H "Authorization: token $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "PR 标题",
+    "head": "feature/my-branch",
+    "base": "develop/v3.1.0",
+    "body": "PR 描述"
+  }'
+```
+
+### 创建 Issue（API）
+```bash
+TOKEN=04bcda86dd601364a53eec33dc37aa6efa98a5b7
+curl -X POST http://192.168.0.252:3000/api/v1/repos/openclaw/sqlrustgo/issues \
+  -H "Authorization: token $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"标题","body":"描述"}'
+```
+
+### 关键注意事项
+- Gitea 只有 HTTP，没有 HTTPS
+- head 分支必须先 push 到 Gitea 才能创建 PR
+- 使用 http:// 而非 https://
