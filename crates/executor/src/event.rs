@@ -38,7 +38,10 @@ impl EventExecutor {
         }
 
         let statement = parse(&event.body).map_err(|e| {
-            SqlError::ExecutionError(format!("Failed to parse event body '{}': {}", event.name, e))
+            SqlError::ExecutionError(format!(
+                "Failed to parse event body '{}': {}",
+                event.name, e
+            ))
         })?;
 
         let _ = statement;
@@ -74,10 +77,7 @@ impl EventExecutor {
         let due_events = self.get_due_events();
         due_events
             .iter()
-            .map(|event| {
-                self.execute_event(event)
-                    .map_err(|e| e.to_string())
-            })
+            .map(|event| self.execute_event(event).map_err(|e| e.to_string()))
             .collect()
     }
 }
