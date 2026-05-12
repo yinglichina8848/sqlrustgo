@@ -182,9 +182,8 @@ fn test_execution_chain_scalar_subquery() {
     let _ = engine.execute("INSERT INTO t1 VALUES (1, 100)");
     let _ = engine.execute("INSERT INTO t2 VALUES (1, 50)");
 
-    let result = engine.execute(
-        "SELECT t1.id, (SELECT MAX(val) FROM t2 WHERE t2.id = t1.id) as max_val FROM t1"
-    );
+    let result = engine
+        .execute("SELECT t1.id, (SELECT MAX(val) FROM t2 WHERE t2.id = t1.id) as max_val FROM t1");
     assert!(result.is_ok());
 }
 
@@ -197,9 +196,8 @@ fn test_execution_chain_cte() {
     let _ = engine.execute("INSERT INTO sales VALUES ('A', 100)");
     let _ = engine.execute("INSERT INTO sales VALUES ('B', 200)");
 
-    let result = engine.execute(
-        "WITH total AS (SELECT SUM(amount) as s FROM sales) SELECT * FROM total"
-    );
+    let result =
+        engine.execute("WITH total AS (SELECT SUM(amount) as s FROM sales) SELECT * FROM total");
     assert!(result.is_ok());
 }
 

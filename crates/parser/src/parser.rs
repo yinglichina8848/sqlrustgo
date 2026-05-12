@@ -641,9 +641,9 @@ pub struct WindowCall {
 /// Full-text search mode for MATCH...AGAINST
 #[derive(Debug, Clone, PartialEq)]
 pub enum FtsMode {
-    Natural,           // Default: MATCH(col) AGAINST('search')
-    Boolean,           // MATCH(col) AGAINST('search' IN BOOLEAN MODE)
-    QueryExpansion,    // MATCH(col) AGAINST('search' WITH QUERY EXPANSION)
+    Natural,        // Default: MATCH(col) AGAINST('search')
+    Boolean,        // MATCH(col) AGAINST('search' IN BOOLEAN MODE)
+    QueryExpansion, // MATCH(col) AGAINST('search' WITH QUERY EXPANSION)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -3637,7 +3637,8 @@ impl Parser {
             self.next();
             if matches!(self.current(), Some(Token::Boolean)) {
                 self.next();
-                if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "MODE") {
+                if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "MODE")
+                {
                     self.next();
                 }
                 FtsMode::Boolean
@@ -3646,9 +3647,11 @@ impl Parser {
             }
         } else if matches!(self.current(), Some(Token::With)) {
             self.next();
-            if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "QUERY") {
+            if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "QUERY")
+            {
                 self.next();
-                if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "EXPANSION") {
+                if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "EXPANSION")
+                {
                     self.next();
                 }
                 FtsMode::QueryExpansion
@@ -3661,7 +3664,11 @@ impl Parser {
 
         self.expect(Token::RParen)?;
 
-        Ok(Expression::MatchAgainst(columns, Box::new(search_expr), mode))
+        Ok(Expression::MatchAgainst(
+            columns,
+            Box::new(search_expr),
+            mode,
+        ))
     }
 
     /// Parse primary expression (identifier, literal, or parenthesized)

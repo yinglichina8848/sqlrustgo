@@ -16,7 +16,7 @@ pub use parser::{
     CallStatement, CheckOption, CheckStatement, ColumnDefinition, CommonTableExpression,
     CreateProcedureStatement, CreateTableStatement, CreateTriggerStatement, CreateViewStatement,
     DeleteStatement, DropIndexStatement, DropTableStatement, DropViewStatement, Expression,
-    FtsMode, ForeignKeyRef, InsertStatement, JoinClause, JoinType, ObjectType, OptimizeStatement,
+    ForeignKeyRef, FtsMode, InsertStatement, JoinClause, JoinType, ObjectType, OptimizeStatement,
     RepairStatement, RestoreStatement, SelectColumn, SelectStatement, Statement, StoredProcParam,
     StoredProcParamMode, StoredProcStatement, TableConstraint, TruncateStatement, UpdateStatement,
     VacuumMode, VacuumStatement, WithClause, WithSelect,
