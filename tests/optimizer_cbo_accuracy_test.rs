@@ -83,10 +83,22 @@ fn test_agg_cost_increases_with_group_by() {
     let cost_four_groups = model.agg_cost(row_count, 4);
 
     // Aggregation costs should be non-negative
-    assert!(cost_no_group >= 0.0, "Agg cost without group should be >= 0");
-    assert!(cost_one_group >= 0.0, "Agg cost with 1 group should be >= 0");
-    assert!(cost_two_groups >= 0.0, "Agg cost with 2 groups should be >= 0");
-    assert!(cost_four_groups >= 0.0, "Agg cost with 4 groups should be >= 0");
+    assert!(
+        cost_no_group >= 0.0,
+        "Agg cost without group should be >= 0"
+    );
+    assert!(
+        cost_one_group >= 0.0,
+        "Agg cost with 1 group should be >= 0"
+    );
+    assert!(
+        cost_two_groups >= 0.0,
+        "Agg cost with 2 groups should be >= 0"
+    );
+    assert!(
+        cost_four_groups >= 0.0,
+        "Agg cost with 4 groups should be >= 0"
+    );
 }
 
 #[test]

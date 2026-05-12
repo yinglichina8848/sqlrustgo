@@ -142,7 +142,11 @@ fn test_wal_crash_recovery_after_incomplete_transaction() {
 
     let manager = WalManager::new(wal_path);
     let entries = manager.recover().unwrap();
-    assert_eq!(entries.len(), 10, "Should recover partial entries after crash");
+    assert_eq!(
+        entries.len(),
+        10,
+        "Should recover partial entries after crash"
+    );
 }
 
 #[test]
@@ -177,7 +181,11 @@ fn test_wal_archive_cleanup_preserves_recent() {
     assert_eq!(cleaned, 3, "Should clean up 3 old archives");
 
     let remaining = manager.list_archives().unwrap();
-    assert_eq!(remaining.len(), 2, "Should keep only 2 most recent archives");
+    assert_eq!(
+        remaining.len(),
+        2,
+        "Should keep only 2 most recent archives"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -216,5 +224,8 @@ async fn test_wal_archive_recovery_stress() {
 
     let archives = manager.list_archives().unwrap();
     assert_eq!(archives.len(), 10, "Should have 10 archives");
-    assert!(archives[9].archive_id > archives[0].archive_id, "Archives should have incrementing IDs");
+    assert!(
+        archives[9].archive_id > archives[0].archive_id,
+        "Archives should have incrementing IDs"
+    );
 }

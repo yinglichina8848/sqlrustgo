@@ -646,7 +646,10 @@ mod tests {
 
     #[test]
     fn test_get_next_rowid_requires_hidden_rowid() {
-        let mut table = Table::new("users", vec![ColumnDefinition::new("id", DataType::Integer)]);
+        let mut table = Table::new(
+            "users",
+            vec![ColumnDefinition::new("id", DataType::Integer)],
+        );
 
         assert_eq!(table.get_next_rowid(), None);
         assert_eq!(table.peek_next_rowid(), None);

@@ -5939,7 +5939,8 @@ mod tests {
 
     #[test]
     fn test_parse_merge_matched() {
-        let result = parse("MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET name = s.name");
+        let result =
+            parse("MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET name = s.name");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
             Statement::Merge(m) => {
