@@ -116,3 +116,35 @@ fn test_fts_empty_search_term() {
     let result = engine.execute("SELECT * FROM test WHERE MATCH(content) AGAINST('')");
     assert!(result.is_ok(), "FTS query should handle empty term");
 }
+
+#[test]
+fn test_fts_dml_auto_sync() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE articles (id INTEGER, title TEXT, body TEXT)").unwrap();
+
+    // INSERT: new documents should be findable
+    engine.execute("INSERT INTO articles VALUES (1, 'Rust Programming', 'Learn Rust')").unwrap();
+    engine.execute("INSERT INTO articles VALUES (2, 'Database Basics', 'Introduction to SQL')").unwrap();
+
+    // Search for 'rust' - should find row 1
+    let result = engine.execute("SELECT id FROM articles WHERE MATCH(title, body) AGAINST('rust')").unwrap();
+    assert_eq!(result.rows.len(), 1, "Should find 1 row with 'rust'");
+    assert_eq!(result.rows[0][0], sqlrustgo_types::Value::Integer(1));
+
+    // UPDATE: modified documents should reflect in search
+    engine.execute("UPDATE articles SET title = 'Rust Deep Dive' WHERE id = 1").unwrap();
+
+    // Row 1 should still be findable by new title
+    let result = engine.execute("SELECT id FROM articles WHERE MATCH(title, body) AGAINST('deep')").unwrap();
+    assert_eq!(result.rows.len(), 1, "Should find 1 row with 'deep' after UPDATE");
+
+    // Original 'rust' search should still work (body contains 'Rust')
+    let result = engine.execute("SELECT id FROM articles WHERE MATCH(title, body) AGAINST('rust')").unwrap();
+    assert_eq!(result.rows.len(), 1, "Should still find row 1 by 'rust' in body");
+
+    // DELETE: removed documents should not be findable
+    engine.execute("DELETE FROM articles WHERE id = 1").unwrap();
+
+    let result = engine.execute("SELECT id FROM articles WHERE MATCH(title, body) AGAINST('rust')").unwrap();
+    assert_eq!(result.rows.len(), 0, "Deleted row should not be found");
+}
