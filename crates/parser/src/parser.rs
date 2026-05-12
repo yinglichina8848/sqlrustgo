@@ -671,6 +671,7 @@ pub enum Expression {
         Box<Expression>,
     ), // INSERT(str, pos, len, newstr)
     Extract(String, Box<Expression>), // EXTRACT(YEAR FROM date)
+    MatchAgainst(Vec<String>, Box<Expression>), // MATCH(col1, col2) AGAINST(expr)
 }
 
 impl Expression {
@@ -822,6 +823,14 @@ impl Expression {
                     self.clone()
                 } else {
                     Expression::CaseWhen(folded_clauses, else_folded.map(Box::new))
+                }
+            }
+            Expression::MatchAgainst(cols, expr) => {
+                let expr_folded = expr.fold_constants();
+                if expr_folded == **expr {
+                    self.clone()
+                } else {
+                    Expression::MatchAgainst(cols.clone(), Box::new(expr_folded))
                 }
             }
             _ => self.clone(),
@@ -3266,6 +3275,10 @@ impl Parser {
                 let pattern = self.parse_primary_expression()?;
                 return Ok(Expression::NotRegexp(Box::new(left), Box::new(pattern)));
             }
+            // Check for MATCH...AGAINST (Full-text search)
+            if matches!(self.current(), Some(Token::Match)) {
+                return self.parse_match_against();
+            }
             return Err("NOT must be followed by IN, LIKE, BETWEEN, or REGEXP".to_string());
         }
 
@@ -3541,6 +3554,43 @@ impl Parser {
         self.expect(Token::RParen)?;
 
         Ok(Expression::FunctionCall("IF".to_string(), args))
+    }
+
+    /// Parse MATCH (col1, col2, ...) AGAINST (expr) full-text search expression
+    fn parse_match_against(&mut self) -> Result<Expression, String> {
+        // Already consumed Token::Match at this point
+        self.expect(Token::LParen)?;
+
+        // Parse column list: col1, col2, ...
+        let mut columns = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Identifier(ref name)) => {
+                    columns.push(name.clone());
+                    self.next();
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                    continue;
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                _ => return Err("Expected column name, comma, or ')' in MATCH clause".to_string()),
+            }
+        }
+
+        // Expect AGAINST (expr)
+        self.expect(Token::Against)?;
+        self.expect(Token::LParen)?;
+
+        // Parse the search expression
+        let search_expr = self.parse_additive_expression()?;
+
+        self.expect(Token::RParen)?;
+
+        Ok(Expression::MatchAgainst(columns, Box::new(search_expr)))
     }
 
     /// Parse primary expression (identifier, literal, or parenthesized)

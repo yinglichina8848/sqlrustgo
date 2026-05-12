@@ -364,6 +364,8 @@ impl<'a> Lexer<'a> {
                     "RESTORE" => Token::Restore,
                     "MERGE" => Token::Merge,
                     "MATCHED" => Token::Matched,
+                    "MATCH" => Token::Match,
+                    "AGAINST" => Token::Against,
                     "USING" => Token::Using,
                     "WINDOW" => Token::Window,
                     "PARTITION" => Token::Partition,

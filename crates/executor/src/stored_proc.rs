@@ -1427,6 +1427,11 @@ impl StoredProcExecutor {
                     _ => Value::Null,
                 }
             }
+            sqlrustgo_parser::Expression::MatchAgainst(_, _) => {
+                // FTS MATCH...AGAINST is evaluated during query execution, not in stored procedures
+                // Return Null here - actual FTS evaluation happens in the executor
+                Value::Null
+            }
         }
     }
 
