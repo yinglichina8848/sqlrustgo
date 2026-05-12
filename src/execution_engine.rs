@@ -2318,18 +2318,16 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     let _ = storage.update(target_table, &[], &updates);
                     matched_count += 1;
                 }
-            } else {
-                if let Some(ref clause) = merge.not_matched_clause {
-                    let values: Vec<Value> = clause
-                        .insert_values
-                        .iter()
-                        .map(|val| self.eval_merge_value(val, source_row, &[], &target_table_info))
-                        .collect();
+            } else if let Some(ref clause) = merge.not_matched_clause {
+                let values: Vec<Value> = clause
+                    .insert_values
+                    .iter()
+                    .map(|val| self.eval_merge_value(val, source_row, &[], &target_table_info))
+                    .collect();
 
-                    let mut storage = self.storage.write().unwrap();
-                    let _ = storage.insert(target_table, vec![values]);
-                    inserted_count += 1;
-                }
+                let mut storage = self.storage.write().unwrap();
+                let _ = storage.insert(target_table, vec![values]);
+                inserted_count += 1;
             }
         }
 
