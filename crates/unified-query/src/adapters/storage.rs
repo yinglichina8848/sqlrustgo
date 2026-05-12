@@ -121,6 +121,8 @@ impl StorageAdapter {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
 
         // Create table schema
