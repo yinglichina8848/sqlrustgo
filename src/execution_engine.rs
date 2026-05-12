@@ -2341,6 +2341,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(ExecutorResult::new(vec![], matched_count + inserted_count))
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn eval_merge_condition(
         &self,
         condition: &Expression,
@@ -2366,6 +2367,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn eval_merge_expr(
         &self,
         expr: &Expression,
