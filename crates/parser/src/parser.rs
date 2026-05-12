@@ -671,6 +671,7 @@ pub enum Expression {
         Box<Expression>,
     ), // INSERT(str, pos, len, newstr)
     Extract(String, Box<Expression>), // EXTRACT(YEAR FROM date)
+    MatchAgainst(Vec<String>, Box<Expression>), // MATCH(col1, col2) AGAINST(expr)
 }
 
 impl Expression {
@@ -822,6 +823,14 @@ impl Expression {
                     self.clone()
                 } else {
                     Expression::CaseWhen(folded_clauses, else_folded.map(Box::new))
+                }
+            }
+            Expression::MatchAgainst(cols, expr) => {
+                let expr_folded = expr.fold_constants();
+                if expr_folded == **expr {
+                    self.clone()
+                } else {
+                    Expression::MatchAgainst(cols.clone(), Box::new(expr_folded))
                 }
             }
             _ => self.clone(),
@@ -3171,6 +3180,12 @@ impl Parser {
     }
 
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
+        // Check for MATCH...AGAINST (Full-text search) BEFORE parse_additive_expression
+        // because MATCH starts a standalone expression, not a binary operator
+        if matches!(self.current(), Some(Token::Match)) {
+            return self.parse_match_against();
+        }
+
         let left = self.parse_additive_expression()?;
 
         if matches!(self.current(), Some(Token::In)) {
@@ -3265,6 +3280,10 @@ impl Parser {
                 self.next();
                 let pattern = self.parse_primary_expression()?;
                 return Ok(Expression::NotRegexp(Box::new(left), Box::new(pattern)));
+            }
+            // Check for MATCH...AGAINST (Full-text search)
+            if matches!(self.current(), Some(Token::Match)) {
+                return self.parse_match_against();
             }
             return Err("NOT must be followed by IN, LIKE, BETWEEN, or REGEXP".to_string());
         }
@@ -3541,6 +3560,51 @@ impl Parser {
         self.expect(Token::RParen)?;
 
         Ok(Expression::FunctionCall("IF".to_string(), args))
+    }
+
+    /// Parse MATCH (col1, col2, ...) AGAINST (expr) full-text search expression
+    fn parse_match_against(&mut self) -> Result<Expression, String> {
+        // Consume Token::Match
+        self.next();
+        self.expect(Token::LParen)?;
+
+        // Parse column list: col1, col2, ...
+        // Note: column names can be identifiers or keywords used as column names (e.g., 'text')
+        let mut columns = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Identifier(ref name)) => {
+                    columns.push(name.clone());
+                    self.next();
+                }
+                // Allow type keywords to be used as column names
+                Some(Token::Text) | Some(Token::Integer) | Some(Token::Blob) => {
+                    let name = format!("{:?}", self.current().unwrap()).to_lowercase();
+                    columns.push(name);
+                    self.next();
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                    continue;
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                _ => return Err("Expected column name, comma, or ')' in MATCH clause".to_string()),
+            }
+        }
+
+        // Expect AGAINST (expr)
+        self.expect(Token::Against)?;
+        self.expect(Token::LParen)?;
+
+        // Parse the search expression
+        let search_expr = self.parse_additive_expression()?;
+
+        self.expect(Token::RParen)?;
+
+        Ok(Expression::MatchAgainst(columns, Box::new(search_expr)))
     }
 
     /// Parse primary expression (identifier, literal, or parenthesized)
