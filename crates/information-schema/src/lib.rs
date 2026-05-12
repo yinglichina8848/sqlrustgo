@@ -199,6 +199,31 @@ pub struct ViewRow {
     pub is_insertable_into: String,
 }
 
+/// Row representing an event in information_schema.events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventRow {
+    pub event_catalog: String,
+    pub event_schema: String,
+    pub event_name: String,
+    pub definer: String,
+    pub event_body: String,
+    pub event_definition: Option<String>,
+    pub event_type: String,
+    pub execute_at: Option<String>,
+    pub interval_value: Option<String>,
+    pub interval_field: Option<String>,
+    pub sql_mode: String,
+    pub starts: Option<String>,
+    pub ends: Option<String>,
+    pub status: String,
+    pub on_completion: String,
+    pub created: Option<String>,
+    pub last_altered: Option<String>,
+    pub event_comment: Option<String>,
+    pub originator: String,
+    pub event_body_utf8: String,
+}
+
 /// INFORMATION_SCHEMA providing standard SQL metadata views
 pub struct InformationSchema<'a> {
     catalog: &'a Catalog,
@@ -327,7 +352,10 @@ impl<'a> InformationSchema<'a> {
     }
 
     pub fn get_triggers(&self) -> Vec<TriggerRow> {
-        // Triggers not yet implemented in catalog
+        Vec::new()
+    }
+
+    pub fn get_events(&self) -> Vec<EventRow> {
         Vec::new()
     }
 
