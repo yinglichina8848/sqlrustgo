@@ -4062,7 +4062,7 @@ fn evaluate_expression(
                 Err(format!("Aggregate not found in schema: {}", agg_name))
             }
         }
-        Expression::MatchAgainst(columns, search_expr) => {
+        Expression::MatchAgainst(columns, search_expr, _mode) => {
             // Evaluate the search expression first
             let search_val = evaluate_expression(search_expr, row, table_info)?;
             let search_text = match &search_val {

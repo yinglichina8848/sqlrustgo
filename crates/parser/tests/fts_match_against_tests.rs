@@ -17,7 +17,7 @@ fn test_parse_match_against_basic() {
             assert!(sel.where_clause.is_some(), "WHERE clause should exist");
             if let Some(expr) = &sel.where_clause {
                 assert!(
-                    matches!(expr, Expression::MatchAgainst(_, _)),
+                    matches!(expr, Expression::MatchAgainst(_, _, _)),
                     "WHERE should contain MatchAgainst expression"
                 );
             }
@@ -52,4 +52,46 @@ fn test_parse_match_against_derived_table() {
     let sql = "WITH recent AS (SELECT * FROM articles WHERE MATCH(title) AGAINST('news')) SELECT * FROM recent";
     let result = parse(sql);
     assert!(result.is_ok(), "Failed to parse MATCH in CTE: {:?}", result);
+}
+
+#[test]
+fn test_parse_match_against_boolean_mode() {
+    let sql = "SELECT * FROM articles WHERE MATCH(title, content) AGAINST('+rust -java' IN BOOLEAN MODE)";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse IN BOOLEAN MODE: {:?}", result);
+
+    let stmt = result.unwrap();
+    match stmt {
+        Statement::Select(sel) => {
+            assert!(sel.where_clause.is_some(), "WHERE clause should exist");
+            if let Some(expr) = &sel.where_clause {
+                assert!(
+                    matches!(expr, Expression::MatchAgainst(_, _, sqlrustgo_parser::FtsMode::Boolean)),
+                    "WHERE should contain MatchAgainst expression with Boolean mode"
+                );
+            }
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
+}
+
+#[test]
+fn test_parse_match_against_query_expansion() {
+    let sql = "SELECT * FROM articles WHERE MATCH(title) AGAINST('database' WITH QUERY EXPANSION)";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse WITH QUERY EXPANSION: {:?}", result);
+
+    let stmt = result.unwrap();
+    match stmt {
+        Statement::Select(sel) => {
+            assert!(sel.where_clause.is_some(), "WHERE clause should exist");
+            if let Some(expr) = &sel.where_clause {
+                assert!(
+                    matches!(expr, Expression::MatchAgainst(_, _, sqlrustgo_parser::FtsMode::QueryExpansion)),
+                    "WHERE should contain MatchAgainst expression with QueryExpansion mode"
+                );
+            }
+        }
+        _ => panic!("Expected SELECT statement"),
+    }
 }

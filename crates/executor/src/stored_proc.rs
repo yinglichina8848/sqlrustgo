@@ -1488,7 +1488,7 @@ impl StoredProcExecutor {
                     _ => Value::Null,
                 }
             }
-            sqlrustgo_parser::Expression::MatchAgainst(columns, search_expr) => {
+            sqlrustgo_parser::Expression::MatchAgainst(columns, search_expr, _mode) => {
                 // Evaluate the search expression first
                 let search_term = self.expression_to_value(search_expr, ctx);
                 let search_text = match &search_term {

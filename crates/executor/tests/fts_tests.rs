@@ -148,3 +148,42 @@ fn test_fts_dml_auto_sync() {
     let result = engine.execute("SELECT id FROM articles WHERE MATCH(title, body) AGAINST('rust')").unwrap();
     assert_eq!(result.rows.len(), 0, "Deleted row should not be found");
 }
+
+#[test]
+fn test_fts_select_list_expression() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE articles (id INTEGER, title TEXT, body TEXT)").unwrap();
+    engine.execute("INSERT INTO articles VALUES (1, 'Rust Programming', 'Learn Rust programming language')").unwrap();
+    engine.execute("INSERT INTO articles VALUES (2, 'Database Basics', 'Introduction to SQL databases')").unwrap();
+    engine.execute("INSERT INTO articles VALUES (3, 'Web Development', 'Building web apps with Rust')").unwrap();
+
+    // SELECT list FTS expression with alias
+    let result = engine.execute("SELECT id, MATCH(title, body) AGAINST('rust') AS relevance FROM articles").unwrap();
+    assert_eq!(result.rows.len(), 3, "Should return all 3 rows");
+
+    // Rows containing 'rust' should have relevance = true (1)
+    let rust_relevance: Vec<bool> = result.rows.iter()
+        .map(|row| {
+            if let sqlrustgo_types::Value::Boolean(b) = &row[1] {
+                *b
+            } else {
+                false
+            }
+        })
+        .collect();
+    assert_eq!(rust_relevance, vec![true, false, true], "id=1 and id=3 should match 'rust'");
+
+    // Test FTS in SELECT with WHERE filter
+    let result = engine.execute("SELECT id, MATCH(title) AGAINST('database') AS title_match FROM articles WHERE id > 1").unwrap();
+    assert_eq!(result.rows.len(), 2, "Should return 2 rows");
+    let title_match: Vec<bool> = result.rows.iter()
+        .map(|row| {
+            if let sqlrustgo_types::Value::Boolean(b) = &row[1] {
+                *b
+            } else {
+                false
+            }
+        })
+        .collect();
+    assert_eq!(title_match, vec![true, false], "id=2 title_match=true, id=3 title_match=false");
+}
