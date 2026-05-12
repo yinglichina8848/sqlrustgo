@@ -10,6 +10,7 @@ pub mod buffer_pool;
 
 pub mod engine;
 pub mod file_storage;
+pub mod fts;
 pub mod page;
 pub mod predicate;
 pub mod read_write_split;
@@ -25,4 +26,5 @@ pub use engine::{
     TriggerTiming, UniqueConstraint,
 };
 pub use file_storage::FileStorage;
+pub use fts::{InvertedIndex, MultiLanguageTokenizer, SimpleTokenizer, ChineseTokenizer, Tokenizer};
 pub use page::Page;
