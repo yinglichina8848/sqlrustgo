@@ -18,7 +18,7 @@ pub use optimizer::{DefaultOptimizer, NoOpOptimizer, Optimizer, OptimizerRule};
 pub use physical_plan::PhysicalPlan;
 pub use physical_plan::{
     AggregateExec, DeleteExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, ProjectionExec,
-    SeqScanExec, SortExec,
+    SeqScanExec, SortExec, WindowExec,
 };
 pub use planner::{DefaultPlanner, NoOpPlanner, Planner};
 
@@ -61,6 +61,64 @@ pub enum AggregateFunction {
     Min,
     /// MAX - maximum value
     Max,
+}
+
+/// Window function types
+#[derive(Debug, Clone, PartialEq)]
+pub enum WindowFunction {
+    RowNumber,
+    Rank,
+    DenseRank,
+    Lead,
+    Lag,
+    FirstValue,
+    LastValue,
+    NthValue,
+    Sum,
+    Avg,
+    Count,
+    Min,
+    Max,
+    Ntile,
+}
+
+/// Window frame boundary type
+#[derive(Debug, Clone, PartialEq)]
+pub enum FrameBound {
+    /// Unbounded preceding (first row in partition)
+    UnboundedPreceding,
+    /// Current row
+    CurrentRow,
+    /// Following by offset
+    Following(u64),
+    /// Preceding by offset
+    Preceding(u64),
+}
+
+impl fmt::Display for FrameBound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FrameBound::UnboundedPreceding => write!(f, "UNBOUNDED PRECEDING"),
+            FrameBound::CurrentRow => write!(f, "CURRENT ROW"),
+            FrameBound::Following(n) => write!(f, "{} FOLLOWING", n),
+            FrameBound::Preceding(n) => write!(f, "{} PRECEDING", n),
+        }
+    }
+}
+
+/// Window frame definition
+#[derive(Debug, Clone, PartialEq)]
+pub struct WindowFrame {
+    /// Start boundary
+    pub start: FrameBound,
+    /// End boundary
+    pub end: FrameBound,
+}
+
+impl fmt::Display for WindowFrame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ROWS BETWEEN {} AND {}", self.start, self.end)
+    }
 }
 
 /// Binary and unary operators in expressions
@@ -107,6 +165,18 @@ pub struct SortExpr {
     pub asc: bool,
     /// Place nulls first if true, last if false
     pub nulls_first: bool,
+}
+
+impl fmt::Display for SortExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let null_order = if self.nulls_first {
+            "NULLS FIRST"
+        } else {
+            "NULLS LAST"
+        };
+        let direction = if self.asc { "ASC" } else { "DESC" };
+        write!(f, "{} {} {}", self.expr, direction, null_order)
+    }
 }
 
 /// Column reference in query
@@ -168,6 +238,13 @@ pub enum Expr {
         func: AggregateFunction,
         args: Vec<Expr>,
         distinct: bool,
+    },
+    WindowFunction {
+        func: WindowFunction,
+        args: Vec<Expr>,
+        partition_by: Vec<Expr>,
+        order_by: Vec<SortExpr>,
+        frame: Option<WindowFrame>,
     },
     Alias {
         expr: Box<Expr>,
@@ -310,6 +387,47 @@ impl fmt::Display for Expr {
             }
             Expr::Extract { field, expr } => {
                 write!(f, "EXTRACT({} FROM {})", field, expr)
+            }
+            Expr::WindowFunction {
+                func,
+                args,
+                partition_by,
+                order_by,
+                frame,
+            } => {
+                let func_name = match func {
+                    WindowFunction::RowNumber => "ROW_NUMBER",
+                    WindowFunction::Rank => "RANK",
+                    WindowFunction::DenseRank => "DENSE_RANK",
+                    WindowFunction::Lead => "LEAD",
+                    WindowFunction::Lag => "LAG",
+                    WindowFunction::FirstValue => "FIRST_VALUE",
+                    WindowFunction::LastValue => "LAST_VALUE",
+                    WindowFunction::NthValue => "NTH_VALUE",
+                    WindowFunction::Sum => "SUM",
+                    WindowFunction::Avg => "AVG",
+                    WindowFunction::Count => "COUNT",
+                    WindowFunction::Min => "MIN",
+                    WindowFunction::Max => "MAX",
+                    WindowFunction::Ntile => "NTILE",
+                };
+                let args_str: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+                let mut result = format!("{}({})", func_name, args_str.join(", "));
+                if !partition_by.is_empty() {
+                    let partition_str: Vec<String> =
+                        partition_by.iter().map(|p| p.to_string()).collect();
+                    result.push_str(" PARTITION BY ");
+                    result.push_str(&partition_str.join(", "));
+                }
+                if !order_by.is_empty() {
+                    let order_str: Vec<String> = order_by.iter().map(|o| o.to_string()).collect();
+                    result.push_str(" ORDER BY ");
+                    result.push_str(&order_str.join(", "));
+                }
+                if let Some(f) = frame {
+                    result.push_str(&format!(" {}", f));
+                }
+                write!(f, "{}", result)
             }
         }
     }
