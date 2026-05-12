@@ -885,6 +885,48 @@ impl Expression {
             _ => self.clone(),
         }
     }
+
+    pub fn to_sql_string(&self) -> String {
+        match self {
+            Expression::Literal(s) => s.clone(),
+            Expression::Identifier(s) => s.clone(),
+            Expression::BinaryOp(left, op, right) => {
+                format!("{} {} {}", left.to_sql_string(), op, right.to_sql_string())
+            }
+            Expression::IsNull(expr) => format!("{} IS NULL", expr.to_sql_string()),
+            Expression::IsNotNull(expr) => format!("{} IS NOT NULL", expr.to_sql_string()),
+            Expression::Like(expr, pattern, escape) => {
+                let base = format!("{} LIKE {}", expr.to_sql_string(), pattern.to_sql_string());
+                if let Some(e) = escape {
+                    format!("{} ESCAPE '{}'", base, e)
+                } else {
+                    base
+                }
+            }
+            Expression::NotLike(expr, pattern, escape) => {
+                let base = format!(
+                    "{} NOT LIKE {}",
+                    expr.to_sql_string(),
+                    pattern.to_sql_string()
+                );
+                if let Some(e) = escape {
+                    format!("{} ESCAPE '{}'", base, e)
+                } else {
+                    base
+                }
+            }
+            Expression::Between(expr, low, high) => {
+                format!(
+                    "{} BETWEEN {} AND {}",
+                    expr.to_sql_string(),
+                    low.to_sql_string(),
+                    high.to_sql_string()
+                )
+            }
+            Expression::UnaryOp(op, expr) => format!("{} {}", op, expr.to_sql_string()),
+            _ => format!("{:?}", self),
+        }
+    }
 }
 
 fn evaluate_binary_op(l: &str, r: &str, op: &str) -> Option<Expression> {

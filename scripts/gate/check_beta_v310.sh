@@ -22,12 +22,42 @@ check_test() {
     TOTAL=$((TOTAL+1))
     echo -n "[beta-v3.1.0] $name ... "
     out=$(eval "$cmd" 2>&1 || true)
-    passed=$(echo "$out" | grep -c "test result: ok\." || echo "0")
-    failed=$(echo "$out" | grep -c "test result: FAILED" || echo "0")
+    passed=$(echo "$out" | grep -c "test result: ok\." 2>/dev/null || echo "0")
+    failed=$(echo "$out" | grep -c "test result: FAILED" 2>/dev/null || echo "0")
+    passed=${passed//[^0-9]/}
+    failed=${failed//[^0-9]/}
+    if [ -z "$passed" ] || [ -z "$failed" ]; then
+        passed=0; failed=0
+    fi
     if [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ]; then
         echo "PASS ($passed tests)"; PASS=$((PASS+1))
     else
         echo "FAIL ($passed passed, $failed failed)"; BLOCKERS=$((BLOCKERS+1))
+    fi
+}
+
+check_coverage() {
+    local name="$1" min_rate="$2" cmd="$3"
+    TOTAL=$((TOTAL+1))
+    echo -n "[beta-v3.1.0] $name ... "
+    out=$($cmd 2>&1 || true)
+    passed=$(echo "$out" | grep -c "test result: ok\." 2>/dev/null || echo "0")
+    failed=$(echo "$out" | grep -c "test result: FAILED" 2>/dev/null || echo "0")
+    passed=${passed//[^0-9]/}
+    failed=${failed//[^0-9]/}
+    if [ -z "$passed" ] || [ -z "$failed" ]; then
+        passed=0; failed=0
+    fi
+    total=$((passed + failed))
+    if [ "$total" -gt 0 ]; then
+        rate=$((passed * 100 / total))
+        if [ "$rate" -ge "$min_rate" ]; then
+            echo "PASS ($rate% = $passed/$total)"; PASS=$((PASS+1))
+        else
+            echo "FAIL ($rate% < $min_rate%)"; BLOCKERS=$((BLOCKERS+1))
+        fi
+    else
+        echo "FAIL (no tests)"; BLOCKERS=$((BLOCKERS+1))
     fi
 }
 
@@ -39,22 +69,7 @@ echo ""
 check "B1: cargo build --release" cargo build --release --workspace
 
 # B2: L1 test >= 90%
-TOTAL=$((TOTAL+1))
-echo -n "[beta-v3.1.0] B2: L1 test (>=90%) ... "
-out=$(cargo test -p sqlrustgo-types -p sqlrustgo-parser -p sqlrustgo-planner -p sqlrustgo-optimizer -p sqlrustgo-executor -p sqlrustgo-storage -p sqlrustgo-transaction -p sqlrustgo-catalog --lib -- --test-threads=8 2>&1 || true)
-passed=$(echo "$out" | grep -c "test result: ok\." || echo "0")
-failed=$(echo "$out" | grep -c "test result: FAILED" || echo "0")
-total=$((passed + failed))
-if [ "$total" -gt 0 ]; then
-    rate=$((passed * 100 / total))
-    if [ "$rate" -ge 90 ]; then
-        echo "PASS ($rate% = $passed/$total)"; PASS=$((PASS+1))
-    else
-        echo "FAIL ($rate% < 90%)"; BLOCKERS=$((BLOCKERS+1))
-    fi
-else
-    echo "FAIL (no tests)"; BLOCKERS=$((BLOCKERS+1))
-fi
+check_coverage "B2: L1 test (>=90%)" 90 "cargo test -p sqlrustgo-types -p sqlrustgo-parser -p sqlrustgo-planner -p sqlrustgo-optimizer -p sqlrustgo-executor -p sqlrustgo-storage -p sqlrustgo-transaction -p sqlrustgo-catalog --lib -- --test-threads=8"
 
 check "B3: cargo clippy" cargo clippy --all-features -- -D warnings
 check "B4: cargo fmt" cargo fmt --all -- --check
