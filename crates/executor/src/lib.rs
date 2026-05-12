@@ -1,6 +1,7 @@
 // SQLRustGo executor module
 
 pub mod audit_logger;
+pub mod event;
 pub mod executor;
 pub mod executor_metrics;
 pub mod explain;
