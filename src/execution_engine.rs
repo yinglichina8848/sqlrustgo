@@ -3067,6 +3067,50 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             )),
             ShowStatement::TableStatus { database: _ } => self.execute_show_table_status(),
             ShowStatement::Processlist => self.execute_show_processlist(),
+            ShowStatement::Events => self.execute_show_events(),
+        }
+    }
+
+    fn execute_show_events(&self) -> SqlResult<ExecutorResult> {
+        let opt_text = |opt: Option<String>| match opt {
+            Some(s) => Value::Text(s),
+            None => Value::Null,
+        };
+
+        if let Some(catalog) = &self.catalog {
+            let catalog = catalog.read().unwrap();
+            let info_schema = InformationSchema::new(&catalog);
+            let rows: Vec<Vec<Value>> = info_schema
+                .get_events()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.event_catalog),
+                        Value::Text(row.event_schema),
+                        Value::Text(row.event_name),
+                        Value::Text(row.definer),
+                        Value::Text(row.event_body),
+                        opt_text(row.event_definition),
+                        Value::Text(row.event_type),
+                        opt_text(row.execute_at),
+                        opt_text(row.interval_value),
+                        opt_text(row.interval_field),
+                        Value::Text(row.sql_mode),
+                        opt_text(row.starts),
+                        opt_text(row.ends),
+                        Value::Text(row.status),
+                        Value::Text(row.on_completion),
+                        opt_text(row.created),
+                        opt_text(row.last_altered),
+                        opt_text(row.event_comment),
+                        Value::Text(row.originator),
+                        Value::Text(row.event_body_utf8),
+                    ]
+                })
+                .collect();
+            Ok(ExecutorResult::new(rows.clone(), rows.len()))
+        } else {
+            Ok(ExecutorResult::new(vec![], 0))
         }
     }
 

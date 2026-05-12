@@ -2446,6 +2446,14 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
             if let Err(e) = eng.execute(sql) { tracing::warn!("Init: {}", e); }
         }
     }
+
+    // TODO: Event Scheduler Integration
+    // - Requires global Catalog with Event storage
+    // - Requires Catalog-backed MemoryExecutionEngine
+    // - EventSchedulerService should be spawned as async task
+    // - See crates/server/src/event_scheduler.rs for EventSchedulerService
+    tracing::info!("Event scheduler: requires global Catalog integration");
+
     let user_store = UserStore::new();
     for s in listener.incoming() {
         match s {
