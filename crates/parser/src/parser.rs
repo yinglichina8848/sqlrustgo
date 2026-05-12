@@ -3180,6 +3180,12 @@ impl Parser {
     }
 
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
+        // Check for MATCH...AGAINST (Full-text search) BEFORE parse_additive_expression
+        // because MATCH starts a standalone expression, not a binary operator
+        if matches!(self.current(), Some(Token::Match)) {
+            return self.parse_match_against();
+        }
+
         let left = self.parse_additive_expression()?;
 
         if matches!(self.current(), Some(Token::In)) {
@@ -3558,15 +3564,23 @@ impl Parser {
 
     /// Parse MATCH (col1, col2, ...) AGAINST (expr) full-text search expression
     fn parse_match_against(&mut self) -> Result<Expression, String> {
-        // Already consumed Token::Match at this point
+        // Consume Token::Match
+        self.next();
         self.expect(Token::LParen)?;
 
         // Parse column list: col1, col2, ...
+        // Note: column names can be identifiers or keywords used as column names (e.g., 'text')
         let mut columns = Vec::new();
         loop {
             match self.current() {
                 Some(Token::Identifier(ref name)) => {
                     columns.push(name.clone());
+                    self.next();
+                }
+                // Allow type keywords to be used as column names
+                Some(Token::Text) | Some(Token::Integer) | Some(Token::Blob) => {
+                    let name = format!("{:?}", self.current().unwrap()).to_lowercase();
+                    columns.push(name);
                     self.next();
                 }
                 Some(Token::Comma) => {
