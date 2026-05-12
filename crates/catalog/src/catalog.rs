@@ -155,6 +155,7 @@ impl Catalog {
         privilege: Privilege,
         object_type: ObjectType,
         object_name: &str,
+        grantor: &UserIdentity,
         grant_option: bool,
     ) -> CatalogResult<u64> {
         self.auth_manager
@@ -163,7 +164,7 @@ impl Catalog {
                 privilege,
                 object_type,
                 object_name,
-                &UserIdentity::new("root", "%"),
+                grantor,
                 grant_option,
             )
             .map_err(|e| CatalogError::ExecutionError(e.to_string()))

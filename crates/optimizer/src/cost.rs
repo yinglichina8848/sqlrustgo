@@ -393,8 +393,7 @@ impl SimpleCostModel {
     /// In-memory: rows × log2(rows) × cpu_cost
     /// External: pages × io_cost × 2 (read + write)
     pub fn sort_cost_detail(&self, row_count: u64, avg_row_size: u32) -> Cost {
-        let memory_sort_threshold =
-            self.consts.sort_buffer_pages * self.consts.page_size_bytes;
+        let memory_sort_threshold = self.consts.sort_buffer_pages * self.consts.page_size_bytes;
         let required_bytes = row_count * avg_row_size as u64;
 
         if required_bytes <= memory_sort_threshold {

@@ -47,6 +47,7 @@ pub struct ExecutionEngine<S: StorageEngine> {
     current_tx_id: Option<TxId>,
     default_isolation: TmIsolationLevel,
     current_role: Option<String>,
+    current_user: Option<UserIdentity>,
     query_cache: Arc<RwLock<QueryCache>>,
     cache_config: QueryCacheConfig,
 }
@@ -141,6 +142,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_tx_id: None,
             default_isolation: config.default_isolation,
             current_role: None,
+            current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: config.cache_config,
         }
@@ -162,6 +164,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
         }
@@ -183,6 +186,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
         }
@@ -200,6 +204,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
         }
@@ -223,6 +228,21 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     /// Enable or disable statistics collection
     pub fn set_stats_enabled(&mut self, enabled: bool) {
         self.stats_enabled = enabled;
+    }
+
+    /// Set the current user for RBAC permission checks
+    pub fn set_current_user(&mut self, user: UserIdentity) {
+        self.current_user = Some(user);
+    }
+
+    /// Get the current user
+    pub fn get_current_user(&self) -> Option<&UserIdentity> {
+        self.current_user.as_ref()
+    }
+
+    /// Clear the current user (e.g., on logout)
+    pub fn clear_current_user(&mut self) {
+        self.current_user = None;
     }
 
     /// Get table statistics for CBO
@@ -2587,6 +2607,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         })?;
         let mut catalog = catalog_guard.write().unwrap();
 
+        let current_user = self
+            .current_user
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No current user set for GRANT".to_string()))?;
+
         for privilege in &grant.privileges {
             let priv_str = match privilege {
                 ParserPrivilege::Select => "SELECT",
@@ -2629,6 +2654,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             priv_obj,
                             obj_type,
                             &grant.object_name,
+                            current_user,
                             grant.with_grant_option,
                         )
                         .map_err(|e| SqlError::ExecutionError(format!("GRANT failed: {}", e)))?;
@@ -2647,6 +2673,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             SqlError::ExecutionError("Catalog not available for REVOKE".to_string())
         })?;
         let mut catalog = catalog_guard.write().unwrap();
+
+        let current_user = self.current_user.as_ref().ok_or_else(|| {
+            SqlError::ExecutionError("No current user set for REVOKE".to_string())
+        })?;
 
         for privilege in &revoke.privileges {
             let priv_str = match privilege {
@@ -2672,6 +2702,23 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 ParserObjectType::Procedure => sqlrustgo_catalog::auth::ObjectType::Table,
                 ParserObjectType::Function => sqlrustgo_catalog::auth::ObjectType::Table,
             };
+
+            let object_ref = sqlrustgo_catalog::auth::ObjectRef {
+                object_type: obj_type,
+                object_name: revoke.object_name.clone(),
+                column_name: None,
+            };
+
+            let has_grant_option = catalog
+                .auth_manager()
+                .has_grant_option(current_user, priv_obj, &object_ref)
+                .map_err(|e| SqlError::ExecutionError(format!("REVOKE check failed: {}", e)))?;
+
+            if !has_grant_option {
+                return Err(SqlError::ExecutionError(
+                    "Access denied: you need GRANT OPTION to REVOKE".to_string(),
+                ));
+            }
 
             for user in &revoke.from_users {
                 let identity = sqlrustgo_catalog::auth::UserIdentity::new(user, "%");
@@ -3256,6 +3303,7 @@ impl ExecutionEngine<MemoryStorage> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
@@ -3273,6 +3321,7 @@ impl ExecutionEngine<MemoryStorage> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
@@ -3290,6 +3339,7 @@ impl ExecutionEngine<MemoryStorage> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
