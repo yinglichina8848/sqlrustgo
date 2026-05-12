@@ -896,6 +896,34 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     ]
                 })
                 .collect(),
+            "events" => info_schema
+                .get_events()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.event_catalog),
+                        Value::Text(row.event_schema),
+                        Value::Text(row.event_name),
+                        Value::Text(row.definer),
+                        Value::Text(row.event_body),
+                        opt_text(row.event_definition),
+                        Value::Text(row.event_type),
+                        opt_text(row.execute_at),
+                        opt_text(row.interval_value),
+                        opt_text(row.interval_field),
+                        Value::Text(row.sql_mode),
+                        opt_text(row.starts),
+                        opt_text(row.ends),
+                        Value::Text(row.status),
+                        Value::Text(row.on_completion),
+                        opt_text(row.created),
+                        opt_text(row.last_altered),
+                        opt_text(row.event_comment),
+                        Value::Text(row.originator),
+                        Value::Text(row.event_body_utf8),
+                    ]
+                })
+                .collect(),
             "routines" => info_schema
                 .get_routines()
                 .into_iter()
