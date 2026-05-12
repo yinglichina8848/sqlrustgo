@@ -4060,6 +4060,41 @@ fn evaluate_expression(
                 Err(format!("Aggregate not found in schema: {}", agg_name))
             }
         }
+        Expression::MatchAgainst(columns, search_expr) => {
+            // Evaluate the search expression first
+            let search_val = evaluate_expression(search_expr, row, table_info)?;
+            let search_text = match &search_val {
+                Value::Text(s) => s.to_lowercase(),
+                Value::Integer(n) => n.to_string(),
+                Value::Float(f) => f.to_string(),
+                _ => return Ok(Value::Boolean(false)),
+            };
+
+            if search_text.is_empty() {
+                return Ok(Value::Boolean(false));
+            }
+
+            // Check if any of the specified columns contain the search term
+            let mut found = false;
+            for col_name in columns {
+                if let Some(col_idx) = find_column_index(col_name, table_info) {
+                    if let Some(value) = row.get(col_idx) {
+                        let col_text = match value {
+                            Value::Text(s) => s.to_lowercase(),
+                            Value::Integer(n) => n.to_string(),
+                            Value::Float(f) => f.to_string(),
+                            Value::Null => continue,
+                            _ => continue,
+                        };
+                        if col_text.contains(&search_text) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            Ok(Value::Boolean(found))
+        }
         _ => Ok(Value::Null),
     }
 }
