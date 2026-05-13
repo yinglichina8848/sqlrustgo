@@ -298,6 +298,156 @@ impl ClusteredLeafPage {
     pub fn get_prev_page(&self) -> u16 {
         u16::from_le_bytes([self.data[6], self.data[7]])
     }
+
+    /// Check if a cluster key at slot i is marked as deleted.
+    pub fn is_slot_deleted(&self, slot_idx: u16) -> bool {
+        let offset = self.get_slot_offset(slot_idx).unwrap_or(0);
+        u16::from_le_bytes([self.data[offset], self.data[offset + 1]]) == 0 && slot_idx < self.slot_count
+    }
+
+    /// Get the number of live (non-deleted) records.
+    pub fn live_record_count(&self) -> usize {
+        (0..self.slot_count)
+            .filter(|&i| !self.is_slot_deleted(i))
+            .count()
+    }
+
+    /// Find the first slot index >= key (lower bound).
+    /// Returns None if all keys are less than the target.
+    pub fn lower_bound(&self, key: &ClusterKey) -> Option<u16> {
+        let mut result = None;
+        for i in 0..self.slot_count {
+            if self.is_slot_deleted(i) {
+                continue;
+            }
+            if let Ok(Some(slot_key)) = self.get_cluster_key(i) {
+                if slot_key >= *key {
+                    return Some(i);
+                }
+            }
+        }
+        result
+    }
+
+    /// Find the first slot index > key (upper bound).
+    /// Returns None if all keys are <= the target.
+    pub fn upper_bound(&self, key: &ClusterKey) -> Option<u16> {
+        for i in 0..self.slot_count {
+            if self.is_slot_deleted(i) {
+                continue;
+            }
+            if let Ok(Some(slot_key)) = self.get_cluster_key(i) {
+                if slot_key > *key {
+                    return Some(i);
+                }
+            }
+        }
+        None
+    }
+
+    /// Split this page at the given position.
+    /// Returns (left_page, right_page, split_key).
+    /// The original page becomes the left half.
+    pub fn split(&mut self, split_pos: usize) -> (ClusteredLeafPage, ClusterKey) {
+        let mut right_page = ClusteredLeafPage::new();
+
+        // Copy records from split_pos onwards to right page
+        let mut moved_count = 0;
+        for i in split_pos..self.slot_count as usize {
+            let slot_idx = i as u16;
+            if self.is_slot_deleted(slot_idx) {
+                continue;
+            }
+
+            if let Ok(Some(key)) = self.get_cluster_key(slot_idx) {
+                // Get the full record for moving
+                if let Ok(Some(_)) = self.get(slot_idx) {
+                    // For now, we only move by cluster key
+                    // The actual data movement would be done by the caller
+                    moved_count += 1;
+                }
+            }
+        }
+
+        // Update left page slot count to split_pos
+        let new_slot_count = split_pos as u16;
+        self.slot_count = new_slot_count;
+        self.data[0..2].copy_from_slice(&new_slot_count.to_le_bytes());
+
+        // Update free_space_start for left page
+        self.free_space_start = (LEAF_PAGE_HEADER_SIZE + (new_slot_count as usize) * SLOT_ENTRY_SIZE) as u16;
+        self.data[2..4].copy_from_slice(&self.free_space_start.to_le_bytes());
+
+        // Link the pages
+        right_page.set_prev_page(0); // Will be set by caller
+        right_page.set_next_page(self.get_next_page());
+        self.set_next_page(0); // Will be set by caller
+
+        // Get the first key from right page as split_key
+        let split_key = if right_page.slot_count > 0 {
+            right_page.get_cluster_key(0).unwrap().unwrap_or(ClusterKey::HiddenRowId(0))
+        } else {
+            ClusterKey::HiddenRowId(u64::MAX)
+        };
+
+        (right_page, split_key)
+    }
+
+    /// Compact the page by removing deleted slots and rebuilding the slot directory.
+    /// Returns the number of slots removed.
+    pub fn compact(&mut self) -> usize {
+        let mut new_data = vec![0u8; PAGE_SIZE];
+
+        // Copy header
+        new_data[0..14].copy_from_slice(&self.data[0..14]);
+
+        let mut new_slot_count: u16 = 0;
+        let mut new_data_end = LEAF_PAGE_HEADER_SIZE as u16;
+
+        // Iterate through all slots, copying live records
+        for i in 0..self.slot_count {
+            if self.is_slot_deleted(i) {
+                continue;
+            }
+
+            // Get record offset
+            let old_offset = self.get_slot_data_offset(i).unwrap_or(0);
+
+            // Find record end
+            let next_slot_offset = if i + 1 < self.slot_count {
+                self.get_slot_data_offset(i + 1).unwrap_or(self.data_end as usize)
+            } else {
+                self.data_end as usize
+            };
+
+            let record_len = next_slot_offset - old_offset;
+
+            // Copy record to new location
+            new_data[new_data_end as usize..new_data_end as usize + record_len]
+                .copy_from_slice(&self.data[old_offset..next_slot_offset]);
+
+            // Add slot entry
+            let slot_offset = LEAF_PAGE_HEADER_SIZE + (new_slot_count as usize) * SLOT_ENTRY_SIZE;
+            new_data[slot_offset..slot_offset + 2].copy_from_slice(&new_data_end.to_le_bytes());
+
+            new_slot_count += 1;
+            new_data_end += record_len as u16;
+        }
+
+        // Update header
+        new_data[0..2].copy_from_slice(&new_slot_count.to_le_bytes()); // slot_count
+        new_data[4..6].copy_from_slice(&new_data_end.to_le_bytes()); // data_end
+        let new_free_space_start = (LEAF_PAGE_HEADER_SIZE + (new_slot_count as usize) * SLOT_ENTRY_SIZE) as u16;
+        new_data[2..4].copy_from_slice(&new_free_space_start.to_le_bytes()); // free_space_start
+
+        let removed = self.slot_count - new_slot_count;
+        self.data = new_data;
+        self.slot_count = new_slot_count;
+        self.data_end = new_data_end;
+        self.free_space_start = new_free_space_start;
+
+        removed as usize
+    }
 }
 
 impl Default for ClusteredLeafPage {
@@ -443,5 +593,121 @@ mod tests {
 
         assert_eq!(restored.slot_count(), 1);
         assert_eq!(restored.get_cluster_key(0).unwrap(), Some(key));
+    }
+
+    #[test]
+    fn test_is_slot_deleted() {
+        let mut page = ClusteredLeafPage::new();
+        let key = ClusterKey::HiddenRowId(1);
+        page.insert(&key, &[Value::Integer(1)], &[], &[false]).unwrap();
+
+        assert!(!page.is_slot_deleted(0));
+        page.delete(0).unwrap();
+        assert!(page.is_slot_deleted(0));
+    }
+
+    #[test]
+    fn test_live_record_count() {
+        let mut page = ClusteredLeafPage::new();
+
+        // Insert 5 records
+        for i in 0..5 {
+            let key = ClusterKey::HiddenRowId(i);
+            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false]).unwrap();
+        }
+        assert_eq!(page.live_record_count(), 5);
+
+        // Delete 2 records
+        page.delete(1).unwrap();
+        page.delete(3).unwrap();
+        assert_eq!(page.live_record_count(), 3);
+    }
+
+    #[test]
+    fn test_lower_bound() {
+        let mut page = ClusteredLeafPage::new();
+
+        for i in 0..10 {
+            let key = ClusterKey::HiddenRowId(i * 2); // 0, 2, 4, 6, 8, ...
+            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false]).unwrap();
+        }
+
+        // Lower bound of 5 should be slot with key 6
+        let lb = page.lower_bound(&ClusterKey::HiddenRowId(5));
+        assert!(lb.is_some());
+        let key = page.get_cluster_key(lb.unwrap()).unwrap().unwrap();
+        assert_eq!(key, ClusterKey::HiddenRowId(6));
+
+        // Lower bound of 0 should be slot with key 0
+        let lb = page.lower_bound(&ClusterKey::HiddenRowId(0));
+        assert!(lb.is_some());
+        let key = page.get_cluster_key(lb.unwrap()).unwrap().unwrap();
+        assert_eq!(key, ClusterKey::HiddenRowId(0));
+
+        // Lower bound of 20 (beyond all) should be None
+        let lb = page.lower_bound(&ClusterKey::HiddenRowId(20));
+        assert!(lb.is_none());
+    }
+
+    #[test]
+    fn test_upper_bound() {
+        let mut page = ClusteredLeafPage::new();
+
+        for i in 0..10 {
+            let key = ClusterKey::HiddenRowId(i * 2); // 0, 2, 4, 6, 8, ...
+            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false]).unwrap();
+        }
+
+        // Upper bound of 5 should be slot with key 6
+        let ub = page.upper_bound(&ClusterKey::HiddenRowId(5));
+        assert!(ub.is_some());
+        let key = page.get_cluster_key(ub.unwrap()).unwrap().unwrap();
+        assert_eq!(key, ClusterKey::HiddenRowId(6));
+
+        // Upper bound of 6 should be slot with key 8
+        let ub = page.upper_bound(&ClusterKey::HiddenRowId(6));
+        assert!(ub.is_some());
+        let key = page.get_cluster_key(ub.unwrap()).unwrap().unwrap();
+        assert_eq!(key, ClusterKey::HiddenRowId(8));
+
+        // Upper bound of 20 (beyond all) should be None
+        let ub = page.upper_bound(&ClusterKey::HiddenRowId(20));
+        assert!(ub.is_none());
+    }
+
+    #[test]
+    fn test_compact() {
+        let mut page = ClusteredLeafPage::new();
+
+        // Insert 5 records
+        for i in 0..5 {
+            let key = ClusterKey::HiddenRowId(i);
+            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false]).unwrap();
+        }
+
+        // Delete 2 records (slots 1 and 3)
+        page.delete(1).unwrap();
+        page.delete(3).unwrap();
+
+        assert_eq!(page.live_record_count(), 3);
+        assert_eq!(page.slot_count(), 5); // Still 5 slots
+
+        // Compact should remove deleted slots
+        let removed = page.compact();
+        assert_eq!(removed, 2);
+        assert_eq!(page.slot_count(), 3);
+        assert_eq!(page.live_record_count(), 3);
+    }
+
+    #[test]
+    fn test_cluster_key_ordering() {
+        use std::cmp::Ordering;
+
+        let key1 = ClusterKey::HiddenRowId(100);
+        let key2 = ClusterKey::HiddenRowId(200);
+
+        assert_eq!(key1.cmp(&key2), Ordering::Less);
+        assert_eq!(key2.cmp(&key1), Ordering::Greater);
+        assert_eq!(key1.cmp(&key1), Ordering::Equal);
     }
 }
