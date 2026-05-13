@@ -31,13 +31,29 @@ use crate::mvcc::TxId;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum WaitForEdge {
     /// Transaction tx1 is waiting for transaction tx2 to release a lock on a key
-    LockWait { waiter: TxId, holder: TxId, key: Vec<u8> },
+    LockWait {
+        waiter: TxId,
+        holder: TxId,
+        key: Vec<u8>,
+    },
     /// Transaction tx1 read a key that transaction tx2 wrote (read-write dependency)
-    ReadWrite { reader: TxId, writer: TxId, key: Vec<u8> },
+    ReadWrite {
+        reader: TxId,
+        writer: TxId,
+        key: Vec<u8>,
+    },
     /// Transaction tx1 wrote a key that transaction tx2 read (write-read dependency)
-    WriteRead { writer: TxId, reader: TxId, key: Vec<u8> },
+    WriteRead {
+        writer: TxId,
+        reader: TxId,
+        key: Vec<u8>,
+    },
     /// Transaction tx1 wrote a key that transaction tx2 wrote (write-write dependency)
-    WriteWrite { writer1: TxId, writer2: TxId, key: Vec<u8> },
+    WriteWrite {
+        writer1: TxId,
+        writer2: TxId,
+        key: Vec<u8>,
+    },
 }
 
 impl WaitForEdge {
@@ -254,7 +270,8 @@ impl WaitForGraph {
         }
 
         // Remove all edges involving this transaction
-        self.edges.retain(|(from, to), _| *from != tx_id && *to != tx_id);
+        self.edges
+            .retain(|(from, to), _| *from != tx_id && *to != tx_id);
 
         // Remove key tracking
         self.read_keys.remove(&tx_id);
@@ -438,10 +455,7 @@ use crate::ssi::SsiError;
 /// SSI-specific error for cycle detection
 #[derive(Debug, Clone)]
 pub enum SsiCycleError {
-    CycleDetected {
-        tx_id: TxId,
-        cycle: Vec<TxId>,
-    },
+    CycleDetected { tx_id: TxId, cycle: Vec<TxId> },
 }
 
 impl std::fmt::Display for SsiCycleError {
