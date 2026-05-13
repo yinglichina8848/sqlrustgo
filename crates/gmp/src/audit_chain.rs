@@ -136,10 +136,7 @@ pub enum AuditChainError {
         actual: [u8; 32],
     },
     /// Sequence number mismatch
-    SeqMismatch {
-        expected: u64,
-        actual: u64,
-    },
+    SeqMismatch { expected: u64, actual: u64 },
     /// Checksum validation failed
     ChecksumInvalid { seq: u64 },
     /// Chain is empty
@@ -150,10 +147,18 @@ impl fmt::Display for AuditChainError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AuditChainError::HashMismatch { expected, actual } => {
-                write!(f, "Hash mismatch: expected {:x?}, got {:x?}", expected, actual)
+                write!(
+                    f,
+                    "Hash mismatch: expected {:x?}, got {:x?}",
+                    expected, actual
+                )
             }
             AuditChainError::SeqMismatch { expected, actual } => {
-                write!(f, "Sequence mismatch: expected {}, got {}", expected, actual)
+                write!(
+                    f,
+                    "Sequence mismatch: expected {}, got {}",
+                    expected, actual
+                )
             }
             AuditChainError::ChecksumInvalid { seq } => {
                 write!(f, "Checksum invalid for entry with seq {}", seq)

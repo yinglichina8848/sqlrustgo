@@ -183,7 +183,9 @@ impl AuditChainWalEntry {
             if offset + 8 > bytes.len() {
                 return None;
             }
-            Some(u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?))
+            Some(u64::from_le_bytes(
+                bytes[offset..offset + 8].try_into().ok()?,
+            ))
         } else {
             None
         };
@@ -210,10 +212,7 @@ pub struct AuditChainWalWriter {
 impl AuditChainWalWriter {
     /// Create new WAL writer
     pub fn new(path: PathBuf) -> std::io::Result<Self> {
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)?;
+        let file = OpenOptions::new().create(true).append(true).open(&path)?;
 
         let writer = BufWriter::new(file);
 
@@ -225,10 +224,7 @@ impl AuditChainWalWriter {
     }
 
     /// Append an audit entry to WAL
-    pub fn append_entry(
-        &mut self,
-        entry: &AuditChainEntry,
-    ) -> std::io::Result<u64> {
+    pub fn append_entry(&mut self, entry: &AuditChainEntry) -> std::io::Result<u64> {
         let wal_entry = AuditChainWalEntry {
             entry_type: AuditChainWalEntryType::Append,
             seq: entry.seq,
