@@ -4,7 +4,6 @@
 //! inline threshold. Each overflow page can store up to PAGE_SIZE bytes.
 //! Large fields chain multiple overflow pages together.
 
-use crate::row_format::types::OverflowPage;
 use crate::clustered_index::leaf::PAGE_SIZE;
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
@@ -48,7 +47,8 @@ impl OverflowManager {
         self.allocation_count += 1;
 
         // Store the page data with header (no padding)
-        let mut page_data = Vec::with_capacity(OVERFLOW_HEADER_SIZE + data.len().min(OVERFLOW_DATA_SIZE));
+        let mut page_data =
+            Vec::with_capacity(OVERFLOW_HEADER_SIZE + data.len().min(OVERFLOW_DATA_SIZE));
 
         // Write next_page pointer (4 bytes)
         page_data.extend_from_slice(&(next_page.unwrap_or(0).to_le_bytes()));
@@ -72,13 +72,15 @@ impl OverflowManager {
 
         while current_page != 0 {
             let page_data = self.pages.get(&current_page).ok_or_else(|| {
-                Error::new(ErrorKind::NotFound, format!("Overflow page {} not found", current_page))
+                Error::new(
+                    ErrorKind::NotFound,
+                    format!("Overflow page {} not found", current_page),
+                )
             })?;
 
             // Read next page pointer
-            let next_page = u32::from_le_bytes([
-                page_data[0], page_data[1], page_data[2], page_data[3]
-            ]);
+            let next_page =
+                u32::from_le_bytes([page_data[0], page_data[1], page_data[2], page_data[3]]);
 
             // Read data (skip 4-byte header)
             let data_end = page_data.len().min(PAGE_SIZE);
@@ -100,9 +102,7 @@ impl OverflowManager {
         if page_data.len() < OVERFLOW_HEADER_SIZE {
             return None;
         }
-        let next = u32::from_le_bytes([
-            page_data[0], page_data[1], page_data[2], page_data[3]
-        ]);
+        let next = u32::from_le_bytes([page_data[0], page_data[1], page_data[2], page_data[3]]);
         if next == 0 {
             None
         } else {
@@ -117,7 +117,10 @@ impl OverflowManager {
 
         while current_page != 0 {
             let page_data = self.pages.get(&current_page).ok_or_else(|| {
-                Error::new(ErrorKind::NotFound, format!("Overflow page {} not found", current_page))
+                Error::new(
+                    ErrorKind::NotFound,
+                    format!("Overflow page {} not found", current_page),
+                )
             })?;
 
             let next_page = Self::get_next_page(page_data);
@@ -192,10 +195,7 @@ impl Default for OverflowManager {
 
 /// Encode a large value into overflow pages.
 /// Returns the first page ID and total pages allocated.
-pub fn encode_overflow_chain(
-    manager: &mut OverflowManager,
-    data: &[u8],
-) -> (u32, usize) {
+pub fn encode_overflow_chain(manager: &mut OverflowManager, data: &[u8]) -> (u32, usize) {
     if data.len() <= OVERFLOW_DATA_SIZE {
         // Single page is enough
         let page_id = manager.allocate_page(data, None);
@@ -296,7 +296,8 @@ mod tests {
 
         // Manually create chain
         let page_id1 = manager.allocate_page(&data[..OVERFLOW_DATA_SIZE], Some(2));
-        let page_id2 = manager.allocate_page(&data[OVERFLOW_DATA_SIZE..OVERFLOW_DATA_SIZE + 100], None);
+        let page_id2 =
+            manager.allocate_page(&data[OVERFLOW_DATA_SIZE..OVERFLOW_DATA_SIZE + 100], None);
 
         let read = manager.read_chain(page_id1).unwrap();
         assert_eq!(read.len(), OVERFLOW_DATA_SIZE + 100);

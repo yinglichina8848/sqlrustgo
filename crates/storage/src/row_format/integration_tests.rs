@@ -2,8 +2,8 @@
 //!
 //! These tests verify the full roundtrip functionality of the Compact Row v1 ABI.
 
-use crate::row_format::encoder::encode_row;
 use crate::row_format::decoder::decode_row;
+use crate::row_format::encoder::encode_row;
 use crate::row_format::types::{ClusterKey, RowHeader};
 use sqlrustgo_types::Value;
 
@@ -52,8 +52,7 @@ fn test_roundtrip_all_types() {
     assert!(!encoded.is_empty());
 
     // Decode
-    let (decoded_key, decoded_fixed, decoded_varlen, _) =
-        decode_row(&encoded, 6, 0).unwrap();
+    let (decoded_key, decoded_fixed, decoded_varlen, _) = decode_row(&encoded, 6, 0).unwrap();
 
     // Verify all types
     assert_eq!(decoded_key, cluster_key);
@@ -125,7 +124,8 @@ fn test_decode_encode_inverse() {
         let varlen_columns: Vec<Option<Vec<u8>>> = vec![None, None];
         let null_bitmap = vec![true, true, true, true, true];
 
-        let encoded = encode_row(&cluster_key, &fixed_columns, &varlen_columns, &null_bitmap).unwrap();
+        let encoded =
+            encode_row(&cluster_key, &fixed_columns, &varlen_columns, &null_bitmap).unwrap();
         let (decoded_key, decoded_fixed, decoded_varlen, decoded_nulls) =
             decode_row(&encoded, 3, 2).unwrap();
 
@@ -149,7 +149,8 @@ fn test_decode_encode_inverse() {
         ];
         let null_bitmap = vec![false, false, false, false, false];
 
-        let encoded = encode_row(&cluster_key, &fixed_columns, &varlen_columns, &null_bitmap).unwrap();
+        let encoded =
+            encode_row(&cluster_key, &fixed_columns, &varlen_columns, &null_bitmap).unwrap();
         let (decoded_key, decoded_fixed, decoded_varlen, decoded_nulls) =
             decode_row(&encoded, 3, 2).unwrap();
 
@@ -167,7 +168,8 @@ fn test_decode_encode_inverse() {
         let varlen_columns: Vec<Option<Vec<u8>>> = vec![];
         let null_bitmap = vec![false];
 
-        let encoded = encode_row(&cluster_key, &fixed_columns, &varlen_columns, &null_bitmap).unwrap();
+        let encoded =
+            encode_row(&cluster_key, &fixed_columns, &varlen_columns, &null_bitmap).unwrap();
         let (_, decoded_fixed, _, _) = decode_row(&encoded, 1, 0).unwrap();
 
         assert_eq!(decoded_fixed[0], Value::Text(long_text));

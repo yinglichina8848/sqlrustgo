@@ -2482,22 +2482,20 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         }
                     }
                     Value::Null
+                } else if let Some(idx) = target_table_info
+                    .columns
+                    .iter()
+                    .position(|c| c.name.eq_ignore_ascii_case(name))
+                {
+                    target_row.get(idx).cloned().unwrap_or(Value::Null)
+                } else if let Some(idx) = source_table_info
+                    .columns
+                    .iter()
+                    .position(|c| c.name.eq_ignore_ascii_case(name))
+                {
+                    source_row.get(idx).cloned().unwrap_or(Value::Null)
                 } else {
-                    if let Some(idx) = target_table_info
-                        .columns
-                        .iter()
-                        .position(|c| c.name.eq_ignore_ascii_case(name))
-                    {
-                        target_row.get(idx).cloned().unwrap_or(Value::Null)
-                    } else if let Some(idx) = source_table_info
-                        .columns
-                        .iter()
-                        .position(|c| c.name.eq_ignore_ascii_case(name))
-                    {
-                        source_row.get(idx).cloned().unwrap_or(Value::Null)
-                    } else {
-                        Value::Null
-                    }
+                    Value::Null
                 }
             }
             Expression::BinaryOp(left, op, right) => {

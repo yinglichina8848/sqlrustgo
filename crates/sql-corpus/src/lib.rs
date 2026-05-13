@@ -377,7 +377,11 @@ impl SimpleExecutor {
                         Value::Text(col.name.clone()),
                         Value::Integer((i + 1) as i64),
                         Value::Null,
-                        Value::Text(if col.nullable { "YES".to_string() } else { "NO".to_string() }),
+                        Value::Text(if col.nullable {
+                            "YES".to_string()
+                        } else {
+                            "NO".to_string()
+                        }),
                         Value::Text(col.data_type.clone()),
                         char_max,
                         num_prec,

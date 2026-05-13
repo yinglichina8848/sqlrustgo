@@ -262,7 +262,9 @@ impl GroupMembership {
         }
 
         let mut members = self.members.write().unwrap();
-        members.remove(&node_id).ok_or(MembershipError::MemberNotFound(node_id))?;
+        members
+            .remove(&node_id)
+            .ok_or(MembershipError::MemberNotFound(node_id))?;
 
         let mut view = self.current_view.write().unwrap();
         if view.members.remove(&node_id) {
@@ -308,7 +310,9 @@ impl GroupMembership {
         let mut failed = Vec::new();
 
         for (node_id, member) in members.iter_mut() {
-            if member.state == MemberState::Online && now.duration_since(member.last_seen) > threshold {
+            if member.state == MemberState::Online
+                && now.duration_since(member.last_seen) > threshold
+            {
                 member.state = MemberState::Offline;
                 failed.push(*node_id);
             }
@@ -353,7 +357,11 @@ impl GroupMembership {
     }
 
     /// Create a new view with updated membership
-    pub fn create_new_view(&self, members: HashSet<u64>, primary: Option<u64>) -> Result<View, MembershipError> {
+    pub fn create_new_view(
+        &self,
+        members: HashSet<u64>,
+        primary: Option<u64>,
+    ) -> Result<View, MembershipError> {
         let mut view = self.current_view.write().unwrap();
         let new_id = ViewId::new(view.view_id.id + 1, view.view_id.leader_id);
         let new_view = View {

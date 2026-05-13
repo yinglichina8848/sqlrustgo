@@ -17,11 +17,11 @@ pub mod cross_shard_query;
 pub mod distributed_lock;
 pub mod error;
 pub mod failover_manager;
-pub mod grpc_client;
-pub mod grpc_server;
 pub mod group_membership;
 pub mod group_replication;
 pub mod group_replication_raft;
+pub mod grpc_client;
+pub mod grpc_server;
 pub mod partition;
 pub mod proto;
 pub mod raft;
@@ -38,18 +38,18 @@ pub use consensus::{Operation, ShardReplicaManager};
 pub use cross_shard_query::{CrossShardQueryExecutor, QueryRouter};
 pub use distributed_lock::{DistributedLockManager, LockEntry};
 pub use error::DistributedError;
+pub use failover_manager::{
+    ClusterHealth, FailoverConfig, FailoverManager, FailoverNotifier, FailoverTrigger,
+    FailureDetector, FailureDetectorConfig, FailureEvent, FailureReason,
+};
 pub use group_membership::{
-    GroupMembership, MemberInfo, MemberRole, MemberState, View, ViewId, MembershipError,
+    GroupMembership, MemberInfo, MemberRole, MemberState, MembershipError, View, ViewId,
 };
 pub use group_replication::{
     CertificationInfo, CertificationResult, GroupReplication, GroupReplicationConfig,
     TransactionContext, TransactionId,
 };
 pub use group_replication_raft::GroupReplicationRaft;
-pub use failover_manager::{
-    ClusterHealth, FailoverConfig, FailoverManager, FailoverNotifier, FailoverTrigger,
-    FailureDetector, FailureDetectorConfig, FailureEvent, FailureReason,
-};
 pub use grpc_client::{ClientPool, ShardClient};
 pub use grpc_server::{start_server, GraphStorage, ShardServer, ShardServerConfig, VectorStorage};
 pub use partition::{PartitionKey, PartitionStrategy};

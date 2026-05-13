@@ -8,7 +8,8 @@ use std::collections::HashSet;
 
 use crate::group_membership::{GroupMembership, View};
 use crate::group_replication::{
-    CertificationResult, GroupReplication, GroupReplicationConfig, TransactionContext, TransactionId,
+    CertificationResult, GroupReplication, GroupReplicationConfig, TransactionContext,
+    TransactionId,
 };
 use crate::raft::{RaftEntry, RaftEntryData, RaftNode};
 

@@ -7,8 +7,8 @@
 //! - Encode/decode roundtrip
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use sqlrustgo_storage::row_format::types::ClusterKey;
 use sqlrustgo_storage::clustered_index::ClusteredLeafPage;
+use sqlrustgo_storage::row_format::types::ClusterKey;
 use sqlrustgo_types::Value;
 use std::hint::black_box;
 
@@ -169,12 +169,16 @@ fn bench_search_lower_bound(c: &mut Criterion) {
     }
 
     for search_key in [0, 25, 50, 75, 99, 500].iter() {
-        group.bench_with_input(BenchmarkId::from_parameter(search_key), search_key, |b, &search_key| {
-            b.iter(|| {
-                let key = gen_key(search_key as u64);
-                let _ = black_box(page.lower_bound(&key));
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::from_parameter(search_key),
+            search_key,
+            |b, &search_key| {
+                b.iter(|| {
+                    let key = gen_key(search_key as u64);
+                    let _ = black_box(page.lower_bound(&key));
+                });
+            },
+        );
     }
 
     group.finish();
@@ -185,22 +189,26 @@ fn bench_page_split(c: &mut Criterion) {
     let mut group = c.benchmark_group("clustered_leaf_page_split");
 
     for initial_size in [50, 100, 150, 200].iter() {
-        group.bench_with_input(BenchmarkId::from_parameter(initial_size), initial_size, |b, &initial_size| {
-            b.iter(|| {
-                let mut page = ClusteredLeafPage::new();
-                for i in 0..initial_size {
-                    let key = gen_key(i as u64);
-                    let fixed = gen_fixed_columns(i as u64);
-                    let varlen = gen_varlen_columns(i as u64);
-                    let nulls = gen_null_bitmap();
-                    let _ = page.insert(&key, &fixed, &varlen, &nulls);
-                }
+        group.bench_with_input(
+            BenchmarkId::from_parameter(initial_size),
+            initial_size,
+            |b, &initial_size| {
+                b.iter(|| {
+                    let mut page = ClusteredLeafPage::new();
+                    for i in 0..initial_size {
+                        let key = gen_key(i as u64);
+                        let fixed = gen_fixed_columns(i as u64);
+                        let varlen = gen_varlen_columns(i as u64);
+                        let nulls = gen_null_bitmap();
+                        let _ = page.insert(&key, &fixed, &varlen, &nulls);
+                    }
 
-                // Split at middle
-                let split_pos = initial_size / 2;
-                let _ = black_box(page.split(split_pos));
-            });
-        });
+                    // Split at middle
+                    let split_pos = initial_size / 2;
+                    let _ = black_box(page.split(split_pos));
+                });
+            },
+        );
     }
 
     group.finish();
@@ -274,9 +282,15 @@ fn bench_delete(c: &mut Criterion) {
             b.iter(|| {
                 let mut page = base_page.clone();
                 match *delete_pattern {
-                    "first" => { let _ = page.delete(0); }
-                    "last" => { let _ = page.delete((size - 1) as u16); }
-                    "middle" => { let _ = page.delete(size as u16 / 2); }
+                    "first" => {
+                        let _ = page.delete(0);
+                    }
+                    "last" => {
+                        let _ = page.delete((size - 1) as u16);
+                    }
+                    "middle" => {
+                        let _ = page.delete(size as u16 / 2);
+                    }
                     "every_other" => {
                         for i in (0..size).step_by(2) {
                             let _ = page.delete(i as u16);
@@ -301,27 +315,31 @@ fn bench_compact(c: &mut Criterion) {
         let size = 100;
         let delete_count = (size as f64 * delete_ratio) as usize;
 
-        group.bench_with_input(BenchmarkId::from_parameter(delete_ratio), delete_ratio, |b, &delete_ratio| {
-            b.iter(|| {
-                let mut page = ClusteredLeafPage::new();
-                for i in 0..size {
-                    let key = gen_key(i as u64);
-                    let fixed = gen_fixed_columns(i as u64);
-                    let varlen = gen_varlen_columns(i as u64);
-                    let nulls = gen_null_bitmap();
-                    let _ = page.insert(&key, &fixed, &varlen, &nulls);
-                }
+        group.bench_with_input(
+            BenchmarkId::from_parameter(delete_ratio),
+            delete_ratio,
+            |b, &delete_ratio| {
+                b.iter(|| {
+                    let mut page = ClusteredLeafPage::new();
+                    for i in 0..size {
+                        let key = gen_key(i as u64);
+                        let fixed = gen_fixed_columns(i as u64);
+                        let varlen = gen_varlen_columns(i as u64);
+                        let nulls = gen_null_bitmap();
+                        let _ = page.insert(&key, &fixed, &varlen, &nulls);
+                    }
 
-                // Delete some records
-                for i in 0..delete_count {
-                    let _ = page.delete(i as u16);
-                }
+                    // Delete some records
+                    for i in 0..delete_count {
+                        let _ = page.delete(i as u16);
+                    }
 
-                // Compact
-                let _ = page.compact();
-                black_box(&page);
-            });
-        });
+                    // Compact
+                    let _ = page.compact();
+                    black_box(&page);
+                });
+            },
+        );
     }
 
     group.finish();

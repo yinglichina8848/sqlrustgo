@@ -74,7 +74,10 @@ fn decode_cluster_key(data: &[u8]) -> std::io::Result<ClusterKey> {
         0 => {
             // PrimaryKey - type marker is at data[1]
             if data.len() < 2 {
-                return Err(Error::new(ErrorKind::InvalidData, "Invalid PrimaryKey data"));
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "Invalid PrimaryKey data",
+                ));
             }
             let value_type = data[1];
             match value_type {
@@ -95,29 +98,50 @@ fn decode_cluster_key(data: &[u8]) -> std::io::Result<ClusterKey> {
                     }
                     let len = u32::from_le_bytes([data[2], data[3], data[4], data[5]]) as usize;
                     if data.len() < 6 + len {
-                        return Err(Error::new(ErrorKind::InvalidData, "Invalid Text key length"));
+                        return Err(Error::new(
+                            ErrorKind::InvalidData,
+                            "Invalid Text key length",
+                        ));
                     }
                     let s = String::from_utf8(data[6..6 + len].to_vec())
                         .map_err(|_| Error::new(ErrorKind::InvalidData, "Invalid UTF-8 in key"))?;
                     Ok(ClusterKey::PrimaryKey(Value::Text(s)))
                 }
-                _ => Err(Error::new(ErrorKind::InvalidData, "Unsupported value type for key")),
+                _ => Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "Unsupported value type for key",
+                )),
             }
         }
         1 => {
             // HiddenRowId
             if data.len() < 9 {
-                return Err(Error::new(ErrorKind::InvalidData, "Invalid HiddenRowId data"));
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "Invalid HiddenRowId data",
+                ));
             }
-            let id = u64::from_le_bytes([data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8]]);
+            let id = u64::from_le_bytes([
+                data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
+            ]);
             Ok(ClusterKey::HiddenRowId(id))
         }
-        _ => Err(Error::new(ErrorKind::InvalidData, "Invalid cluster key tag")),
+        _ => Err(Error::new(
+            ErrorKind::InvalidData,
+            "Invalid cluster key tag",
+        )),
     }
 }
 
 /// Decode row components from encoded data.
-fn decode_row_components(data: &[u8]) -> std::io::Result<(Option<Vec<Value>>, Option<Vec<Option<Vec<u8>>>>, Option<Vec<bool>>)> {
+#[allow(clippy::type_complexity)]
+fn decode_row_components(
+    data: &[u8],
+) -> std::io::Result<(
+    Option<Vec<Value>>,
+    Option<Vec<Option<Vec<u8>>>>,
+    Option<Vec<bool>>,
+)> {
     use crate::row_format::decoder::decode_row;
 
     // For recovery, we need fixed_column_count and varlen_column_count
@@ -214,12 +238,15 @@ impl ClusteredWalManager {
 
     /// Recover all entries for this table.
     pub fn recover(&self) -> std::io::Result<Vec<ClusteredWalEntry>> {
-        let entries = self.inner.recover()?;
         Ok(self
             .inner
             .recover()?
             .into_iter()
-            .filter(|e| e.table_id == self.table_id || e.entry_type == WalEntryType::Begin || e.entry_type == WalEntryType::Commit)
+            .filter(|e| {
+                e.table_id == self.table_id
+                    || e.entry_type == WalEntryType::Begin
+                    || e.entry_type == WalEntryType::Commit
+            })
             .map(ClusteredWalEntry::from_wal_entry)
             .collect())
     }
@@ -229,7 +256,11 @@ impl ClusteredWalManager {
         let entries = self.inner.recover_to_timestamp(timestamp)?;
         Ok(entries
             .into_iter()
-            .filter(|e| e.table_id == self.table_id || e.entry_type == WalEntryType::Begin || e.entry_type == WalEntryType::Commit)
+            .filter(|e| {
+                e.table_id == self.table_id
+                    || e.entry_type == WalEntryType::Begin
+                    || e.entry_type == WalEntryType::Commit
+            })
             .map(ClusteredWalEntry::from_wal_entry)
             .collect())
     }

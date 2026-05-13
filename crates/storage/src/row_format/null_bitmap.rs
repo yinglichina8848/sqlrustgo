@@ -35,7 +35,7 @@ pub fn is_null(bitmap: &[u8], column_index: usize) -> bool {
 /// Returns exactly `expected_columns` elements.
 pub fn decode_null_bitmap(bitmap: Vec<u8>, expected_columns: usize) -> Vec<bool> {
     let mut nulls = Vec::with_capacity(expected_columns);
-    for (i, &byte) in bitmap.iter().enumerate() {
+    for &byte in bitmap.iter() {
         for bit in 0..8 {
             if nulls.len() >= expected_columns {
                 break;
