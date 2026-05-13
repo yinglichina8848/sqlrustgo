@@ -9,6 +9,8 @@ pub enum IsolationLevel {
     /// Snapshot Isolation - readers see consistent snapshot, writers use first-committer-wins
     #[default]
     SnapshotIsolation,
+    /// Repeatable Read - readers see data as of first read timestamp (MySQL default)
+    RepeatableRead,
     /// Serializable - ensures strict serial execution order
     Serializable,
 }
@@ -57,6 +59,7 @@ pub struct TransactionManager {
     ssi_detector: SsiDetectorSync,
     active_transactions: HashMap<TxId, ActiveTransaction>,
     next_tx_id: u64,
+    global_timestamp: u64,
 }
 
 impl TransactionManager {
@@ -66,6 +69,7 @@ impl TransactionManager {
             ssi_detector: SsiDetectorSync::new(),
             active_transactions: HashMap::new(),
             next_tx_id: 1,
+            global_timestamp: 1,
         }
     }
 
@@ -77,12 +81,19 @@ impl TransactionManager {
     /// # Returns
     /// * `Ok(TxId)` - Transaction ID if successful
     /// * `Err(SsiError)` - If transaction cannot be started
-    pub fn begin_transaction(&mut self, _isolation: IsolationLevel) -> Result<TxId, SsiError> {
+    pub fn begin_transaction(&mut self, isolation: IsolationLevel) -> Result<TxId, SsiError> {
         let tx_id = TxId::new(self.next_tx_id);
         self.next_tx_id += 1;
 
-        let snapshot_timestamp = tx_id.as_u64();
-        let snapshot = Snapshot::new_read_committed(tx_id, snapshot_timestamp);
+        let snapshot_timestamp = self.global_timestamp;
+        self.global_timestamp += 1;
+
+        let snapshot = match isolation {
+            IsolationLevel::RepeatableRead => {
+                Snapshot::new_repeatable_read_from_start(tx_id, snapshot_timestamp, Vec::new())
+            }
+            _ => Snapshot::new_read_committed(tx_id, snapshot_timestamp),
+        };
 
         let active_tx = ActiveTransaction::new(tx_id, snapshot);
         self.active_transactions.insert(tx_id, active_tx);
@@ -90,16 +101,28 @@ impl TransactionManager {
         Ok(tx_id)
     }
 
-    /// Record a read operation for SSI detection
+    /// Record a read operation for SSI detection and snapshot management
     ///
     /// # Arguments
     /// * `tx_id` - Transaction ID
     /// * `key` - Key being read
-    pub fn record_read(&mut self, tx_id: TxId, key: Vec<u8>) -> Result<(), SsiError> {
+    /// * `isolation` - Isolation level (determines if first-read timestamp is tracked)
+    pub fn record_read(
+        &mut self,
+        tx_id: TxId,
+        key: Vec<u8>,
+        isolation: IsolationLevel,
+    ) -> Result<(), SsiError> {
         self.ssi_detector.record_read(tx_id, key.clone());
 
         if let Some(active_tx) = self.active_transactions.get_mut(&tx_id) {
             active_tx.read_keys.push(key);
+
+            if isolation == IsolationLevel::RepeatableRead {
+                let read_ts = self.global_timestamp;
+                self.global_timestamp += 1;
+                active_tx.snapshot.snapshot_timestamp = read_ts;
+            }
         }
 
         Ok(())
@@ -217,7 +240,8 @@ mod tests {
             .begin_transaction(IsolationLevel::SnapshotIsolation)
             .unwrap();
 
-        mgr.record_read(tx_id, b"key1".to_vec()).unwrap();
+        mgr.record_read(tx_id, b"key1".to_vec(), IsolationLevel::SnapshotIsolation)
+            .unwrap();
         mgr.record_write(tx_id, b"key2".to_vec()).unwrap();
 
         let active = mgr.active_transactions.get(&tx_id).unwrap();
@@ -232,7 +256,8 @@ mod tests {
             .begin_transaction(IsolationLevel::SnapshotIsolation)
             .unwrap();
 
-        mgr.record_read(tx_id, b"key1".to_vec()).unwrap();
+        mgr.record_read(tx_id, b"key1".to_vec(), IsolationLevel::SnapshotIsolation)
+            .unwrap();
         let result = mgr.commit(tx_id);
         assert!(result.is_ok());
 
@@ -246,7 +271,8 @@ mod tests {
             .begin_transaction(IsolationLevel::SnapshotIsolation)
             .unwrap();
 
-        mgr.record_read(tx_id, b"key1".to_vec()).unwrap();
+        mgr.record_read(tx_id, b"key1".to_vec(), IsolationLevel::SnapshotIsolation)
+            .unwrap();
         let result = mgr.rollback(tx_id);
         assert!(result.is_ok());
 
@@ -289,7 +315,8 @@ mod tests {
         assert_eq!(tx1.as_u64(), 1);
         assert_eq!(tx2.as_u64(), 2);
 
-        mgr.record_read(tx1, b"key1".to_vec()).unwrap();
+        mgr.record_read(tx1, b"key1".to_vec(), IsolationLevel::SnapshotIsolation)
+            .unwrap();
         mgr.record_write(tx2, b"key2".to_vec()).unwrap();
 
         mgr.commit(tx1).unwrap();

@@ -67,6 +67,9 @@ pub struct Transaction {
     pub status: TransactionStatus,
     /// Start timestamp (when transaction began)
     pub start_timestamp: u64,
+    /// First read timestamp (when transaction first read data)
+    /// Used for REPEATABLE READ isolation level
+    pub first_read_timestamp: Option<u64>,
     /// Commit timestamp (None if not committed)
     pub commit_timestamp: Option<u64>,
 }
@@ -78,6 +81,7 @@ impl Transaction {
             id,
             status: TransactionStatus::Active,
             start_timestamp,
+            first_read_timestamp: None,
             commit_timestamp: None,
         }
     }
@@ -104,6 +108,16 @@ impl Transaction {
 
     pub fn is_aborted(&self) -> bool {
         self.status == TransactionStatus::Aborted
+    }
+
+    pub fn record_first_read(&mut self, timestamp: u64) {
+        if self.first_read_timestamp.is_none() {
+            self.first_read_timestamp = Some(timestamp);
+        }
+    }
+
+    pub fn get_read_timestamp(&self) -> u64 {
+        self.first_read_timestamp.unwrap_or(self.start_timestamp)
     }
 }
 
@@ -134,6 +148,35 @@ impl Snapshot {
             tx_id,
             snapshot_timestamp,
             active_transactions: Vec::new(),
+        }
+    }
+
+    /// Create a REPEATABLE READ snapshot using first-read timestamp
+    ///
+    /// In REPEATABLE READ, all reads see data as of the first read timestamp,
+    /// not the transaction start timestamp. This ensures consistent reads
+    /// within a transaction.
+    pub fn new_repeatable_read(tx_id: TxId, first_read_timestamp: u64, active: Vec<TxId>) -> Self {
+        Self {
+            tx_id,
+            snapshot_timestamp: first_read_timestamp,
+            active_transactions: active,
+        }
+    }
+
+    /// Create a REPEATABLE READ snapshot using transaction start timestamp
+    ///
+    /// For transactions that haven't read yet, the start timestamp is used.
+    /// This is the standard REPEATABLE READ behavior.
+    pub fn new_repeatable_read_from_start(
+        tx_id: TxId,
+        start_timestamp: u64,
+        active: Vec<TxId>,
+    ) -> Self {
+        Self {
+            tx_id,
+            snapshot_timestamp: start_timestamp,
+            active_transactions: active,
         }
     }
 
