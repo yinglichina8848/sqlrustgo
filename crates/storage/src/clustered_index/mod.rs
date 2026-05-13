@@ -10,6 +10,6 @@ pub mod wal_integration;
 #[cfg(test)]
 mod invariant_tests;
 
-pub use leaf::{ClusteredLeafPage, ClusteredLeafIter};
+pub use leaf::{ClusteredLeafIter, ClusteredLeafPage};
 pub use overflow::OverflowManager;
 pub use wal_integration::{ClusteredWalEntry, ClusteredWalManager};

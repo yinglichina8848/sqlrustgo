@@ -13,8 +13,8 @@
 //! 7. Compact removes only deleted records
 
 use crate::clustered_index::ClusteredLeafPage;
-use crate::row_format::types::ClusterKey;
 use crate::row_format::encoder;
+use crate::row_format::types::ClusterKey;
 use sqlrustgo_types::Value;
 
 /// Helper to create a test page with sequential records

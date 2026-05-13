@@ -41,5 +41,5 @@ pub use row_format::{
 
 // Re-export clustered_index types
 pub use clustered_index::{
-    ClusteredLeafPage, ClusteredLeafIter, ClusteredWalEntry, ClusteredWalManager, OverflowManager,
+    ClusteredLeafIter, ClusteredLeafPage, ClusteredWalEntry, ClusteredWalManager, OverflowManager,
 };

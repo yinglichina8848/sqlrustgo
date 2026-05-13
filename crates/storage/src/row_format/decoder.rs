@@ -48,9 +48,9 @@ pub fn decode_row(
     let nulls = decode_null_bitmap(null_bitmap_bytes, total_columns);
 
     // Apply null bitmap to fixed columns - override values marked as NULL
-    for i in 0..fixed_column_count {
-        if nulls.get(i).copied().unwrap_or(false) {
-            fixed_values[i] = Value::Null;
+    for (i, val) in fixed_values.iter_mut().enumerate() {
+        if i < nulls.len() && nulls[i] {
+            *val = Value::Null;
         }
     }
 

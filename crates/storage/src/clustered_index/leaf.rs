@@ -3,9 +3,9 @@
 //! A clustered leaf page stores actual row data indexed by cluster key.
 //! Each page contains a header followed by slot directory and row data.
 
-use crate::row_format::types::{ClusterKey, ClusteredLeafRecord, RowHeader};
-use crate::row_format::encoder;
 use crate::row_format::decoder;
+use crate::row_format::encoder;
+use crate::row_format::types::{ClusterKey, ClusteredLeafRecord};
 use sqlrustgo_types::Value;
 use std::io::{Error, ErrorKind};
 
@@ -137,7 +137,11 @@ impl ClusteredLeafPage {
         if needed_space > self.free_space() {
             return Err(Error::new(
                 ErrorKind::OutOfMemory,
-                format!("Insufficient space: need {}, have {}", needed_space, self.free_space()),
+                format!(
+                    "Insufficient space: need {}, have {}",
+                    needed_space,
+                    self.free_space()
+                ),
             ));
         }
 
@@ -153,16 +157,19 @@ impl ClusteredLeafPage {
         self.data_end = new_data_end;
 
         // Add slot entry pointing to new record
+        // Slot directory grows backward from end of page
         let slot_idx = self.slot_count;
-        let slot_offset = LEAF_PAGE_HEADER_SIZE + (slot_idx as usize) * SLOT_ENTRY_SIZE;
-        self.data[slot_offset..slot_offset + 2].copy_from_slice(&(record_offset as u16).to_le_bytes());
+        let slot_offset = PAGE_SIZE - ((slot_idx + 1) as usize) * SLOT_ENTRY_SIZE;
+        self.data[slot_offset..slot_offset + 2]
+            .copy_from_slice(&(record_offset as u16).to_le_bytes());
 
         // Update slot_count
         self.slot_count += 1;
         self.data[0..2].copy_from_slice(&self.slot_count.to_le_bytes());
 
-        // Update free_space_start (simplified - points to first slot after last)
-        self.free_space_start = (LEAF_PAGE_HEADER_SIZE + (self.slot_count as usize) * SLOT_ENTRY_SIZE) as u16;
+        // Update free_space_start to point to start of slot directory (grows backward from end)
+        self.free_space_start =
+            PAGE_SIZE as u16 - (self.slot_count as usize * SLOT_ENTRY_SIZE) as u16;
         self.data[2..4].copy_from_slice(&self.free_space_start.to_le_bytes());
 
         Ok(slot_idx)
@@ -174,13 +181,14 @@ impl ClusteredLeafPage {
             return Ok(None);
         }
 
-        let offset = self.get_slot_data_offset(slot_idx).ok_or_else(|| {
-            Error::new(ErrorKind::InvalidData, "Invalid slot offset")
-        })?;
+        let offset = self
+            .get_slot_data_offset(slot_idx)
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Invalid slot offset"))?;
 
         // Find the record end by scanning for next slot or data_end
         let next_slot_offset = if slot_idx + 1 < self.slot_count {
-            self.get_slot_data_offset(slot_idx + 1).unwrap_or(self.data_end as usize)
+            self.get_slot_data_offset(slot_idx + 1)
+                .unwrap_or(self.data_end as usize)
         } else {
             self.data_end as usize
         };
@@ -201,16 +209,19 @@ impl ClusteredLeafPage {
             return Ok(None);
         }
 
-        let offset = self.get_slot_data_offset(slot_idx).ok_or_else(|| {
-            Error::new(ErrorKind::InvalidData, "Invalid slot offset")
-        })?;
+        let offset = self
+            .get_slot_data_offset(slot_idx)
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Invalid slot offset"))?;
 
         // Skip RowHeader (19 bytes) and read cluster key
         // Format: [version(1) + flags(2) + trx_id(8) + undo_ptr(8)] = 19 bytes header
         // Then cluster key: tag(1) + value
         let tag_offset = offset + 19;
         if tag_offset >= self.data.len() {
-            return Err(Error::new(ErrorKind::UnexpectedEof, "Unexpected end of data"));
+            return Err(Error::new(
+                ErrorKind::UnexpectedEof,
+                "Unexpected end of data",
+            ));
         }
 
         let tag = self.data[tag_offset];
@@ -219,7 +230,10 @@ impl ClusteredLeafPage {
                 // PrimaryKey - read value type
                 let value_offset = tag_offset + 1;
                 if value_offset >= self.data.len() {
-                    return Err(Error::new(ErrorKind::UnexpectedEof, "Unexpected end of data"));
+                    return Err(Error::new(
+                        ErrorKind::UnexpectedEof,
+                        "Unexpected end of data",
+                    ));
                 }
                 let value_type = self.data[value_offset];
                 match value_type {
@@ -227,7 +241,10 @@ impl ClusteredLeafPage {
                         // Integer
                         let int_offset = value_offset + 1;
                         if int_offset + 8 > self.data.len() {
-                            return Err(Error::new(ErrorKind::UnexpectedEof, "Unexpected end of data"));
+                            return Err(Error::new(
+                                ErrorKind::UnexpectedEof,
+                                "Unexpected end of data",
+                            ));
                         }
                         let val = i64::from_le_bytes([
                             self.data[int_offset],
@@ -248,7 +265,10 @@ impl ClusteredLeafPage {
                 // HiddenRowId
                 let id_offset = tag_offset + 1;
                 if id_offset + 8 > self.data.len() {
-                    return Err(Error::new(ErrorKind::UnexpectedEof, "Unexpected end of data"));
+                    return Err(Error::new(
+                        ErrorKind::UnexpectedEof,
+                        "Unexpected end of data",
+                    ));
                 }
                 let id = u64::from_le_bytes([
                     self.data[id_offset],
@@ -262,7 +282,10 @@ impl ClusteredLeafPage {
                 ]);
                 Ok(Some(ClusterKey::HiddenRowId(id)))
             }
-            _ => Err(Error::new(ErrorKind::InvalidData, "Invalid cluster key tag")),
+            _ => Err(Error::new(
+                ErrorKind::InvalidData,
+                "Invalid cluster key tag",
+            )),
         }
     }
 
@@ -273,7 +296,8 @@ impl ClusteredLeafPage {
         }
 
         // Mark slot as deleted by setting offset to 0
-        let slot_offset = LEAF_PAGE_HEADER_SIZE + (slot_idx as usize) * SLOT_ENTRY_SIZE;
+        // Slot directory grows backward from end of page
+        let slot_offset = PAGE_SIZE - ((slot_idx + 1) as usize) * SLOT_ENTRY_SIZE;
         self.data[slot_offset..slot_offset + 2].copy_from_slice(&0u16.to_le_bytes());
 
         Ok(())
@@ -302,7 +326,8 @@ impl ClusteredLeafPage {
     /// Check if a cluster key at slot i is marked as deleted.
     pub fn is_slot_deleted(&self, slot_idx: u16) -> bool {
         let offset = self.get_slot_offset(slot_idx).unwrap_or(0);
-        u16::from_le_bytes([self.data[offset], self.data[offset + 1]]) == 0 && slot_idx < self.slot_count
+        u16::from_le_bytes([self.data[offset], self.data[offset + 1]]) == 0
+            && slot_idx < self.slot_count
     }
 
     /// Get the number of live (non-deleted) records.
@@ -315,7 +340,7 @@ impl ClusteredLeafPage {
     /// Find the first slot index >= key (lower bound).
     /// Returns None if all keys are less than the target.
     pub fn lower_bound(&self, key: &ClusterKey) -> Option<u16> {
-        let mut result = None;
+        let result = None;
         for i in 0..self.slot_count {
             if self.is_slot_deleted(i) {
                 continue;
@@ -352,19 +377,19 @@ impl ClusteredLeafPage {
         let mut right_page = ClusteredLeafPage::new();
 
         // Copy records from split_pos onwards to right page
-        let mut moved_count = 0;
+        let mut _moved_count = 0;
         for i in split_pos..self.slot_count as usize {
             let slot_idx = i as u16;
             if self.is_slot_deleted(slot_idx) {
                 continue;
             }
 
-            if let Ok(Some(key)) = self.get_cluster_key(slot_idx) {
+            if let Ok(Some(_key)) = self.get_cluster_key(slot_idx) {
                 // Get the full record for moving
                 if let Ok(Some(_)) = self.get(slot_idx) {
                     // For now, we only move by cluster key
                     // The actual data movement would be done by the caller
-                    moved_count += 1;
+                    _moved_count += 1;
                 }
             }
         }
@@ -375,7 +400,8 @@ impl ClusteredLeafPage {
         self.data[0..2].copy_from_slice(&new_slot_count.to_le_bytes());
 
         // Update free_space_start for left page
-        self.free_space_start = (LEAF_PAGE_HEADER_SIZE + (new_slot_count as usize) * SLOT_ENTRY_SIZE) as u16;
+        self.free_space_start =
+            (LEAF_PAGE_HEADER_SIZE + (new_slot_count as usize) * SLOT_ENTRY_SIZE) as u16;
         self.data[2..4].copy_from_slice(&self.free_space_start.to_le_bytes());
 
         // Link the pages
@@ -385,7 +411,10 @@ impl ClusteredLeafPage {
 
         // Get the first key from right page as split_key
         let split_key = if right_page.slot_count > 0 {
-            right_page.get_cluster_key(0).unwrap().unwrap_or(ClusterKey::HiddenRowId(0))
+            right_page
+                .get_cluster_key(0)
+                .unwrap()
+                .unwrap_or(ClusterKey::HiddenRowId(0))
         } else {
             ClusterKey::HiddenRowId(u64::MAX)
         };
@@ -415,7 +444,8 @@ impl ClusteredLeafPage {
 
             // Find record end
             let next_slot_offset = if i + 1 < self.slot_count {
-                self.get_slot_data_offset(i + 1).unwrap_or(self.data_end as usize)
+                self.get_slot_data_offset(i + 1)
+                    .unwrap_or(self.data_end as usize)
             } else {
                 self.data_end as usize
             };
@@ -426,8 +456,8 @@ impl ClusteredLeafPage {
             new_data[new_data_end as usize..new_data_end as usize + record_len]
                 .copy_from_slice(&self.data[old_offset..next_slot_offset]);
 
-            // Add slot entry
-            let slot_offset = LEAF_PAGE_HEADER_SIZE + (new_slot_count as usize) * SLOT_ENTRY_SIZE;
+            // Add slot entry (slot directory grows backward from end of page)
+            let slot_offset = PAGE_SIZE - ((new_slot_count + 1) as usize) * SLOT_ENTRY_SIZE;
             new_data[slot_offset..slot_offset + 2].copy_from_slice(&new_data_end.to_le_bytes());
 
             new_slot_count += 1;
@@ -437,7 +467,9 @@ impl ClusteredLeafPage {
         // Update header
         new_data[0..2].copy_from_slice(&new_slot_count.to_le_bytes()); // slot_count
         new_data[4..6].copy_from_slice(&new_data_end.to_le_bytes()); // data_end
-        let new_free_space_start = (LEAF_PAGE_HEADER_SIZE + (new_slot_count as usize) * SLOT_ENTRY_SIZE) as u16;
+                                                                     // free_space_start points to start of slot directory (grows backward from end)
+        let new_free_space_start =
+            PAGE_SIZE as u16 - (new_slot_count as usize * SLOT_ENTRY_SIZE) as u16;
         new_data[2..4].copy_from_slice(&new_free_space_start.to_le_bytes()); // free_space_start
 
         let removed = self.slot_count - new_slot_count;
@@ -530,7 +562,9 @@ mod tests {
 
         for i in 0..5 {
             let key = ClusterKey::HiddenRowId(i);
-            let slot = page.insert(&key, &[Value::Integer(i as i64)], &[], &[false]).unwrap();
+            let slot = page
+                .insert(&key, &[Value::Integer(i as i64)], &[], &[false])
+                .unwrap();
             assert_eq!(slot, i as u16);
         }
 
@@ -546,7 +580,8 @@ mod tests {
     fn test_delete() {
         let mut page = ClusteredLeafPage::new();
         let key = ClusterKey::HiddenRowId(1);
-        page.insert(&key, &[Value::Integer(1)], &[], &[false]).unwrap();
+        page.insert(&key, &[Value::Integer(1)], &[], &[false])
+            .unwrap();
 
         assert!(page.get_cluster_key(0).unwrap().is_some());
 
@@ -564,7 +599,12 @@ mod tests {
         // Fill the page with many small records
         for i in 0..100 {
             let key = ClusterKey::HiddenRowId(i);
-            let _ = page.insert(&key, &[Value::Integer(i as i64)], &[Some(vec![0u8; 50])], &[false]);
+            let _ = page.insert(
+                &key,
+                &[Value::Integer(i as i64)],
+                &[Some(vec![0u8; 50])],
+                &[false],
+            );
         }
     }
 
@@ -574,7 +614,8 @@ mod tests {
         let keys: Vec<_> = (0..3).map(|i| ClusterKey::HiddenRowId(i)).collect();
 
         for key in &keys {
-            page.insert(key, &[Value::Integer(0)], &[], &[false]).unwrap();
+            page.insert(key, &[Value::Integer(0)], &[], &[false])
+                .unwrap();
         }
 
         let iter = ClusteredLeafIter::new(&page);
@@ -586,7 +627,8 @@ mod tests {
     fn test_leaf_page_from_data() {
         let mut page = ClusteredLeafPage::new();
         let key = ClusterKey::HiddenRowId(42);
-        page.insert(&key, &[Value::Integer(42)], &[], &[false]).unwrap();
+        page.insert(&key, &[Value::Integer(42)], &[], &[false])
+            .unwrap();
 
         let data = page.data().to_vec();
         let restored = ClusteredLeafPage::from_data(data);
@@ -599,7 +641,8 @@ mod tests {
     fn test_is_slot_deleted() {
         let mut page = ClusteredLeafPage::new();
         let key = ClusterKey::HiddenRowId(1);
-        page.insert(&key, &[Value::Integer(1)], &[], &[false]).unwrap();
+        page.insert(&key, &[Value::Integer(1)], &[], &[false])
+            .unwrap();
 
         assert!(!page.is_slot_deleted(0));
         page.delete(0).unwrap();
@@ -613,7 +656,8 @@ mod tests {
         // Insert 5 records
         for i in 0..5 {
             let key = ClusterKey::HiddenRowId(i);
-            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false]).unwrap();
+            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false])
+                .unwrap();
         }
         assert_eq!(page.live_record_count(), 5);
 
@@ -629,7 +673,8 @@ mod tests {
 
         for i in 0..10 {
             let key = ClusterKey::HiddenRowId(i * 2); // 0, 2, 4, 6, 8, ...
-            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false]).unwrap();
+            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false])
+                .unwrap();
         }
 
         // Lower bound of 5 should be slot with key 6
@@ -655,7 +700,8 @@ mod tests {
 
         for i in 0..10 {
             let key = ClusterKey::HiddenRowId(i * 2); // 0, 2, 4, 6, 8, ...
-            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false]).unwrap();
+            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false])
+                .unwrap();
         }
 
         // Upper bound of 5 should be slot with key 6
@@ -682,7 +728,8 @@ mod tests {
         // Insert 5 records
         for i in 0..5 {
             let key = ClusterKey::HiddenRowId(i);
-            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false]).unwrap();
+            page.insert(&key, &[Value::Integer(i as i64)], &[], &[false])
+                .unwrap();
         }
 
         // Delete 2 records (slots 1 and 3)

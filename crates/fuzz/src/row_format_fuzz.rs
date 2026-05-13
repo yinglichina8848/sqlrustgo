@@ -3,8 +3,8 @@
 //! This module provides fuzz testing for the Compact Row v1 format.
 //! It generates random row data and verifies encode/decode consistency.
 
-use sqlrustgo_storage::row_format::encoder;
 use sqlrustgo_storage::row_format::decoder;
+use sqlrustgo_storage::row_format::encoder;
 use sqlrustgo_storage::row_format::types::ClusterKey;
 use sqlrustgo_types::Value;
 use std::collections::HashSet;
@@ -87,11 +87,7 @@ impl RowFormatFuzzer {
                     None // 25% NULL
                 } else {
                     let len = (self.next_rng() % 500) as usize;
-                    Some(
-                        (0..len)
-                            .map(|_| (self.next_rng() % 256) as u8)
-                            .collect(),
-                    )
+                    Some((0..len).map(|_| (self.next_rng() % 256) as u8).collect())
                 }
             })
             .collect()
@@ -288,7 +284,11 @@ mod tests {
     #[test]
     fn test_fuzz_encode_decode_roundtrip() {
         let result = run_quick_fuzz();
-        assert!(result.passed(), "Fuzzing found {} failures", result.failures.len());
+        assert!(
+            result.passed(),
+            "Fuzzing found {} failures",
+            result.failures.len()
+        );
     }
 
     #[test]

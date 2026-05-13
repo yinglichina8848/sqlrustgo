@@ -162,10 +162,8 @@ impl GroupReplication {
         for info in self.certified.values() {
             if info.view_id == view_id {
                 // Check for intersection of write sets
-                let intersection: HashSet<_> = ctx
-                    .write_set
-                    .intersection(&info.write_set)
-                    .collect();
+                let intersection: HashSet<_> =
+                    ctx.write_set.intersection(&info.write_set).collect();
                 if !intersection.is_empty() {
                     // Conflict detected
                     return CertificationResult::Aborted;
