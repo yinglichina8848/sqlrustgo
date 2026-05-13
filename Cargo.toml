@@ -261,6 +261,18 @@ name = "e2e_monitoring_test"
 path = "tests/e2e/monitoring_test.rs"
 
 [[test]]
+name = "e2e_window_function_test"
+path = "tests/e2e/e2e_window_function_test.rs"
+
+[[test]]
+name = "e2e_merge_test"
+path = "tests/e2e/e2e_merge_test.rs"
+
+[[test]]
+name = "e2e_fts_test"
+path = "tests/e2e/e2e_fts_test.rs"
+
+[[test]]
 name = "stored_procedure_parser_test"
 path = "tests/stored_procedure_parser_test.rs"
 
