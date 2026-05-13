@@ -29,3 +29,15 @@ pub fn is_null(bitmap: &[u8], column_index: usize) -> bool {
     let bit_index = column_index % 8;
     (bitmap[byte_index] & (1 << bit_index)) != 0
 }
+
+/// Decode a null bitmap to a vector of booleans.
+/// Each true value means NULL, false means NOT NULL.
+pub fn decode_null_bitmap(bitmap: Vec<u8>) -> Vec<bool> {
+    let mut nulls = Vec::new();
+    for byte in bitmap {
+        for bit in 0..8 {
+            nulls.push((byte & (1 << bit)) != 0);
+        }
+    }
+    nulls
+}
