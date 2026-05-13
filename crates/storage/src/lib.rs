@@ -8,6 +8,7 @@ pub mod buffer_pool;
 // pub mod columnar; // TODO: re-enable once StorageEngine trait is synced
 // NOTE: ColumnarStorage has trait sync issues; tpch-import uses MemoryStorage + Parquet export
 
+pub mod clustered_index;
 pub mod engine;
 pub mod file_storage;
 pub mod fts;
@@ -36,4 +37,9 @@ pub use page::Page;
 pub use row_format::{
     decode_row, encode_row, ClusterKey, ClusteredLeafRecord, DefaultRowIdGenerator, OverflowPage,
     RowHeader, RowIdGenerator, VarLenSlot,
+};
+
+// Re-export clustered_index types
+pub use clustered_index::{
+    ClusteredLeafPage, ClusteredLeafIter, ClusteredWalEntry, ClusteredWalManager, OverflowManager,
 };

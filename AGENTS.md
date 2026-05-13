@@ -8,9 +8,9 @@
 
 ## Branch Strategy
 
-- **Main development branch**: `develop/v3.0.0` (GA)
+- **Main development branch**: `develop/v3.1.0` (Beta)
 - **DO NOT modify `main` branch directly**
-- Create feature branches from `develop/v3.0.0`
+- Create feature branches from `develop/v3.1.0`
 - Use git worktrees for isolated feature work: `git worktree add .worktrees/<name> -b feature/<name>`
 
 ## Essential Commands
@@ -56,7 +56,7 @@ bash scripts/gate/check_docs_links.sh
 # Full doc links check
 bash scripts/gate/check_docs_links.sh --all
 
-# Coverage check
+# Coverage check (v3.1.0)
 bash scripts/gate/check_coverage.sh
 
 # Security check
@@ -158,10 +158,18 @@ gh issue view <id> --json closedByPullRequestsReferences
 
 ## Version
 
-Current: **v3.0.0 GA** (Enterprise Resilience)
+Current: **v3.1.0 Beta** (Compact Row Format)
 - Version file: `VERSION`
-- Current branch: `develop/v3.0.0`
-- Previous stable: v2.9.0 (RC)
+- Current branch: `develop/v3.1.0`
+- Previous stable: v3.0.0 (GA)
+
+**v3.1.0 Gate Scripts**:
+```bash
+bash scripts/gate/check_alpha_v310.sh   # Alpha gate
+bash scripts/gate/check_beta_v310.sh    # Beta gate
+bash scripts/gate/check_rc_v310.sh      # RC gate
+bash scripts/gate/check_ga_v310.sh      # GA gate
+```
 
 ---
 
@@ -200,18 +208,20 @@ docs/wiki/                   # QMD Wiki（结构化流程文档）
 
 ### Gate 脚本 (`scripts/gate/`)
 
+v3.1.0 门禁脚本：
+
 | 脚本 | 用途 |
 |------|------|
-| `check_beta_v300.sh` | v3.0.0 Beta Gate |
-| `check_rc_v300.sh` | v3.0.0 RC Gate |
-| `check_ga_v300.sh` | v3.0.0 GA Gate |
+| `check_alpha_v310.sh` | v3.1.0 Alpha Gate |
+| `check_beta_v310.sh` | v3.1.0 Beta Gate |
+| `check_rc_v310.sh` | v3.1.0 RC Gate |
+| `check_ga_v310.sh` | v3.1.0 GA Gate |
 | `check_coverage.sh` | 覆盖率检查 (≥75%/85%) |
 | `check_security.sh` | 安全扫描 |
 | `check_sql_compat.sh` | SQL 兼容性检查 |
 | `check_l0_smoke.sh` | L0 smoke 测试 |
-| `gate_lifecycle_check.sh` | 生命周期追踪 |
 
-### Beta Gate 要求 (B1-B9)
+### Beta Gate 要求 (v3.1.0 B1-B9)
 
 | 检查项 | 要求 |
 |--------|------|
@@ -254,6 +264,6 @@ docs/wiki/                   # QMD Wiki（结构化流程文档）
 
 ### 分支保护规则
 
-- `develop/v3.0.0`: 禁止直接推送，必须通过 PR
+- `develop/v3.1.0`: 禁止直接推送，必须通过 PR
 - 使用 `force_merge=true` 绕过保护合并（需 API）
 

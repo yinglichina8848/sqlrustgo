@@ -88,7 +88,8 @@ fn encode_row_header(buf: &mut Vec<u8>, header: &RowHeader) -> io::Result<()> {
     Ok(())
 }
 
-fn encode_cluster_key(buf: &mut Vec<u8>, key: &ClusterKey) -> io::Result<()> {
+/// Encode cluster key to bytes.
+pub fn encode_cluster_key(buf: &mut Vec<u8>, key: &ClusterKey) -> io::Result<()> {
     match key {
         ClusterKey::PrimaryKey(v) => {
             buf.push(0); // variant tag
