@@ -1,0 +1,57 @@
+name: RC Gate Pipeline
+run-name: R-Gate v3.1.0
+
+on:
+  push:
+    branches:
+      - rc/v3.1.0
+    tags:
+      - v*-rc*
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 02:00
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rc-gate:
+    runs-on: [hp-z6g4, hp-z6g4, hp-z6g4, hp-z6g4]
+    parallel: true
+    steps:
+      - name: Checkout
+        run: |
+          git clone --depth=1 "${{ gitea.repository_url }}" repo
+          cd repo
+          git fetch --depth=1 origin "${{ gitea.ref_name }}"
+          git checkout "${{ gitea_sha }}"
+
+      - name: RC Gate
+        run: |
+          cd repo
+          bash scripts/test/nomad/r_gate.sh
+
+  rc-gate-full:
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          git clone --depth=1 "${{ gitea.repository_url }}" repo
+          cd repo
+          git fetch --depth=1 origin "${{ gitea.ref_name }}"
+          git checkout "${{ gitea_sha }}"
+
+      - name: TPC-H Full
+        run: |
+          cd repo
+          bash scripts/gate/check_tpch.sh --full
+
+      - name: Sysbench
+        run: |
+          cd repo
+          bash scripts/gate/check_sysbench.sh
+
+      - name: E2E Tests
+        run: |
+          cd repo
+          bash scripts/test/e2e/run_e2e.sh
