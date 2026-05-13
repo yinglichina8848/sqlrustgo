@@ -21,6 +21,7 @@ pub mod grpc_client;
 pub mod grpc_server;
 pub mod group_membership;
 pub mod group_replication;
+pub mod group_replication_raft;
 pub mod partition;
 pub mod proto;
 pub mod raft;
@@ -44,6 +45,7 @@ pub use group_replication::{
     CertificationInfo, CertificationResult, GroupReplication, GroupReplicationConfig,
     TransactionContext, TransactionId,
 };
+pub use group_replication_raft::GroupReplicationRaft;
 pub use failover_manager::{
     ClusterHealth, FailoverConfig, FailoverManager, FailoverNotifier, FailoverTrigger,
     FailureDetector, FailureDetectorConfig, FailureEvent, FailureReason,

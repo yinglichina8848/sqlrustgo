@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 #[allow(unused_imports)]
-use crate::group_membership::{GroupMembership, MemberState, View};
+use crate::group_membership::{GroupMembership, MemberRole, MemberState, View};
 
 /// Transaction certification result
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,8 +105,19 @@ impl GroupReplication {
 
     /// Check if current node is primary
     pub fn is_primary(&self) -> bool {
-        if let Some(primary) = self.primary {
-            primary == self.membership.get_local_node_id()
+        if self.config.single_primary {
+            if let Some(primary) = self.primary {
+                return primary == self.membership.get_local_node_id();
+            }
+        }
+        false
+    }
+
+    /// Check if current node is a primary member (for Multi-Primary mode)
+    pub fn is_primary_member(&self) -> bool {
+        let local_id = self.membership.get_local_node_id();
+        if let Some(member) = self.membership.get_member(local_id) {
+            member.role == MemberRole::Primary && member.state == MemberState::Online
         } else {
             false
         }
@@ -114,7 +125,17 @@ impl GroupReplication {
 
     /// Check if current node can accept writes
     pub fn can_accept_writes(&self) -> bool {
-        self.is_primary() && !self.recovery_mode
+        if self.recovery_mode {
+            return false;
+        }
+
+        if self.config.single_primary {
+            // Single-Primary: only the designated primary can write
+            self.is_primary()
+        } else {
+            // Multi-Primary: any node with Primary role can write
+            self.is_primary_member()
+        }
     }
 
     /// Generate a new transaction ID
@@ -235,6 +256,10 @@ impl GroupReplication {
     /// Get certification window size
     pub fn window_size(&self) -> usize {
         self.certification_window.len()
+    }
+
+    pub fn set_primary(&mut self, primary: Option<u64>) {
+        self.primary = primary;
     }
 }
 
@@ -360,5 +385,94 @@ mod tests {
 
         gr.set_recovery_mode(false);
         assert!(gr.can_accept_writes());
+    }
+
+    #[test]
+    fn test_multi_primary_mode() {
+        let gm = GroupMembership::new(1);
+        gm.add_member(2, "node-2".to_string()).unwrap();
+        gm.add_member(3, "node-3".to_string()).unwrap();
+        gm.update_member_state(1, MemberState::Online).unwrap();
+        gm.update_member_state(2, MemberState::Online).unwrap();
+        gm.update_member_state(3, MemberState::Online).unwrap();
+        gm.set_member_role(1, MemberRole::Primary).unwrap();
+        gm.set_member_role(2, MemberRole::Primary).unwrap();
+        gm.set_member_role(3, MemberRole::Secondary).unwrap();
+
+        let config = GroupReplicationConfig {
+            single_primary: false,
+            auto_rejoin: true,
+            certification_window_size: 1000,
+            max_memory_size: 128 * 1024 * 1024,
+        };
+        let mut gr = GroupReplication::new(gm, config);
+
+        assert!(!gr.is_primary());
+        assert!(gr.is_primary_member());
+        assert!(gr.can_accept_writes());
+    }
+
+    #[test]
+    fn test_multi_primary_secondary_cannot_write() {
+        let gm = GroupMembership::new(1);
+        gm.add_member(2, "node-2".to_string()).unwrap();
+        gm.update_member_state(1, MemberState::Online).unwrap();
+        gm.update_member_state(2, MemberState::Online).unwrap();
+        gm.set_member_role(1, MemberRole::Secondary).unwrap();
+        gm.set_member_role(2, MemberRole::Primary).unwrap();
+
+        let config = GroupReplicationConfig {
+            single_primary: false,
+            auto_rejoin: true,
+            certification_window_size: 1000,
+            max_memory_size: 128 * 1024 * 1024,
+        };
+        let mut gr = GroupReplication::new(gm, config);
+
+        assert!(!gr.is_primary());
+        assert!(!gr.is_primary_member());
+        assert!(!gr.can_accept_writes());
+    }
+
+    #[test]
+    fn test_multi_primary_conflict_detection() {
+        let gm = GroupMembership::new(1);
+        gm.add_member(2, "node-2".to_string()).unwrap();
+        gm.update_member_state(1, MemberState::Online).unwrap();
+        gm.update_member_state(2, MemberState::Online).unwrap();
+        gm.set_member_role(1, MemberRole::Primary).unwrap();
+        gm.set_member_role(2, MemberRole::Primary).unwrap();
+
+        let config = GroupReplicationConfig {
+            single_primary: false,
+            auto_rejoin: true,
+            certification_window_size: 1000,
+            max_memory_size: 128 * 1024 * 1024,
+        };
+        let mut gr = GroupReplication::new(gm, config);
+
+        assert!(gr.can_accept_writes());
+
+        let mut write_set1 = HashSet::new();
+        write_set1.insert(b"key1".to_vec());
+
+        let tx_id1 = gr.new_transaction_id();
+        let ctx1 = TransactionContext {
+            tx_id: tx_id1,
+            write_set: write_set1,
+            snapshot_version: 1,
+        };
+        assert_eq!(gr.certify(ctx1), CertificationResult::Certified);
+
+        let mut write_set2 = HashSet::new();
+        write_set2.insert(b"key1".to_vec());
+
+        let tx_id2 = gr.new_transaction_id();
+        let ctx2 = TransactionContext {
+            tx_id: tx_id2,
+            write_set: write_set2,
+            snapshot_version: 1,
+        };
+        assert_eq!(gr.certify(ctx2), CertificationResult::Aborted);
     }
 }
