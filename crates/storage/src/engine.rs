@@ -734,14 +734,43 @@ impl MemoryStorage {
 
     /// Find row indices by index lookup
     pub fn find_by_index(&self, table: &str, column_index: usize, key: i64) -> Option<Vec<usize>> {
-        let index_key = table.to_string();
-        self.indexes.get(&index_key).and_then(|(idx, data)| {
-            if *idx == column_index {
-                data.get(&key).cloned()
-            } else {
-                None
+        let table_prefix = format!("{}:", table);
+        for (index_key, (col_idx, data)) in &self.indexes {
+            if index_key.starts_with(&table_prefix) && *col_idx == column_index {
+                return data.get(&key).cloned();
             }
-        })
+        }
+        None
+    }
+
+    /// Search using index - returns row IDs matching the key (by column name)
+    pub fn search_index(&self, table: &str, column: &str, key: i64) -> Vec<u32> {
+        let index_key = format!("{}:{}", table, column);
+        self.indexes
+            .get(&index_key)
+            .map(|(_, data)| data.get(&key).cloned().unwrap_or_default())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|v| v as u32)
+            .collect()
+    }
+
+    /// Range query using index (by column name)
+    pub fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32> {
+        let index_key = format!("{}:{}", table, column);
+        if let Some((_, data)) = self.indexes.get(&index_key) {
+            let mut results = Vec::new();
+            for (key, row_ids) in data {
+                if *key >= start && *key <= end {
+                    for row_id in row_ids {
+                        results.push(*row_id as u32);
+                    }
+                }
+            }
+            results
+        } else {
+            Vec::new()
+        }
     }
 
     /// Get or parse predicate, using cache if available (returns owned Predicate)
@@ -790,8 +819,9 @@ impl StorageEngine for MemoryStorage {
             let actual_row_idx = table_records.len() + row_idx;
 
             // Update all indexes for this table
+            let table_prefix = format!("{}:", table);
             for (index_key, (col_idx, index_data)) in self.indexes.iter_mut() {
-                if index_key == table {
+                if index_key.starts_with(&table_prefix) {
                     if let Some(Value::Integer(key)) = record.get(*col_idx) {
                         index_data.entry(*key).or_default().push(actual_row_idx);
                     }
@@ -1005,12 +1035,12 @@ impl StorageEngine for MemoryStorage {
         self.table_infos.keys().cloned().collect()
     }
 
-    fn create_index(&mut self, table: &str, _column: &str, column_index: usize) -> SqlResult<()> {
+    fn create_index(&mut self, table: &str, column: &str, column_index: usize) -> SqlResult<()> {
         let Some(records) = self.tables.get(table) else {
             return Ok(());
         };
 
-        let index_key = table.to_string();
+        let index_key = format!("{}:{}", table, column);
         let mut index_data: HashMap<i64, Vec<usize>> = HashMap::new();
 
         for (row_idx, row) in records.iter().enumerate() {
