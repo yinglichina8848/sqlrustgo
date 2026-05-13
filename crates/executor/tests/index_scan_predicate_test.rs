@@ -46,7 +46,8 @@ mod index_scan_eq_tests {
     #[test]
     fn test_index_scan_eq_with_text_column() {
         let mut e = engine();
-        e.execute("CREATE TABLE users (id INTEGER, email TEXT)").unwrap();
+        e.execute("CREATE TABLE users (id INTEGER, email TEXT)")
+            .unwrap();
         e.execute("CREATE INDEX idx_email ON users (id)").unwrap();
         e.execute("INSERT INTO users VALUES (1, 'alice@test.com'), (2, 'bob@test.com')")
             .unwrap();
@@ -72,7 +73,11 @@ mod index_scan_gt_tests {
         let result = e.execute("SELECT * FROM t WHERE id > 2").unwrap();
         assert_eq!(result.rows.len(), 2);
         // Should return rows with id = 3 and id = 4
-        let ids: Vec<i64> = result.rows.iter().map(|r| r[0].as_integer().unwrap()).collect();
+        let ids: Vec<i64> = result
+            .rows
+            .iter()
+            .map(|r| r[0].as_integer().unwrap())
+            .collect();
         assert!(ids.contains(&3));
         assert!(ids.contains(&4));
     }
@@ -117,7 +122,11 @@ mod index_scan_lt_tests {
         let result = e.execute("SELECT * FROM t WHERE id < 3").unwrap();
         assert_eq!(result.rows.len(), 2);
         // Should return rows with id = 1 and id = 2
-        let ids: Vec<i64> = result.rows.iter().map(|r| r[0].as_integer().unwrap()).collect();
+        let ids: Vec<i64> = result
+            .rows
+            .iter()
+            .map(|r| r[0].as_integer().unwrap())
+            .collect();
         assert!(ids.contains(&1));
         assert!(ids.contains(&2));
     }
@@ -162,7 +171,11 @@ mod index_scan_gteq_tests {
         let result = e.execute("SELECT * FROM t WHERE id >= 3").unwrap();
         assert_eq!(result.rows.len(), 2);
         // Should return rows with id = 3 and id = 4
-        let ids: Vec<i64> = result.rows.iter().map(|r| r[0].as_integer().unwrap()).collect();
+        let ids: Vec<i64> = result
+            .rows
+            .iter()
+            .map(|r| r[0].as_integer().unwrap())
+            .collect();
         assert!(ids.contains(&3));
         assert!(ids.contains(&4));
     }
@@ -207,7 +220,11 @@ mod index_scan_lteq_tests {
         let result = e.execute("SELECT * FROM t WHERE id <= 2").unwrap();
         assert_eq!(result.rows.len(), 2);
         // Should return rows with id = 1 and id = 2
-        let ids: Vec<i64> = result.rows.iter().map(|r| r[0].as_integer().unwrap()).collect();
+        let ids: Vec<i64> = result
+            .rows
+            .iter()
+            .map(|r| r[0].as_integer().unwrap())
+            .collect();
         assert!(ids.contains(&1));
         assert!(ids.contains(&2));
     }
@@ -248,7 +265,9 @@ mod index_scan_boundary_tests {
         e.execute("INSERT INTO t VALUES (1), (9223372036854775807), (-9223372036854775808)")
             .unwrap();
 
-        let result = e.execute("SELECT * FROM t WHERE id = 9223372036854775807").unwrap();
+        let result = e
+            .execute("SELECT * FROM t WHERE id = 9223372036854775807")
+            .unwrap();
         assert_eq!(result.rows.len(), 1);
         assert_eq!(result.rows[0][0], Value::Integer(9223372036854775807));
     }
@@ -261,7 +280,9 @@ mod index_scan_boundary_tests {
         e.execute("INSERT INTO t VALUES (1), (9223372036854775807), (-9223372036854775808)")
             .unwrap();
 
-        let result = e.execute("SELECT * FROM t WHERE id = -9223372036854775808").unwrap();
+        let result = e
+            .execute("SELECT * FROM t WHERE id = -9223372036854775808")
+            .unwrap();
         assert_eq!(result.rows.len(), 1);
         assert_eq!(result.rows[0][0], Value::Integer(-9223372036854775808));
     }
@@ -271,11 +292,16 @@ mod index_scan_boundary_tests {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER)").unwrap();
         e.execute("CREATE INDEX idx_id ON t (id)").unwrap();
-        e.execute("INSERT INTO t VALUES (-10), (-5), (0), (5), (10)").unwrap();
+        e.execute("INSERT INTO t VALUES (-10), (-5), (0), (5), (10)")
+            .unwrap();
 
         let result = e.execute("SELECT * FROM t WHERE id > -5").unwrap();
         assert_eq!(result.rows.len(), 3);
-        let ids: Vec<i64> = result.rows.iter().map(|r| r[0].as_integer().unwrap()).collect();
+        let ids: Vec<i64> = result
+            .rows
+            .iter()
+            .map(|r| r[0].as_integer().unwrap())
+            .collect();
         assert!(ids.contains(&0));
         assert!(ids.contains(&5));
         assert!(ids.contains(&10));
@@ -286,11 +312,16 @@ mod index_scan_boundary_tests {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER)").unwrap();
         e.execute("CREATE INDEX idx_id ON t (id)").unwrap();
-        e.execute("INSERT INTO t VALUES (-10), (-5), (0), (5), (10)").unwrap();
+        e.execute("INSERT INTO t VALUES (-10), (-5), (0), (5), (10)")
+            .unwrap();
 
         let result = e.execute("SELECT * FROM t WHERE id < 0").unwrap();
         assert_eq!(result.rows.len(), 2);
-        let ids: Vec<i64> = result.rows.iter().map(|r| r[0].as_integer().unwrap()).collect();
+        let ids: Vec<i64> = result
+            .rows
+            .iter()
+            .map(|r| r[0].as_integer().unwrap())
+            .collect();
         assert!(ids.contains(&-10));
         assert!(ids.contains(&-5));
     }
@@ -302,7 +333,8 @@ mod index_scan_with_projection {
     #[test]
     fn test_index_scan_with_projection() {
         let mut e = engine();
-        e.execute("CREATE TABLE t (id INTEGER, val INTEGER, name TEXT)").unwrap();
+        e.execute("CREATE TABLE t (id INTEGER, val INTEGER, name TEXT)")
+            .unwrap();
         e.execute("CREATE INDEX idx_id ON t (id)").unwrap();
         e.execute("INSERT INTO t VALUES (1, 100, 'Alice'), (2, 200, 'Bob'), (3, 300, 'Charlie')")
             .unwrap();
@@ -317,13 +349,16 @@ mod index_scan_with_projection {
     #[test]
     fn test_index_scan_with_aggregate() {
         let mut e = engine();
-        e.execute("CREATE TABLE t (id INTEGER, val INTEGER)").unwrap();
+        e.execute("CREATE TABLE t (id INTEGER, val INTEGER)")
+            .unwrap();
         e.execute("CREATE INDEX idx_id ON t (id)").unwrap();
         e.execute("INSERT INTO t VALUES (1, 100), (2, 200), (3, 300), (4, 400)")
             .unwrap();
 
         // SELECT COUNT(*), SUM(val) FROM t WHERE id > 2
-        let result = e.execute("SELECT COUNT(*), SUM(val) FROM t WHERE id > 2").unwrap();
+        let result = e
+            .execute("SELECT COUNT(*), SUM(val) FROM t WHERE id > 2")
+            .unwrap();
         assert_eq!(result.rows.len(), 1);
         assert_eq!(result.rows[0][0], Value::Integer(2)); // COUNT: 2 rows (id=3,4)
         assert_eq!(result.rows[0][1], Value::Integer(700)); // SUM: 300+400
@@ -336,7 +371,8 @@ mod index_scan_multiple_rows_same_key {
     #[test]
     fn test_index_scan_eq_multiple_rows_same_key() {
         let mut e = engine();
-        e.execute("CREATE TABLE t (id INTEGER, category TEXT)").unwrap();
+        e.execute("CREATE TABLE t (id INTEGER, category TEXT)")
+            .unwrap();
         e.execute("CREATE INDEX idx_category ON t (id)").unwrap();
         // Multiple rows can have the same indexed value
         e.execute("INSERT INTO t VALUES (1, 'A'), (1, 'B'), (2, 'C'), (1, 'D')")

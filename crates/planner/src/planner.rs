@@ -242,7 +242,8 @@ impl DefaultPlanner {
                     | Expr::AggregateFunction { .. }
                     | Expr::Alias { .. }
                     | Expr::Wildcard
-                    | Expr::QualifiedWildcard { .. } => {
+                    | Expr::QualifiedWildcard { .. }
+                    | Expr::WindowFunction { .. } => {
                         let input_plan = self.create_physical_plan_internal(input)?;
                         Ok(Box::new(FilterExec::new(input_plan, predicate.clone())))
                     }
@@ -455,7 +456,8 @@ impl DefaultPlanner {
                 | Expr::AggregateFunction { .. }
                 | Expr::Alias { .. }
                 | Expr::Wildcard
-                | Expr::QualifiedWildcard { .. } => {
+                | Expr::QualifiedWildcard { .. }
+                | Expr::WindowFunction { .. } => {
                     let input_plan = self.create_physical_plan_with_cte_ctx(input, cte_ctx)?;
                     Ok(Box::new(FilterExec::new(input_plan, predicate.clone())))
                 }

@@ -19,10 +19,18 @@ mod cross_join_tests {
     #[test]
     fn test_cross_join_basic() {
         let mut engine = create_engine();
-        engine.execute("CREATE TABLE t1 (id INTEGER, name TEXT)").unwrap();
-        engine.execute("CREATE TABLE t2 (val INTEGER, code TEXT)").unwrap();
-        engine.execute("INSERT INTO t1 VALUES (1, 'A'), (2, 'B')").unwrap();
-        engine.execute("INSERT INTO t2 VALUES (10, 'X'), (20, 'Y')").unwrap();
+        engine
+            .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")
+            .unwrap();
+        engine
+            .execute("CREATE TABLE t2 (val INTEGER, code TEXT)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO t1 VALUES (1, 'A'), (2, 'B')")
+            .unwrap();
+        engine
+            .execute("INSERT INTO t2 VALUES (10, 'X'), (20, 'Y')")
+            .unwrap();
 
         // CROSS JOIN should produce Cartesian product: 2 * 2 = 4 rows
         let result = engine
@@ -34,10 +42,18 @@ mod cross_join_tests {
     #[test]
     fn test_cross_join_all_combinations() {
         let mut engine = create_engine();
-        engine.execute("CREATE TABLE colors (id INTEGER, color TEXT)").unwrap();
-        engine.execute("CREATE TABLE sizes (id INTEGER, size TEXT)").unwrap();
-        engine.execute("INSERT INTO colors VALUES (1, 'Red'), (2, 'Blue')").unwrap();
-        engine.execute("INSERT INTO sizes VALUES (1, 'S'), (2, 'M'), (3, 'L')").unwrap();
+        engine
+            .execute("CREATE TABLE colors (id INTEGER, color TEXT)")
+            .unwrap();
+        engine
+            .execute("CREATE TABLE sizes (id INTEGER, size TEXT)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO colors VALUES (1, 'Red'), (2, 'Blue')")
+            .unwrap();
+        engine
+            .execute("INSERT INTO sizes VALUES (1, 'S'), (2, 'M'), (3, 'L')")
+            .unwrap();
 
         // 2 colors * 3 sizes = 6 combinations
         let result = engine
@@ -65,10 +81,18 @@ mod cross_join_tests {
     #[test]
     fn test_cross_join_with_filter() {
         let mut engine = create_engine();
-        engine.execute("CREATE TABLE t1 (id INTEGER, name TEXT)").unwrap();
-        engine.execute("CREATE TABLE t2 (val INTEGER, code TEXT)").unwrap();
-        engine.execute("INSERT INTO t1 VALUES (1, 'A'), (2, 'B')").unwrap();
-        engine.execute("INSERT INTO t2 VALUES (10, 'X'), (20, 'Y')").unwrap();
+        engine
+            .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")
+            .unwrap();
+        engine
+            .execute("CREATE TABLE t2 (val INTEGER, code TEXT)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO t1 VALUES (1, 'A'), (2, 'B')")
+            .unwrap();
+        engine
+            .execute("INSERT INTO t2 VALUES (10, 'X'), (20, 'Y')")
+            .unwrap();
 
         // CROSS JOIN with WHERE clause
         let result = engine
@@ -89,9 +113,7 @@ mod cross_join_tests {
         // t1 is empty
         engine.execute("INSERT INTO t2 VALUES (10), (20)").unwrap();
 
-        let result = engine
-            .execute("SELECT * FROM t1 CROSS JOIN t2")
-            .unwrap();
+        let result = engine.execute("SELECT * FROM t1 CROSS JOIN t2").unwrap();
         // Empty left table = 0 rows
         assert_eq!(result.rows.len(), 0);
     }
@@ -104,9 +126,7 @@ mod cross_join_tests {
         engine.execute("INSERT INTO t1 VALUES (1), (2)").unwrap();
         // t2 is empty
 
-        let result = engine
-            .execute("SELECT * FROM t1 CROSS JOIN t2")
-            .unwrap();
+        let result = engine.execute("SELECT * FROM t1 CROSS JOIN t2").unwrap();
         // Empty right table = 0 rows
         assert_eq!(result.rows.len(), 0);
     }
@@ -118,9 +138,7 @@ mod cross_join_tests {
         engine.execute("CREATE TABLE t2 (val INTEGER)").unwrap();
         // Both empty
 
-        let result = engine
-            .execute("SELECT * FROM t1 CROSS JOIN t2")
-            .unwrap();
+        let result = engine.execute("SELECT * FROM t1 CROSS JOIN t2").unwrap();
         assert_eq!(result.rows.len(), 0);
     }
 
@@ -161,9 +179,13 @@ mod cross_join_tests {
     #[test]
     fn test_cross_join_with_aggregate() {
         let mut engine = create_engine();
-        engine.execute("CREATE TABLE t1 (id INTEGER, name TEXT)").unwrap();
+        engine
+            .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")
+            .unwrap();
         engine.execute("CREATE TABLE t2 (val INTEGER)").unwrap();
-        engine.execute("INSERT INTO t1 VALUES (1, 'A'), (2, 'B')").unwrap();
+        engine
+            .execute("INSERT INTO t1 VALUES (1, 'A'), (2, 'B')")
+            .unwrap();
         engine.execute("INSERT INTO t2 VALUES (10), (20)").unwrap();
 
         // CROSS JOIN with aggregate
@@ -199,9 +221,7 @@ mod cross_join_tests {
         engine.execute("INSERT INTO t2 VALUES (10), (20)").unwrap();
 
         // Comma syntax without WHERE - implementation may vary
-        let result = engine
-            .execute("SELECT t1.id, t2.val FROM t1, t2")
-            .unwrap();
+        let result = engine.execute("SELECT t1.id, t2.val FROM t1, t2").unwrap();
         // Comma without WHERE should produce some results
         assert!(result.rows.len() >= 2);
     }

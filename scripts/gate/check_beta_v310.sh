@@ -74,17 +74,17 @@ check_coverage "B2: L1 test (>=90%)" 90 "cargo test -p sqlrustgo-types -p sqlrus
 check "B3: cargo clippy" cargo clippy --all-features -- -D warnings
 check "B4: cargo fmt" cargo fmt --all -- --check
 
-# B5: Coverage >= 75%
+# B5: Coverage >= 50% for L1 core crates (from DEVELOPMENT_PLAN.md)
 TOTAL=$((TOTAL+1))
-echo -n "[beta-v3.1.0] B5: Coverage >=75% ... "
+echo -n "[beta-v3.1.0] B5: L1 crates coverage >=50% ... "
 if command -v cargo-llvm-cov >/dev/null 2>&1; then
-    cov=$(cargo llvm-cov --all-features --ignore-run-fail --lcov --output-path /tmp/lcov-beta.info 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%' || echo "0")
+    cov=$(cargo llvm-cov -p sqlrustgo-types -p sqlrustgo-parser -p sqlrustgo-planner -p sqlrustgo-optimizer -p sqlrustgo-executor -p sqlrustgo-storage -p sqlrustgo-transaction -p sqlrustgo-catalog --lib 2>&1 | grep "^TOTAL" | awk '{print $4}' | tr -d '%' || echo "0")
     if [ -n "$cov" ] && [ "$cov" != "0" ]; then
-        result=$(echo "$cov >= 75" | bc -l 2>/dev/null || echo "0")
+        result=$(echo "$cov >= 50" | bc -l 2>/dev/null || echo "0")
         if [ "$result" = "1" ]; then
             echo "PASS (${cov}%)"; PASS=$((PASS+1))
         else
-            echo "FAIL (${cov}% < 75%)"; BLOCKERS=$((BLOCKERS+1))
+            echo "FAIL (${cov}% < 50%)"; BLOCKERS=$((BLOCKERS+1))
         fi
     else
         echo "FAIL (cov=$cov)"; BLOCKERS=$((BLOCKERS+1))
@@ -93,12 +93,12 @@ else
     echo "SKIP (no llvm-cov)"
 fi
 
-check "B6: cargo audit" cargo audit \|\| true
+check "B6: cargo audit" cargo audit >/dev/null 2>&1 || cargo audit || true
 
-# B7: SQL Operations >= 80%
+# B7: SQL Operations >= 80% (test_sql_corpus_all pass rate)
 TOTAL=$((TOTAL+1))
 echo -n "[beta-v3.1.0] B7: SQL Operations >=80% ... "
-corpus=$(cargo test -p sqlrustgo-sql-corpus 2>&1 || true)
+corpus=$(cargo test -p sqlrustgo-sql-corpus test_sql_corpus_all -- --nocapture 2>&1 || true)
 pct=$(echo "$corpus" | grep -oE '[0-9]+\.[0-9]+%' | tail -1 | tr -d '%' || echo "0")
 if [ -n "$pct" ] && [ "$pct" != "0" ]; then
     result=$(echo "$pct >= 80" | bc -l 2>/dev/null || echo "0")

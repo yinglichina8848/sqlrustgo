@@ -2308,6 +2308,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             storage.get_table_info(target_table)?.clone()
         };
 
+        let source_table_info = {
+            let storage = self.storage.read().unwrap();
+            storage.get_table_info(source_table)?.clone()
+        };
+
+        let target_pk_idx = target_table_info.columns.iter().position(|c| c.primary_key);
+
         let mut matched_count: usize = 0;
         let mut inserted_count: usize = 0;
 
@@ -2317,6 +2324,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     &merge.on_condition,
                     source_row,
                     target_row,
+                    &source_table_info,
                     &target_table_info,
                 )
             });
@@ -2324,7 +2332,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             if let Some(idx) = matching_target_idx {
                 if let Some(ref clause) = merge.matched_clause {
                     let target_row = &target_rows[idx];
-                    // Convert column names to indices
                     let updates: Vec<(usize, Value)> = clause
                         .update_columns
                         .iter()
@@ -2335,6 +2342,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                                     val,
                                     source_row,
                                     target_row,
+                                    &source_table_info,
                                     &target_table_info,
                                 );
                                 (col_idx, evaluated)
@@ -2342,15 +2350,24 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         })
                         .collect();
 
+                    let filter = target_pk_idx.and_then(|pk_idx| target_row.get(pk_idx).cloned());
                     let mut storage = self.storage.write().unwrap();
-                    let _ = storage.update(target_table, &[], &updates);
+                    let _ = storage.update(target_table, filter.as_slice(), &updates);
                     matched_count += 1;
                 }
             } else if let Some(ref clause) = merge.not_matched_clause {
                 let values: Vec<Value> = clause
                     .insert_values
                     .iter()
-                    .map(|val| self.eval_merge_value(val, source_row, &[], &target_table_info))
+                    .map(|val| {
+                        self.eval_merge_value(
+                            val,
+                            source_row,
+                            &[],
+                            &source_table_info,
+                            &target_table_info,
+                        )
+                    })
                     .collect();
 
                 let mut storage = self.storage.write().unwrap();
@@ -2373,20 +2390,55 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         condition: &Expression,
         source_row: &[Value],
         target_row: &[Value],
-        table_info: &TableInfo,
+        source_table_info: &TableInfo,
+        target_table_info: &TableInfo,
     ) -> bool {
         match condition {
             Expression::BinaryOp(left, op, right) if op.to_uppercase() == "AND" => {
-                self.eval_merge_condition(left, source_row, target_row, table_info)
-                    && self.eval_merge_condition(right, source_row, target_row, table_info)
+                self.eval_merge_condition(
+                    left,
+                    source_row,
+                    target_row,
+                    source_table_info,
+                    target_table_info,
+                ) && self.eval_merge_condition(
+                    right,
+                    source_row,
+                    target_row,
+                    source_table_info,
+                    target_table_info,
+                )
             }
             Expression::BinaryOp(left, op, right) if op.to_uppercase() == "OR" => {
-                self.eval_merge_condition(left, source_row, target_row, table_info)
-                    || self.eval_merge_condition(right, source_row, target_row, table_info)
+                self.eval_merge_condition(
+                    left,
+                    source_row,
+                    target_row,
+                    source_table_info,
+                    target_table_info,
+                ) || self.eval_merge_condition(
+                    right,
+                    source_row,
+                    target_row,
+                    source_table_info,
+                    target_table_info,
+                )
             }
             Expression::BinaryOp(left, op, right) => {
-                let left_val = self.eval_merge_expr(left, source_row, target_row, table_info);
-                let right_val = self.eval_merge_expr(right, source_row, target_row, table_info);
+                let left_val = self.eval_merge_expr(
+                    left,
+                    source_row,
+                    target_row,
+                    source_table_info,
+                    target_table_info,
+                );
+                let right_val = self.eval_merge_expr(
+                    right,
+                    source_row,
+                    target_row,
+                    source_table_info,
+                    target_table_info,
+                );
                 sql_compare(op, &left_val, &right_val)
             }
             _ => false,
@@ -2399,20 +2451,35 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         expr: &Expression,
         source_row: &[Value],
         target_row: &[Value],
-        table_info: &TableInfo,
+        source_table_info: &TableInfo,
+        target_table_info: &TableInfo,
     ) -> Value {
         match expr {
             Expression::Literal(_) => expression_to_value(expr),
             Expression::Identifier(name) => {
-                if let Some(idx) = find_column_index(name, table_info) {
+                if let Some(idx) = find_column_index(name, target_table_info) {
                     target_row.get(idx).cloned().unwrap_or(Value::Null)
+                } else if let Some(idx) = find_column_index(name, source_table_info) {
+                    source_row.get(idx).cloned().unwrap_or(Value::Null)
                 } else {
                     Value::Null
                 }
             }
             Expression::BinaryOp(left, op, right) => {
-                let l = self.eval_merge_expr(left, source_row, target_row, table_info);
-                let r = self.eval_merge_expr(right, source_row, target_row, table_info);
+                let l = self.eval_merge_expr(
+                    left,
+                    source_row,
+                    target_row,
+                    source_table_info,
+                    target_table_info,
+                );
+                let r = self.eval_merge_expr(
+                    right,
+                    source_row,
+                    target_row,
+                    source_table_info,
+                    target_table_info,
+                );
                 evaluate_binary_op(&l, &r, op)
             }
             _ => Value::Null,
@@ -2425,9 +2492,16 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         expr: &Expression,
         source_row: &[Value],
         target_row: &[Value],
-        table_info: &TableInfo,
+        source_table_info: &TableInfo,
+        target_table_info: &TableInfo,
     ) -> Value {
-        self.eval_merge_expr(expr, source_row, target_row, table_info)
+        self.eval_merge_expr(
+            expr,
+            source_row,
+            target_row,
+            source_table_info,
+            target_table_info,
+        )
     }
 
     fn execute_alter_table(&self, alter: &AlterTableStatement) -> SqlResult<ExecutorResult> {
