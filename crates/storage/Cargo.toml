@@ -27,3 +27,7 @@ criterion = "0.8"
 [[bench]]
 name = "storage_benchmark"
 harness = false
+
+[[bench]]
+name = "clustered_index_benchmark"
+harness = false

@@ -34,9 +34,9 @@ pub struct ClusteredLeafPage {
     /// Number of slots in directory
     slot_count: u16,
     /// Offset to free space start
-    free_space_start: u16,
+    pub(crate) free_space_start: u16,
     /// Offset to committed data end
-    data_end: u16,
+    pub(crate) data_end: u16,
 }
 
 impl ClusteredLeafPage {
@@ -113,7 +113,7 @@ impl ClusteredLeafPage {
     }
 
     /// Get the data offset for a slot.
-    fn get_slot_data_offset(&self, slot_idx: u16) -> Option<usize> {
+    pub(crate) fn get_slot_data_offset(&self, slot_idx: u16) -> Option<usize> {
         let offset = self.get_slot_offset(slot_idx)?;
         let off = u16::from_le_bytes([self.data[offset], self.data[offset + 1]]);
         Some(off as usize)

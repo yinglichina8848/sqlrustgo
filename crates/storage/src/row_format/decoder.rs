@@ -41,11 +41,18 @@ pub fn decode_row(
     }
 
     // 4. Null bitmap
-let total_columns = fixed_column_count + varlen_column_count;
+    let total_columns = fixed_column_count + varlen_column_count;
     let null_bitmap_size = total_columns.div_ceil(8);
     let null_bitmap_bytes = read_bytes(buf, offset, null_bitmap_size)?;
     offset += null_bitmap_size;
     let nulls = decode_null_bitmap(null_bitmap_bytes, total_columns);
+
+    // Apply null bitmap to fixed columns - override values marked as NULL
+    for i in 0..fixed_column_count {
+        if nulls.get(i).copied().unwrap_or(false) {
+            fixed_values[i] = Value::Null;
+        }
+    }
 
     // 5. VarLen slots
     let mut varlen_columns = Vec::with_capacity(varlen_column_count);
