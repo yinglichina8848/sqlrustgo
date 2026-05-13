@@ -42,22 +42,18 @@ SHOW CREATE TABLE users;
 
 -- === CASE: Information Schema Tables ===
 -- EXPECT: rows > 0
--- === SKIP ===
 SELECT * FROM information_schema.tables WHERE table_name = 'users';
 
 -- === CASE: Information Schema Columns ===
 -- EXPECT: 3 rows
--- === SKIP ===
 SELECT * FROM information_schema.columns WHERE table_name = 'users';
 
 -- === CASE: Information Schema Indexes ===
 -- EXPECT: 1 row
--- === SKIP ===
 SELECT * FROM information_schema.indexes WHERE table_name = 'users';
 
 -- === CASE: Information Schema Statistics ===
 -- EXPECT: rows > 0
--- === SKIP ===
 SELECT * FROM information_schema.statistics WHERE table_name = 'users';
 
 -- === CASE: Explain Join Query ===
