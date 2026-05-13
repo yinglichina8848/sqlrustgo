@@ -941,4 +941,147 @@ mod tests {
         let logs = get_all_audit_logs(&storage).unwrap();
         assert_eq!(logs.len(), 1);
     }
+
+    #[test]
+    fn test_audit_log_entry_from_row_invalid_type() {
+        // Test from_row returns None for wrong type in first field
+        let row = vec![
+            Value::Text("not an integer".to_string()), // id should be Integer
+            Value::Integer(1),
+            Value::Integer(1),
+            Value::Text("user".to_string()),
+            Value::Null,
+            Value::Text("INSERT".to_string()),
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            Value::Text("abc123".to_string()),
+        ];
+        assert!(AuditLogEntry::from_row(&row).is_none());
+
+        // Test from_row returns None for wrong type in timestamp
+        let row2 = vec![
+            Value::Integer(1),
+            Value::Text("not an integer".to_string()), // timestamp should be Integer
+            Value::Integer(1),
+            Value::Text("user".to_string()),
+            Value::Null,
+            Value::Text("INSERT".to_string()),
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            Value::Text("abc123".to_string()),
+        ];
+        assert!(AuditLogEntry::from_row(&row2).is_none());
+    }
+
+    #[test]
+    fn test_audit_log_entry_to_row() {
+        let entry = AuditLogEntry {
+            id: 1,
+            timestamp: 1000,
+            tx_id: 1,
+            user: "test_user".to_string(),
+            client_ip: Some("127.0.0.1".to_string()),
+            operation: "INSERT".to_string(),
+            table_name: Some("test_table".to_string()),
+            row_id: Some("row1".to_string()),
+            old_value: None,
+            new_value: Some("{}".to_string()),
+            sql_text: Some("INSERT INTO...".to_string()),
+            session_id: Some(123),
+            checksum: "abc123".to_string(),
+        };
+
+        let row = entry.to_row();
+        assert_eq!(row.len(), 13);
+        assert_eq!(row[0], Value::Integer(1));
+        assert_eq!(row[4], Value::Text("127.0.0.1".to_string()));
+        assert_eq!(row[11], Value::Integer(123));
+    }
+
+    #[test]
+    fn test_get_audit_log_by_id_not_found() {
+        let mut storage = MemoryStorage::new();
+        create_system_audit_log_table(&mut storage).unwrap();
+
+        // Query non-existent ID
+        let result = get_audit_log_by_id(&storage, 9999).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_audit_context_builder() {
+        let logger = AuditLogger::new("test_user".to_string());
+
+        // Test with_client_ip
+        let logger = logger.with_client_ip("192.168.1.1".to_string());
+
+        // Test with_session_id
+        let logger = logger.with_session_id(42);
+
+        // Logger should be enabled by default (tested through behavior)
+        let mut storage = MemoryStorage::new();
+        create_system_audit_log_table(&mut storage).unwrap();
+        let result = logger.log_insert(&mut storage, 1, "t1", "r1", "{}", None).unwrap();
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_audit_context_disable_enable() {
+        let mut logger = AuditLogger::new("test_user".to_string());
+        let mut storage = MemoryStorage::new();
+        create_system_audit_log_table(&mut storage).unwrap();
+
+        // Initially enabled - should log
+        let result = logger.log_insert(&mut storage, 1, "t1", "r1", "{}", None).unwrap();
+        assert!(result.is_some());
+
+        // Disable - should not log
+        logger.disable();
+        let result = logger.log_insert(&mut storage, 1, "t1", "r1", "{}", None).unwrap();
+        assert!(result.is_none());
+
+        // Re-enable - should log again
+        logger.enable();
+        let result = logger.log_insert(&mut storage, 1, "t1", "r1", "{}", None).unwrap();
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_audit_log_entry_verify_checksum_invalid() {
+        let entry = AuditLogEntry {
+            id: 1,
+            timestamp: 1000,
+            tx_id: 1,
+            user: "test_user".to_string(),
+            client_ip: None,
+            operation: "INSERT".to_string(),
+            table_name: None,
+            row_id: None,
+            old_value: None,
+            new_value: None,
+            sql_text: None,
+            session_id: None,
+            checksum: "invalid_checksum".to_string(),
+        };
+
+        // Checksum should not verify with invalid checksum
+        assert!(!entry.verify_checksum());
+    }
+
+    #[test]
+    fn test_query_audit_logs_empty() {
+        let storage = MemoryStorage::new();
+
+        // Query on empty storage should return empty
+        let logs = query_audit_logs(&storage, None, None, None, None, None).unwrap();
+        assert!(logs.is_empty());
+    }
 }
