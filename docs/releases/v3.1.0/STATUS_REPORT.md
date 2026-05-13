@@ -1,10 +1,10 @@
 # v3.1.0 版本状态报告
 
 > **版本**: v3.1.0  
-> **日期**: 2026-05-12  
+> **日期**: 2026-05-14  
 > **分支**: develop/v3.1.0  
-> **状态**: 🟡 Alpha 阶段 → Beta 阶段准备中  
-> **完成度**: 72% (36/50 Issues closed)
+> **状态**: 🟡 Beta 阶段  
+> **完成度**: 78% (39/50 Issues closed)
 
 ---
 
@@ -15,16 +15,16 @@
 | 指标 | 数值 |
 |------|------|
 | **总 Issue** | 50 |
-| **已完成** | 36 (72%) |
-| **开放中** | 14 |
+| **已完成** | 39 (78%) |
+| **开放中** | 11 |
 | **Open PR** | 0 |
 
 ### 1.2 发布阶段目标
 
 | 阶段 | 目标日期 | 状态 |
 |------|---------|------|
-| **Alpha** | 2026-06-01 | 🟡 进行中 (20天) |
-| **Beta** | 2026-07-01 | 🔴 准备中 |
+| **Alpha** | 2026-06-01 | ✅ 已完成 |
+| **Beta** | 2026-07-01 | 🟡 进行中 |
 | **RC** | 2026-08-01 | ⚪ 未开始 |
 | **GA** | 2026-09-01 | ⚪ 未开始 |
 
@@ -138,19 +138,28 @@
 | A7 | TPC-H SF=1 (22/22 PASS, 4.2s) | ✅ |
 | A12 | cargo audit | ✅ |
 
-### 5.2 Beta 门禁 🔴 待验证
+### 5.2 Beta 门禁 🟡 进行中 (13/18 通过)
 
-| # | 检查项 | 状态 |
-|---|--------|------|
-| B1 | Release Build | ⚠️ 待验证 |
-| B2 | L1 测试 ≥90% | ⚠️ 需运行 |
-| B3 | Clippy 零警告 | ⚠️ 待验证 |
-| B4 | Format 通过 | ⚠️ 待验证 |
-| B5 | 覆盖率 ≥75% | ⚠️ 需测量 |
-| B6 | Security Audit | ⚠️ 待验证 |
-| B7 | SQL Operations ≥80% | ✅ 98.5% |
-| B8 | TPC-H SF=1 | ✅ 22/22 |
-| B-S1~S9 | 稳定性测试 | ⚠️ 待运行 |
+| # | 检查项 | 状态 | 说明 |
+|---|--------|------|------|
+| B1 | Release Build | ✅ | cargo build --all-features |
+| B2 | L1 测试 ≥90% | ❌ | 83% < 90% |
+| B3 | Clippy 零警告 | ❌ | 有警告需修复 |
+| B4 | Format 通过 | ❌ | 需运行 cargo fmt |
+| B5 | 覆盖率 ≥75% | ❌ | ~22% (需专项提升) |
+| B6 | Security Audit | ⚠️ | 待验证 |
+| B7 | SQL Operations ≥80% | ✅ | 80%+ |
+| B8 | TPC-H SF=1 | ⚠️ | 本地需数据文件 |
+| B9 | Proof Registry ≥30 | ✅ | 30+ proofs |
+| B-S1 | concurrency_stress | ✅ | 9/9 PASS |
+| B-S2 | crash_recovery | ✅ | 9/9 PASS |
+| B-S3 | long_run_stability | ✅ | 10/10 PASS |
+| B-S4 | wal_integration | ✅ | 16/16 PASS |
+| B-S5 | network_tcp | ✅ | PASS |
+| B-S6 | ssi_stress | ✅ | PASS |
+| B-S7 | audit_trail | ✅ | PASS |
+| B-S8 | explain_analyze | ✅ | PASS |
+| B-S9 | window_functions | ✅ | PASS |
 
 ---
 
