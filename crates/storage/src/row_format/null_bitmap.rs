@@ -32,12 +32,17 @@ pub fn is_null(bitmap: &[u8], column_index: usize) -> bool {
 
 /// Decode a null bitmap to a vector of booleans.
 /// Each true value means NULL, false means NOT NULL.
-pub fn decode_null_bitmap(bitmap: Vec<u8>) -> Vec<bool> {
-    let mut nulls = Vec::new();
-    for byte in bitmap {
+/// Returns exactly `expected_columns` elements.
+pub fn decode_null_bitmap(bitmap: Vec<u8>, expected_columns: usize) -> Vec<bool> {
+    let mut nulls = Vec::with_capacity(expected_columns);
+    for (i, &byte) in bitmap.iter().enumerate() {
         for bit in 0..8 {
+            if nulls.len() >= expected_columns {
+                break;
+            }
             nulls.push((byte & (1 << bit)) != 0);
         }
     }
+    nulls.truncate(expected_columns);
     nulls
 }

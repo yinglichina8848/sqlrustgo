@@ -40,10 +40,11 @@ pub fn decode_row(
     }
 
     // 4. Null bitmap
-    let null_bitmap_size = (fixed_column_count + varlen_column_count + 7) / 8;
+    let total_columns = fixed_column_count + varlen_column_count;
+    let null_bitmap_size = (total_columns + 7) / 8;
     let null_bitmap_bytes = read_bytes(buf, offset, null_bitmap_size)?;
     offset += null_bitmap_size;
-    let nulls = decode_null_bitmap(null_bitmap_bytes);
+    let nulls = decode_null_bitmap(null_bitmap_bytes, total_columns);
 
     // 5. VarLen slots
     let mut varlen_columns = Vec::with_capacity(varlen_column_count);
@@ -163,7 +164,9 @@ fn read_u16(buf: &[u8], offset: usize) -> std::io::Result<u16> {
     if offset + 2 > buf.len() {
         return Err(Error::new(ErrorKind::UnexpectedEof, "unexpected end of data"));
     }
-    Ok(u16::from_le_bytes([buf[offset], buf[offset + 1]))
+    let b0 = buf[offset];
+    let b1 = buf[offset + 1];
+    Ok(u16::from_le_bytes([b0, b1]))
 }
 
 fn read_u32(buf: &[u8], offset: usize) -> std::io::Result<u32> {
