@@ -307,6 +307,21 @@ impl SimpleExecutor {
     fn execute_select(&self, select: &SelectStatement) -> Result<Vec<Vec<Value>>, String> {
         // Use first_table() for backward compat: from.tables[0] or select.table
         let table_name = select.first_table();
+
+        // Handle INFORMATION_SCHEMA queries
+        if table_name.eq_ignore_ascii_case("information_schema.tables") {
+            return self.execute_information_schema_tables(select);
+        }
+        if table_name.eq_ignore_ascii_case("information_schema.columns") {
+            return self.execute_information_schema_columns(select);
+        }
+        if table_name.eq_ignore_ascii_case("information_schema.indexes") {
+            return self.execute_information_schema_indexes(select);
+        }
+        if table_name.eq_ignore_ascii_case("information_schema.statistics") {
+            return self.execute_information_schema_statistics(select);
+        }
+
         let mut rows = self
             .storage
             .scan(&table_name)
@@ -321,6 +336,300 @@ impl SimpleExecutor {
         }
 
         Ok(rows)
+    }
+
+    fn execute_information_schema_tables(
+        &self,
+        select: &SelectStatement,
+    ) -> Result<Vec<Vec<Value>>, String> {
+        let mut rows = Vec::new();
+        let table_names = self.storage.list_tables();
+        for name in table_names {
+            rows.push(vec![
+                Value::Text("default".to_string()),
+                Value::Text(name.clone()),
+                Value::Text("BASE TABLE".to_string()),
+                Value::Text("YES".to_string()),
+            ]);
+        }
+
+        if let Some(ref where_clause) = select.where_clause {
+            let fake_info = self.create_fake_table_info_for_tables();
+            rows.retain(|row| self.evaluate_where(where_clause, row, &fake_info));
+        }
+
+        Ok(rows)
+    }
+
+    fn execute_information_schema_columns(
+        &self,
+        select: &SelectStatement,
+    ) -> Result<Vec<Vec<Value>>, String> {
+        let mut rows = Vec::new();
+        let table_names = self.storage.list_tables();
+        for name in table_names {
+            if let Ok(info) = self.storage.get_table_info(&name) {
+                for (i, col) in info.columns.iter().enumerate() {
+                    let (char_max, num_prec, num_scale) = self.get_type_attributes(&col.data_type);
+                    rows.push(vec![
+                        Value::Text("default".to_string()),
+                        Value::Text(name.clone()),
+                        Value::Text(col.name.clone()),
+                        Value::Integer((i + 1) as i64),
+                        Value::Null,
+                        Value::Text(if col.nullable { "YES".to_string() } else { "NO".to_string() }),
+                        Value::Text(col.data_type.clone()),
+                        char_max,
+                        num_prec,
+                        num_scale,
+                    ]);
+                }
+            }
+        }
+
+        if let Some(ref where_clause) = select.where_clause {
+            let fake_info = self.create_fake_table_info_for_columns();
+            rows.retain(|row| self.evaluate_where(where_clause, row, &fake_info));
+        }
+
+        Ok(rows)
+    }
+
+    fn execute_information_schema_indexes(
+        &self,
+        select: &SelectStatement,
+    ) -> Result<Vec<Vec<Value>>, String> {
+        let mut rows = Vec::new();
+        let table_names = self.storage.list_tables();
+        for name in table_names {
+            if let Ok(info) = self.storage.get_table_info(&name) {
+                for col in &info.columns {
+                    if col.primary_key {
+                        rows.push(vec![
+                            Value::Text("default".to_string()),
+                            Value::Text(name.clone()),
+                            Value::Text(format!("idx_{}_pk", name)),
+                            Value::Text(col.name.clone()),
+                            Value::Integer(1),
+                            Value::Boolean(true),
+                            Value::Boolean(true),
+                        ]);
+                    }
+                }
+            }
+        }
+
+        if let Some(ref where_clause) = select.where_clause {
+            let fake_info = self.create_fake_table_info_for_indexes();
+            rows.retain(|row| self.evaluate_where(where_clause, row, &fake_info));
+        }
+
+        Ok(rows)
+    }
+
+    fn execute_information_schema_statistics(
+        &self,
+        select: &SelectStatement,
+    ) -> Result<Vec<Vec<Value>>, String> {
+        self.execute_information_schema_indexes(select)
+    }
+
+    fn create_fake_table_info_for_tables(&self) -> TableInfo {
+        TableInfo {
+            name: "information_schema.tables".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "table_schema".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "table_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "table_type".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "is_insertable_into".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+            ],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 0,
+        }
+    }
+
+    fn create_fake_table_info_for_columns(&self) -> TableInfo {
+        TableInfo {
+            name: "information_schema.columns".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "table_schema".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "table_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "column_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "ordinal_position".to_string(),
+                    data_type: "integer".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "column_default".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: true,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "is_nullable".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "data_type".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "character_maximum_length".to_string(),
+                    data_type: "integer".to_string(),
+                    nullable: true,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "numeric_precision".to_string(),
+                    data_type: "integer".to_string(),
+                    nullable: true,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "numeric_scale".to_string(),
+                    data_type: "integer".to_string(),
+                    nullable: true,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+            ],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 0,
+        }
+    }
+
+    fn create_fake_table_info_for_indexes(&self) -> TableInfo {
+        TableInfo {
+            name: "information_schema.indexes".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "table_schema".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "table_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "index_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "column_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "ordinal_position".to_string(),
+                    data_type: "integer".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "is_unique".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "is_primary".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+            ],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 0,
+        }
+    }
+
+    fn get_type_attributes(&self, data_type: &str) -> (Value, Value, Value) {
+        match data_type.to_uppercase().as_str() {
+            "TEXT" | "VARCHAR" | "CHAR" => (Value::Integer(65535), Value::Null, Value::Null),
+            "INTEGER" | "INT" => (Value::Null, Value::Integer(64), Value::Integer(0)),
+            "REAL" | "FLOAT" | "DOUBLE" => (Value::Null, Value::Integer(53), Value::Null),
+            _ => (Value::Null, Value::Null, Value::Null),
+        }
     }
 
     fn execute_statement(&self, stmt: &Statement) -> Result<Vec<Vec<Value>>, String> {
