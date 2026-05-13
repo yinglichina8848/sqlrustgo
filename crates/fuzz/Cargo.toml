@@ -4,3 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+sqlrustgo-storage = { path = "../storage" }
+sqlrustgo-types = { path = "../types" }
+
+[[bin]]
+name = "row_format_fuzz"
+path = "src/bin/row_format_fuzz.rs"

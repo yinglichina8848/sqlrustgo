@@ -38,9 +38,14 @@ fn setup_test_storage(
             data_type: "INTEGER".to_string(),
             nullable: false,
             primary_key: true,
+            auto_increment: false,
         }],
         foreign_keys: vec![],
         unique_constraints: vec![],
+        check_constraints: vec![],
+        partition_info: None,
+        has_hidden_rowid: false,
+        next_rowid: 1,
     };
     storage.create_table(&table_info).unwrap();
 
@@ -279,9 +284,14 @@ fn bench_multi_table_insert(c: &mut Criterion) {
                         data_type: "INTEGER".to_string(),
                         nullable: false,
                         primary_key: true,
+                        auto_increment: false,
                     }],
                     foreign_keys: vec![],
                     unique_constraints: vec![],
+                    check_constraints: vec![],
+                    partition_info: None,
+                    has_hidden_rowid: false,
+                    next_rowid: 1,
                 };
                 let _ = storage.create_table(&table_info);
             }
