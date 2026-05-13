@@ -19,7 +19,8 @@ mod delete_basic_tests {
     fn test_delete_all_rows() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER, name TEXT)").unwrap();
-        e.execute("INSERT INTO t VALUES (1, 'A'), (2, 'B'), (3, 'C')").unwrap();
+        e.execute("INSERT INTO t VALUES (1, 'A'), (2, 'B'), (3, 'C')")
+            .unwrap();
 
         let delete_result = e.execute("DELETE FROM t").unwrap();
         assert_eq!(delete_result.affected_rows, 3);
@@ -32,7 +33,8 @@ mod delete_basic_tests {
     fn test_delete_with_where_eq() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER, name TEXT)").unwrap();
-        e.execute("INSERT INTO t VALUES (1, 'A'), (2, 'B'), (3, 'C')").unwrap();
+        e.execute("INSERT INTO t VALUES (1, 'A'), (2, 'B'), (3, 'C')")
+            .unwrap();
 
         let result = e.execute("DELETE FROM t WHERE id = 2").unwrap();
         assert_eq!(result.affected_rows, 1);
@@ -47,7 +49,8 @@ mod delete_basic_tests {
     fn test_delete_with_where_gt() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER)").unwrap();
-        e.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)").unwrap();
+        e.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)")
+            .unwrap();
 
         let result = e.execute("DELETE FROM t WHERE id > 3").unwrap();
         assert_eq!(result.affected_rows, 2);
@@ -60,7 +63,8 @@ mod delete_basic_tests {
     fn test_delete_with_where_lt() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER)").unwrap();
-        e.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)").unwrap();
+        e.execute("INSERT INTO t VALUES (1), (2), (3), (4), (5)")
+            .unwrap();
 
         let result = e.execute("DELETE FROM t WHERE id < 3").unwrap();
         assert_eq!(result.affected_rows, 2);
@@ -73,7 +77,8 @@ mod delete_basic_tests {
     fn test_delete_with_where_gteq() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER)").unwrap();
-        e.execute("INSERT INTO t VALUES (1), (2), (3), (4)").unwrap();
+        e.execute("INSERT INTO t VALUES (1), (2), (3), (4)")
+            .unwrap();
 
         let result = e.execute("DELETE FROM t WHERE id >= 3").unwrap();
         assert_eq!(result.affected_rows, 2);
@@ -86,7 +91,8 @@ mod delete_basic_tests {
     fn test_delete_with_where_lteq() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER)").unwrap();
-        e.execute("INSERT INTO t VALUES (1), (2), (3), (4)").unwrap();
+        e.execute("INSERT INTO t VALUES (1), (2), (3), (4)")
+            .unwrap();
 
         let result = e.execute("DELETE FROM t WHERE id <= 2").unwrap();
         assert_eq!(result.affected_rows, 2);
@@ -120,11 +126,14 @@ mod delete_basic_tests {
     #[test]
     fn test_delete_with_and_condition() {
         let mut e = engine();
-        e.execute("CREATE TABLE t (id INTEGER, val INTEGER)").unwrap();
+        e.execute("CREATE TABLE t (id INTEGER, val INTEGER)")
+            .unwrap();
         e.execute("INSERT INTO t VALUES (1, 10), (1, 20), (2, 10), (2, 20)")
             .unwrap();
 
-        let result = e.execute("DELETE FROM t WHERE id = 1 AND val = 10").unwrap();
+        let result = e
+            .execute("DELETE FROM t WHERE id = 1 AND val = 10")
+            .unwrap();
         assert_eq!(result.affected_rows, 1);
 
         let select = e.execute("SELECT COUNT(*) FROM t").unwrap();
@@ -135,7 +144,8 @@ mod delete_basic_tests {
     fn test_delete_with_or_condition() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER)").unwrap();
-        e.execute("INSERT INTO t VALUES (1), (2), (3), (4)").unwrap();
+        e.execute("INSERT INTO t VALUES (1), (2), (3), (4)")
+            .unwrap();
 
         let result = e.execute("DELETE FROM t WHERE id = 1 OR id = 3").unwrap();
         assert_eq!(result.affected_rows, 2);
@@ -186,9 +196,12 @@ mod delete_boundary_tests {
     fn test_delete_with_i64_max() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER)").unwrap();
-        e.execute("INSERT INTO t VALUES (1), (9223372036854775807)").unwrap();
+        e.execute("INSERT INTO t VALUES (1), (9223372036854775807)")
+            .unwrap();
 
-        let result = e.execute("DELETE FROM t WHERE id = 9223372036854775807").unwrap();
+        let result = e
+            .execute("DELETE FROM t WHERE id = 9223372036854775807")
+            .unwrap();
         assert_eq!(result.affected_rows, 1);
 
         let select = e.execute("SELECT COUNT(*) FROM t").unwrap();
@@ -199,9 +212,12 @@ mod delete_boundary_tests {
     fn test_delete_with_i64_min() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER)").unwrap();
-        e.execute("INSERT INTO t VALUES (-9223372036854775808), (0), (1)").unwrap();
+        e.execute("INSERT INTO t VALUES (-9223372036854775808), (0), (1)")
+            .unwrap();
 
-        let result = e.execute("DELETE FROM t WHERE id = -9223372036854775808").unwrap();
+        let result = e
+            .execute("DELETE FROM t WHERE id = -9223372036854775808")
+            .unwrap();
         assert_eq!(result.affected_rows, 1);
 
         let select = e.execute("SELECT COUNT(*) FROM t").unwrap();
@@ -212,7 +228,8 @@ mod delete_boundary_tests {
     fn test_delete_multiple_rows() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER)").unwrap();
-        e.execute("INSERT INTO t VALUES (1), (1), (1), (2), (2), (3)").unwrap();
+        e.execute("INSERT INTO t VALUES (1), (1), (1), (2), (2), (3)")
+            .unwrap();
 
         let result = e.execute("DELETE FROM t WHERE id = 1").unwrap();
         assert_eq!(result.affected_rows, 3);
@@ -228,7 +245,8 @@ mod delete_with_index {
     #[test]
     fn test_delete_with_index_scan() {
         let mut e = engine();
-        e.execute("CREATE TABLE t (id INTEGER, val INTEGER)").unwrap();
+        e.execute("CREATE TABLE t (id INTEGER, val INTEGER)")
+            .unwrap();
         e.execute("CREATE INDEX idx_id ON t (id)").unwrap();
         e.execute("INSERT INTO t VALUES (1, 100), (2, 200), (3, 300), (4, 400)")
             .unwrap();
@@ -243,7 +261,8 @@ mod delete_with_index {
     #[test]
     fn test_delete_with_range_using_index() {
         let mut e = engine();
-        e.execute("CREATE TABLE t (id INTEGER, val INTEGER)").unwrap();
+        e.execute("CREATE TABLE t (id INTEGER, val INTEGER)")
+            .unwrap();
         e.execute("CREATE INDEX idx_id ON t (id)").unwrap();
         e.execute("INSERT INTO t VALUES (1, 100), (2, 200), (3, 300), (4, 400), (5, 500)")
             .unwrap();
