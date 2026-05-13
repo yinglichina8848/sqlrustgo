@@ -3,7 +3,9 @@
 //! Provides real-time tamper detection and alerting for audit chains.
 //! Integrates with WAL for recovery when tampering is detected.
 
-use crate::audit_chain::{compute_checksum, AuditChain, AuditChainEntry, AuditChainError, GENESIS_PREV_HASH};
+use crate::audit_chain::{
+    compute_checksum, AuditChain, AuditChainEntry, AuditChainError, GENESIS_PREV_HASH,
+};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -247,10 +249,7 @@ pub fn detect_tamper(chain: &AuditChain) -> Option<TamperAlert> {
     // If genesis is corrupted
     if let Some(first) = chain.get_entry(1) {
         if first.seq != 1 || first.prev_hash != GENESIS_PREV_HASH {
-            return Some(TamperAlert::new(
-                1,
-                TamperViolation::GenesisTampered,
-            ));
+            return Some(TamperAlert::new(1, TamperViolation::GenesisTampered));
         }
     } else if chain.len() > 0 {
         return Some(TamperAlert::new(1, TamperViolation::EntryNotFound(1)));

@@ -72,8 +72,8 @@ pub use audit_chain::{
 };
 
 pub use audit_chain_wal::{
-    AuditChainWalEntry, AuditChainWalEntryType, AuditChainWalManager, AuditChainWalReader,
-    AuditChainWalWriter, compute_entry_checksum,
+    compute_entry_checksum, AuditChainWalEntry, AuditChainWalEntryType, AuditChainWalManager,
+    AuditChainWalReader, AuditChainWalWriter,
 };
 
 pub use audit_chain_tamper::{
