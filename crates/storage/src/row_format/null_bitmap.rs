@@ -5,6 +5,21 @@ pub fn null_bitmap_size(num_columns: usize) -> usize {
     (num_columns + 7) / 8
 }
 
+/// Encode a null bitmap from a vector of booleans.
+/// Each true value means NULL, false means NOT NULL.
+pub fn encode_null_bitmap(nulls: &[bool]) -> Vec<u8> {
+    let size = null_bitmap_size(nulls.len());
+    let mut bitmap = vec![0u8; size];
+    for (i, &is_null) in nulls.iter().enumerate() {
+        if is_null {
+            let byte_index = i / 8;
+            let bit_index = i % 8;
+            bitmap[byte_index] |= 1 << bit_index;
+        }
+    }
+    bitmap
+}
+
 /// Check if a column is null given the null bitmap.
 pub fn is_null(bitmap: &[u8], column_index: usize) -> bool {
     if column_index >= bitmap.len() * 8 {
