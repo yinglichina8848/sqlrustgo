@@ -35,10 +35,14 @@ mod insert_tests {
     #[test]
     fn test_insert_select_basic() {
         let mut e = engine();
-        e.execute("CREATE TABLE source (id INTEGER, val INTEGER)").unwrap();
-        e.execute("CREATE TABLE target (id INTEGER, val INTEGER)").unwrap();
-        e.execute("INSERT INTO source VALUES (1, 10), (2, 20)").unwrap();
-        e.execute("INSERT INTO target SELECT * FROM source").unwrap();
+        e.execute("CREATE TABLE source (id INTEGER, val INTEGER)")
+            .unwrap();
+        e.execute("CREATE TABLE target (id INTEGER, val INTEGER)")
+            .unwrap();
+        e.execute("INSERT INTO source VALUES (1, 10), (2, 20)")
+            .unwrap();
+        e.execute("INSERT INTO target SELECT * FROM source")
+            .unwrap();
         let r = e.execute("SELECT COUNT(*) FROM target").unwrap();
         assert_eq!(r.rows[0][0], Value::Integer(2));
     }
@@ -54,7 +58,6 @@ mod insert_tests {
     }
 }
 
-
 mod update_tests {
     use super::*;
 
@@ -68,7 +71,6 @@ mod update_tests {
         assert_eq!(r.rows[0][0], Value::Text("Bob".to_string()));
     }
 }
-
 
 mod delete_tests {
     use super::*;
@@ -128,7 +130,6 @@ mod delete_tests {
         assert_eq!(r.rows[0][0], Value::Integer(1));
     }
 }
-
 
 mod replace_tests {
     use super::*;
