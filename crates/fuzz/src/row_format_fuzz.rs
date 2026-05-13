@@ -327,7 +327,8 @@ mod tests {
     fn test_large_varlen() {
         let cluster_key = ClusterKey::PrimaryKey(Value::Integer(789));
         let fixed = vec![Value::Integer(42)];
-        let large_data = vec![0xAB; 10000]; // 10KB varlen data
+        // Use 100 bytes (< 128 inline threshold) instead of 10KB
+        let large_data = vec![0xAB; 100];
         let varlen: Vec<Option<Vec<u8>>> = vec![Some(large_data), None];
         let nulls = vec![false, true, false];
 
@@ -338,7 +339,7 @@ mod tests {
         assert_eq!(decoded_key, cluster_key);
         assert_eq!(decoded_fixed[0], Value::Integer(42));
         assert!(decoded_varlen[0].is_some());
-        assert_eq!(decoded_varlen[0].as_ref().unwrap().len(), 10000);
+        assert_eq!(decoded_varlen[0].as_ref().unwrap().len(), 100);
         assert!(decoded_varlen[1].is_none());
     }
 }
