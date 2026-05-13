@@ -241,6 +241,7 @@ impl<'a> Lexer<'a> {
                     "TABLE" => Token::Table,
                     "DROP" => Token::Drop,
                     "DUPLICATE" => Token::Duplicate,
+                    "CONFLICT" => Token::Conflict,
                     "ALTER" => Token::Alter,
                     "INDEX" => Token::Index,
                     "EXPLAIN" => Token::Explain,

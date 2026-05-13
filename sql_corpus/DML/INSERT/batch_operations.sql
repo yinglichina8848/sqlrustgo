@@ -78,7 +78,6 @@ DELETE FROM users WHERE id IN (SELECT id FROM users WHERE id BETWEEN 304 AND 306
 
 -- === CASE: Batch INSERT with ON CONFLICT ===
 -- EXPECT: success
--- === SKIP ===
 INSERT INTO users (id, name, email) VALUES
   (1, 'Conflict1', 'conflict1@example.com'),
   (2, 'Conflict2', 'conflict2@example.com')

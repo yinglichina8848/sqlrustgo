@@ -1891,8 +1891,8 @@ fn test_parse_with_recursive() {
     let sql = "WITH RECURSIVE cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM cte WHERE n < 10) SELECT * FROM cte";
     let result = parse(sql);
     assert!(
-        result.is_err(),
-        "WITH RECURSIVE may not be fully supported: {:?}",
+        result.is_ok(),
+        "WITH RECURSIVE should be supported: {:?}",
         result
     );
 }
@@ -1939,8 +1939,30 @@ fn test_parse_insert_on_duplicate_key_update() {
         "INSERT INTO users (id, name) VALUES (1, 'Alice') ON DUPLICATE KEY UPDATE name = 'Bob'";
     let result = parse(sql);
     assert!(
-        result.is_err(),
-        "INSERT ON DUPLICATE KEY UPDATE not supported: {:?}",
+        result.is_ok(),
+        "INSERT ON DUPLICATE KEY UPDATE should be supported: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_insert_on_conflict() {
+    let sql = "INSERT INTO users (id, name) VALUES (1, 'Alice') ON CONFLICT (id) DO UPDATE SET name = 'Bob'";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "INSERT ON CONFLICT should be supported: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_insert_with_cte() {
+    let sql = "WITH new_users AS (SELECT 1 UNION SELECT 2) INSERT INTO users SELECT * FROM new_users";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "INSERT WITH CTE should be supported: {:?}",
         result
     );
 }
