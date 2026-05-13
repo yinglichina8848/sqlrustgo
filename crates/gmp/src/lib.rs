@@ -47,6 +47,9 @@
 //! - `gmp_audit_log`: Audit trail for all GMP operations
 
 pub mod audit;
+pub mod audit_chain;
+pub mod audit_chain_tamper;
+pub mod audit_chain_wal;
 pub mod compliance;
 pub mod document;
 pub mod embedding;
@@ -62,6 +65,20 @@ pub use audit::{
     create_audit_log_table, get_all_audit_logs, get_audit_log_by_id, get_audit_stats,
     query_audit_logs, record_audit_log, AuditAction, AuditLog, AuditStats, TableCount, UserCount,
     TABLE_AUDIT_LOG,
+};
+
+pub use audit_chain::{
+    AuditChain, AuditChainEntry, AuditChainError, AuditChainState, GENESIS_PREV_HASH,
+};
+
+pub use audit_chain_wal::{
+    AuditChainWalEntry, AuditChainWalEntryType, AuditChainWalManager, AuditChainWalReader,
+    AuditChainWalWriter, compute_entry_checksum,
+};
+
+pub use audit_chain_tamper::{
+    detect_tamper, incremental_verify, quick_verify, verify_entry_checksum, verify_entry_link,
+    RecoveryAction, TamperAlert, TamperViolation, VerificationResult,
 };
 
 pub use compliance::{
