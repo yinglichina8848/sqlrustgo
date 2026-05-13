@@ -558,6 +558,7 @@ impl SimpleExecutor {
             }
             ShowStatement::TableStatus { .. } => vec![],
             ShowStatement::Status { .. } => vec![],
+            ShowStatement::Events => vec![],
             ShowStatement::Processlist => vec![],
             ShowStatement::Events => vec![],
         }
