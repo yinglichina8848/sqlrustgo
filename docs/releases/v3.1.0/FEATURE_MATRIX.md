@@ -72,7 +72,7 @@
 | UNION/UNION ALL | ✅ | ✅ | ✅ | |
 | Subquery | ✅ | ✅ | ✅ | |
 | CTE (WITH) | ✅ | ✅ | ✅ | Non-recursive |
-| Window Functions | ✅ | ✅ | ✅ | 6/6 (all) |
+| Window Functions | ✅ | ✅ | ⚠️ | 3/6 (ROW_NUMBER, RANK, DENSE_RANK) |
 | CASE WHEN | ✅ | ✅ | ✅ | |
 | COALESCE | ✅ | ✅ | ✅ | |
 | CAST | ✅ | ✅ | ✅ | |
