@@ -1,3 +1,11 @@
+# 双测试系统集成
+
+> **相关文档**: [docs/testing/TEST_SYSTEM_ARCHITECTURE.md](../testing/TEST_SYSTEM_ARCHITECTURE.md)
+> **RC 测试计划**: [docs/testing/GATE-RC-TEST-PLAN.md](../testing/GATE-RC-TEST-PLAN.md)
+> **GBrain Pattern**: [P15-rc-ga-test-system](../testing/P15-rc-ga-test-system.md)
+
+---
+
 # Governance Gate CI/CD Automation
 
 > **Version**: 1.1
