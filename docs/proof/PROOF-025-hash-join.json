@@ -1,0 +1,16 @@
+{
+  "proof_id": "PROOF-025",
+  "title": "Hash Join 连接结果正确性证明",
+  "language": "TLA+",
+  "category": "executor",
+  "status": "verified",
+  "target": "Hash join correctness",
+  "description": "证明 Hash Join 正确地连接两表，包括空值处理和重复键处理。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-executor -- hash_join: 31 passed, 0 failed",
+    "verification_method": "Hash Join 语义验证 + 多表连接测试"
+  },
+  "author": "openclaw",
+  "verified_at": "2026-05-13T00:00:00Z",
+  "created_at": "2026-05-13"
+}
