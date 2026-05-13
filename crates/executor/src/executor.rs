@@ -293,10 +293,7 @@ mod tests {
 
     #[test]
     fn test_local_executor_adapter_from_result() {
-        let result = ExecutorResult::new(
-            vec![vec![Value::Integer(42)]],
-            1,
-        );
+        let result = ExecutorResult::new(vec![vec![Value::Integer(42)]], 1);
         let adapter = LocalExecutorAdapter::from_result(result);
         assert_eq!(adapter.rows.len(), 1);
     }

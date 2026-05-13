@@ -1029,7 +1029,9 @@ mod tests {
         // Logger should be enabled by default (tested through behavior)
         let mut storage = MemoryStorage::new();
         create_system_audit_log_table(&mut storage).unwrap();
-        let result = logger.log_insert(&mut storage, 1, "t1", "r1", "{}", None).unwrap();
+        let result = logger
+            .log_insert(&mut storage, 1, "t1", "r1", "{}", None)
+            .unwrap();
         assert!(result.is_some());
     }
 
@@ -1040,17 +1042,23 @@ mod tests {
         create_system_audit_log_table(&mut storage).unwrap();
 
         // Initially enabled - should log
-        let result = logger.log_insert(&mut storage, 1, "t1", "r1", "{}", None).unwrap();
+        let result = logger
+            .log_insert(&mut storage, 1, "t1", "r1", "{}", None)
+            .unwrap();
         assert!(result.is_some());
 
         // Disable - should not log
         logger.disable();
-        let result = logger.log_insert(&mut storage, 1, "t1", "r1", "{}", None).unwrap();
+        let result = logger
+            .log_insert(&mut storage, 1, "t1", "r1", "{}", None)
+            .unwrap();
         assert!(result.is_none());
 
         // Re-enable - should log again
         logger.enable();
-        let result = logger.log_insert(&mut storage, 1, "t1", "r1", "{}", None).unwrap();
+        let result = logger
+            .log_insert(&mut storage, 1, "t1", "r1", "{}", None)
+            .unwrap();
         assert!(result.is_some());
     }
 

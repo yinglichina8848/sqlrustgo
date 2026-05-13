@@ -4934,6 +4934,7 @@ dependencies = [
 name = "sqlrustgo-executor"
 version = "3.0.0"
 dependencies = [
+ "criterion 0.5.1",
  "log",
  "serde",
  "serde_json",

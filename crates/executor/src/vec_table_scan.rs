@@ -1,5 +1,5 @@
 use crate::executor::VolcanoExecutor;
-use crate::vectorization::{DataChunk, ColumnArray};
+use crate::vectorization::{ColumnArray, DataChunk};
 use sqlrustgo_planner::{Expr, Schema};
 use sqlrustgo_types::{SqlResult, Value};
 
@@ -178,12 +178,8 @@ mod tests {
         ]);
 
         let ids: Vec<i64> = (0..num_rows as i64).collect();
-        let names: Vec<String> = (0..num_rows)
-            .map(|i| format!("name_{}", i))
-            .collect();
-        let values: Vec<f64> = (0..num_rows as i64)
-            .map(|i| i as f64 * 1.5)
-            .collect();
+        let names: Vec<String> = (0..num_rows).map(|i| format!("name_{}", i)).collect();
+        let values: Vec<f64> = (0..num_rows as i64).map(|i| i as f64 * 1.5).collect();
 
         chunk.add_column(ColumnArray::Int64(ids));
         chunk.add_column(ColumnArray::Text(names));

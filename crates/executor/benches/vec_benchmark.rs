@@ -1,14 +1,12 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use sqlrustgo_executor::vec_table_scan::VecTableScanExecutor;
+use sqlrustgo_executor::vectorization::{ColumnArray, DataChunk};
 use sqlrustgo_planner::{DataType, Expr, Field, Operator, Schema};
 use sqlrustgo_types::Value;
-use sqlrustgo_executor::vec_table_scan::VecTableScanExecutor;
-use sqlrustgo_executor::vectorization::{DataChunk, ColumnArray};
 
 fn create_test_chunk(num_rows: usize) -> DataChunk {
-    let mut chunk = DataChunk::new(num_rows).with_schema(vec![
-        "id".to_string(),
-        "value".to_string(),
-    ]);
+    let mut chunk =
+        DataChunk::new(num_rows).with_schema(vec!["id".to_string(), "value".to_string()]);
 
     let ids: Vec<i64> = (0..num_rows as i64).collect();
     let values: Vec<i64> = (0..num_rows as i64).map(|i| i * 2).collect();
@@ -61,8 +59,8 @@ fn bench_vec_table_scan_batch_iteration(c: &mut Criterion) {
 }
 
 fn bench_filter_volcano_model(c: &mut Criterion) {
-    use sqlrustgo_executor::filter::FilterVolcanoExecutor;
     use sqlrustgo_executor::executor::VolcanoExecutor;
+    use sqlrustgo_executor::filter::FilterVolcanoExecutor;
 
     let chunk = create_test_chunk(100_000);
     let schema = create_test_schema();
@@ -74,12 +72,8 @@ fn bench_filter_volcano_model(c: &mut Criterion) {
         right: Box::new(Expr::Literal(Value::Integer(100000))),
     };
 
-    let mut filter_executor = FilterVolcanoExecutor::new(
-        Box::new(scan_executor),
-        predicate,
-        schema.clone(),
-        schema,
-    );
+    let mut filter_executor =
+        FilterVolcanoExecutor::new(Box::new(scan_executor), predicate, schema.clone(), schema);
 
     c.bench_function("filter_volcano_100k", |b| {
         b.iter(|| {
@@ -98,7 +92,9 @@ fn bench_data_chunk_filter(c: &mut Criterion) {
 
     let chunk = create_test_chunk(100_000);
     let predicate_array = ColumnArray::Int64(
-        (0..100_000i64).map(|i| if i > 100000 { 1 } else { 0 }).collect()
+        (0..100_000i64)
+            .map(|i| if i > 100000 { 1 } else { 0 })
+            .collect(),
     );
 
     c.bench_function("data_chunk_filter_100k", |b| {
