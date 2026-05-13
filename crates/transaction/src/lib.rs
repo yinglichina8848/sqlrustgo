@@ -23,6 +23,7 @@ pub mod savepoint;
 pub mod ssi;
 pub mod transaction_manager;
 pub mod version_chain;
+pub mod wait_for_graph;
 
 pub use gid::NodeId;
 pub use lock_manager::DistributedLockManager;
