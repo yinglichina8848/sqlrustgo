@@ -10,6 +10,7 @@
 //! - Failover and health checking
 //! - Replica synchronization
 //! - Semi-synchronous replication (AFTER_SYNC/AFTER_COMMIT modes)
+//! - Group Replication with virtual synchronous replication
 
 pub mod consensus;
 pub mod cross_shard_query;
@@ -18,6 +19,8 @@ pub mod error;
 pub mod failover_manager;
 pub mod grpc_client;
 pub mod grpc_server;
+pub mod group_membership;
+pub mod group_replication;
 pub mod partition;
 pub mod proto;
 pub mod raft;
@@ -34,6 +37,13 @@ pub use consensus::{Operation, ShardReplicaManager};
 pub use cross_shard_query::{CrossShardQueryExecutor, QueryRouter};
 pub use distributed_lock::{DistributedLockManager, LockEntry};
 pub use error::DistributedError;
+pub use group_membership::{
+    GroupMembership, MemberInfo, MemberRole, MemberState, View, ViewId, MembershipError,
+};
+pub use group_replication::{
+    CertificationInfo, CertificationResult, GroupReplication, GroupReplicationConfig,
+    TransactionContext, TransactionId,
+};
 pub use failover_manager::{
     ClusterHealth, FailoverConfig, FailoverManager, FailoverNotifier, FailoverTrigger,
     FailureDetector, FailureDetectorConfig, FailureEvent, FailureReason,
