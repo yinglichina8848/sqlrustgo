@@ -14,6 +14,7 @@ pub mod fts;
 pub mod page;
 pub mod predicate;
 pub mod read_write_split;
+pub mod row_format;
 pub mod wal;
 
 pub use binary_format::BinaryFormat;
@@ -30,3 +31,9 @@ pub use fts::{
     ChineseTokenizer, InvertedIndex, MultiLanguageTokenizer, SimpleTokenizer, Tokenizer,
 };
 pub use page::Page;
+
+// Re-export row_format types
+pub use row_format::{
+    ClusteredLeafRecord, ClusterKey, DefaultRowIdGenerator, OverflowPage, RowHeader,
+    RowIdGenerator, VarLenSlot, encode_row, decode_row,
+};
