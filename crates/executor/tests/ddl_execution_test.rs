@@ -19,7 +19,8 @@ mod create_index_tests {
     fn test_create_index_basic() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER, name TEXT)").unwrap();
-        e.execute("INSERT INTO t VALUES (1, 'Alice'), (2, 'Bob')").unwrap();
+        e.execute("INSERT INTO t VALUES (1, 'Alice'), (2, 'Bob')")
+            .unwrap();
 
         let result = e.execute("CREATE INDEX idx_name ON t (name)").unwrap();
         assert_eq!(result.affected_rows >= 0, true);
@@ -32,10 +33,14 @@ mod create_index_tests {
     #[test]
     fn test_create_unique_index() {
         let mut e = engine();
-        e.execute("CREATE TABLE t (id INTEGER, email TEXT)").unwrap();
-        e.execute("INSERT INTO t VALUES (1, 'a@test.com'), (2, 'b@test.com')").unwrap();
+        e.execute("CREATE TABLE t (id INTEGER, email TEXT)")
+            .unwrap();
+        e.execute("INSERT INTO t VALUES (1, 'a@test.com'), (2, 'b@test.com')")
+            .unwrap();
 
-        let result = e.execute("CREATE UNIQUE INDEX idx_email ON t (email)").unwrap();
+        let result = e
+            .execute("CREATE UNIQUE INDEX idx_email ON t (email)")
+            .unwrap();
         assert_eq!(result.affected_rows >= 0, true);
     }
 }
