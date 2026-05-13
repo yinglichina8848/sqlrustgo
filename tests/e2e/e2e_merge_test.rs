@@ -12,9 +12,11 @@ fn test_merge_basic_syntax() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE target (id INTEGER, value TEXT)").unwrap();
     engine.execute("INSERT INTO target VALUES (1, 'original')").unwrap();
+    engine.execute("CREATE TABLE source (id INTEGER, value TEXT)").unwrap();
+    engine.execute("INSERT INTO source VALUES (1, 'updated')").unwrap();
 
     let result = engine.execute(
-        "MERGE INTO target USING (SELECT 1 as id, 'updated' as value) AS source ON target.id = source.id WHEN MATCHED THEN UPDATE SET value = source.value WHEN NOT MATCHED THEN INSERT (id, value) VALUES (source.id, source.value)"
+        "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET target.value = source.value WHEN NOT MATCHED THEN INSERT (id, value) VALUES (source.id, source.value)"
     );
     assert!(result.is_ok(), "MERGE should parse and execute: {:?}", result);
 }
