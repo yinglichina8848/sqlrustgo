@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::lock::{LockGrantMode, LockManager, LockMode, LockTarget};
 use crate::mvcc::{Snapshot, TxId};
 use crate::ssi::{SsiDetectorSync, SsiError};
 
@@ -57,6 +58,7 @@ impl ActiveTransaction {
 /// Transaction manager with SSI (Serializable Snapshot Isolation) support
 pub struct TransactionManager {
     ssi_detector: SsiDetectorSync,
+    lock_manager: LockManager,
     active_transactions: HashMap<TxId, ActiveTransaction>,
     next_tx_id: u64,
     global_timestamp: u64,
@@ -67,6 +69,7 @@ impl TransactionManager {
     pub fn new() -> Self {
         Self {
             ssi_detector: SsiDetectorSync::new(),
+            lock_manager: LockManager::new(),
             active_transactions: HashMap::new(),
             next_tx_id: 1,
             global_timestamp: 1,
@@ -143,6 +146,57 @@ impl TransactionManager {
         Ok(())
     }
 
+    /// Acquire a lock on a key for a transaction
+    ///
+    /// # Arguments
+    /// * `tx_id` - Transaction ID
+    /// * `key` - Key to lock
+    /// * `mode` - Lock mode (Shared or Exclusive)
+    ///
+    /// # Returns
+    /// * `Ok(LockGrantMode)` - Whether lock was granted or waiter
+    /// * `Err(LockError)` - If deadlock detected or other error
+    pub fn acquire_lock(
+        &mut self,
+        tx_id: TxId,
+        key: Vec<u8>,
+        mode: LockMode,
+    ) -> Result<LockGrantMode, crate::lock::LockError> {
+        self.lock_manager.acquire_lock(tx_id, key, mode)
+    }
+
+    /// Acquire a lock with a target (supports Gap and NextKey locks)
+    ///
+    /// # Arguments
+    /// * `tx_id` - Transaction ID
+    /// * `target` - Lock target (Record, Gap, or NextKey)
+    /// * `mode` - Lock mode (Shared or Exclusive)
+    ///
+    /// # Returns
+    /// * `Ok(LockGrantMode)` - Whether lock was granted or waiter
+    /// * `Err(LockError)` - If deadlock detected or other error
+    pub fn acquire_lock_with_target(
+        &mut self,
+        tx_id: TxId,
+        target: LockTarget,
+        mode: LockMode,
+    ) -> Result<LockGrantMode, crate::lock::LockError> {
+        self.lock_manager
+            .acquire_lock_with_target(tx_id, target, mode)
+    }
+
+    /// Release all locks held by a transaction
+    ///
+    /// # Arguments
+    /// * `tx_id` - Transaction ID
+    ///
+    /// # Returns
+    /// * `Ok(())` - If locks released successfully
+    pub fn release_all_locks(&mut self, tx_id: TxId) -> Result<(), crate::lock::LockError> {
+        self.lock_manager.release_all_locks_full(tx_id)?;
+        Ok(())
+    }
+
     /// Commit a transaction
     ///
     /// # Arguments
@@ -159,6 +213,7 @@ impl TransactionManager {
         }
 
         self.ssi_detector.release(tx_id);
+        self.lock_manager.release_all_locks_full(tx_id).ok();
         self.active_transactions.remove(&tx_id);
 
         Ok(())
@@ -170,6 +225,7 @@ impl TransactionManager {
         }
 
         self.ssi_detector.release(tx_id);
+        self.lock_manager.release_all_locks_full(tx_id).ok();
         self.active_transactions.remove(&tx_id);
 
         Ok(())
@@ -185,6 +241,7 @@ impl TransactionManager {
         }
 
         self.ssi_detector.release(tx_id);
+        self.lock_manager.release_all_locks_full(tx_id).ok();
         self.active_transactions.remove(&tx_id);
 
         Ok(())
