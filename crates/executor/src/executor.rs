@@ -248,4 +248,82 @@ mod tests {
         assert!(result.rows.is_empty());
         assert_eq!(result.affected_rows, 0);
     }
+
+    #[test]
+    fn test_local_executor_adapter_basic() {
+        let rows = vec![
+            vec![Value::Integer(1), Value::Text("Alice".to_string())],
+            vec![Value::Integer(2), Value::Text("Bob".to_string())],
+        ];
+        let mut adapter = LocalExecutorAdapter::new(rows);
+
+        // Open should initialize position
+        adapter.open().unwrap();
+        assert_eq!(adapter.position, 0);
+
+        // Next should return first row
+        let row1 = adapter.next().unwrap();
+        assert!(row1.is_some());
+        assert_eq!(row1.unwrap()[0], Value::Integer(1));
+
+        // Next should return second row
+        let row2 = adapter.next().unwrap();
+        assert!(row2.is_some());
+        assert_eq!(row2.unwrap()[0], Value::Integer(2));
+
+        // Next should return None when exhausted
+        let row3 = adapter.next().unwrap();
+        assert!(row3.is_none());
+
+        // Close should reset state
+        adapter.close().unwrap();
+    }
+
+    #[test]
+    fn test_local_executor_adapter_next_without_open() {
+        let rows = vec![vec![Value::Integer(1)]];
+        let mut adapter = LocalExecutorAdapter::new(rows);
+
+        // Calling next without open should return error
+        let result = adapter.next();
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("executor not opened"));
+    }
+
+    #[test]
+    fn test_local_executor_adapter_from_result() {
+        let result = ExecutorResult::new(
+            vec![vec![Value::Integer(42)]],
+            1,
+        );
+        let adapter = LocalExecutorAdapter::from_result(result);
+        assert_eq!(adapter.rows.len(), 1);
+    }
+
+    #[test]
+    fn test_local_executor_adapter_close_resets_position() {
+        let rows = vec![vec![Value::Integer(1)]];
+        let mut adapter = LocalExecutorAdapter::new(rows);
+
+        adapter.open().unwrap();
+        adapter.next().unwrap();
+        adapter.close().unwrap();
+
+        // After close, position should be reset
+        adapter.open().unwrap();
+        let row = adapter.next().unwrap();
+        assert!(row.is_some());
+        assert_eq!(row.unwrap()[0], Value::Integer(1));
+    }
+
+    #[test]
+    fn test_local_executor_adapter_empty_rows() {
+        let rows: Vec<Vec<Value>> = vec![];
+        let mut adapter = LocalExecutorAdapter::new(rows);
+
+        adapter.open().unwrap();
+        let row = adapter.next().unwrap();
+        assert!(row.is_none());
+    }
 }
