@@ -738,13 +738,14 @@ Run: `grep -n "Box::new.*Executor\|impl.*PhysicalPlan" crates/executor/src/execu
 在物理计划执行分支中添加 WindowExec 处理 (约在 1720 行附近):
 
 ```rust
-PhysicalPlan::WindowExec { input, window_exprs, schema, input_schema } => {
+PhysicalPlan::WindowExec { input, window_exprs, schema: _, input_schema } => {
     let mut child_executor = create_physical_executor(input.as_ref())?;
     Box::new(WindowVolcanoExecutor::new(
         child_executor,
         window_exprs.clone(),
-        schema.clone(),
         input_schema.clone(),
+        vec![],  // partition_by
+        vec![],  // order_by
     ))
 }
 ```

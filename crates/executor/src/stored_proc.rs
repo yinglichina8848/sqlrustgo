@@ -54,10 +54,6 @@ pub struct ProcedureContext {
     cursors: HashMap<String, Cursor>,
     /// CTE (Common Table Expression) results: CTE name -> rows
     cte_tables: HashMap<String, Vec<Vec<Value>>>,
-    /// Current row being evaluated (for FTS and other row-level expressions)
-    current_row: Option<Vec<Value>>,
-    /// Column names for the current row (for FTS lookups)
-    current_row_columns: Option<Vec<String>>,
 }
 
 /// Exception handler registered by DECLARE HANDLER
@@ -95,8 +91,6 @@ impl ProcedureContext {
             current_exception: None,
             cursors: HashMap::new(),
             cte_tables: HashMap::new(),
-            current_row: None,
-            current_row_columns: None,
         }
     }
 
@@ -391,27 +385,6 @@ impl ProcedureContext {
     /// Get current label
     pub fn get_label(&self) -> Option<&String> {
         self.current_label.as_ref()
-    }
-
-    /// Set current row (for FTS evaluation during filtering)
-    pub fn set_current_row(&mut self, row: Option<Vec<Value>>, columns: Option<Vec<String>>) {
-        self.current_row = row;
-        self.current_row_columns = columns;
-    }
-
-    /// Get current row
-    pub fn get_current_row(&self) -> Option<&Vec<Value>> {
-        self.current_row.as_ref()
-    }
-
-    /// Get column value by name from current row
-    pub fn get_column_value(&self, col_name: &str) -> Option<Value> {
-        if let (Some(row), Some(cols)) = (&self.current_row, &self.current_row_columns) {
-            if let Some(idx) = cols.iter().position(|c| c == col_name) {
-                return row.get(idx).cloned();
-            }
-        }
-        None
     }
 }
 
@@ -912,31 +885,18 @@ impl StoredProcExecutor {
                         .map_err(|e| format!("Failed to scan table: {}", e))?
                 };
 
-                // Get actual table column names for row context
-                let column_names: Vec<String> = {
-                    let storage = self.storage.read().unwrap();
-                    storage
-                        .get_table_info(table_name)
-                        .map(|info| info.columns.iter().map(|c| c.name.clone()).collect())
-                        .unwrap_or_default()
-                };
-
                 let filtered: Vec<Vec<Value>> = if let Some(ref where_expr) = select.where_clause {
-                    let mut result = Vec::new();
-                    for row in records {
-                        // Set current row context for expression evaluation (FTS needs this)
-                        ctx.set_current_row(Some(row.clone()), Some(column_names.clone()));
-                        let where_val = self.expression_to_value(where_expr, ctx);
-                        let keep = if let Value::Boolean(b) = where_val {
-                            b
-                        } else {
-                            where_val != Value::Null
-                        };
-                        if keep {
-                            result.push(row);
-                        }
-                    }
-                    result
+                    records
+                        .into_iter()
+                        .filter(|_row| {
+                            let where_val = self.expression_to_value(where_expr, ctx);
+                            if let Value::Boolean(b) = where_val {
+                                b
+                            } else {
+                                where_val != Value::Null
+                            }
+                        })
+                        .collect()
                 } else {
                     records
                 };
@@ -963,33 +923,18 @@ impl StoredProcExecutor {
                         .map_err(|e| format!("Failed to scan table: {}", e))?
                 };
 
-                // Get actual table column names for row context
-                let column_names: Vec<String> = if table_name.is_empty() {
-                    vec![]
-                } else {
-                    let storage = self.storage.read().unwrap();
-                    storage
-                        .get_table_info(table_name)
-                        .map(|info| info.columns.iter().map(|c| c.name.clone()).collect())
-                        .unwrap_or_default()
-                };
-
                 let filtered: Vec<Vec<Value>> = if let Some(ref where_expr) = select.where_clause {
-                    let mut result = Vec::new();
-                    for row in records {
-                        // Set current row context for expression evaluation (FTS needs this)
-                        ctx.set_current_row(Some(row.clone()), Some(column_names.clone()));
-                        let where_val = self.expression_to_value(where_expr, ctx);
-                        let keep = if let Value::Boolean(b) = where_val {
-                            b
-                        } else {
-                            where_val != Value::Null
-                        };
-                        if keep {
-                            result.push(row);
-                        }
-                    }
-                    result
+                    records
+                        .into_iter()
+                        .filter(|_row| {
+                            let where_val = self.expression_to_value(where_expr, ctx);
+                            if let Value::Boolean(b) = where_val {
+                                b
+                            } else {
+                                where_val != Value::Null
+                            }
+                        })
+                        .collect()
                 } else {
                     records
                 };
@@ -1277,9 +1222,7 @@ impl StoredProcExecutor {
                 if let Some(stripped) = name.strip_prefix('@') {
                     ctx.get_var(stripped).cloned().unwrap_or(Value::Null)
                 } else {
-                    // Try to get column value from current row (for FTS and other row-level expressions)
-                    ctx.get_column_value(name)
-                        .unwrap_or(Value::Text(name.to_string()))
+                    Value::Text(name.to_string())
                 }
             }
             sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
@@ -1489,38 +1432,9 @@ impl StoredProcExecutor {
                     _ => Value::Null,
                 }
             }
-            sqlrustgo_parser::Expression::MatchAgainst(columns, search_expr, _mode) => {
-                // Evaluate the search expression first
-                let search_term = self.expression_to_value(search_expr, ctx);
-                let search_text = match &search_term {
-                    Value::Text(s) => s.to_lowercase(),
-                    Value::Integer(n) => n.to_string(),
-                    Value::Float(f) => f.to_string(),
-                    _ => return Value::Boolean(false),
-                };
-
-                if search_text.is_empty() {
-                    return Value::Boolean(false);
-                }
-
-                // Check if any of the specified columns contain the search term
-                let mut found = false;
-                for col_name in columns {
-                    if let Some(value) = ctx.get_column_value(col_name) {
-                        let col_text = match &value {
-                            Value::Text(s) => s.to_lowercase(),
-                            Value::Integer(n) => n.to_string(),
-                            Value::Float(f) => f.to_string(),
-                            Value::Null => continue,
-                            _ => continue,
-                        };
-                        if col_text.contains(&search_text) {
-                            found = true;
-                            break;
-                        }
-                    }
-                }
-                Value::Boolean(found)
+            sqlrustgo_parser::Expression::MatchAgainst(_, _, _) => {
+                // FTS not supported in stored procedures - return NULL
+                Value::Null
             }
         }
     }
