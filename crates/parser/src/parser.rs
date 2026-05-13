@@ -459,7 +459,7 @@ pub struct InsertStatement {
     pub table: String,
     pub columns: Vec<String>,
     pub values: Vec<Vec<Expression>>,         // For INSERT VALUES
-    pub select: Option<Box<SelectStatement>>, // For INSERT SELECT
+    pub select: Option<Box<Statement>>,      // For INSERT SELECT (includes UNION)
     pub is_replace: bool,                     // For REPLACE INTO (MySQL compatibility)
     pub on_duplicate_key_update: Option<Vec<(String, Expression)>>, // For ON DUPLICATE KEY UPDATE
     pub on_conflict: Option<OnConflictClause>, // For ON CONFLICT (PostgreSQL)
@@ -477,7 +477,9 @@ pub struct OnConflictClause {
 #[derive(Debug, Clone, PartialEq)]
 pub struct UpdateStatement {
     pub table: String,
+    pub alias: Option<String>,
     pub set_clauses: Vec<(String, Expression)>,
+    pub from_clause: Option<FromClause>,
     pub where_clause: Option<Expression>,
 }
 
@@ -1977,8 +1979,9 @@ impl Parser {
         let select = if matches!(self.current(), Some(Token::Select)) {
             let select_stmt = self.parse_select()?;
             match select_stmt {
-                Statement::Select(s) => Some(Box::new(s)),
-                _ => return Err("Expected SELECT statement".to_string()),
+                Statement::Select(s) => Some(Box::new(Statement::Select(s))),
+                Statement::Union(u) => Some(Box::new(Statement::Union(u))),
+                _ => return Err("Expected SELECT or UNION statement".to_string()),
             }
         } else {
             None
@@ -3323,8 +3326,9 @@ impl Parser {
         } else if matches!(self.current(), Some(Token::Select)) {
             let select_stmt = self.parse_select()?;
             match select_stmt {
-                Statement::Select(s) => (Vec::new(), Some(Box::new(s))),
-                _ => return Err("Expected SELECT statement".to_string()),
+                Statement::Select(s) => (Vec::new(), Some(Box::new(Statement::Select(s)))),
+                Statement::Union(u) => (Vec::new(), Some(Box::new(Statement::Union(u)))),
+                _ => return Err("Expected SELECT or UNION statement".to_string()),
             }
         } else {
             return Err("Expected VALUES or SELECT".to_string());
@@ -3450,6 +3454,18 @@ impl Parser {
             _ => return Err("Expected table name".to_string()),
         };
 
+        // Parse optional table alias (e.g., UPDATE users u SET ...)
+        let alias = if matches!(self.current(), Some(Token::Identifier(_))) {
+            let alias_name = match self.current() {
+                Some(Token::Identifier(name)) => Some(name.clone()),
+                _ => None,
+            };
+            self.next();
+            alias_name
+        } else {
+            None
+        };
+
         // Expect SET keyword
         if !matches!(self.current(), Some(Token::Set)) {
             return Err("Expected SET".to_string());
@@ -3459,11 +3475,26 @@ impl Parser {
         // Parse SET clause: column = value [, column = value ...]
         let mut set_clauses = Vec::new();
         loop {
+            // Parse column name, potentially qualified (e.g., u.email)
             let column = match self.current() {
-                Some(Token::Identifier(name)) => name.clone(),
+                Some(Token::Identifier(name)) => {
+                    let col_name = name.clone();
+                    self.next();
+                    // Check for qualified name (table.column)
+                    if matches!(self.current(), Some(Token::Dot)) {
+                        self.next(); // consume dot
+                        match self.next() {
+                            Some(Token::Identifier(col)) => {
+                                format!("{}.{}", col_name, col)
+                            }
+                            _ => return Err("Expected column name after DOT".to_string()),
+                        }
+                    } else {
+                        col_name
+                    }
+                }
                 _ => return Err("Expected column name in SET".to_string()),
             };
-            self.next();
 
             // Expect =
             match self.current() {
@@ -3477,15 +3508,63 @@ impl Parser {
 
             set_clauses.push((column, value));
 
-            // Check for more SET clauses or WHERE
+            // Check for more SET clauses or WHERE or FROM
             match self.current() {
                 Some(Token::Comma) => {
                     self.next(); // consume comma, continue to parse next column
                 }
-                Some(Token::Where) | None | Some(Token::Eof) => break,
-                _ => return Err("Expected , or WHERE".to_string()),
+                Some(Token::Where) | Some(Token::From) | None | Some(Token::Eof) => break,
+                _ => return Err("Expected , or WHERE or FROM".to_string()),
             }
         }
+
+        // Parse FROM clause (optional) - for UPDATE with JOIN support
+        let from_clause = if matches!(self.current(), Some(Token::From)) {
+            self.next(); // consume FROM
+            let mut tables = Vec::new();
+            loop {
+                match self.next() {
+                    Some(Token::Identifier(name)) => {
+                        let table_name = name.clone();
+                        let alias = if matches!(self.current(), Some(Token::Identifier(_)))
+                            && !matches!(self.peek(), Some(Token::Dot))
+                        {
+                            let a = match self.current().cloned() {
+                                Some(Token::Identifier(ident)) => Some(ident),
+                                _ => None,
+                            };
+                            self.next();
+                            a
+                        } else {
+                            None
+                        };
+                        tables.push(FromTable {
+                            name: table_name,
+                            alias,
+                        });
+                    }
+                    Some(Token::LParen) => {
+                        // Handle subquery in FROM: FROM (SELECT ...)
+                        let _subquery_stmt = Box::new(self.parse_select()?);
+                        self.expect(Token::RParen)?;
+                        tables.push(FromTable {
+                            name: "__subquery".to_string(),
+                            alias: None,
+                        });
+                    }
+                    Some(Token::Comma) => {
+                        self.next(); // consume comma, continue to next table
+                    }
+                    _ => break,
+                }
+            }
+            Some(FromClause {
+                tables,
+                join_clauses: vec![],
+            })
+        } else {
+            None
+        };
 
         // Parse WHERE clause (optional)
         let where_clause = if matches!(self.current(), Some(Token::Where)) {
@@ -3497,7 +3576,9 @@ impl Parser {
 
         Ok(Statement::Update(UpdateStatement {
             table,
+            alias,
             set_clauses,
+            from_clause,
             where_clause,
         }))
     }
@@ -6199,8 +6280,13 @@ mod tests {
                     "INSERT SELECT should have a select statement"
                 );
                 let select = i.select.as_ref().unwrap();
-                assert_eq!(select.table, "old_users");
-                assert_eq!(select.columns.len(), 1); // * expands to one column
+                match select.as_ref() {
+                    Statement::Select(s) => {
+                        assert_eq!(s.table, "old_users");
+                        assert_eq!(s.columns.len(), 1); // * expands to one column
+                    }
+                    _ => panic!("Expected SELECT statement"),
+                }
             }
             _ => panic!("Expected INSERT statement"),
         }
@@ -6248,8 +6334,13 @@ mod tests {
                     "INSERT SELECT should have a select statement"
                 );
                 let select = i.select.as_ref().unwrap();
-                assert_eq!(select.table, "old_users");
-                assert!(select.where_clause.is_some());
+                match select.as_ref() {
+                    Statement::Select(s) => {
+                        assert_eq!(s.table, "old_users");
+                        assert!(s.where_clause.is_some());
+                    }
+                    _ => panic!("Expected SELECT statement"),
+                }
             }
             _ => panic!("Expected INSERT statement"),
         }

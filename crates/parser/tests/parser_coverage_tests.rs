@@ -1968,6 +1968,28 @@ fn test_parse_insert_with_cte() {
     );
 }
 
+#[test]
+fn test_parse_insert_select_union() {
+    let sql = "INSERT INTO users (id, name, email) SELECT id + 500, name, email FROM users WHERE id < 6 UNION ALL SELECT id + 600, name, email FROM users WHERE id >= 6 AND id < 11";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "INSERT...SELECT...UNION should be supported: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_update_with_from() {
+    let sql = "UPDATE users u SET u.email = 'joined_' || u.email FROM (SELECT id FROM users WHERE id BETWEEN 1 AND 5) AS upd WHERE u.id = upd.id";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "UPDATE with FROM should be supported: {:?}",
+        result
+    );
+}
+
 // ============ String Functions Tests ============
 
 #[test]
