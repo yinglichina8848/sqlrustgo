@@ -48,6 +48,7 @@
 
 pub mod audit;
 pub mod audit_chain;
+pub mod audit_chain_wal;
 pub mod compliance;
 pub mod document;
 pub mod embedding;
@@ -67,6 +68,11 @@ pub use audit::{
 
 pub use audit_chain::{
     AuditChain, AuditChainEntry, AuditChainError, AuditChainState, GENESIS_PREV_HASH,
+};
+
+pub use audit_chain_wal::{
+    AuditChainWalEntry, AuditChainWalEntryType, AuditChainWalManager, AuditChainWalReader,
+    AuditChainWalWriter, compute_entry_checksum,
 };
 
 pub use compliance::{
