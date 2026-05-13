@@ -349,6 +349,8 @@ fn execute_create_table(
         unique_constraints: vec![],
         check_constraints: vec![],
         partition_info: None,
+        has_hidden_rowid: false,
+        next_rowid: 0,
     };
 
     storage

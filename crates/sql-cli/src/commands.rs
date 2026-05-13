@@ -240,6 +240,7 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             }],
             ..Default::default()
         };
@@ -265,12 +266,14 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     primary_key: false,
+                    auto_increment: false,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     primary_key: false,
+                    auto_increment: false,
                 },
             ],
             ..Default::default()
@@ -313,6 +316,7 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             }],
             ..Default::default()
         };
