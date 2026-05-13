@@ -34,6 +34,6 @@ pub use page::Page;
 
 // Re-export row_format types
 pub use row_format::{
-    ClusteredLeafRecord, ClusterKey, DefaultRowIdGenerator, OverflowPage, RowHeader,
-    RowIdGenerator, VarLenSlot, encode_row, decode_row,
+    decode_row, encode_row, ClusterKey, ClusteredLeafRecord, DefaultRowIdGenerator, OverflowPage,
+    RowHeader, RowIdGenerator, VarLenSlot,
 };

@@ -2,8 +2,8 @@
 //!
 //! This module provides the fundamental types used by clustered index row format.
 
-use sqlrustgo_types::Value;
 use serde::{Deserialize, Serialize};
+use sqlrustgo_types::Value;
 
 /// Row header for Compact Row v1 format.
 /// Always 19 bytes - this size is ABI-stable and will never change.

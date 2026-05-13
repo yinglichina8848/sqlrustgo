@@ -2,8 +2,8 @@
 
 //! Event executor tests
 
-use sqlrustgo_executor::event::EventExecutor;
 use sqlrustgo_catalog::{Catalog, Event, EventSchedule};
+use sqlrustgo_executor::event::EventExecutor;
 use sqlrustgo_types::SqlResult;
 use std::sync::{Arc, RwLock};
 
@@ -142,8 +142,12 @@ mod get_due_events_tests {
 
         {
             let mut cat = catalog.write().unwrap();
-            cat.add_event(create_enabled_event("event1", "SELECT 1", EventSchedule::OneTime))
-                .unwrap();
+            cat.add_event(create_enabled_event(
+                "event1",
+                "SELECT 1",
+                EventSchedule::OneTime,
+            ))
+            .unwrap();
             cat.add_event(create_enabled_event(
                 "event2",
                 "SELECT 2",
@@ -166,10 +170,18 @@ mod get_due_events_tests {
 
         {
             let mut cat = catalog.write().unwrap();
-            cat.add_event(create_enabled_event("event1", "SELECT 1", EventSchedule::OneTime))
-                .unwrap();
-            cat.add_event(create_disabled_event("event2", "SELECT 2", EventSchedule::OneTime))
-                .unwrap();
+            cat.add_event(create_enabled_event(
+                "event1",
+                "SELECT 1",
+                EventSchedule::OneTime,
+            ))
+            .unwrap();
+            cat.add_event(create_disabled_event(
+                "event2",
+                "SELECT 2",
+                EventSchedule::OneTime,
+            ))
+            .unwrap();
         }
 
         let executor = EventExecutor::new(catalog);
@@ -188,8 +200,12 @@ mod has_event_tests {
 
         {
             let mut cat = catalog.write().unwrap();
-            cat.add_event(create_enabled_event("myevent", "SELECT 1", EventSchedule::OneTime))
-                .unwrap();
+            cat.add_event(create_enabled_event(
+                "myevent",
+                "SELECT 1",
+                EventSchedule::OneTime,
+            ))
+            .unwrap();
         }
 
         let executor = EventExecutor::new(catalog);
@@ -213,8 +229,12 @@ mod get_event_tests {
 
         {
             let mut cat = catalog.write().unwrap();
-            cat.add_event(create_enabled_event("myevent", "SELECT 1", EventSchedule::OneTime))
-                .unwrap();
+            cat.add_event(create_enabled_event(
+                "myevent",
+                "SELECT 1",
+                EventSchedule::OneTime,
+            ))
+            .unwrap();
         }
 
         let executor = EventExecutor::new(catalog);
@@ -249,8 +269,12 @@ mod run_due_events_tests {
 
         {
             let mut cat = catalog.write().unwrap();
-            cat.add_event(create_enabled_event("event1", "SELECT 1", EventSchedule::OneTime))
-                .unwrap();
+            cat.add_event(create_enabled_event(
+                "event1",
+                "SELECT 1",
+                EventSchedule::OneTime,
+            ))
+            .unwrap();
         }
 
         let executor = EventExecutor::new(catalog);
@@ -265,8 +289,12 @@ mod run_due_events_tests {
 
         {
             let mut cat = catalog.write().unwrap();
-            cat.add_event(create_enabled_event("event1", "SELECT 1", EventSchedule::OneTime))
-                .unwrap();
+            cat.add_event(create_enabled_event(
+                "event1",
+                "SELECT 1",
+                EventSchedule::OneTime,
+            ))
+            .unwrap();
             cat.add_event(create_enabled_event(
                 "event2",
                 "SELECT 2",
@@ -290,10 +318,18 @@ mod run_due_events_tests {
 
         {
             let mut cat = catalog.write().unwrap();
-            cat.add_event(create_enabled_event("event1", "SELECT 1", EventSchedule::OneTime))
-                .unwrap();
-            cat.add_event(create_disabled_event("event2", "SELECT 2", EventSchedule::OneTime))
-                .unwrap();
+            cat.add_event(create_enabled_event(
+                "event1",
+                "SELECT 1",
+                EventSchedule::OneTime,
+            ))
+            .unwrap();
+            cat.add_event(create_disabled_event(
+                "event2",
+                "SELECT 2",
+                EventSchedule::OneTime,
+            ))
+            .unwrap();
         }
 
         let executor = EventExecutor::new(catalog);
