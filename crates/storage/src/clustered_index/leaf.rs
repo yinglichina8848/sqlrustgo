@@ -105,11 +105,13 @@ impl ClusteredLeafPage {
     }
 
     /// Get the offset of slot i in the slot directory.
+    /// Slot directory grows backward from the end of page.
     fn get_slot_offset(&self, slot_idx: u16) -> Option<usize> {
         if slot_idx >= self.slot_count {
             return None;
         }
-        Some(LEAF_PAGE_HEADER_SIZE + (slot_idx as usize) * SLOT_ENTRY_SIZE)
+        // Slots are at the end of page: slot 0 is at PAGE_SIZE - 2, slot 1 at PAGE_SIZE - 4, etc.
+        Some(PAGE_SIZE - ((slot_idx + 1) as usize) * SLOT_ENTRY_SIZE)
     }
 
     /// Get the data offset for a slot.
@@ -399,9 +401,9 @@ impl ClusteredLeafPage {
         self.slot_count = new_slot_count;
         self.data[0..2].copy_from_slice(&new_slot_count.to_le_bytes());
 
-        // Update free_space_start for left page
+        // Update free_space_start for left page (slot directory grows backward from end)
         self.free_space_start =
-            (LEAF_PAGE_HEADER_SIZE + (new_slot_count as usize) * SLOT_ENTRY_SIZE) as u16;
+            PAGE_SIZE as u16 - (new_slot_count as usize * SLOT_ENTRY_SIZE) as u16;
         self.data[2..4].copy_from_slice(&self.free_space_start.to_le_bytes());
 
         // Link the pages

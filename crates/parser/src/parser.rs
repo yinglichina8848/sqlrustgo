@@ -469,7 +469,7 @@ pub struct InsertStatement {
 /// ON CONFLICT clause for PostgreSQL UPSERT syntax
 #[derive(Debug, Clone, PartialEq)]
 pub struct OnConflictClause {
-    pub column: String,                          // The column to check for conflict
+    pub column: String,                            // The column to check for conflict
     pub update_clauses: Vec<(String, Expression)>, // SET clauses for UPDATE
 }
 
@@ -2028,7 +2028,12 @@ impl Parser {
 
         loop {
             match self.current() {
-                Some(Token::From) | Some(Token::Eof) | Some(Token::RParen) | Some(Token::Union) | Some(Token::Intersect) | Some(Token::Except) => break,
+                Some(Token::From)
+                | Some(Token::Eof)
+                | Some(Token::RParen)
+                | Some(Token::Union)
+                | Some(Token::Intersect)
+                | Some(Token::Except) => break,
                 Some(Token::Star) => {
                     columns.push(SelectColumn {
                         name: "*".to_string(),
@@ -3394,7 +3399,8 @@ impl Parser {
                                                 updates.push((col, val));
                                             }
                                             _ => {
-                                                return Err("Expected column = value assignment".to_string())
+                                                return Err("Expected column = value assignment"
+                                                    .to_string())
                                             }
                                         }
                                     }
