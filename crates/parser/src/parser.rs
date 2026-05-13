@@ -406,6 +406,7 @@ pub struct SelectStatement {
     pub limit: Option<u64>,
     pub offset: Option<u64>,
     pub distinct: bool,
+    pub for_update: bool,
 }
 
 impl SelectStatement {
@@ -2982,6 +2983,17 @@ impl Parser {
             }
         }
 
+        // Parse FOR UPDATE clause (must come after ORDER BY/LIMIT)
+        let for_update = if matches!(self.current(), Some(Token::For))
+            && matches!(self.peek(), Some(Token::Update))
+        {
+            self.next(); // consume FOR
+            self.next(); // consume UPDATE
+            true
+        } else {
+            false
+        };
+
         Ok(SelectStatement {
             columns,
             table: primary_table,
@@ -2995,6 +3007,7 @@ impl Parser {
             limit,
             offset,
             distinct,
+            for_update,
         })
     }
 

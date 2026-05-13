@@ -29,6 +29,7 @@ fn test_select_statement_first_table_from_table_field() {
         limit: None,
         offset: None,
         distinct: false,
+        for_update: false,
     };
     assert_eq!(stmt.first_table(), "users");
 }
@@ -58,6 +59,7 @@ fn test_select_statement_first_table_from_from_clause() {
         limit: None,
         offset: None,
         distinct: false,
+        for_update: false,
     };
     assert_eq!(stmt.first_table(), "users");
 }
@@ -77,6 +79,7 @@ fn test_select_statement_first_table_empty() {
         limit: None,
         offset: None,
         distinct: false,
+        for_update: false,
     };
     assert_eq!(stmt.first_table(), "");
 }
@@ -100,6 +103,7 @@ fn test_select_statement_all_table_names_from_table_field() {
         limit: None,
         offset: None,
         distinct: false,
+        for_update: false,
     };
     assert_eq!(stmt.all_table_names(), vec!["users"]);
 }
@@ -133,6 +137,7 @@ fn test_select_statement_all_table_names_with_join() {
         limit: None,
         offset: None,
         distinct: false,
+        for_update: false,
     };
     let names = stmt.all_table_names();
     assert!(names.contains(&"users".to_string()));
@@ -154,6 +159,7 @@ fn test_select_statement_all_table_names_empty() {
         limit: None,
         offset: None,
         distinct: false,
+        for_update: false,
     };
     assert!(stmt.all_table_names().is_empty());
 }
@@ -350,6 +356,7 @@ fn test_fold_constants_subquery() {
         limit: None,
         offset: None,
         distinct: false,
+        for_update: false,
     };
     let expr = Expression::Subquery(Box::new(subquery));
     let folded = expr.fold_constants();
@@ -378,6 +385,7 @@ fn test_fold_constants_exists() {
         limit: None,
         offset: None,
         distinct: false,
+        for_update: false,
     };
     let expr = Expression::Exists(Box::new(subquery));
     let folded = expr.fold_constants();
@@ -406,6 +414,7 @@ fn test_fold_constants_not_exists() {
         limit: None,
         offset: None,
         distinct: false,
+        for_update: false,
     };
     let expr = Expression::NotExists(Box::new(subquery));
     let folded = expr.fold_constants();
