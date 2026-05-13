@@ -79,7 +79,7 @@ impl AuditChainEntry {
 }
 
 /// Compute SHA-256 checksum for an audit chain entry
-fn compute_checksum(entry: &AuditChainEntry) -> [u8; 32] {
+pub fn compute_checksum(entry: &AuditChainEntry) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(&entry.prev_hash);
     hasher.update(entry.seq.to_le_bytes());

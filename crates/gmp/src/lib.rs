@@ -48,6 +48,7 @@
 
 pub mod audit;
 pub mod audit_chain;
+pub mod audit_chain_tamper;
 pub mod audit_chain_wal;
 pub mod compliance;
 pub mod document;
@@ -73,6 +74,11 @@ pub use audit_chain::{
 pub use audit_chain_wal::{
     AuditChainWalEntry, AuditChainWalEntryType, AuditChainWalManager, AuditChainWalReader,
     AuditChainWalWriter, compute_entry_checksum,
+};
+
+pub use audit_chain_tamper::{
+    detect_tamper, incremental_verify, quick_verify, verify_entry_checksum, verify_entry_link,
+    RecoveryAction, TamperAlert, TamperViolation, VerificationResult,
 };
 
 pub use compliance::{
