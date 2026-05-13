@@ -17,6 +17,8 @@
 | [开发分析](DEVELOPMENT_ANALYSIS.md) | 开发阶段分析 |
 | [开发指导](DEVELOPMENT_GUIDANCE.md) | 开发阶段指导 |
 | [状态报告](STATUS_REPORT.md) | 版本状态报告 |
+| [Alpha 门禁报告](ALPHA_GATE_REPORT.md) | Alpha 门禁 12/12 PASS |
+| [覆盖分析报告](COVERAGE_ANALYSIS_REPORT.md) | 覆盖率分析与改进 |
 | [系统瓶颈分析](SYSTEM_BOTTLENECK_ANALYSIS.md) | 瓶颈分析与优化路线 |
 | [性能目标](PERFORMANCE_TARGETS.md) | 性能目标 |
 | [测试计划](TEST_PLAN.md) | 测试目标与阶段安排 |
