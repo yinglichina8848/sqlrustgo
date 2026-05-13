@@ -1958,7 +1958,8 @@ fn test_parse_insert_on_conflict() {
 
 #[test]
 fn test_parse_insert_with_cte() {
-    let sql = "WITH new_users AS (SELECT 1 UNION SELECT 2) INSERT INTO users SELECT * FROM new_users";
+    let sql =
+        "WITH new_users AS (SELECT 1 UNION SELECT 2) INSERT INTO users SELECT * FROM new_users";
     let result = parse(sql);
     assert!(
         result.is_ok(),
