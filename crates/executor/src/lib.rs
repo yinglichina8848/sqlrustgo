@@ -10,6 +10,7 @@ pub mod query_cache_config;
 pub mod scan;
 pub mod stored_proc;
 pub mod vec_table_scan;
+pub mod vec_simd;
 pub mod vectorization;
 pub mod trigger;
 pub mod trigger_eval;
