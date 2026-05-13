@@ -11,6 +11,9 @@ pub mod scan;
 pub mod stored_proc;
 pub mod trigger;
 pub mod trigger_eval;
+pub mod vec_simd;
+pub mod vec_table_scan;
+pub mod vectorization;
 
 pub use audit_logger::{
     create_system_audit_log_table, get_all_audit_logs, get_audit_log_by_id, query_audit_logs,

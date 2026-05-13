@@ -21,3 +21,8 @@ log.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 sqlrustgo = { path = "../.." }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "vec_benchmark"
+harness = false
