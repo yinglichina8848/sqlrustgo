@@ -11,7 +11,7 @@
 //!
 //! # Transaction Isolation
 //!
-//! Supports Snapshot Isolation and Serializable isolation levels.
+//! Supports Snapshot Isolation, Repeatable Read, and Serializable isolation levels.
 
 pub mod deadlock;
 pub mod dtc;
@@ -26,6 +26,7 @@ pub mod version_chain;
 pub mod wait_for_graph;
 
 pub use gid::NodeId;
+pub use lock::{LockMode, LockTarget};
 pub use lock_manager::DistributedLockManager;
 pub use mvcc::{Snapshot, Transaction, TxId, INVALID_TX_ID};
 pub use ssi::{SerializationGraph, SireadLock, SsiDetector, SsiDetectorSync, SsiError};
