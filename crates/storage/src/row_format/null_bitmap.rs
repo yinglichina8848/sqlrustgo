@@ -2,7 +2,7 @@
 
 /// Get the number of bytes needed for a null bitmap with n columns.
 pub fn null_bitmap_size(num_columns: usize) -> usize {
-    (num_columns + 7) / 8
+    num_columns.div_ceil(8)
 }
 
 /// Encode a null bitmap from a vector of booleans.

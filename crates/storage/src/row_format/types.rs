@@ -2,8 +2,8 @@
 //!
 //! This module provides the fundamental types used by clustered index row format.
 
-use sqlrustgo_types::Value;
 use serde::{Deserialize, Serialize};
+use sqlrustgo_types::Value;
 
 /// Row header for Compact Row v1 format.
 /// Always 19 bytes - this size is ABI-stable and will never change.
@@ -52,6 +52,24 @@ pub enum ClusterKey {
     PrimaryKey(Value),
     /// Hidden row ID - stable logical identity (used when no primary key defined)
     HiddenRowId(u64),
+}
+
+impl PartialOrd for ClusterKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ClusterKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            // HiddenRowId always comes before PrimaryKey (for btree ordering)
+            (ClusterKey::HiddenRowId(lhs), ClusterKey::HiddenRowId(rhs)) => lhs.cmp(rhs),
+            (ClusterKey::HiddenRowId(_), ClusterKey::PrimaryKey(_)) => std::cmp::Ordering::Less,
+            (ClusterKey::PrimaryKey(_), ClusterKey::HiddenRowId(_)) => std::cmp::Ordering::Greater,
+            (ClusterKey::PrimaryKey(lhs), ClusterKey::PrimaryKey(rhs)) => lhs.cmp(rhs),
+        }
+    }
 }
 
 /// Trait for generating unique row IDs.

@@ -17,6 +17,7 @@ const FORMAT_VERSION: u8 = 1;
 ///
 /// # Returns
 /// Tuple of (cluster_key, fixed_values, varlen_columns, nulls)
+#[allow(clippy::type_complexity)]
 pub fn decode_row(
     buf: &[u8],
     fixed_column_count: usize,
@@ -40,8 +41,8 @@ pub fn decode_row(
     }
 
     // 4. Null bitmap
-    let total_columns = fixed_column_count + varlen_column_count;
-    let null_bitmap_size = (total_columns + 7) / 8;
+let total_columns = fixed_column_count + varlen_column_count;
+    let null_bitmap_size = total_columns.div_ceil(8);
     let null_bitmap_bytes = read_bytes(buf, offset, null_bitmap_size)?;
     offset += null_bitmap_size;
     let nulls = decode_null_bitmap(null_bitmap_bytes, total_columns);
@@ -62,7 +63,10 @@ fn decode_row_header(buf: &[u8], offset: usize) -> std::io::Result<(usize, ())> 
     if format_version != FORMAT_VERSION {
         return Err(Error::new(
             ErrorKind::InvalidData,
-            format!("invalid format version: expected {}, got {}", FORMAT_VERSION, format_version),
+            format!(
+                "invalid format version: expected {}, got {}",
+                FORMAT_VERSION, format_version
+            ),
         ));
     }
     // Skip flags (2), trx_id (8), undo_ptr (8) - not needed for Phase A
@@ -75,7 +79,10 @@ fn decode_cluster_key(buf: &[u8], offset: usize) -> std::io::Result<(usize, Clus
         0 => {
             // PrimaryKey
             let (_new_offset, value) = decode_fixed_value(buf, offset + 1)?;
-            Ok((offset + 1 + value_encoding_size(&value), ClusterKey::PrimaryKey(value)))
+            Ok((
+                offset + 1 + value_encoding_size(&value),
+                ClusterKey::PrimaryKey(value),
+            ))
         }
         1 => {
             // HiddenRowId
@@ -123,9 +130,8 @@ pub fn decode_fixed_value(buf: &[u8], offset: usize) -> std::io::Result<(usize, 
         4 => {
             let len = read_u32(buf, offset + 1)? as usize;
             let data = read_bytes(buf, offset + 5, len)?;
-            let s = String::from_utf8(data).map_err(|_| {
-                Error::new(ErrorKind::InvalidData, "invalid UTF-8 in Text value")
-            })?;
+            let s = String::from_utf8(data)
+                .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid UTF-8 in Text value"))?;
             Ok((offset + 5 + len, Value::Text(s)))
         }
         5 => {
@@ -155,23 +161,30 @@ fn decode_varlen_slot(buf: &[u8], offset: usize) -> std::io::Result<(usize, Opti
 
 fn read_u8(buf: &[u8], offset: usize) -> std::io::Result<u8> {
     if offset >= buf.len() {
-        return Err(Error::new(ErrorKind::UnexpectedEof, "unexpected end of data"));
+        return Err(Error::new(
+            ErrorKind::UnexpectedEof,
+            "unexpected end of data",
+        ));
     }
     Ok(buf[offset])
 }
 
 fn read_u16(buf: &[u8], offset: usize) -> std::io::Result<u16> {
     if offset + 2 > buf.len() {
-        return Err(Error::new(ErrorKind::UnexpectedEof, "unexpected end of data"));
+        return Err(Error::new(
+            ErrorKind::UnexpectedEof,
+            "unexpected end of data",
+        ));
     }
-    let b0 = buf[offset];
-    let b1 = buf[offset + 1];
-    Ok(u16::from_le_bytes([b0, b1]))
+    Ok(u16::from_le_bytes([buf[offset], buf[offset + 1]]))
 }
 
 fn read_u32(buf: &[u8], offset: usize) -> std::io::Result<u32> {
     if offset + 4 > buf.len() {
-        return Err(Error::new(ErrorKind::UnexpectedEof, "unexpected end of data"));
+        return Err(Error::new(
+            ErrorKind::UnexpectedEof,
+            "unexpected end of data",
+        ));
     }
     Ok(u32::from_le_bytes([
         buf[offset],
@@ -183,7 +196,10 @@ fn read_u32(buf: &[u8], offset: usize) -> std::io::Result<u32> {
 
 fn read_u64(buf: &[u8], offset: usize) -> std::io::Result<u64> {
     if offset + 8 > buf.len() {
-        return Err(Error::new(ErrorKind::UnexpectedEof, "unexpected end of data"));
+        return Err(Error::new(
+            ErrorKind::UnexpectedEof,
+            "unexpected end of data",
+        ));
     }
     Ok(u64::from_le_bytes([
         buf[offset],
@@ -199,7 +215,10 @@ fn read_u64(buf: &[u8], offset: usize) -> std::io::Result<u64> {
 
 fn read_i64(buf: &[u8], offset: usize) -> std::io::Result<i64> {
     if offset + 8 > buf.len() {
-        return Err(Error::new(ErrorKind::UnexpectedEof, "unexpected end of data"));
+        return Err(Error::new(
+            ErrorKind::UnexpectedEof,
+            "unexpected end of data",
+        ));
     }
     Ok(i64::from_le_bytes([
         buf[offset],
@@ -215,7 +234,10 @@ fn read_i64(buf: &[u8], offset: usize) -> std::io::Result<i64> {
 
 fn read_bytes(buf: &[u8], offset: usize, len: usize) -> std::io::Result<Vec<u8>> {
     if offset + len > buf.len() {
-        return Err(Error::new(ErrorKind::UnexpectedEof, "unexpected end of data"));
+        return Err(Error::new(
+            ErrorKind::UnexpectedEof,
+            "unexpected end of data",
+        ));
     }
     Ok(buf[offset..offset + len].to_vec())
 }

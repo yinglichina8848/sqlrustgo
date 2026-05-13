@@ -2457,12 +2457,47 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         match expr {
             Expression::Literal(_) => expression_to_value(expr),
             Expression::Identifier(name) => {
-                if let Some(idx) = find_column_index(name, target_table_info) {
-                    target_row.get(idx).cloned().unwrap_or(Value::Null)
-                } else if let Some(idx) = find_column_index(name, source_table_info) {
-                    source_row.get(idx).cloned().unwrap_or(Value::Null)
-                } else {
+                if let Some((qualifier, col)) = name.split_once('.') {
+                    let qualifier_lower = qualifier.to_lowercase();
+                    if qualifier_lower == source_table_info.name.to_lowercase()
+                        || qualifier_lower == "source"
+                    {
+                        if let Some(idx) = source_table_info
+                            .columns
+                            .iter()
+                            .position(|c| c.name.eq_ignore_ascii_case(col))
+                        {
+                            return source_row.get(idx).cloned().unwrap_or(Value::Null);
+                        }
+                    }
+                    if qualifier_lower == target_table_info.name.to_lowercase()
+                        || qualifier_lower == "target"
+                    {
+                        if let Some(idx) = target_table_info
+                            .columns
+                            .iter()
+                            .position(|c| c.name.eq_ignore_ascii_case(col))
+                        {
+                            return target_row.get(idx).cloned().unwrap_or(Value::Null);
+                        }
+                    }
                     Value::Null
+                } else {
+                    if let Some(idx) = target_table_info
+                        .columns
+                        .iter()
+                        .position(|c| c.name.eq_ignore_ascii_case(name))
+                    {
+                        target_row.get(idx).cloned().unwrap_or(Value::Null)
+                    } else if let Some(idx) = source_table_info
+                        .columns
+                        .iter()
+                        .position(|c| c.name.eq_ignore_ascii_case(name))
+                    {
+                        source_row.get(idx).cloned().unwrap_or(Value::Null)
+                    } else {
+                        Value::Null
+                    }
                 }
             }
             Expression::BinaryOp(left, op, right) => {
@@ -4533,12 +4568,7 @@ fn evaluate_expr_to_string(expr: &Expression, row: &[Value], table_info: &TableI
 /// by routing to the correct portion of the combined schema.
 /// Combined table naming: left_table.col, right_table.col
 fn find_column_index(col_name: &str, table_info: &TableInfo) -> Option<usize> {
-    if let Some((qualifier, col)) = col_name.split_once('.') {
-        for (i, c) in table_info.columns.iter().enumerate() {
-            if c.name.eq_ignore_ascii_case(col_name) {
-                return Some(i);
-            }
-        }
+    if let Some((_qualifier, col)) = col_name.split_once('.') {
         table_info
             .columns
             .iter()
