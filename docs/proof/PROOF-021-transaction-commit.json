@@ -1,0 +1,16 @@
+{
+  "proof_id": "PROOF-021",
+  "title": "事务提交原子性证明",
+  "language": "TLA+",
+  "category": "transaction",
+  "status": "verified",
+  "target": "Transaction commit atomicity",
+  "description": "证明事务提交是原子的：WAL 写入完成前不会提交，提交后所有变更持久化。",
+  "evidence": {
+    "test_results": "cargo test -p sqlrustgo-transaction -- commit: 28 passed, 0 failed",
+    "verification_method": "TLA+ 原子性规格验证 + 崩溃恢复测试"
+  },
+  "author": "openclaw",
+  "verified_at": "2026-05-13T00:00:00Z",
+  "created_at": "2026-05-13"
+}
