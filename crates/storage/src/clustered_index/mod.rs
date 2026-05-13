@@ -5,6 +5,8 @@
 
 pub mod leaf;
 pub mod overflow;
+pub mod wal_integration;
 
 pub use leaf::{ClusteredLeafPage, ClusteredLeafIter};
 pub use overflow::OverflowManager;
+pub use wal_integration::{ClusteredWalEntry, ClusteredWalManager};
