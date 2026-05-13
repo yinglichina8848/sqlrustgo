@@ -69,7 +69,7 @@ echo ""
 check "B1: cargo build --all-features" cargo build --all-features
 
 # B2: L1 test >= 90%
-check_coverage "B2: L1 test (>=90%)" 90 "cargo test -p sqlrustgo-types -p sqlrustgo-parser -p sqlrustgo-planner -p sqlrustgo-optimizer -p sqlrustgo-executor -p sqlrustgo-storage -p sqlrustgo-transaction -p sqlrustgo-catalog --lib -- --test-threads=8"
+check_coverage "B2: L1 test (>=90%)" 90 "cargo test -p sqlrustgo-types -p sqlrustgo-parser -p sqlrustgo-planner -p sqlrustgo-optimizer -p sqlrustgo-executor -p sqlrustgo-storage -p sqlrustgo-transaction -p sqlrustgo-catalog --lib -- --test-threads=1"
 
 check "B3: cargo clippy" cargo clippy --all-features -- -D warnings
 check "B4: cargo fmt" cargo fmt --all -- --check
