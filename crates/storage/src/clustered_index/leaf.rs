@@ -444,23 +444,32 @@ impl ClusteredLeafPage {
             // Get record offset
             let old_offset = self.get_slot_data_offset(i).unwrap_or(0);
 
-            // Find record end
-            let next_slot_offset = if i + 1 < self.slot_count {
-                self.get_slot_data_offset(i + 1)
-                    .unwrap_or(self.data_end as usize)
-            } else {
-                self.data_end as usize
-            };
+            // Find record end by looking for the next valid (non-deleted) slot's offset
+            // that is greater than our current offset
+            let mut search_idx = i + 1;
+            let mut next_slot_offset = self.data_end as usize;
+            while search_idx < self.slot_count {
+                if let Some(offset) = self.get_slot_data_offset(search_idx) {
+                    if offset > old_offset {
+                        next_slot_offset = offset;
+                        break;
+                    }
+                }
+                search_idx += 1;
+            }
 
             let record_len = next_slot_offset - old_offset;
 
+            // Capture the START position before copying
+            let record_start = new_data_end as usize;
+
             // Copy record to new location
-            new_data[new_data_end as usize..new_data_end as usize + record_len]
+            new_data[record_start..record_start + record_len]
                 .copy_from_slice(&self.data[old_offset..next_slot_offset]);
 
-            // Add slot entry (slot directory grows backward from end of page)
+            // Add slot entry pointing to record START (not end)
             let slot_offset = PAGE_SIZE - ((new_slot_count + 1) as usize) * SLOT_ENTRY_SIZE;
-            new_data[slot_offset..slot_offset + 2].copy_from_slice(&new_data_end.to_le_bytes());
+            new_data[slot_offset..slot_offset + 2].copy_from_slice(&(record_start as u16).to_le_bytes());
 
             new_slot_count += 1;
             new_data_end += record_len as u16;
