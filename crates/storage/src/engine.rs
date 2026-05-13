@@ -901,7 +901,8 @@ impl StorageEngine for MemoryStorage {
         // Auto-create index for primary key column
         for (col_idx, col) in info.columns.iter().enumerate() {
             if col.primary_key {
-                // Use table name as index key, build index from existing data
+                // Use table:column as index key, build index from existing data
+                let index_key = format!("{}:{}", info.name, col.name);
                 if let Some(records) = self.tables.get(&info.name) {
                     let mut index_data: HashMap<i64, Vec<usize>> = HashMap::new();
                     for (row_idx, row) in records.iter().enumerate() {
@@ -909,8 +910,7 @@ impl StorageEngine for MemoryStorage {
                             index_data.entry(*key).or_default().push(row_idx);
                         }
                     }
-                    self.indexes
-                        .insert(info.name.clone(), (col_idx, index_data));
+                    self.indexes.insert(index_key, (col_idx, index_data));
                 }
                 break; // Only one primary key index per table for now
             }
