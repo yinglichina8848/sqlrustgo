@@ -1,30 +1,161 @@
-# SQLRustGo Test Manifest
-# Canonical list of all tests with metadata
+# Test Manifest v1.0
+# SQLRustGo 测试清单
+# 用于 L2 集成测试和分层测试
 
-version: "1.0"
-last_updated: "2026-05-04"
-
-tests:
-  - name: optimizer_cbo_accuracy
-    type: integration
-    component: optimizer
-    dimension: correctness
-    command: cargo test --test optimizer_cbo_accuracy_test --all-features
-    description: CBO cost model accuracy tests - validates relative cost relationships
-  - name: network_tcp_smoke
-    type: integration
-    component: network
-    dimension: correctness
-    command: cargo test --test network_tcp_smoke_test --all-features
-    description: TCP connection smoke tests - bind, connect, read/write, options
-
-groups:
+dimensions:
   correctness:
-    - optimizer_cbo_accuracy
-    - network_tcp_smoke
-  full:
-    - optimizer_cbo_accuracy
-    - network_tcp_smoke
+    description: "正确性测试 - SQL 语义、查询结果验证"
+    tags: [sql, correctness, semantic]
+    
+  performance:
+    description: "性能测试 - 延迟、吞吐量、基准"
+    tags: [performance, benchmark, latency]
+    
+  regression:
+    description: "回归测试 - 功能完整性"
+    tags: [regression, functional]
+    
+  security:
+    description: "安全测试 - 注入、权限、加密"
+    tags: [security, injection, encryption]
+
+components:
+  parser:
+    name: "Parser"
+    crates: [sqlrustgo-parser]
+    test_types: [unit, integration]
+    
+  planner:
+    name: "Planner"
+    crates: [sqlrustgo-planner]
+    test_types: [unit, integration]
+    
+  optimizer:
+    name: "Optimizer"
+    crates: [sqlrustgo-optimizer]
+    test_types: [unit, integration]
+    
+  executor:
+    name: "Executor"
+    crates: [sqlrustgo-executor]
+    test_types: [unit, integration, e2e]
+    
+  storage:
+    name: "Storage"
+    crates: [sqlrustgo-storage]
+    test_types: [unit, integration, stress]
+    
+  transaction:
+    name: "Transaction"
+    crates: [sqlrustgo-transaction]
+    test_types: [unit, integration]
+    
+  network:
+    name: "Network"
+    crates: [sqlrustgo-network]
+    test_types: [unit, integration]
+
+test_groups:
   quick:
-    - optimizer_cbo_accuracy
-    - network_tcp_smoke
+    description: "快速测试 (<5min)"
+    levels: [L0]
+    
+  unit:
+    description: "单元测试 (<10min)"
+    levels: [L1]
+    components: [parser, planner, optimizer, executor, storage, transaction, network]
+    
+  integration:
+    description: "集成测试 (<15min)"
+    levels: [L2]
+    tests:
+      - aggregate_functions_test
+      - boundary_test
+      - cbo_integration_test
+      - concurrency_stress_test
+      - crash_recovery_test
+      - distinct_test
+      - expression_operators_test
+      - in_value_list_test
+      - limit_clause_test
+      - mvcc_transaction_test
+      - parser_token_test
+      - stored_proc_catalog_test
+      - wal_integration_test
+      - data_loader
+      
+  full:
+    description: "完整回归 (<20min)"
+    levels: [L0, L1, L2]
+    include_groups: [unit, integration]
+
+  performance:
+    description: "性能测试"
+    levels: [L3]
+    tests:
+      - tpch_sf1
+      - sysbench_qps
+      - crash_recovery_loop
+      - long_run_stability
+
+integration_tests:
+  - name: "aggregate_functions_test"
+    dimension: "correctness"
+    component: "executor"
+    timeout: 300
+    
+  - name: "binary_format_test"
+    dimension: "correctness"
+    component: "storage"
+    timeout: 300
+    
+  - name: "boundary_test"
+    dimension: "correctness"
+    component: "executor"
+    timeout: 300
+    
+  - name: "cbo_integration_test"
+    dimension: "correctness"
+    component: "optimizer"
+    timeout: 600
+    
+  - name: "concurrency_stress_test"
+    dimension: "regression"
+    component: "transaction"
+    timeout: 900
+    
+  - name: "crash_recovery_test"
+    dimension: "regression"
+    component: "storage"
+    timeout: 600
+    
+  - name: "mvcc_transaction_test"
+    dimension: "correctness"
+    component: "transaction"
+    timeout: 600
+    
+  - name: "wal_integration_test"
+    dimension: "correctness"
+    component: "storage"
+    timeout: 600
+    
+  - name: "data_loader"
+    dimension: "performance"
+    component: "storage"
+    timeout: 1200
+
+performance_tests:
+  - name: "tpch_sf1"
+    dimension: "performance"
+    metric: "p99_latency"
+    threshold: "5s"
+    
+  - name: "sysbench_qps"
+    dimension: "performance"
+    metric: "queries_per_second"
+    threshold: "10000"
+    
+  - name: "crash_recovery_loop"
+    dimension: "regression"
+    metric: "zero_data_loss"
+    iterations: 100
