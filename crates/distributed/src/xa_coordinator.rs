@@ -104,6 +104,57 @@ impl Xid {
             bytes_to_string(&self.bqual)
         )
     }
+
+    /// Returns the gtrid length in bytes (MySQL XA RECOVER format)
+    pub fn gtrid_length(&self) -> u32 {
+        self.gtrid.len() as u32
+    }
+
+    /// Returns the bqual length in bytes (MySQL XA RECOVER format)
+    pub fn bqual_length(&self) -> u32 {
+        self.bqual.len() as u32
+    }
+
+    /// Returns the concatenated gtrid + bqual data (MySQL XA RECOVER format)
+    pub fn xa_recover_data(&self) -> Vec<u8> {
+        let mut data = self.gtrid.clone();
+        data.extend_from_slice(&self.bqual);
+        data
+    }
+}
+
+/// MySQL-compatible XA RECOVER output row
+///
+/// This represents one row in the `XA RECOVER` output, following MySQL's format:
+/// - `formatID`: The XA format identifier
+/// - `gtrid_length`: Length of the gtrid in bytes
+/// - `bqual_length`: Length of the bqual in bytes
+/// - `data`: The concatenated gtrid and bqual bytes
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct XaRecoverRow {
+    /// Format identifier (0 = MySQL XA format)
+    pub format_id: i32,
+    /// Global transaction ID length in bytes
+    pub gtrid_length: u32,
+    /// Branch qualifier length in bytes
+    pub bqual_length: u32,
+    /// Concatenated gtrid + bqual bytes
+    pub data: Vec<u8>,
+}
+
+impl Xid {
+    /// Converts this XID to a MySQL-compatible XaRecoverRow
+    ///
+    /// MySQL's `XA RECOVER` returns rows with the format:
+    /// `formatID, gtrid_length, bqual_length, data`
+    pub fn to_recover_row(&self) -> XaRecoverRow {
+        XaRecoverRow {
+            format_id: self.format_id,
+            gtrid_length: self.gtrid_length(),
+            bqual_length: self.bqual_length(),
+            data: self.xa_recover_data(),
+        }
+    }
 }
 
 impl PartialEq for Xid {
@@ -408,6 +459,21 @@ impl XaCoordinator {
     pub fn xa_recover(&self) -> Result<Vec<Xid>, XaError> {
         let recovery_log = self.recovery_log.read().unwrap();
         Ok(recovery_log.clone())
+    }
+
+    /// Returns all prepared XA transactions in MySQL-compatible format
+    ///
+    /// MySQL's `XA RECOVER` returns rows with columns:
+    /// - `formatID`: The XA format identifier
+    /// - `gtrid_length`: Length of the gtrid in bytes
+    /// - `bqual_length`: Length of the bqual in bytes
+    /// - `data`: The concatenated gtrid and bqual bytes
+    ///
+    /// # Errors
+    /// Returns an error if the recovery log cannot be read
+    pub fn xa_recover_mysql_format(&self) -> Result<Vec<XaRecoverRow>, XaError> {
+        let xids = self.xa_recover()?;
+        Ok(xids.into_iter().map(|xid| xid.to_recover_row()).collect())
     }
 
     /// Returns the state of an XA transaction
@@ -810,6 +876,25 @@ mod tests {
         let recovered = coordinator.xa_recover().unwrap();
         assert_eq!(recovered.len(), 1);
         assert_eq!(recovered[0], xid);
+    }
+
+    #[test]
+    fn test_xa_recover_mysql_format() {
+        let coordinator = XaCoordinator::new();
+        let xid = Xid::new(0, b"gtrid1".to_vec(), b"bqual1".to_vec());
+
+        coordinator.xa_start(xid.clone()).unwrap();
+        coordinator.xa_end(&xid).unwrap();
+        coordinator.xa_prepare(&xid).unwrap();
+
+        let recovered = coordinator.xa_recover_mysql_format().unwrap();
+        assert_eq!(recovered.len(), 1);
+
+        let row = &recovered[0];
+        assert_eq!(row.format_id, 0);
+        assert_eq!(row.gtrid_length, 6);
+        assert_eq!(row.bqual_length, 6);
+        assert_eq!(row.data, b"gtrid1bqual1");
     }
 
     #[test]
