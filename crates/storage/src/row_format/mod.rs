@@ -9,6 +9,9 @@ pub mod decoder;
 pub mod null_bitmap;
 pub mod overflow;
 
+#[cfg(test)]
+pub mod integration_tests;
+
 // Re-export for convenience
 pub use types::*;
 pub use encoder::encode_row;
