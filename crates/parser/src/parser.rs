@@ -462,7 +462,15 @@ pub struct InsertStatement {
     pub select: Option<Box<SelectStatement>>, // For INSERT SELECT
     pub is_replace: bool,                     // For REPLACE INTO (MySQL compatibility)
     pub on_duplicate_key_update: Option<Vec<(String, Expression)>>, // For ON DUPLICATE KEY UPDATE
+    pub on_conflict: Option<OnConflictClause>, // For ON CONFLICT (PostgreSQL)
     pub with_clause: Option<WithClause>,      // For WITH ... INSERT
+}
+
+/// ON CONFLICT clause for PostgreSQL UPSERT syntax
+#[derive(Debug, Clone, PartialEq)]
+pub struct OnConflictClause {
+    pub column: String,                          // The column to check for conflict
+    pub update_clauses: Vec<(String, Expression)>, // SET clauses for UPDATE
 }
 
 /// UPDATE statement
@@ -1847,6 +1855,12 @@ impl Parser {
             break;
         }
 
+        // Check if this is WITH ... INSERT (PostgreSQL-style)
+        if matches!(self.current(), Some(Token::Insert)) {
+            let with_clause = WithClause { recursive, ctes };
+            return self.parse_insert_with_clause(with_clause);
+        }
+
         let select = self.parse_select_statement()?;
 
         Ok(Statement::WithSelect(WithSelect {
@@ -1977,6 +1991,7 @@ impl Parser {
             select,
             is_replace,
             on_duplicate_key_update: None,
+            on_conflict: None,
             with_clause: Some(with_clause),
         }))
     }
@@ -2013,7 +2028,7 @@ impl Parser {
 
         loop {
             match self.current() {
-                Some(Token::From) | Some(Token::Eof) | Some(Token::RParen) => break,
+                Some(Token::From) | Some(Token::Eof) | Some(Token::RParen) | Some(Token::Union) | Some(Token::Intersect) | Some(Token::Except) => break,
                 Some(Token::Star) => {
                     columns.push(SelectColumn {
                         name: "*".to_string(),
@@ -2678,6 +2693,26 @@ impl Parser {
         }
 
         // Handle SELECT without FROM (e.g., SELECT NULL, SELECT 1, SELECT 'hello')
+        // Check for UNION/INTERSECT/EXCEPT - these are handled by parse_select_or_union
+        if matches!(self.current(), Some(Token::Union))
+            || matches!(self.current(), Some(Token::Intersect))
+            || matches!(self.current(), Some(Token::Except))
+        {
+            return Ok(SelectStatement {
+                distinct: false,
+                columns,
+                table: String::new(),
+                from: None,
+                where_clause: None,
+                join_clause: None,
+                aggregates: Vec::new(),
+                group_by: Vec::new(),
+                having: None,
+                order_by: Vec::new(),
+                limit: None,
+                offset: None,
+            });
+        }
         let mut tables: Vec<FromTable> = Vec::new();
         let mut primary_table = String::new();
 
@@ -3290,7 +3325,10 @@ impl Parser {
             return Err("Expected VALUES or SELECT".to_string());
         };
 
-        let on_duplicate_key_update = if matches!(self.current(), Some(Token::On)) {
+        let on_duplicate_key_update;
+        let on_conflict;
+
+        if matches!(self.current(), Some(Token::On)) {
             self.next();
             match self.current() {
                 Some(Token::Duplicate) => {
@@ -3330,13 +3368,62 @@ impl Parser {
                             "Expected column assignments after ON DUPLICATE KEY UPDATE".to_string()
                         );
                     }
-                    Some(updates)
+                    on_duplicate_key_update = Some(updates);
+                    on_conflict = None;
                 }
-                _ => return Err("Expected 'DUPLICATE KEY' after 'ON'".to_string()),
+                Some(Token::Conflict) => {
+                    self.next(); // consume Conflict
+                    self.expect(Token::LParen)?;
+                    let column = match self.next() {
+                        Some(Token::Identifier(name)) => name,
+                        _ => return Err("Expected column name in ON CONFLICT clause".to_string()),
+                    };
+                    self.expect(Token::RParen)?;
+                    self.expect(Token::Do)?;
+                    self.expect(Token::Update)?;
+                    self.expect(Token::Set)?;
+                    let mut updates = Vec::new();
+                    loop {
+                        match self.current() {
+                            Some(Token::Identifier(_)) => {
+                                let expr = self.parse_expression()?;
+                                match expr {
+                                    Expression::BinaryOp(left, op, right) if op == "=" => {
+                                        match (*left, *right) {
+                                            (Expression::Identifier(col), val) => {
+                                                updates.push((col, val));
+                                            }
+                                            _ => {
+                                                return Err("Expected column = value assignment".to_string())
+                                            }
+                                        }
+                                    }
+                                    _ => {
+                                        return Err("Expected column = value assignment".to_string())
+                                    }
+                                }
+                            }
+                            Some(Token::Comma) => {
+                                self.next();
+                            }
+                            _ => break,
+                        }
+                    }
+                    if updates.is_empty() {
+                        return Err("Expected column assignments after DO UPDATE SET".to_string());
+                    }
+                    on_conflict = Some(OnConflictClause {
+                        column,
+                        update_clauses: updates,
+                    });
+                    on_duplicate_key_update = None;
+                }
+                _ => return Err("Expected 'DUPLICATE KEY' or 'CONFLICT' after 'ON'".to_string()),
             }
         } else {
-            None
-        };
+            on_duplicate_key_update = None;
+            on_conflict = None;
+        }
 
         Ok(Statement::Insert(InsertStatement {
             table,
@@ -3345,6 +3432,7 @@ impl Parser {
             select,
             is_replace,
             on_duplicate_key_update,
+            on_conflict,
             with_clause: None,
         }))
     }
