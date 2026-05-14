@@ -5,6 +5,8 @@
 > **Phase**: RC → GA
 > **CMMI Target**: Level 3
 > **Status**: Industrial QA Skeleton Establishment
+>
+> **Issue Tracking**: [Issue #859 - QA 改进总控](http://192.168.0.252:3000/openclaw/sqlrustgo/issues/859)
 
 ---
 
