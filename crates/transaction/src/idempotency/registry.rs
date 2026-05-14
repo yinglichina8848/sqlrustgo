@@ -65,10 +65,10 @@ impl IdempotencyRegistry {
                     }
                     IdempotencyState::Pending => {
                         eprintln!(
-                            "DEBUG check_and_register: key={}, returning Ok(false) - pending",
+                            "DEBUG check_and_register: key={}, returning Ok(true) - pending but idempotent (safe retry)",
                             key
                         );
-                        Ok(false)
+                        Ok(true)
                     }
                     IdempotencyState::Rejected { ref reason } => {
                         eprintln!(
