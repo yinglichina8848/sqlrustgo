@@ -286,5 +286,5 @@ RUST_LOG=debug cargo run -p sqlrustgo-mysql-server -- --log-level debug
 ## 7. 相关文档
 
 - [MySQL Wire Protocol 修复指南](SYSBENCH_WIRE_PROTOCOL_FIX_GUIDE.md)
-- [性能调优指南](../PERFORMANCE_TUNING.md)
+- [性能调优指南](./PERFORMANCE_TUNING.md)
 - [慢查询日志](../crates/query-stats/src/slow_query_log.rs)
