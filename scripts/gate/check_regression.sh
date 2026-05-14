@@ -121,7 +121,7 @@ if [ "$SKIP_RUN" = false ]; then
     COMPLEX_WHERE=$(cargo test --release --test qps_benchmark_test test_qps_complex_where -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${COMPLEX_WHERE:-N/A} qps"
 
-    echo "[10/13] Running benchmark: insert_prepared..."
+echo "[10/13] Running benchmark: insert_prepared..."
     INSERT_PREPARED=$(cargo test --release --test qps_benchmark_test test_qps_insert_prepared -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${INSERT_PREPARED:-N/A} qps"
 
@@ -136,7 +136,6 @@ if [ "$SKIP_RUN" = false ]; then
     echo "[13/13] Running benchmark: concurrent_mixed..."
     CONCURRENT_MIXED=$(cargo test --release --test qps_benchmark_test test_qps_concurrent_mixed -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${CONCURRENT_MIXED:-N/A} qps"
-
     # Write current results
     cat > "$RESULT_FILE" << JSONEOF
 {
