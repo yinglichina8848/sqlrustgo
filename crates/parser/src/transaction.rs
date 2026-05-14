@@ -36,6 +36,9 @@ pub enum TransactionStatement {
     ReleaseSavepoint {
         name: String,
     },
+    BeginIdempotent {
+        key: String,
+    },
 }
 
 #[cfg(test)]
@@ -183,8 +186,22 @@ mod tests {
                 | TransactionStatement::StartTransaction { .. }
                 | TransactionStatement::Savepoint { .. }
                 | TransactionStatement::RollbackToSavepoint { .. }
-                | TransactionStatement::ReleaseSavepoint { .. } => {}
+                | TransactionStatement::ReleaseSavepoint { .. }
+                | TransactionStatement::BeginIdempotent { .. } => {}
             }
+        }
+    }
+
+    #[test]
+    fn test_begin_idempotent() {
+        let stmt = TransactionStatement::BeginIdempotent {
+            key: "txn-123".to_string(),
+        };
+        match stmt {
+            TransactionStatement::BeginIdempotent { key } => {
+                assert_eq!(key, "txn-123");
+            }
+            _ => panic!("Expected BeginIdempotent"),
         }
     }
 }
