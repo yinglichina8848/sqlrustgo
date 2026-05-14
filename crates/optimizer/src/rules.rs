@@ -718,4 +718,156 @@ mod tests {
         let changed = rule.apply(&mut plan);
         assert!(!changed);
     }
+
+    #[test]
+    fn test_eval_binary_op_minus() {
+        let result = eval_binary_op("5", "3", BinaryOperator::Minus);
+        assert_eq!(result, Some("2".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_multiply() {
+        let result = eval_binary_op("4", "3", BinaryOperator::Multiply);
+        assert_eq!(result, Some("12".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_divide() {
+        let result = eval_binary_op("10", "2", BinaryOperator::Divide);
+        assert_eq!(result, Some("5".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_divide_by_zero() {
+        let result = eval_binary_op("10", "0", BinaryOperator::Divide);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_eval_binary_op_not_eq() {
+        let result = eval_binary_op("5", "3", BinaryOperator::NotEq);
+        assert_eq!(result, Some("true".to_string()));
+        let result2 = eval_binary_op("5", "5", BinaryOperator::NotEq);
+        assert_eq!(result2, Some("false".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_lt() {
+        let result = eval_binary_op("3", "5", BinaryOperator::Lt);
+        assert_eq!(result, Some("true".to_string()));
+        let result2 = eval_binary_op("5", "3", BinaryOperator::Lt);
+        assert_eq!(result2, Some("false".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_lt_eq() {
+        let result = eval_binary_op("3", "3", BinaryOperator::LtEq);
+        assert_eq!(result, Some("true".to_string()));
+        let result2 = eval_binary_op("4", "3", BinaryOperator::LtEq);
+        assert_eq!(result2, Some("false".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_gt_eq() {
+        let result = eval_binary_op("5", "3", BinaryOperator::GtEq);
+        assert_eq!(result, Some("true".to_string()));
+        let result2 = eval_binary_op("3", "5", BinaryOperator::GtEq);
+        assert_eq!(result2, Some("false".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_and_with_numeric() {
+        let result = eval_binary_op("1", "1", BinaryOperator::And);
+        assert_eq!(result, Some("true".to_string()));
+        let result2 = eval_binary_op("1", "0", BinaryOperator::And);
+        assert_eq!(result2, Some("false".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_or_with_numeric() {
+        let result = eval_binary_op("0", "1", BinaryOperator::Or);
+        assert_eq!(result, Some("true".to_string()));
+        let result2 = eval_binary_op("0", "0", BinaryOperator::Or);
+        assert_eq!(result2, Some("false".to_string()));
+    }
+
+    #[test]
+    fn test_expr_references_columns_literal() {
+        let expr = Expr::Literal("1".to_string());
+        let cols = expr.references_columns();
+        assert!(cols.is_empty());
+    }
+
+    #[test]
+    fn test_expr_references_columns_column() {
+        let expr = Expr::Column("name".to_string());
+        let cols = expr.references_columns();
+        assert_eq!(cols, vec!["name"]);
+    }
+
+    #[test]
+    fn test_expr_references_columns_nested() {
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("a".to_string())),
+            op: BinaryOperator::Plus,
+            right: Box::new(Expr::BinaryExpr {
+                left: Box::new(Expr::Column("b".to_string())),
+                op: BinaryOperator::Multiply,
+                right: Box::new(Expr::Literal("2".to_string())),
+            }),
+        };
+        let cols = expr.references_columns();
+        assert!(cols.contains(&"a"));
+        assert!(cols.contains(&"b"));
+        assert_eq!(cols.len(), 2);
+    }
+
+    #[test]
+    fn test_constant_folding_or_simplify_left_true() {
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal("true".to_string())),
+            op: BinaryOperator::Or,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let folded = expr.fold_constants();
+        assert_eq!(folded, Expr::Literal("true".to_string()));
+    }
+
+    #[test]
+    fn test_constant_folding_and_simplify_left_false() {
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal("false".to_string())),
+            op: BinaryOperator::And,
+            right: Box::new(Expr::Column("x".to_string())),
+        };
+        let folded = expr.fold_constants();
+        assert_eq!(folded, Expr::Literal("false".to_string()));
+    }
+
+    #[test]
+    fn test_predicate_pushdown_on_projection() {
+        let mut plan = UnifiedPlan::Projection {
+            expr: vec![Expr::Column("a".to_string())],
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_projection_pruning_multiple_columns() {
+        let mut plan = UnifiedPlan::Projection {
+            expr: vec![Expr::Column("a".to_string()), Expr::Column("b".to_string())],
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: Some(vec![0, 1, 2]),
+            }),
+        };
+        let rule = ProjectionPruning::new();
+        let _changed = rule.apply(&mut plan);
+    }
 }
