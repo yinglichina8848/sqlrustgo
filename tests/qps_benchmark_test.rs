@@ -481,12 +481,15 @@ fn test_qps_insert_batch() {
             if row > 0 {
                 values.push_str(", ");
             }
-            values.push_str(&format!("({}, 'batch_{}_{}', {})", 30000 + id, batch, row, 35 + (row % 20)));
+            values.push_str(&format!(
+                "({}, 'batch_{}_{}', {})",
+                30000 + id,
+                batch,
+                row,
+                35 + (row % 20)
+            ));
         }
-        let _ = engine.execute(&format!(
-            "INSERT INTO users VALUES {}",
-            values
-        ));
+        let _ = engine.execute(&format!("INSERT INTO users VALUES {}", values));
     }
 
     let elapsed = start.elapsed();
@@ -521,9 +524,7 @@ fn test_qps_insert_multi_row() {
 
     for _ in 0..iteration_count {
         // Multi-row INSERT via INSERT SELECT
-        let _ = engine.execute(
-            "INSERT INTO user_backup SELECT * FROM users WHERE id % 10 = 0"
-        );
+        let _ = engine.execute("INSERT INTO user_backup SELECT * FROM users WHERE id % 10 = 0");
         // Clean up for next iteration
         let _ = engine.execute("DELETE FROM user_backup");
     }

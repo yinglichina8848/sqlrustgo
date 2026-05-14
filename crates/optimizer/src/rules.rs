@@ -951,7 +951,9 @@ mod tests {
                 right: Box::new(Expr::Literal("7".to_string())),
             }),
             graph_name: "social".to_string(),
-            scan_type: GraphScanType::Reachability { target: "user2".to_string() },
+            scan_type: GraphScanType::Reachability {
+                target: "user2".to_string(),
+            },
             start_node: Some("user1".to_string()),
         };
         let rule = PredicatePushdown::new();

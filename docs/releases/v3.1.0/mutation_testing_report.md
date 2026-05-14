@@ -25,4 +25,4 @@ cargo mutants test -p sqlrustgo-optimizer
 
 ## Date
 
-2026-05-14T16:50:59Z
+2026-05-14T17:31:49Z
