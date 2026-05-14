@@ -2720,6 +2720,7 @@ impl Parser {
                 order_by: Vec::new(),
                 limit: None,
                 offset: None,
+                for_update: false,
             });
         }
         let mut tables: Vec<FromTable> = Vec::new();
