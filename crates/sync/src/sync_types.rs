@@ -60,9 +60,9 @@ impl SyncRequest {
     }
 
     pub fn request_hash(&self) -> Vec<u8> {
+        use serde_json::to_string;
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        use serde_json::to_string;
 
         let mut hasher = DefaultHasher::new();
         self.cgtid.hash(&mut hasher);

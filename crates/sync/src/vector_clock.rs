@@ -86,7 +86,8 @@ impl Default for VectorClock {
 
 impl std::fmt::Display for VectorClock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let pairs: Vec<String> = self.entries
+        let pairs: Vec<String> = self
+            .entries
             .iter()
             .map(|(k, v)| format!("{}:{}", k, v))
             .collect();
@@ -112,8 +113,12 @@ mod tests {
 
     #[test]
     fn test_merge() {
-        let mut clock1 = VectorClock::new().with_entry("node-a", 1).with_entry("node-b", 1);
-        let clock2 = VectorClock::new().with_entry("node-b", 2).with_entry("node-c", 1);
+        let mut clock1 = VectorClock::new()
+            .with_entry("node-a", 1)
+            .with_entry("node-b", 1);
+        let clock2 = VectorClock::new()
+            .with_entry("node-b", 2)
+            .with_entry("node-c", 1);
 
         clock1.merge(&clock2);
 
@@ -124,8 +129,12 @@ mod tests {
 
     #[test]
     fn test_happens_before() {
-        let clock1 = VectorClock::new().with_entry("node-a", 1).with_entry("node-b", 1);
-        let clock2 = VectorClock::new().with_entry("node-a", 2).with_entry("node-b", 1);
+        let clock1 = VectorClock::new()
+            .with_entry("node-a", 1)
+            .with_entry("node-b", 1);
+        let clock2 = VectorClock::new()
+            .with_entry("node-a", 2)
+            .with_entry("node-b", 1);
 
         assert!(clock1.happens_before(&clock2));
         assert!(!clock2.happens_before(&clock1));
@@ -133,8 +142,12 @@ mod tests {
 
     #[test]
     fn test_concurrent() {
-        let clock1 = VectorClock::new().with_entry("node-a", 1).with_entry("node-b", 2);
-        let clock2 = VectorClock::new().with_entry("node-a", 2).with_entry("node-b", 1);
+        let clock1 = VectorClock::new()
+            .with_entry("node-a", 1)
+            .with_entry("node-b", 2);
+        let clock2 = VectorClock::new()
+            .with_entry("node-a", 2)
+            .with_entry("node-b", 1);
 
         assert!(clock1.concurrent_with(&clock2));
     }

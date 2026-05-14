@@ -1,6 +1,6 @@
 pub use super::sync_types::{
-    CommitResult, ConflictResult, ErrorResult, Operation, OperationType,
-    ResponseResult, SyncRequest, SyncResponse,
+    CommitResult, ConflictResult, ErrorResult, Operation, OperationType, ResponseResult,
+    SyncRequest, SyncResponse,
 };
 
 impl SyncResponse {
@@ -16,7 +16,11 @@ impl SyncResponse {
         }
     }
 
-    pub fn conflict(cgtid: super::ClientGtid, transformed_ops: Vec<Operation>, conflicts: Vec<String>) -> Self {
+    pub fn conflict(
+        cgtid: super::ClientGtid,
+        transformed_ops: Vec<Operation>,
+        conflicts: Vec<String>,
+    ) -> Self {
         Self {
             result: ResponseResult::Conflict(ConflictResult {
                 cgtid,
@@ -26,7 +30,12 @@ impl SyncResponse {
         }
     }
 
-    pub fn error(cgtid: super::ClientGtid, error_code: &str, error_message: &str, retryable: bool) -> Self {
+    pub fn error(
+        cgtid: super::ClientGtid,
+        error_code: &str,
+        error_message: &str,
+        retryable: bool,
+    ) -> Self {
         Self {
             result: ResponseResult::Error(ErrorResult {
                 cgtid,

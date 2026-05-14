@@ -1,8 +1,8 @@
-use sqlrustgo_sync::{
-    ClientGtid, ClientRegistry, OTEngine, Operation, OperationType,
-    SqlOperation, SyncRequest, SyncResponse, VectorClock, ResponseResult,
-};
 use sqlrustgo_sync::client_registry::{InMemoryClientRegistry, TransactionStatus};
+use sqlrustgo_sync::{
+    ClientGtid, ClientRegistry, OTEngine, Operation, OperationType, ResponseResult, SqlOperation,
+    SyncRequest, SyncResponse, VectorClock,
+};
 
 fn make_cgtid(client_id: &str, seq: u64) -> ClientGtid {
     ClientGtid::new(client_id, seq)
@@ -58,7 +58,11 @@ async fn test_sync_response_conflict() {
     let cgtid = make_cgtid("iphone-23", 1);
     let ops = vec![make_op("UPDATE t SET x = 2 WHERE id = 1")];
 
-    let response = SyncResponse::conflict(cgtid.clone(), ops.clone(), vec!["Concurrent modification".to_string()]);
+    let response = SyncResponse::conflict(
+        cgtid.clone(),
+        ops.clone(),
+        vec!["Concurrent modification".to_string()],
+    );
 
     assert!(!response.is_commit());
     assert!(response.is_conflict());
@@ -118,7 +122,9 @@ async fn test_client_registry_operations() {
     let duplicate_result = registry.begin_transaction(&tx);
     assert!(duplicate_result.is_err());
 
-    registry.mark_committed(&cgtid, "server-1:100", Some(vec![1, 2, 3]), 1699999999000).unwrap();
+    registry
+        .mark_committed(&cgtid, "server-1:100", Some(vec![1, 2, 3]), 1699999999000)
+        .unwrap();
     assert!(!registry.is_in_progress(&cgtid).unwrap());
     assert!(registry.is_committed(&cgtid).unwrap());
 
@@ -146,11 +152,24 @@ async fn test_client_registry_get_last_committed_seq() {
             device_info: None,
         };
         registry.begin_transaction(&tx).unwrap();
-        registry.mark_committed(&cgtid, &format!("server-1:{}", seq * 100), None, seq as i64 * 1000).unwrap();
+        registry
+            .mark_committed(
+                &cgtid,
+                &format!("server-1:{}", seq * 100),
+                None,
+                seq as i64 * 1000,
+            )
+            .unwrap();
     }
 
-    assert_eq!(registry.get_last_committed_seq("iphone-23").unwrap(), Some(5));
-    assert_eq!(registry.get_last_committed_seq("unknown-device").unwrap(), None);
+    assert_eq!(
+        registry.get_last_committed_seq("iphone-23").unwrap(),
+        Some(5)
+    );
+    assert_eq!(
+        registry.get_last_committed_seq("unknown-device").unwrap(),
+        None
+    );
 }
 
 #[tokio::test]
@@ -185,7 +204,12 @@ async fn test_ot_engine_record_commit() {
     let cgtid = make_cgtid("iphone-23", 1);
 
     engine.record_commit(&cgtid);
-    engine.check_dependencies(&make_cgtid("iphone-23", 2), &VectorClock::new().with_entry("iphone-23", 1)).unwrap();
+    engine
+        .check_dependencies(
+            &make_cgtid("iphone-23", 2),
+            &VectorClock::new().with_entry("iphone-23", 1),
+        )
+        .unwrap();
 }
 
 #[tokio::test]
