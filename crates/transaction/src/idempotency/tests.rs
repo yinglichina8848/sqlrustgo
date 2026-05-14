@@ -62,15 +62,15 @@ fn test_mark_rejected() {
 }
 
 #[test]
-fn test_pending_state_blocks_idempotent_check() {
+fn test_pending_state_is_idempotent() {
     let registry = IdempotencyRegistry::new();
     let hash = [0u8; 32];
 
     registry.check_and_register("txn-1", hash, 1).unwrap();
     let result = registry.check_and_register("txn-1", hash, 2).unwrap();
 
-    // Pending state returns false (not idempotent - in progress)
-    assert!(!result);
+    // Pending state returns true (idempotent - same request in progress is safe to retry)
+    assert!(result);
 }
 
 #[test]
