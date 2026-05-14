@@ -322,6 +322,14 @@ impl WalWriter {
         // Write entry data
         self.writer.write_all(&bytes)?;
 
+        // Record WAL stats
+        if let Ok(stats) = sqlrustgo_observability::tables::OBSERVABILITY
+            .wal_stats
+            .write()
+        {
+            stats.record_write(bytes.len() as u64, lsn);
+        }
+
         // Crash injection: after WAL write but before commit
         if should_crash_at(CrashPoint::AfterWalWrite) {
             trigger_crash();
@@ -333,10 +341,22 @@ impl WalWriter {
             if self.records_since_flush >= self.flush_threshold {
                 self.writer.flush()?;
                 self.records_since_flush = 0;
+                if let Ok(stats) = sqlrustgo_observability::tables::OBSERVABILITY
+                    .wal_stats
+                    .write()
+                {
+                    stats.record_flush(lsn);
+                }
             }
         } else {
             // 默认模式：每次都 flush，保证持久性
             self.writer.flush()?;
+            if let Ok(stats) = sqlrustgo_observability::tables::OBSERVABILITY
+                .wal_stats
+                .write()
+            {
+                stats.record_flush(lsn);
+            }
         }
 
         self.lsn += 1;
@@ -347,6 +367,12 @@ impl WalWriter {
     pub fn flush(&mut self) -> std::io::Result<()> {
         self.writer.flush()?;
         self.records_since_flush = 0;
+        if let Ok(stats) = sqlrustgo_observability::tables::OBSERVABILITY
+            .wal_stats
+            .write()
+        {
+            stats.record_flush(self.lsn);
+        }
         Ok(())
     }
 

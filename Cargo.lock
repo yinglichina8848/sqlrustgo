@@ -5171,6 +5171,7 @@ name = "sqlrustgo-observability"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "lazy_static",
  "serde",
  "sqlrustgo-types",
  "uuid",
@@ -5348,6 +5349,7 @@ dependencies = [
  "sha2 0.10.9",
  "snap",
  "sqlrustgo-common",
+ "sqlrustgo-observability",
  "sqlrustgo-types",
  "tempfile",
  "thiserror 2.0.18",
@@ -5395,6 +5397,7 @@ dependencies = [
  "serde",
  "sha2 0.10.9",
  "sqlrustgo-common",
+ "sqlrustgo-observability",
  "sqlrustgo-storage",
  "tempfile",
  "thiserror 2.0.18",
