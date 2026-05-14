@@ -842,11 +842,23 @@ impl StorageEngine for MemoryStorage {
         Ok(())
     }
 
-    fn delete(&mut self, table: &str, _filters: &[Value]) -> SqlResult<usize> {
+    fn delete(&mut self, table: &str, filters: &[Value]) -> SqlResult<usize> {
+        let Some(records) = self.tables.get_mut(table) else {
+            return Ok(0);
+        };
+
         let mut count = 0;
-        if let Some(records) = self.tables.get_mut(table) {
+        if filters.is_empty() {
             count = records.len();
             records.clear();
+        } else if let Some(filter_val) = filters.first() {
+            records.retain(|record| {
+                let should_delete = record.first().map(|v| v != filter_val).unwrap_or(true);
+                if !should_delete {
+                    count += 1;
+                }
+                should_delete
+            });
         }
         Ok(count)
     }

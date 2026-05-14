@@ -26,11 +26,11 @@ use sqlrustgo_parser::parser::{
     CheckOption, CheckStatement, CreateIndexStatement, CreateProcedureStatement,
     CreateRoleStatement, CreateTableStatement, CreateTriggerStatement, DropRoleStatement,
     DropTableStatement, ExplainStatement, GrantRoleStatement, GrantStatement, InsertStatement,
-    MergeStatement, ObjectType as ParserObjectType, OptimizeStatement, OrderByExpression,
-    Privilege as ParserPrivilege, RepairStatement, RevokeRoleStatement, RevokeStatement,
-    SelectStatement, SetRoleStatement, ShowStatement, StoredProcParam as ParserStoredProcParam,
-    StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
-    TruncateStatement, VacuumMode, VacuumStatement,
+    MergeAction, MergeMatchedClause, MergeSource, MergeStatement, ObjectType as ParserObjectType,
+    OptimizeStatement, OrderByExpression, Privilege as ParserPrivilege, RepairStatement,
+    RevokeRoleStatement, RevokeStatement, SelectStatement, SetRoleStatement, ShowStatement,
+    StoredProcParam as ParserStoredProcParam, StoredProcParamMode as ParserParamMode,
+    StoredProcStatement as ParserStatement, TruncateStatement, VacuumMode, VacuumStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::JoinType; // For join type matching
@@ -2519,13 +2519,25 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(ExecutorResult::new(vec![], count))
     }
 
-    fn execute_merge(&self, merge: &MergeStatement) -> SqlResult<ExecutorResult> {
+    fn execute_merge(&mut self, merge: &MergeStatement) -> SqlResult<ExecutorResult> {
         let target_table = &merge.target_table;
-        let source_table = &merge.source_table;
 
-        let source_rows = {
-            let storage = self.storage.read().unwrap();
-            storage.scan(source_table)?
+        let (source_rows, source_table_info) = match &merge.source {
+            MergeSource::Table(table_name) => {
+                let rows = {
+                    let storage = self.storage.read().unwrap();
+                    storage.scan(table_name)?
+                };
+                let info = {
+                    let storage = self.storage.read().unwrap();
+                    storage.get_table_info(table_name)?.clone()
+                };
+                (rows, Some(info))
+            }
+            MergeSource::Subquery(subquery, _) => {
+                let result = self.execute_statement(Statement::Select(*subquery.clone()))?;
+                (result.rows, None)
+            }
         };
 
         let target_rows = {
@@ -2538,71 +2550,106 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             storage.get_table_info(target_table)?.clone()
         };
 
-        let source_table_info = {
-            let storage = self.storage.read().unwrap();
-            storage.get_table_info(source_table)?.clone()
-        };
-
         let target_pk_idx = target_table_info.columns.iter().position(|c| c.primary_key);
 
         let mut matched_count: usize = 0;
         let mut inserted_count: usize = 0;
 
         for source_row in source_rows.iter() {
-            let matching_target_idx = target_rows.iter().position(|target_row| {
-                self.eval_merge_condition(
-                    &merge.on_condition,
-                    source_row,
-                    target_row,
-                    &source_table_info,
-                    &target_table_info,
-                )
-            });
+            let matching_target_idx = if source_table_info.is_some() {
+                target_rows.iter().position(|target_row| {
+                    self.eval_merge_condition(
+                        &merge.on_condition,
+                        source_row,
+                        target_row,
+                        source_table_info.as_ref().unwrap(),
+                        &target_table_info,
+                    )
+                })
+            } else {
+                None
+            };
 
             if let Some(idx) = matching_target_idx {
-                if let Some(ref clause) = merge.matched_clause {
-                    let target_row = &target_rows[idx];
-                    let updates: Vec<(usize, Value)> = clause
-                        .update_columns
+                let target_row = &target_rows[idx];
+                for clause in &merge.matched_clauses {
+                    if let Some(ref where_cond) = clause.where_clause {
+                        if !self.eval_merge_condition(
+                            where_cond,
+                            source_row,
+                            target_row,
+                            source_table_info.as_ref().unwrap(),
+                            &target_table_info,
+                        ) {
+                            continue;
+                        }
+                    }
+                    match &clause.action {
+                        MergeAction::Update { columns, values } => {
+                            let updates: Vec<(usize, Value)> = columns
+                                .iter()
+                                .zip(values.iter())
+                                .filter_map(|(col, val)| {
+                                    find_column_index(col, &target_table_info).map(|col_idx| {
+                                        let evaluated = self.eval_merge_value(
+                                            val,
+                                            source_row,
+                                            target_row,
+                                            source_table_info.as_ref().unwrap(),
+                                            &target_table_info,
+                                        );
+                                        (col_idx, evaluated)
+                                    })
+                                })
+                                .collect();
+
+                            let filter =
+                                target_pk_idx.and_then(|pk_idx| target_row.get(pk_idx).cloned());
+                            let mut storage = self.storage.write().unwrap();
+                            let _ = storage.update(target_table, filter.as_slice(), &updates);
+                            matched_count += 1;
+                        }
+                        MergeAction::Delete => {
+                            let filter =
+                                target_pk_idx.and_then(|pk_idx| target_row.get(pk_idx).cloned());
+                            let mut storage = self.storage.write().unwrap();
+                            let _ = storage.delete(target_table, filter.as_slice());
+                            matched_count += 1;
+                        }
+                    }
+                }
+            } else {
+                for clause in &merge.not_matched_clauses {
+                    if let Some(ref where_cond) = clause.where_clause {
+                        let src_info = source_table_info.as_ref().unwrap_or(&target_table_info);
+                        if !self.eval_merge_condition(
+                            where_cond,
+                            source_row,
+                            &[],
+                            src_info,
+                            &target_table_info,
+                        ) {
+                            continue;
+                        }
+                    }
+                    let values: Vec<Value> = clause
+                        .insert_values
                         .iter()
-                        .zip(clause.update_values.iter())
-                        .filter_map(|(col, val)| {
-                            find_column_index(col, &target_table_info).map(|col_idx| {
-                                let evaluated = self.eval_merge_value(
-                                    val,
-                                    source_row,
-                                    target_row,
-                                    &source_table_info,
-                                    &target_table_info,
-                                );
-                                (col_idx, evaluated)
-                            })
+                        .map(|val| {
+                            self.eval_merge_value(
+                                val,
+                                source_row,
+                                &[],
+                                source_table_info.as_ref().unwrap_or(&target_table_info),
+                                &target_table_info,
+                            )
                         })
                         .collect();
 
-                    let filter = target_pk_idx.and_then(|pk_idx| target_row.get(pk_idx).cloned());
                     let mut storage = self.storage.write().unwrap();
-                    let _ = storage.update(target_table, filter.as_slice(), &updates);
-                    matched_count += 1;
+                    let _ = storage.insert(target_table, vec![values]);
+                    inserted_count += 1;
                 }
-            } else if let Some(ref clause) = merge.not_matched_clause {
-                let values: Vec<Value> = clause
-                    .insert_values
-                    .iter()
-                    .map(|val| {
-                        self.eval_merge_value(
-                            val,
-                            source_row,
-                            &[],
-                            &source_table_info,
-                            &target_table_info,
-                        )
-                    })
-                    .collect();
-
-                let mut storage = self.storage.write().unwrap();
-                let _ = storage.insert(target_table, vec![values]);
-                inserted_count += 1;
             }
         }
 

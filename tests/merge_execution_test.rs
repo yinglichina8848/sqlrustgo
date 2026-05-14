@@ -275,3 +275,233 @@ fn test_merge_multiple_matched_rows() {
         .unwrap();
     assert_eq!(result.rows[0][0], Value::Text("s3".to_string()));
 }
+
+#[test]
+fn test_merge_1_basic_update() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE target (id INTEGER PRIMARY KEY, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO target VALUES (1, 'old')")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE source (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO source VALUES (1, 'new')")
+        .unwrap();
+
+    let result = engine.execute(
+        "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET name = source.name",
+    );
+    assert!(result.is_ok(), "MERGE-1 should work: {:?}", result);
+
+    let result = engine
+        .execute("SELECT name FROM target WHERE id = 1")
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Text("new".to_string()));
+}
+
+#[test]
+fn test_merge_2_not_matched_insert() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE target (id INTEGER PRIMARY KEY, name TEXT)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE source (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO source VALUES (1, 'new')")
+        .unwrap();
+
+    let result = engine.execute(
+        "MERGE INTO target USING source ON target.id = source.id WHEN NOT MATCHED THEN INSERT (id, name) VALUES (source.id, source.name)",
+    );
+    assert!(result.is_ok(), "MERGE-2 should work: {:?}", result);
+
+    let result = engine
+        .execute("SELECT name FROM target WHERE id = 1")
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Text("new".to_string()));
+}
+
+#[test]
+fn test_merge_3_update_with_where() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE target (id INTEGER PRIMARY KEY, name TEXT, status INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO target VALUES (1, 'old', 1), (2, 'old', 0)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE source (id INTEGER, name TEXT, status INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO source VALUES (1, 'new', 1), (2, 'new', 0)")
+        .unwrap();
+
+    let result = engine.execute(
+        "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED AND target.status = 1 THEN UPDATE SET name = source.name",
+    );
+    assert!(result.is_ok(), "MERGE-3 should work: {:?}", result);
+
+    let result = engine
+        .execute("SELECT name FROM target WHERE id = 1")
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Text("new".to_string()));
+    let result = engine
+        .execute("SELECT name FROM target WHERE id = 2")
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Text("old".to_string()));
+}
+
+#[test]
+fn test_merge_4_insert_with_where() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE target (id INTEGER PRIMARY KEY, name TEXT, status INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO target VALUES (1, 'existing', 1)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE source (id INTEGER, name TEXT, status INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO source VALUES (2, 'new', 1), (3, 'skip', 0)")
+        .unwrap();
+
+    let result = engine.execute(
+        "MERGE INTO target USING source ON target.id = source.id WHEN NOT MATCHED AND source.status = 1 THEN INSERT (id, name) VALUES (source.id, source.name)",
+    );
+    assert!(result.is_ok(), "MERGE-4 should work: {:?}", result);
+
+    let result = engine.execute("SELECT COUNT(*) FROM target").unwrap();
+    assert_eq!(result.rows[0][0], Value::Integer(2));
+    let result = engine
+        .execute("SELECT name FROM target WHERE id = 2")
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Text("new".to_string()));
+}
+
+#[test]
+fn test_merge_5_multiple_when_matched() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE target (id INTEGER PRIMARY KEY, name TEXT, status INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO target VALUES (1, 'old', 1)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE source (id INTEGER, name TEXT, status INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO source VALUES (1, 'new', 1)")
+        .unwrap();
+
+    let result = engine.execute(
+        "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED AND source.status = 1 THEN UPDATE SET name = 'updated1' WHEN MATCHED AND source.status = 0 THEN UPDATE SET name = 'updated2'",
+    );
+    assert!(result.is_ok(), "MERGE-5 should work: {:?}", result);
+
+    let result = engine
+        .execute("SELECT name FROM target WHERE id = 1")
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Text("updated1".to_string()));
+}
+
+#[test]
+fn test_merge_6_subquery_as_source() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE target (id INTEGER PRIMARY KEY, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO target VALUES (1, 'old')")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE src (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO src VALUES (2, 'from_src')")
+        .unwrap();
+
+    let result = engine.execute(
+        "MERGE INTO target USING src ON target.id = src.id WHEN NOT MATCHED THEN INSERT (id, name) VALUES (src.id, src.name)",
+    );
+    assert!(result.is_ok(), "MERGE-6 should work: {:?}", result);
+
+    let result = engine
+        .execute("SELECT name FROM target WHERE id = 2")
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Text("from_src".to_string()));
+}
+
+#[test]
+fn test_merge_7_delete_operation() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE target (id INTEGER PRIMARY KEY, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO target VALUES (1, 'delete_me'), (2, 'keep_me')")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE src (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO src VALUES (1, 'delete_me')")
+        .unwrap();
+
+    let merge_result = engine
+        .execute("MERGE INTO target USING src ON target.id = src.id WHEN MATCHED THEN DELETE");
+    assert!(
+        merge_result.is_ok(),
+        "MERGE-7 should work: {:?}",
+        merge_result
+    );
+
+    let result = engine.execute("SELECT COUNT(*) FROM target").unwrap();
+    assert_eq!(result.rows[0][0], Value::Integer(1));
+    let result = engine
+        .execute("SELECT name FROM target WHERE id = 2")
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Text("keep_me".to_string()));
+}
+
+#[test]
+fn test_merge_8_bulk_merge() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE target (id INTEGER PRIMARY KEY, value INTEGER)")
+        .unwrap();
+    engine
+        .execute("CREATE TABLE source (id INTEGER, value INTEGER)")
+        .unwrap();
+
+    engine
+        .execute("INSERT INTO target VALUES (1, 1), (2, 2)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO source VALUES (1, 10), (2, 20)")
+        .unwrap();
+
+    let result = engine.execute(
+        "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET value = source.value",
+    );
+    assert!(result.is_ok(), "MERGE-8 should work: {:?}", result);
+
+    let result = engine
+        .execute("SELECT value FROM target WHERE id = 1")
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Integer(10));
+
+    let result = engine
+        .execute("SELECT value FROM target WHERE id = 2")
+        .unwrap();
+    assert_eq!(result.rows[0][0], Value::Integer(20));
+}

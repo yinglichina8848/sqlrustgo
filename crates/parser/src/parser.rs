@@ -495,20 +495,36 @@ pub struct DeleteStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MergeStatement {
     pub target_table: String,
-    pub source_table: String,
+    pub source: MergeSource,
     pub on_condition: Expression,
-    pub matched_clause: Option<MergeMatchedClause>,
-    pub not_matched_clause: Option<MergeNotMatchedClause>,
+    pub matched_clauses: Vec<MergeMatchedClause>,
+    pub not_matched_clauses: Vec<MergeNotMatchedClause>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MergeSource {
+    Table(String),
+    Subquery(Box<SelectStatement>, Vec<String>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MergeAction {
+    Update {
+        columns: Vec<String>,
+        values: Vec<Expression>,
+    },
+    Delete,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MergeMatchedClause {
-    pub update_columns: Vec<String>,
-    pub update_values: Vec<Expression>,
+    pub where_clause: Option<Expression>,
+    pub action: MergeAction,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MergeNotMatchedClause {
+    pub where_clause: Option<Expression>,
     pub insert_columns: Vec<String>,
     pub insert_values: Vec<Expression>,
 }
@@ -4556,23 +4572,63 @@ impl Parser {
         };
 
         self.expect(Token::Using)?;
-        let source_table = match self.next() {
-            Some(Token::Identifier(name)) => name,
-            _ => return Err("Expected source table name".to_string()),
+        let source = if matches!(self.current(), Some(Token::LParen)) {
+            self.next();
+            if matches!(self.current(), Some(Token::Select)) {
+                let subquery = self.parse_select_statement()?;
+                self.expect(Token::RParen)?;
+                let aliases = if matches!(self.current(), Some(Token::Identifier(_))) {
+                    let mut cols = Vec::new();
+                    while matches!(self.current(), Some(Token::Identifier(_))) {
+                        if let Some(Token::Identifier(name)) = self.next() {
+                            cols.push(name);
+                        }
+                        if matches!(self.current(), Some(Token::Comma)) {
+                            self.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    cols
+                } else {
+                    Vec::new()
+                };
+                MergeSource::Subquery(Box::new(subquery), aliases)
+            } else {
+                let source_table = match self.current() {
+                    Some(Token::Identifier(name)) => name.to_string(),
+                    _ => return Err("Expected table name or subquery".to_string()),
+                };
+                self.next();
+                self.expect(Token::RParen)?;
+                MergeSource::Table(source_table)
+            }
+        } else {
+            let source_table = match self.next() {
+                Some(Token::Identifier(name)) => name,
+                _ => return Err("Expected source table name".to_string()),
+            };
+            MergeSource::Table(source_table)
         };
 
         self.expect(Token::On)?;
         let on_condition = self.parse_expression()?;
 
-        let mut matched_clause = None;
-        let mut not_matched_clause = None;
+        let mut matched_clauses = Vec::new();
+        let mut not_matched_clauses = Vec::new();
 
         while matches!(self.current(), Some(Token::When)) {
             self.next();
             if matches!(self.current(), Some(Token::Matched)) {
                 self.next();
+                let where_clause = if matches!(self.current(), Some(Token::And)) {
+                    self.next();
+                    Some(self.parse_expression()?)
+                } else {
+                    None
+                };
                 self.expect(Token::Then)?;
-                if matches!(self.current(), Some(Token::Update)) {
+                let action = if matches!(self.current(), Some(Token::Update)) {
                     self.next();
                     self.expect(Token::Set)?;
                     let mut update_columns = Vec::new();
@@ -4589,14 +4645,29 @@ impl Parser {
                             break;
                         }
                     }
-                    matched_clause = Some(MergeMatchedClause {
-                        update_columns,
-                        update_values,
-                    });
-                }
+                    MergeAction::Update {
+                        columns: update_columns,
+                        values: update_values,
+                    }
+                } else if matches!(self.current(), Some(Token::Delete)) {
+                    self.next();
+                    MergeAction::Delete
+                } else {
+                    return Err("Expected UPDATE or DELETE after THEN".to_string());
+                };
+                matched_clauses.push(MergeMatchedClause {
+                    where_clause,
+                    action,
+                });
             } else if matches!(self.current(), Some(Token::Not)) {
                 self.next();
                 self.expect(Token::Matched)?;
+                let where_clause = if matches!(self.current(), Some(Token::And)) {
+                    self.next();
+                    Some(self.parse_expression()?)
+                } else {
+                    None
+                };
                 self.expect(Token::Then)?;
                 if matches!(self.current(), Some(Token::Insert)) {
                     self.next();
@@ -4625,20 +4696,25 @@ impl Parser {
                         }
                     }
                     self.expect(Token::RParen)?;
-                    not_matched_clause = Some(MergeNotMatchedClause {
+                    not_matched_clauses.push(MergeNotMatchedClause {
+                        where_clause,
                         insert_columns,
                         insert_values,
                     });
+                } else {
+                    return Err("Expected INSERT after THEN".to_string());
                 }
+            } else {
+                return Err("Expected MATCHED or NOT after WHEN".to_string());
             }
         }
 
         Ok(Statement::Merge(MergeStatement {
             target_table,
-            source_table,
+            source,
             on_condition,
-            matched_clause,
-            not_matched_clause,
+            matched_clauses,
+            not_matched_clauses,
         }))
     }
 
@@ -6732,7 +6808,10 @@ mod tests {
         match result.unwrap() {
             Statement::Merge(m) => {
                 assert_eq!(m.target_table, "target");
-                assert_eq!(m.source_table, "source");
+                match m.source {
+                    MergeSource::Table(name) => assert_eq!(name, "source"),
+                    MergeSource::Subquery(_, _) => panic!("Expected table source"),
+                }
             }
             _ => panic!("Expected MERGE statement"),
         }
@@ -6746,11 +6825,19 @@ mod tests {
         match result.unwrap() {
             Statement::Merge(m) => {
                 assert_eq!(m.target_table, "t");
-                assert_eq!(m.source_table, "s");
-                assert!(m.matched_clause.is_some());
-                let clause = m.matched_clause.unwrap();
-                assert_eq!(clause.update_columns.len(), 1);
-                assert_eq!(clause.update_columns[0], "name");
+                match m.source {
+                    MergeSource::Table(name) => assert_eq!(name, "s"),
+                    MergeSource::Subquery(_, _) => panic!("Expected table source"),
+                }
+                assert!(!m.matched_clauses.is_empty());
+                let clause = &m.matched_clauses[0];
+                match &clause.action {
+                    MergeAction::Update { columns, values } => {
+                        assert_eq!(columns.len(), 1);
+                        assert_eq!(columns[0], "name");
+                    }
+                    MergeAction::Delete => panic!("Expected UPDATE action"),
+                }
             }
             _ => panic!("Expected MERGE statement"),
         }
@@ -6763,9 +6850,12 @@ mod tests {
         match result.unwrap() {
             Statement::Merge(m) => {
                 assert_eq!(m.target_table, "t");
-                assert_eq!(m.source_table, "s");
-                assert!(m.not_matched_clause.is_some());
-                let clause = m.not_matched_clause.unwrap();
+                match m.source {
+                    MergeSource::Table(name) => assert_eq!(name, "s"),
+                    MergeSource::Subquery(_, _) => panic!("Expected table source"),
+                }
+                assert!(!m.not_matched_clauses.is_empty());
+                let clause = &m.not_matched_clauses[0];
                 assert_eq!(clause.insert_columns.len(), 2);
             }
             _ => panic!("Expected MERGE statement"),
@@ -6778,8 +6868,8 @@ mod tests {
         assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
             Statement::Merge(m) => {
-                assert!(m.matched_clause.is_some());
-                assert!(m.not_matched_clause.is_some());
+                assert!(!m.matched_clauses.is_empty());
+                assert!(!m.not_matched_clauses.is_empty());
             }
             _ => panic!("Expected MERGE statement"),
         }
