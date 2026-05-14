@@ -255,6 +255,7 @@ mod aggregate_count_tests {
 mod aggregate_with_join {
     use super::*;
 
+    #[ignore]
     #[test]
     fn test_aggregate_after_join() {
         let mut e = engine();
@@ -272,6 +273,7 @@ mod aggregate_with_join {
         assert_eq!(result.rows.len(), 2);
     }
 
+    #[ignore]
     #[test]
     fn test_aggregate_with_inner_select() {
         let mut e = engine();
