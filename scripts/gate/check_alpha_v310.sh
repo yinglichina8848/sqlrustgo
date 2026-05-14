@@ -120,10 +120,10 @@ else
     echo "FAIL (${pct}% < 60%)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
-# A10: MERGE test (use replace_into_test which tests similar functionality)
+# A10: MERGE statement test
 TOTAL=$((TOTAL+1))
-echo -n "[alpha-v3.1.0] A10: merge/replace test ... "
-if cargo test --test replace_into_test >/dev/null 2>&1; then
+echo -n "[alpha-v3.1.0] A10: merge test ... "
+if cargo test --test merge_execution_test >/dev/null 2>&1; then
     echo "PASS"; PASS=$((PASS+1))
 else
     echo "FAIL"; BLOCKERS=$((BLOCKERS+1))

@@ -4872,6 +4872,7 @@ dependencies = [
  "sqlrustgo-common",
  "sqlrustgo-distributed",
  "sqlrustgo-executor",
+ "sqlrustgo-gis",
  "sqlrustgo-gmp",
  "sqlrustgo-graph",
  "sqlrustgo-observability",
