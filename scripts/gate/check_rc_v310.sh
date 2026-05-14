@@ -173,6 +173,9 @@ check_test "R-S4: gis_spatial_test" "cargo test --test gis_spatial_test 2>&1" "R
 # ========== R-S5: Event Scheduler ==========
 check_test "R-S5: event_scheduler_test" "cargo test --test event_scheduler_test 2>&1" "R-S5"
 
+# ========== R-QA: QA Enhancement Suite ==========
+check "R-QA: QA Enhancement Suite" "GATE_STAGE=rc bash scripts/gate/check_qa_enhancement.sh" "R-QA"
+
 echo ""
 echo "=== RC Gate Results: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="
 if [ ${#FAIL_REASONS[@]} -gt 0 ]; then

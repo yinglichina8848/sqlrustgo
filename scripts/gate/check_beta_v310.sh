@@ -143,6 +143,15 @@ fi
 
 check "B9: proof registry" python3 scripts/verify_proof_registry.py
 
+# B10: QA Enhancement Suite
+echo -n "[beta-v3.1.0] B10: QA Enhancement Suite ... "
+GATE_STAGE=beta bash scripts/gate/check_qa_enhancement.sh >/tmp/qa_beta.log 2>&1
+if [ $? -eq 0 ]; then
+    echo "PASS"; PASS=$((PASS+1))
+else
+    echo "FAIL (see /tmp/qa_beta.log)"; BLOCKERS=$((BLOCKERS+1))
+fi
+
 # Stability tests
 check_test "B-S1: concurrency_stress" "cargo test --test concurrency_stress_test"
 check_test "B-S2: crash_recovery" "cargo test --test crash_recovery_test"

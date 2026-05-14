@@ -147,6 +147,17 @@ else
     echo "FAIL"; BLOCKERS=$((BLOCKERS+1))
 fi
 
+# A13: QA Enhancement Suite
+TOTAL=$((TOTAL+1))
+echo -n "[alpha-v3.1.0] A13: QA Enhancement Suite ... "
+GATE_STAGE=alpha bash scripts/gate/check_qa_enhancement.sh >/tmp/qa_alpha.log 2>&1
+QA_RESULT=$?
+if [ $QA_RESULT -eq 0 ]; then
+    echo "PASS"; PASS=$((PASS+1))
+else
+    echo "FAIL (see /tmp/qa_alpha.log)"; BLOCKERS=$((BLOCKERS+1))
+fi
+
 echo ""
 echo "=== Alpha Gate: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="
 if [ $BLOCKERS -gt 0 ]; then
