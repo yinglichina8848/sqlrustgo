@@ -125,6 +125,339 @@ mod constant_folding_tests {
             assert_eq!(predicate, Expr::Literal("3".to_string()));
         }
     }
+
+    #[test]
+    fn test_constant_folding_minus() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("5".to_string())),
+                op: BinaryOperator::Minus,
+                right: Box::new(Expr::Literal("3".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("2".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_multiply() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("4".to_string())),
+                op: BinaryOperator::Multiply,
+                right: Box::new(Expr::Literal("3".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("12".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_divide() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("10".to_string())),
+                op: BinaryOperator::Divide,
+                right: Box::new(Expr::Literal("2".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("5".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_divide_by_zero() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("10".to_string())),
+                op: BinaryOperator::Divide,
+                right: Box::new(Expr::Literal("0".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_constant_folding_eq() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("5".to_string())),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Literal("5".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("true".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_neq() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("5".to_string())),
+                op: BinaryOperator::NotEq,
+                right: Box::new(Expr::Literal("3".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("true".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_lt() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("3".to_string())),
+                op: BinaryOperator::Lt,
+                right: Box::new(Expr::Literal("5".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("true".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_lte() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("5".to_string())),
+                op: BinaryOperator::LtEq,
+                right: Box::new(Expr::Literal("5".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("true".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_gt() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("7".to_string())),
+                op: BinaryOperator::Gt,
+                right: Box::new(Expr::Literal("5".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("true".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_gte() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("5".to_string())),
+                op: BinaryOperator::GtEq,
+                right: Box::new(Expr::Literal("5".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("true".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_and_true() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("true".to_string())),
+                op: BinaryOperator::And,
+                right: Box::new(Expr::Literal("true".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("true".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_and_false_left() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("false".to_string())),
+                op: BinaryOperator::And,
+                right: Box::new(Expr::Literal("true".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("false".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_or_false() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("false".to_string())),
+                op: BinaryOperator::Or,
+                right: Box::new(Expr::Literal("true".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("true".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_or_both_false() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("false".to_string())),
+                op: BinaryOperator::Or,
+                right: Box::new(Expr::Literal("false".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Literal("false".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_and_short_circuit() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("true".to_string())),
+                op: BinaryOperator::And,
+                right: Box::new(Expr::Column("x".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Column("x".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_constant_folding_or_short_circuit() {
+        let mut plan = UnifiedPlan::Filter {
+            predicate: Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("false".to_string())),
+                op: BinaryOperator::Or,
+                right: Box::new(Expr::Column("y".to_string())),
+            },
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let result = rule.apply(&mut plan);
+        assert!(result);
+        if let UnifiedPlan::Filter { predicate, .. } = plan {
+            assert_eq!(predicate, Expr::Column("y".to_string()));
+        }
+    }
 }
 
 mod rule_trait_tests {
