@@ -1520,6 +1520,34 @@ impl StoredProcExecutor {
                     Ok(combined)
                 }
             }
+            sqlrustgo_parser::Statement::Intersect(intersect_stmt) => {
+                let left_records = self.execute_cte_subquery(&intersect_stmt.left, ctx)?;
+                let right_records = self.execute_cte_subquery(&intersect_stmt.right, ctx)?;
+                let right_set: std::collections::HashSet<_> = right_records.iter().collect();
+                let result: Vec<_> = if intersect_stmt.intersect_all {
+                    left_records.into_iter().filter(|r| right_set.contains(r)).collect()
+                } else {
+                    let mut left_unique: Vec<_> = left_records;
+                    left_unique.sort();
+                    left_unique.dedup();
+                    left_unique.into_iter().filter(|r| right_set.contains(r)).collect()
+                };
+                Ok(result)
+            }
+            sqlrustgo_parser::Statement::Except(except_stmt) => {
+                let left_records = self.execute_cte_subquery(&except_stmt.left, ctx)?;
+                let right_records = self.execute_cte_subquery(&except_stmt.right, ctx)?;
+                let right_set: std::collections::HashSet<_> = right_records.iter().collect();
+                let result: Vec<_> = if except_stmt.except_all {
+                    left_records.into_iter().filter(|r| !right_set.contains(r)).collect()
+                } else {
+                    let mut left_unique: Vec<_> = left_records;
+                    left_unique.sort();
+                    left_unique.dedup();
+                    left_unique.into_iter().filter(|r| !right_set.contains(r)).collect()
+                };
+                Ok(result)
+            }
             _ => Err(format!(
                 "Unsupported statement type in CTE: {:?}",
                 statement
