@@ -1164,8 +1164,8 @@ impl Parser {
                 }
             } else {
                 match self.current() {
-                    Some(Token::StringLiteral(s)) => s,
-                    Some(Token::Identifier(s)) => s,
+                    Some(Token::StringLiteral(s)) => s.clone(),
+                    Some(Token::Identifier(s)) => s.clone(),
                     _ => return Err("Expected idempotency key".to_string()),
                 }
             };

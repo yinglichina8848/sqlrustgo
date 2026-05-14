@@ -142,7 +142,7 @@ impl TransactionManager {
     }
 
     fn compute_request_hash(
-        statement: &crate::parser::TransactionStatement,
+        statement: &sqlrustgo_parser::TransactionStatement,
     ) -> Result<[u8; 32], SsiError> {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -162,7 +162,7 @@ impl TransactionManager {
     pub fn begin_transaction_idempotent(
         &mut self,
         key: &str,
-        statement: &crate::parser::TransactionStatement,
+        statement: &sqlrustgo_parser::TransactionStatement,
         isolation: IsolationLevel,
     ) -> Result<IdempotentBeginResult, IdempotencyOrSsiError> {
         let tx_id = TxId::new(self.next_tx_id);
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn test_begin_transaction_idempotent_new_key() {
-        use crate::parser::TransactionStatement;
+        use sqlrustgo_parser::TransactionStatement;
 
         let mut mgr = TransactionManager::new();
         let key = "txn-test-1";
@@ -542,7 +542,7 @@ mod tests {
 
     #[test]
     fn test_begin_transaction_idempotent_same_key_idempotent() {
-        use crate::parser::TransactionStatement;
+        use sqlrustgo_parser::TransactionStatement;
 
         let mut mgr = TransactionManager::new();
         let key = "txn-test-2";
@@ -580,7 +580,7 @@ mod tests {
 
     #[test]
     fn test_begin_transaction_idempotent_different_content_rejected() {
-        use crate::parser::TransactionStatement;
+        use sqlrustgo_parser::TransactionStatement;
 
         let mut mgr = TransactionManager::new();
         let key = "txn-test-3";
@@ -614,7 +614,7 @@ mod tests {
 
     #[test]
     fn test_mark_idempotent_committed() {
-        use crate::parser::TransactionStatement;
+        use sqlrustgo_parser::TransactionStatement;
 
         let mgr = TransactionManager::new();
         let key = "txn-test-4";

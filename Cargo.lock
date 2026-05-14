@@ -5426,12 +5426,14 @@ name = "sqlrustgo-transaction"
 version = "3.0.0"
 dependencies = [
  "ed25519-dalek",
+ "hex",
  "log",
  "rand 0.8.6",
  "serde",
  "sha2 0.10.9",
  "sqlrustgo-common",
  "sqlrustgo-observability",
+ "sqlrustgo-parser",
  "sqlrustgo-storage",
  "tempfile",
  "thiserror 2.0.18",
