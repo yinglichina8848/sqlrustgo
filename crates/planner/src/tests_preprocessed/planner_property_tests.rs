@@ -420,7 +420,7 @@ mod operator_tests {
 #[cfg(test)]
 mod logical_plan_variant_tests {
     use super::*;
-    use sqlrustgo_planner::LogicalPlan;
+    use crate::LogicalPlan;
 
     #[test]
     fn test_logical_plan_subquery() {
@@ -602,7 +602,7 @@ mod expr_tests {
 
     #[test]
     fn test_expr_column() {
-        let expr = Expr::Column(sqlrustgo_planner::Column::new("name".to_string()));
+        let expr = Expr::Column(crate::Column::new("name".to_string()));
         assert!(matches!(expr, Expr::Column(_)));
     }
 
@@ -614,7 +614,7 @@ mod expr_tests {
 
     #[test]
     fn test_expr_binary() {
-        let left = Expr::Column(sqlrustgo_planner::Column::new("a".to_string()));
+        let left = Expr::Column(crate::Column::new("a".to_string()));
         let right = Expr::Literal(Value::Integer(1));
         let expr = Expr::binary_expr(left, Operator::Plus, right);
         assert!(matches!(
