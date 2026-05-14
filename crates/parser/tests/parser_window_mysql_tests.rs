@@ -423,11 +423,7 @@ fn test_parse_substring_multiple_columns() {
     // Note: || concatenation not supported, test single SUBSTRING instead
     let sql = "SELECT SUBSTRING(first_name FROM 1 FOR 1) AS first_initial FROM users";
     let result = parse(sql);
-    assert!(
-        result.is_ok(),
-        "Failed to parse SUBSTRING: {:?}",
-        result
-    );
+    assert!(result.is_ok(), "Failed to parse SUBSTRING: {:?}", result);
 }
 
 // ============ Qualified Table Names ============
