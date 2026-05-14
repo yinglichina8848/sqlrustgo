@@ -883,6 +883,7 @@ impl SimpleExecutor {
     fn execute_transaction(&mut self, stmt: &TransactionStatement) -> Result<(), String> {
         match stmt {
             TransactionStatement::Begin { .. } => Ok(()),
+            TransactionStatement::BeginIdempotent { .. } => Ok(()),
             TransactionStatement::Commit { .. } => Ok(()),
             TransactionStatement::Rollback { .. } => Ok(()),
             TransactionStatement::SetTransaction { isolation_level } => match isolation_level {

@@ -79,7 +79,7 @@ mod wal_tests {
     #[test]
     fn test_log_pending() {
         let registry = Arc::new(IdempotencyRegistry::new());
-        let adapter = IdempotencyWalAdapter::new(registry);
+        let adapter = IdempotencyWalAdapter::new(registry.clone());
 
         let record = IdempotencyRecord {
             key: "txn-1".to_string(),
@@ -97,7 +97,7 @@ mod wal_tests {
     #[test]
     fn test_log_commit() {
         let registry = Arc::new(IdempotencyRegistry::new());
-        let adapter = IdempotencyWalAdapter::new(registry);
+        let adapter = IdempotencyWalAdapter::new(registry.clone());
 
         registry.check_and_register("txn-1", [0u8; 32], 1).unwrap();
 
@@ -114,7 +114,7 @@ mod wal_tests {
     #[test]
     fn test_log_reject() {
         let registry = Arc::new(IdempotencyRegistry::new());
-        let adapter = IdempotencyWalAdapter::new(registry);
+        let adapter = IdempotencyWalAdapter::new(registry.clone());
 
         registry.check_and_register("txn-1", [0u8; 32], 1).unwrap();
 
@@ -132,7 +132,7 @@ mod wal_tests {
     #[test]
     fn test_recover_from_wal_pending() {
         let registry = Arc::new(IdempotencyRegistry::new());
-        let adapter = IdempotencyWalAdapter::new(registry);
+        let adapter = IdempotencyWalAdapter::new(registry.clone());
 
         let entries = vec![WalEntry::IdempotentPending {
             key: "txn-1".to_string(),
@@ -152,7 +152,7 @@ mod wal_tests {
     #[test]
     fn test_recover_from_wal_commit() {
         let registry = Arc::new(IdempotencyRegistry::new());
-        let adapter = IdempotencyWalAdapter::new(registry);
+        let adapter = IdempotencyWalAdapter::new(registry.clone());
 
         let entries = vec![
             WalEntry::IdempotentPending {
@@ -177,7 +177,7 @@ mod wal_tests {
     #[test]
     fn test_recover_from_wal_reject() {
         let registry = Arc::new(IdempotencyRegistry::new());
-        let adapter = IdempotencyWalAdapter::new(registry);
+        let adapter = IdempotencyWalAdapter::new(registry.clone());
 
         let entries = vec![
             WalEntry::IdempotentPending {
@@ -205,7 +205,7 @@ mod wal_tests {
     fn test_recover_from_wal_multiple_entries() {
         let registry = Arc::new(IdempotencyRegistry::new());
         let registry_for_check = registry.clone();
-        let adapter = IdempotencyWalAdapter::new(registry);
+        let adapter = IdempotencyWalAdapter::new(registry.clone());
 
         let entries = vec![
             WalEntry::IdempotentPending {
