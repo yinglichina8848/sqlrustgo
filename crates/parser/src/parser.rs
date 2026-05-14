@@ -1161,7 +1161,9 @@ impl Parser {
                     _ => return Err("Expected idempotency key".to_string()),
                 }
             };
-            return Ok(Statement::Transaction(TransactionStatement::BeginIdempotent { key }));
+            return Ok(Statement::Transaction(
+                TransactionStatement::BeginIdempotent { key },
+            ));
         }
         Ok(Statement::Transaction(TransactionStatement::Begin {
             work,

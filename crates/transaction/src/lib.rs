@@ -35,5 +35,6 @@ pub use lock_manager::DistributedLockManager;
 pub use mvcc::{Snapshot, Transaction, TxId, INVALID_TX_ID};
 pub use ssi::{SerializationGraph, SireadLock, SsiDetector, SsiDetectorSync, SsiError};
 pub use transaction_manager::{
-    ActiveTransaction, IsolationLevel, TransactionManager, TransactionState,
+    ActiveTransaction, IdempotencyOrSsiError, IdempotentBeginResult, IsolationLevel,
+    TransactionManager, TransactionState,
 };

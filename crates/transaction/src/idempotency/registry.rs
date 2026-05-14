@@ -37,7 +37,10 @@ impl IdempotencyRegistry {
         request_hash: [u8; 32],
         tx_id: u64,
     ) -> Result<bool, IdempotencyError> {
-        let mut records = self.records.write().map_err(|_| IdempotencyError::LockError)?;
+        let mut records = self
+            .records
+            .write()
+            .map_err(|_| IdempotencyError::LockError)?;
 
         if let Some(existing) = records.get(key) {
             if existing.request_hash == request_hash {
@@ -75,7 +78,10 @@ impl IdempotencyRegistry {
     }
 
     pub fn mark_committed(&self, key: &str) -> Result<(), IdempotencyError> {
-        let mut records = self.records.write().map_err(|_| IdempotencyError::LockError)?;
+        let mut records = self
+            .records
+            .write()
+            .map_err(|_| IdempotencyError::LockError)?;
         if let Some(record) = records.get_mut(key) {
             record.state = IdempotencyState::Committed;
             record.updated_at = SystemTime::now()
@@ -87,7 +93,10 @@ impl IdempotencyRegistry {
     }
 
     pub fn mark_rejected(&self, key: &str, reason: &str) -> Result<(), IdempotencyError> {
-        let mut records = self.records.write().map_err(|_| IdempotencyError::LockError)?;
+        let mut records = self
+            .records
+            .write()
+            .map_err(|_| IdempotencyError::LockError)?;
         if let Some(record) = records.get_mut(key) {
             record.state = IdempotencyState::Rejected {
                 reason: reason.to_string(),
@@ -101,7 +110,10 @@ impl IdempotencyRegistry {
     }
 
     pub fn get_state(&self, key: &str) -> Result<Option<IdempotencyState>, IdempotencyError> {
-        let records = self.records.read().map_err(|_| IdempotencyError::LockError)?;
+        let records = self
+            .records
+            .read()
+            .map_err(|_| IdempotencyError::LockError)?;
         Ok(records.get(key).map(|r| r.state.clone()))
     }
 }
@@ -145,9 +157,7 @@ mod tests {
     fn test_different_hash_same_key_rejected() {
         let registry = IdempotencyRegistry::new();
 
-        registry
-            .check_and_register("txn-1", [0u8; 32], 1)
-            .unwrap();
+        registry.check_and_register("txn-1", [0u8; 32], 1).unwrap();
         let result = registry.check_and_register("txn-1", [1u8; 32], 2);
 
         assert!(matches!(result, Err(IdempotencyError::HashMismatch(_))));
@@ -171,7 +181,9 @@ mod tests {
         let hash = [0u8; 32];
 
         registry.check_and_register("txn-1", hash, 1).unwrap();
-        registry.mark_rejected("txn-1", "validation failed").unwrap();
+        registry
+            .mark_rejected("txn-1", "validation failed")
+            .unwrap();
 
         let state = registry.get_state("txn-1").unwrap().unwrap();
         assert!(matches!(

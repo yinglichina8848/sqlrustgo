@@ -1,5 +1,5 @@
 mod registry;
 mod wal;
 
-pub use registry::IdempotencyRegistry;
+pub use registry::{IdempotencyError, IdempotencyRegistry};
 pub use wal::IdempotencyWalAdapter;
