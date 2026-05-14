@@ -106,6 +106,15 @@ else
     echo "❌ FAIL"; BLOCKERS=$((BLOCKERS+1)); FAIL_REASONS+=("G6: Security vulnerabilities found")
 fi
 
+# G6b: QA Enhancement Suite
+log_info "G6b: QA Enhancement Suite"
+TOTAL=$((TOTAL+1))
+if GATE_STAGE=ga bash scripts/gate/check_qa_enhancement.sh >/tmp/qa_ga.log 2>&1; then
+    echo "✅ PASS"; PASS=$((PASS+1))
+else
+    echo "❌ FAIL"; BLOCKERS=$((BLOCKERS+1)); FAIL_REASONS+=("G6b: QA Enhancement failed")
+fi
+
 # ============================================================
 # 第二部分: 文档层 Gate (G7-G7d)
 # ============================================================
