@@ -5054,6 +5054,7 @@ dependencies = [
  "serde",
  "sqlrustgo-types",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

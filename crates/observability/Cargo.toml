@@ -7,3 +7,4 @@ edition = "2021"
 sqlrustgo-types = { path = "../types" }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1", features = ["sync", "rt"] }
+uuid = { version = "1.0", features = ["v4"] }
