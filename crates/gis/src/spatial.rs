@@ -9,7 +9,8 @@
 //!
 //! Uses MBR-based pre-filtering with R-Tree for efficient spatial queries.
 
-use crate::geometry::{Geometry, LineString, Point, Polygon};
+#[allow(unused_imports)]
+use crate::geometry::{Geometry, LineString, MultiPoint, MultiPolygon, Point, Polygon};
 use crate::rtree::{MBRTrait, MBR};
 
 /// Edge represented as two points for polygon operations
