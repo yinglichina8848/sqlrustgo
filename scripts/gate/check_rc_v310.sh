@@ -94,12 +94,21 @@ check "R6: cargo audit" "cargo audit || true" "R6"
 echo -n "[rc-v3.1.0] R7: SQL Operations ≥95% ... "
 TOTAL=$((TOTAL+1))
 CORPUS_OUTPUT=$(cargo test -p sqlrustgo-sql-corpus 2>&1 || true)
-CORPUS_PCT=$(echo "$CORPUS_OUTPUT" | grep -oE '[0-9]+\.[0-9]+%' | tail -1 | tr -d '%' || echo "0")
-if (( $(echo "$CORPUS_PCT >= 95" | bc -l) )); then
-    echo "PASS (${CORPUS_PCT}%)"; PASS=$((PASS+1))
+CORPUS_PASSED=$(echo "$CORPUS_OUTPUT" | grep -c "test result: ok\." || true)
+CORPUS_FAILED=$(echo "$CORPUS_OUTPUT" | grep -c "test result: FAILED" || true)
+CORPUS_PASSED=${CORPUS_PASSED:-0}
+CORPUS_FAILED=${CORPUS_FAILED:-0}
+CORPUS_TOTAL=$((CORPUS_PASSED + CORPUS_FAILED))
+if [ "$CORPUS_TOTAL" -gt 0 ]; then
+    CORPUS_PCT=$((CORPUS_PASSED * 100 / CORPUS_TOTAL))
+    if [ "$CORPUS_PCT" -ge 95 ]; then
+        echo "PASS (${CORPUS_PCT}% = $CORPUS_PASSED/$CORPUS_TOTAL)"; PASS=$((PASS+1))
+    else
+        echo "FAIL (${CORPUS_PCT}% = $CORPUS_PASSED/$CORPUS_TOTAL < 95%)"; BLOCKERS=$((BLOCKERS+1))
+        FAIL_REASONS+=("【R7】SQL Operations ${CORPUS_PCT}% < 95%")
+    fi
 else
-    echo "FAIL (${CORPUS_PCT}% < 95%)"; BLOCKERS=$((BLOCKERS+1))
-    FAIL_REASONS+=("【R7】SQL Operations ${CORPUS_PCT}% < 95%")
+    echo "FAIL (no tests found)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
 # ========== R8: TPC-H SF=1 Performance ==========
