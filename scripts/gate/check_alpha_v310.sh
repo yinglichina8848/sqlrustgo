@@ -85,12 +85,14 @@ else
     echo "FAIL"; BLOCKERS=$((BLOCKERS+1))
 fi
 
-# A7: TPC-H SF=1
+# A7: TPC-H SF=1 (requires complete SF=1 data)
 TOTAL=$((TOTAL+1))
 echo -n "[alpha-v3.1.0] A7: TPC-H SF=1 22/22 ... "
 TPCH_OUT=$(bash scripts/gate/check_tpch.sh --sf1 2>&1 || true)
 if echo "$TPCH_OUT" | grep -q "TPC-H Gate: PASSED"; then
     echo "PASS"; PASS=$((PASS+1))
+elif echo "$TPCH_OUT" | grep -q "SKIPPED\|no TPC-H data\|not found"; then
+    echo "FAIL (TPC-H SF=1 data required - run scripts/gate/setup_tpch_env.sh)"; BLOCKERS=$((BLOCKERS+1))
 else
     echo "FAIL"; BLOCKERS=$((BLOCKERS+1))
 fi
