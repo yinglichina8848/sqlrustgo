@@ -13,8 +13,8 @@
 
 ## Gate Results
 
-- **PASS**: 6
-- **SKIP**: 0
+- **PASS**: 5
+- **SKIP**: 1
 - **FAIL**: 0
 
 ## New Gate Scripts
@@ -23,21 +23,21 @@
 [1/3] Checking Miri installation...
 ✅ Miri installed
 [2/3] Checking Sanitizers support...
-✅ Linux detected - ASan/UBSan available
+⚠️  Sanitizers may not be fully available on this platform
 [3/3] Verifying static analysis infrastructure...
 ✅ Miri available for memory safety checking
-✅ Sanitizers available for runtime safety checking
+⏭️  Sanitizers not available
 
 === Static Analysis Gate Summary ===
-PASS: 2
+PASS: 1
 FAIL: 0
-SKIP: 0
-✅ Static Analysis Gate PASSED (with 0 skipped checks) - Miri and Sanitizers integration
+SKIP: 1
+✅ Static Analysis Gate PASSED (with 1 skipped checks) - Miri and Sanitizers integration
 - === Running v3.1.0 Security Gate Check ===
 Running cargo audit...
 ✅ cargo audit completed
 Checking vulnerability levels...
-Critical: 0, High: 0, Medium: 0, Low: 0
+Critical:        0, High:        0, Medium:        0, Low:        0
 ✅ Security scan passed
 === Security Gate Check Complete === - cargo-audit security scanning
 - === Running v3.1.0 Benchmark Gate Check ===
@@ -58,7 +58,8 @@ Failed: 0
 === Benchmark Gate Check Complete === - TPC-H and Point Select benchmarks
 - === Running v3.1.0 Mutation Testing Gate ===
 Checking mutation testing infrastructure...
-✅ cargo-mutants installed: cargo-mutants 27.0.0
+⚠️  cargo-mutants not installed
+   Install with: cargo install cargo-mutants
 
 Verifying mutation testing targets...
 ✅ sqlrustgo-executor: source exists
@@ -66,12 +67,12 @@ Verifying mutation testing targets...
 ✅ sqlrustgo-optimizer: source exists
 
 === Mutation Testing Summary ===
-PASS: 4
+PASS: 3
 FAIL: 0
-SKIP: 0
+SKIP: 1
 Report: docs/releases/v3.1.0/mutation_testing_report.md
 ✅ Mutation Testing Gate PASSED - cargo-mutants mutation testing
 
 ## Date
 
-2026-05-14T12:17:28Z
+2026-05-14T14:47:02Z

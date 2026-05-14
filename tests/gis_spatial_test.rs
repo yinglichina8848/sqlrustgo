@@ -2,9 +2,13 @@
 //! Tests for GIS spatial operations
 //! R-S4 Gate: cargo test --test gis_spatial_test
 
-use sqlrustgo_gis::geometry::{Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
+use sqlrustgo_gis::geometry::{
+    Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon,
+};
 use sqlrustgo_gis::rtree::MBR;
-use sqlrustgo_gis::spatial::{mbr_contains, mbr_intersects, point_in_polygon, st_contains, st_distance, st_intersects};
+use sqlrustgo_gis::spatial::{
+    mbr_contains, mbr_intersects, point_in_polygon, st_contains, st_distance, st_intersects,
+};
 use sqlrustgo_gis::wkt::parse_wkt;
 
 #[test]

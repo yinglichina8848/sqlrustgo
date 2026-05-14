@@ -128,7 +128,9 @@ fn test_merge_no_matches() {
         "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET value = source.value"
     ).unwrap();
 
-    let result = engine.execute("SELECT value FROM target WHERE id = 1").unwrap();
+    let result = engine
+        .execute("SELECT value FROM target WHERE id = 1")
+        .unwrap();
     assert_eq!(result.rows[0][0], Value::Text("original".to_string()));
 }
 
@@ -153,7 +155,9 @@ fn test_merge_multiple_source_rows() {
         "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET value = source.value"
     ).unwrap();
 
-    let result = engine.execute("SELECT value FROM target WHERE id = 1").unwrap();
+    let result = engine
+        .execute("SELECT value FROM target WHERE id = 1")
+        .unwrap();
     assert_eq!(result.rows[0][0], Value::Text("v3".to_string()));
 }
 
@@ -178,7 +182,9 @@ fn test_merge_multiple_columns_update() {
         "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET a = source.a, b = source.b"
     ).unwrap();
 
-    let result = engine.execute("SELECT a, b FROM target WHERE id = 1").unwrap();
+    let result = engine
+        .execute("SELECT a, b FROM target WHERE id = 1")
+        .unwrap();
     assert_eq!(result.rows[0][0], Value::Text("new_a".to_string()));
     assert_eq!(result.rows[0][1], Value::Integer(200));
 }
@@ -204,7 +210,9 @@ fn test_merge_complex_condition() {
         "MERGE INTO target USING source ON target.id = source.id AND target.version < source.version WHEN MATCHED THEN UPDATE SET value = source.value"
     ).unwrap();
 
-    let result = engine.execute("SELECT value FROM target WHERE id = 1").unwrap();
+    let result = engine
+        .execute("SELECT value FROM target WHERE id = 1")
+        .unwrap();
     assert_eq!(result.rows[0][0], Value::Text("new".to_string()));
 }
 
@@ -254,10 +262,16 @@ fn test_merge_multiple_matched_rows() {
         "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN UPDATE SET name = source.name"
     ).unwrap();
 
-    let result = engine.execute("SELECT name FROM target WHERE id = 1").unwrap();
+    let result = engine
+        .execute("SELECT name FROM target WHERE id = 1")
+        .unwrap();
     assert_eq!(result.rows[0][0], Value::Text("s1".to_string()));
-    let result = engine.execute("SELECT name FROM target WHERE id = 2").unwrap();
+    let result = engine
+        .execute("SELECT name FROM target WHERE id = 2")
+        .unwrap();
     assert_eq!(result.rows[0][0], Value::Text("t2".to_string()));
-    let result = engine.execute("SELECT name FROM target WHERE id = 3").unwrap();
+    let result = engine
+        .execute("SELECT name FROM target WHERE id = 3")
+        .unwrap();
     assert_eq!(result.rows[0][0], Value::Text("s3".to_string()));
 }
