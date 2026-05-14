@@ -5205,6 +5205,7 @@ dependencies = [
 name = "sqlrustgo-storage"
 version = "3.0.0"
 dependencies = [
+ "aes-gcm",
  "arrow",
  "async-trait",
  "criterion 0.8.2",
@@ -5212,8 +5213,10 @@ dependencies = [
  "lz4_flex 0.11.6",
  "miniz_oxide 0.7.4",
  "parquet",
+ "rand 0.8.6",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "snap",
  "sqlrustgo-common",
  "sqlrustgo-types",
