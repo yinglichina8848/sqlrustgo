@@ -2534,9 +2534,43 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 };
                 (rows, Some(info))
             }
-            MergeSource::Subquery(subquery, _) => {
+            MergeSource::Subquery(subquery, aliases) => {
                 let result = self.execute_statement(Statement::Select(*subquery.clone()))?;
-                (result.rows, None)
+                let columns: Vec<ColumnDefinition> = if !subquery.columns.is_empty() {
+                    subquery
+                        .columns
+                        .iter()
+                        .map(|col| {
+                            let col_name = col.alias.as_ref().unwrap_or(&col.name).clone();
+                            ColumnDefinition {
+                                name: col_name,
+                                data_type: "TEXT".to_string(),
+                                nullable: true,
+                                primary_key: false,
+                                auto_increment: false,
+                            }
+                        })
+                        .collect()
+                } else if !aliases.is_empty() {
+                    aliases
+                        .iter()
+                        .map(|name| ColumnDefinition {
+                            name: name.clone(),
+                            data_type: "TEXT".to_string(),
+                            nullable: true,
+                            primary_key: false,
+                            auto_increment: false,
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                };
+                let info = TableInfo {
+                    name: "subquery".to_string(),
+                    columns,
+                    ..Default::default()
+                };
+                (result.rows, Some(info))
             }
         };
 
