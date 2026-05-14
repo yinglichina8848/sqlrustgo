@@ -1,0 +1,30 @@
+[package]
+name = "sqlrustgo-sync"
+version = "0.1.0"
+edition = "2021"
+description = "Mobile Sync - Client Transaction Replication Protocol"
+authors = ["OpenClaw"]
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+chrono = "0.4"
+async-trait = "0.1"
+
+prost = "0.13"
+tonic = "0.12"
+tonic-build = "0.12"
+
+sqlrustgo-types = { path = "../types" }
+sqlrustgo-storage = { path = "../storage" }
+sqlrustgo-transaction = { path = "../transaction" }
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[build-dependencies]
+tonic-build = "0.12"
+prost-build = "0.13"

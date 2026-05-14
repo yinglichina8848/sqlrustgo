@@ -42,6 +42,7 @@ members = [
     "crates/qmd-bridge",
     "crates/fuzz",
     "crates/observability",
+    "crates/sync",
 ]
 
 [workspace.package]
