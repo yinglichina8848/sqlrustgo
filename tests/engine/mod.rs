@@ -72,7 +72,7 @@ fn value_to_string(v: Value) -> String {
         }
         Value::Text(s) => s,
         Value::Blob(b) => format!("{:?}", b),
-        Value::Geometry(g) => format!("{:?}", g),
+        Value::Geometry(_) => "GEOMETRY".to_string(),
     }
 }
 
