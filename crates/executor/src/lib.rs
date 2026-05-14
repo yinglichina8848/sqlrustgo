@@ -5,7 +5,6 @@ pub mod event;
 pub mod executor;
 pub mod executor_metrics;
 pub mod explain;
-pub mod merge;
 pub mod query_cache;
 pub mod query_cache_config;
 pub mod scan;
@@ -24,4 +23,3 @@ pub use audit_logger::{
 pub use executor::{Executor, ExecutorResult};
 pub use executor_metrics::ExecutorMetrics;
 pub use explain::{explain, explain_analyze, ExplainConfig, ExplainLine, ExplainOutput};
-pub use merge::MergeExecutor;

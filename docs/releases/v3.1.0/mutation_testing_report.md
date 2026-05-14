@@ -4,7 +4,7 @@
 
 | Tool | Status |
 |------|--------|
-| cargo-mutants | ⏭️  Not installed |
+| cargo-mutants | ✅ Installed |
 
 ## Target Crates
 
@@ -25,4 +25,4 @@ cargo mutants test -p sqlrustgo-optimizer
 
 ## Date
 
-2026-05-14T14:47:02Z
+2026-05-14T16:24:54Z
