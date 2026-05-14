@@ -194,6 +194,8 @@ fn format_value(value: &sqlrustgo_types::Value) -> String {
         sqlrustgo_types::Value::Text(s) => s.clone(),
         sqlrustgo_types::Value::Boolean(b) => b.to_string(),
         sqlrustgo_types::Value::Blob(b) => format!("[BLOB: {} bytes]", b.len()),
+        #[allow(unreachable_patterns)]
+        sqlrustgo_types::Value::Geometry(_) => "[GEOMETRY]".to_string(),
     }
 }
 
