@@ -45,6 +45,8 @@ pub enum Statement {
     Call(CallStatement),
     CreateProcedure(CreateProcedureStatement),
     Union(UnionStatement),
+    Intersect(IntersectStatement),
+    Except(ExceptStatement),
     CreateTrigger(CreateTriggerStatement),
     Transaction(TransactionStatement),
     Grant(GrantStatement),
@@ -70,6 +72,22 @@ pub struct UnionStatement {
     pub left: Box<Statement>,
     pub right: Box<Statement>,
     pub union_all: bool,
+}
+
+/// INTERSECT statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct IntersectStatement {
+    pub left: Box<Statement>,
+    pub right: Box<Statement>,
+    pub intersect_all: bool,
+}
+
+/// EXCEPT (MINUS) statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExceptStatement {
+    pub left: Box<Statement>,
+    pub right: Box<Statement>,
+    pub except_all: bool,
 }
 
 /// CREATE INDEX statement
@@ -1836,15 +1854,38 @@ impl Parser {
             }));
         }
 
-        // INTERSECT and EXCEPT are not yet fully implemented
         if matches!(self.current(), Some(Token::Intersect)) {
             self.next();
-            return Err("INTERSECT is not fully implemented".to_string());
+            let intersect_all = if matches!(self.current(), Some(Token::All)) {
+                self.next();
+                true
+            } else {
+                false
+            };
+            let second_select = self.parse_select_statement()?;
+
+            return Ok(Statement::Intersect(IntersectStatement {
+                left: Box::new(Statement::Select(first_select)),
+                right: Box::new(Statement::Select(second_select)),
+                intersect_all,
+            }));
         }
 
         if matches!(self.current(), Some(Token::Except)) {
             self.next();
-            return Err("EXCEPT is not fully implemented".to_string());
+            let except_all = if matches!(self.current(), Some(Token::All)) {
+                self.next();
+                true
+            } else {
+                false
+            };
+            let second_select = self.parse_select_statement()?;
+
+            return Ok(Statement::Except(ExceptStatement {
+                left: Box::new(Statement::Select(first_select)),
+                right: Box::new(Statement::Select(second_select)),
+                except_all,
+            }));
         }
 
         Ok(Statement::Select(first_select))

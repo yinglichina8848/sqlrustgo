@@ -590,6 +590,104 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 left_result.affected_rows = left_result.rows.len();
                 Ok(left_result)
             }
+            Statement::Intersect(ref intersect_stmt) => {
+                let left_select = match intersect_stmt.left.as_ref() {
+                    Statement::Select(s) => s,
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "INTERSECT left side must be a SELECT".to_string(),
+                        ))
+                    }
+                };
+                let right_select = match intersect_stmt.right.as_ref() {
+                    Statement::Select(s) => s,
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "INTERSECT right side must be a SELECT".to_string(),
+                        ))
+                    }
+                };
+
+                let mut left_result = self.execute_select(left_select)?;
+                let right_result = self.execute_select(right_select)?;
+
+                if intersect_stmt.intersect_all {
+                    let mut right_counts: std::collections::HashMap<&Vec<sqlrustgo_types::Value>, i64> =
+                        std::collections::HashMap::new();
+                    for row in &right_result.rows {
+                        *right_counts.entry(row).or_insert(0) += 1;
+                    }
+
+                    left_result.rows.retain(|row| {
+                        if let Some(count) = right_counts.get_mut(row) {
+                            if *count > 0 {
+                                *count -= 1;
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    });
+                } else {
+                    let right_set: std::collections::HashSet<_> =
+                        right_result.rows.iter().collect();
+                    left_result.rows.retain(|row| right_set.contains(row));
+                }
+
+                left_result.affected_rows = left_result.rows.len();
+                Ok(left_result)
+            }
+            Statement::Except(ref except_stmt) => {
+                let left_select = match except_stmt.left.as_ref() {
+                    Statement::Select(s) => s,
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "EXCEPT left side must be a SELECT".to_string(),
+                        ))
+                    }
+                };
+                let right_select = match except_stmt.right.as_ref() {
+                    Statement::Select(s) => s,
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "EXCEPT right side must be a SELECT".to_string(),
+                        ))
+                    }
+                };
+
+                let mut left_result = self.execute_select(left_select)?;
+                let right_result = self.execute_select(right_select)?;
+
+                if except_stmt.except_all {
+                    let mut right_counts: std::collections::HashMap<&Vec<sqlrustgo_types::Value>, i64> =
+                        std::collections::HashMap::new();
+                    for row in &right_result.rows {
+                        *right_counts.entry(row).or_insert(0) += 1;
+                    }
+
+                    let original_len = left_result.rows.len();
+                    let mut new_rows = Vec::with_capacity(original_len);
+                    for row in left_result.rows.into_iter() {
+                        if let Some(count) = right_counts.get_mut(&row) {
+                            if *count > 0 {
+                                *count -= 1;
+                                continue;
+                            }
+                        }
+                        new_rows.push(row);
+                    }
+                    left_result.rows = new_rows;
+                } else {
+                    let right_set: std::collections::HashSet<_> =
+                        right_result.rows.iter().collect();
+                    left_result.rows.retain(|row| !right_set.contains(row));
+                }
+
+                left_result.affected_rows = left_result.rows.len();
+                Ok(left_result)
+            }
             Statement::CreateTrigger(ref create_trigger) => {
                 self.execute_create_trigger(create_trigger)
             }
