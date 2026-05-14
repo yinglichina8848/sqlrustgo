@@ -51,21 +51,48 @@ impl IdempotencyRegistry {
             .map_err(|_| IdempotencyError::LockError)?;
 
         if let Some(existing) = records.get(key) {
+            eprintln!(
+                "DEBUG check_and_register: key={}, existing state={:?}, request_hash match={}",
+                key,
+                existing.state,
+                existing.request_hash == request_hash
+            );
             if existing.request_hash == request_hash {
                 match existing.state {
-                    IdempotencyState::Committed => Ok(true),
-                    IdempotencyState::Pending => Ok(false),
+                    IdempotencyState::Committed => {
+                        eprintln!("DEBUG check_and_register: key={}, returning Ok(true) - already committed", key);
+                        Ok(true)
+                    }
+                    IdempotencyState::Pending => {
+                        eprintln!(
+                            "DEBUG check_and_register: key={}, returning Ok(false) - pending",
+                            key
+                        );
+                        Ok(false)
+                    }
                     IdempotencyState::Rejected { ref reason } => {
+                        eprintln!(
+                            "DEBUG check_and_register: key={}, returning error - rejected",
+                            key
+                        );
                         Err(IdempotencyError::PreviouslyRejected(reason.clone()))
                     }
                 }
             } else {
+                eprintln!(
+                    "DEBUG check_and_register: key={}, returning error - hash mismatch",
+                    key
+                );
                 Err(IdempotencyError::HashMismatch(format!(
                     "Same key '{}' used with different request payload",
                     key
                 )))
             }
         } else {
+            eprintln!(
+                "DEBUG check_and_register: key={}, inserting new record",
+                key
+            );
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()

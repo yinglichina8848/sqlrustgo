@@ -204,6 +204,7 @@ mod wal_tests {
     #[test]
     fn test_recover_from_wal_multiple_entries() {
         let registry = Arc::new(IdempotencyRegistry::new());
+        let registry_for_check = registry.clone();
         let adapter = IdempotencyWalAdapter::new(registry);
 
         let entries = vec![
@@ -227,13 +228,13 @@ mod wal_tests {
         let recovered = adapter.recover_from_wal(&entries).unwrap();
         assert_eq!(recovered, 4);
 
-        let state1 = registry.get_state("txn-1").unwrap().unwrap();
+        let state1 = registry_for_check.get_state("txn-1").unwrap().unwrap();
         assert!(matches!(
             state1,
             super::super::registry::IdempotencyState::Committed
         ));
 
-        let state2 = registry.get_state("txn-2").unwrap().unwrap();
+        let state2 = registry_for_check.get_state("txn-2").unwrap().unwrap();
         assert!(matches!(
             state2,
             super::super::registry::IdempotencyState::Rejected { reason }
