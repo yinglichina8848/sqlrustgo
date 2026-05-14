@@ -386,6 +386,8 @@ impl<'a> Lexer<'a> {
                     "RANGE" => Token::Range,
                     "LIST" => Token::List,
                     "FULLTEXT" => Token::Fulltext,
+                    "IDEMPOTENCY" => Token::Idempotency,
+                    "IDEMPOTENT" => Token::Idempotent,
                     "OVER" => Token::Over,
                     "BETWEEN" => Token::Between,
                     _ => Token::Identifier(ident),

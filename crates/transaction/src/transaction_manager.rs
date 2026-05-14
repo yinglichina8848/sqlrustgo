@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::Write;
 use std::sync::Arc;
 
 use crate::idempotency::{IdempotencyError, IdempotencyRegistry};
@@ -43,17 +44,19 @@ pub struct ActiveTransaction {
     pub read_keys: Vec<Vec<u8>>,
     /// Keys written by this transaction
     pub write_keys: Vec<Vec<u8>>,
+    /// Idempotency key for this transaction (if any)
+    pub idempotency_key: Option<String>,
 }
 
 impl ActiveTransaction {
-    /// Create a new active transaction
-    pub fn new(tx_id: TxId, snapshot: Snapshot) -> Self {
+    pub fn new(tx_id: TxId, snapshot: Snapshot, idempotency_key: Option<String>) -> Self {
         Self {
             tx_id,
             snapshot,
             state: TransactionState::Active,
             read_keys: Vec::new(),
             write_keys: Vec::new(),
+            idempotency_key,
         }
     }
 }
@@ -126,7 +129,7 @@ impl TransactionManager {
             _ => Snapshot::new_read_committed(tx_id, snapshot_timestamp),
         };
 
-        let active_tx = ActiveTransaction::new(tx_id, snapshot);
+        let active_tx = ActiveTransaction::new(tx_id, snapshot, None);
         self.active_transactions.insert(tx_id, active_tx);
 
         if let Ok(mut history) = OBSERVABILITY.transaction_history.write() {
@@ -167,6 +170,14 @@ impl TransactionManager {
     ) -> Result<IdempotentBeginResult, IdempotencyOrSsiError> {
         let tx_id = TxId::new(self.next_tx_id);
         self.next_tx_id += 1;
+        let msg = format!(
+            "DEBUG begin_transaction_idempotent: key={}, tx_id={}\n",
+            key,
+            tx_id.as_u64()
+        );
+        std::fs::write("/tmp/debug.log", &msg).ok();
+        std::io::stderr().write_all(msg.as_bytes()).ok();
+        std::io::stderr().flush().ok();
 
         let request_hash =
             Self::compute_request_hash(statement).map_err(IdempotencyOrSsiError::HashError)?;
@@ -176,6 +187,10 @@ impl TransactionManager {
             .check_and_register(key, request_hash, tx_id.as_u64())
         {
             Ok(is_idempotent) => {
+                eprintln!(
+                    "DEBUG begin_transaction_idempotent: key={}, is_idempotent={}",
+                    key, is_idempotent
+                );
                 if is_idempotent {
                     return Ok(IdempotentBeginResult::IdempotentSuccess {
                         key: key.to_string(),
@@ -208,7 +223,11 @@ impl TransactionManager {
             _ => Snapshot::new_read_committed(tx_id, snapshot_timestamp),
         };
 
-        let active_tx = ActiveTransaction::new(tx_id, snapshot);
+        eprintln!(
+            "DEBUG begin_transaction_idempotent: creating active_tx with key={}",
+            key
+        );
+        let active_tx = ActiveTransaction::new(tx_id, snapshot, Some(key.to_string()));
         self.active_transactions.insert(tx_id, active_tx);
 
         Ok(IdempotentBeginResult::NewTransaction { tx_id })
@@ -326,9 +345,19 @@ impl TransactionManager {
     pub fn commit(&mut self, tx_id: TxId) -> Result<(), SsiError> {
         self.ssi_detector.validate_commit(tx_id)?;
 
-        if let Some(active_tx) = self.active_transactions.get_mut(&tx_id) {
+        let idempotency_key = if let Some(active_tx) = self.active_transactions.get_mut(&tx_id) {
             active_tx.state = TransactionState::Committed;
-        }
+            let key = active_tx.idempotency_key.clone();
+            eprintln!(
+                "DEBUG commit: tx_id={}, idempotency_key={:?}",
+                tx_id.as_u64(),
+                key
+            );
+            key
+        } else {
+            eprintln!("DEBUG commit: tx_id={}, no active_tx found", tx_id.as_u64());
+            None
+        };
 
         self.ssi_detector.release(tx_id);
         self.lock_manager.release_all_locks_full(tx_id).ok();
@@ -339,6 +368,11 @@ impl TransactionManager {
                 tx_id.as_u64(),
                 sqlrustgo_observability::tables::transaction_history::TransactionStatus::Committed,
             );
+        }
+
+        if let Some(ref key) = idempotency_key {
+            eprintln!("DEBUG commit: calling mark_committed for key={}", key);
+            self.mark_idempotent_committed(key).ok();
         }
 
         Ok(())

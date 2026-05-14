@@ -1154,10 +1154,9 @@ impl Parser {
         };
         if self.current() == Some(&Token::Idempotent) {
             self.next();
-            let key: String = if self.current() == Some(&Token::Idempotency) {
+            let key: String = if self.current() == Some(&Token::Key) {
                 self.next();
-                self.expect(Token::Key)?;
-                match self.next() {
+                match self.current() {
                     Some(Token::StringLiteral(s)) => s.clone(),
                     Some(Token::Identifier(s)) => s.clone(),
                     _ => return Err("Expected idempotency key string".to_string()),
@@ -1168,6 +1167,18 @@ impl Parser {
                     Some(Token::Identifier(s)) => s.clone(),
                     _ => return Err("Expected idempotency key".to_string()),
                 }
+            };
+            return Ok(Statement::Transaction(
+                TransactionStatement::BeginIdempotent { key },
+            ));
+        }
+        if self.current() == Some(&Token::Idempotency) {
+            self.next();
+            self.expect(Token::Key)?;
+            let key = match self.current() {
+                Some(Token::StringLiteral(s)) => s.clone(),
+                Some(Token::Identifier(s)) => s.clone(),
+                _ => return Err("Expected idempotency key".to_string()),
             };
             return Ok(Statement::Transaction(
                 TransactionStatement::BeginIdempotent { key },

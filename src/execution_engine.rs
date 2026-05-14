@@ -629,30 +629,38 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     /// Execute a SQL statement and return results
     pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
         if !sql.trim().is_empty() && self.cache_config.enabled {
-            let cache_key = self.get_cache_key(sql);
-            if let Some(result) = self.query_cache.write().unwrap().get(&cache_key) {
+            let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+
+            let is_idempotent_begin = matches!(
+                statement,
+                Statement::Transaction(TransactionStatement::BeginIdempotent { .. })
+            );
+
+            if !is_idempotent_begin {
+                let cache_key = self.get_cache_key(sql);
+                if let Some(result) = self.query_cache.write().unwrap().get(&cache_key) {
+                    return Ok(result);
+                }
+
+                let table_names = Self::extract_table_names_from_statement(&statement);
+                let result = self.execute_statement(statement)?;
+
+                if should_cache(&result) {
+                    let entry = CacheEntry {
+                        result: result.clone(),
+                        tables: table_names.clone(),
+                        created_at: std::time::Instant::now(),
+                        size_bytes: result.rows.iter().map(|r| r.len()).sum(),
+                        last_access: 0,
+                    };
+                    self.query_cache
+                        .write()
+                        .unwrap()
+                        .put(cache_key, entry, table_names);
+                }
+
                 return Ok(result);
             }
-
-            let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
-            let table_names = Self::extract_table_names_from_statement(&statement);
-            let result = self.execute_statement(statement)?;
-
-            if should_cache(&result) {
-                let entry = CacheEntry {
-                    result: result.clone(),
-                    tables: table_names.clone(),
-                    created_at: std::time::Instant::now(),
-                    size_bytes: result.rows.iter().map(|r| r.len()).sum(),
-                    last_access: 0,
-                };
-                self.query_cache
-                    .write()
-                    .unwrap()
-                    .put(cache_key, entry, table_names);
-            }
-
-            return Ok(result);
         }
 
         let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
