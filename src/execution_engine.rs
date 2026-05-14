@@ -1605,9 +1605,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         };
 
         // Convert expressions to records (INSERT ... VALUES) or execute SELECT (INSERT ... SELECT)
-        let mut all_records: Vec<Vec<Value>> = if let Some(ref select) = insert.select {
-            let result = self.execute_select(select)?;
-            result.rows
+        let mut all_records: Vec<Vec<Value>> = if let Some(ref select_box) = insert.select {
+            if let Statement::Select(ref select) = select_box.as_ref() {
+                let result = self.execute_select(select)?;
+                result.rows
+            } else {
+                Vec::new()
+            }
         } else {
             Vec::new()
         };

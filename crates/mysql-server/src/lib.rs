@@ -7,6 +7,7 @@ use rcgen::{CertificateParams, KeyPair};
 use sha1::{Digest, Sha1};
 use sqlrustgo::execution_engine::EngineConfig;
 use sqlrustgo::MemoryExecutionEngine;
+use sqlrustgo_distributed::{XaCoordinator, XaRecoverRow};
 use sqlrustgo_storage::{MemoryStorage, StorageEngine};
 use sqlrustgo_types::{SqlError, Value};
 use std::collections::HashMap;
@@ -1219,6 +1220,74 @@ fn send_result_set<W: Write>(
     Ok(seq)
 }
 
+fn send_xa_recover_result_set<W: Write>(
+    w: &mut W,
+    rows: &[XaRecoverRow],
+    mut seq: u8,
+    cap: u32,
+) -> MySqlResult<u8> {
+    tracing::info!(
+        "send_xa_recover_result_set: 4 cols, {} rows, start_seq={}",
+        rows.len(),
+        seq
+    );
+
+    let col_names = ["formatID", "gtrid_length", "bqual_length", "data"];
+    let mut packets: Vec<Packet> = Vec::with_capacity(2 + 4 + rows.len());
+
+    {
+        let mut p = Vec::new();
+        write_lenenc_int(&mut p, 4u64).unwrap();
+        packets.push(Packet {
+            length: p.len() as u32,
+            sequence: seq,
+            payload: p,
+        });
+        seq = seq.wrapping_add(1);
+    }
+
+    packets.push(build_column_def_packet(col_names[0], "BIGINT", seq));
+    seq = seq.wrapping_add(1);
+    packets.push(build_column_def_packet(col_names[1], "BIGINT", seq));
+    seq = seq.wrapping_add(1);
+    packets.push(build_column_def_packet(col_names[2], "BIGINT", seq));
+    seq = seq.wrapping_add(1);
+    packets.push(build_column_def_packet(col_names[3], "BINARY(64)", seq));
+    seq = seq.wrapping_add(1);
+
+    if cap & capability::DEPRECATE_EOF == 0 {
+        packets.push(make_eof_packet(seq, 0x0002));
+        seq = seq.wrapping_add(1);
+    }
+
+    for (ri, row) in rows.iter().enumerate() {
+        let mut p = Vec::new();
+        write_lenenc_int(&mut p, row.format_id as u64)?;
+        write_lenenc_int(&mut p, row.gtrid_length as u64)?;
+        write_lenenc_int(&mut p, row.bqual_length as u64)?;
+        write_lenenc_string(&mut p, &row.data)?;
+        tracing::debug!("XA recover row {}: {} bytes, seq={}", ri, p.len(), seq);
+        packets.push(Packet {
+            length: p.len() as u32,
+            sequence: seq,
+            payload: p,
+        });
+        seq = seq.wrapping_add(1);
+    }
+
+    if cap & capability::DEPRECATE_EOF == 0 {
+        packets.push(make_eof_packet(seq, 0x0002));
+    } else {
+        packets.push(make_ok_packet(seq, 0, 0, 0x0002, 0));
+    }
+
+    Packet::write_all_to(&packets, w)?;
+    seq = seq.wrapping_add(1);
+
+    tracing::info!("send_xa_recover_result_set done: final_seq={}", seq);
+    Ok(seq)
+}
+
 struct PreparedStatementInfo {
     sql: String,
     #[allow(dead_code)]
@@ -1790,6 +1859,15 @@ fn is_transaction_cmd(sql: &str) -> bool {
     }
 }
 
+fn is_xa_recover_cmd(sql: &str) -> bool {
+    let trimmed = sql.trim();
+    // Fast path: check first char to avoid allocation
+    match trimmed.as_bytes().first().copied() {
+        Some(b'X') | Some(b'x') => trimmed.to_uppercase().starts_with("XA RECOVER"),
+        _ => false,
+    }
+}
+
 pub fn parse_transaction_command(sql: &str) -> TransactionCommand {
     let trimmed = sql.trim();
     // Fast path: check first char to avoid allocation
@@ -1843,6 +1921,7 @@ fn do_command_loop<S: Read + Write>(
     addr: SocketAddr,
     storage: Arc<RwLock<MemoryStorage>>,
     engine: &mut MemoryExecutionEngine,
+    xa_coordinator: Arc<RwLock<XaCoordinator>>,
     cap: u32,
     mut seq: u8,
     ps_manager: &mut PreparedStatementManager,
@@ -1930,6 +2009,31 @@ fn do_command_loop<S: Read + Write>(
                     }
                     make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
                     seq = seq.wrapping_add(1);
+                    continue;
+                }
+                if is_xa_recover_cmd(&q) {
+                    match xa_coordinator.read() {
+                        Ok(coordinator) => match coordinator.xa_recover_mysql_format() {
+                            Ok(rows) => {
+                                seq = send_xa_recover_result_set(stream, &rows, seq, cap)?;
+                            }
+                            Err(e) => {
+                                make_err_packet(
+                                    seq,
+                                    2000,
+                                    "HY000",
+                                    &format!("XA recover error: {}", e),
+                                )
+                                .write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                            }
+                        },
+                        Err(e) => {
+                            make_err_packet(seq, 2000, "HY000", &format!("Lock error: {}", e))
+                                .write_to(stream)?;
+                            seq = seq.wrapping_add(1);
+                        }
+                    }
                     continue;
                 }
                 if session.transaction_active {
@@ -2361,11 +2465,14 @@ fn handle_connection(
             let mut engine =
                 MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
             let mut session = SessionState::default();
+            let xa_coordinator: Arc<RwLock<XaCoordinator>> =
+                Arc::new(RwLock::new(XaCoordinator::new()));
             let _ = do_command_loop(
                 &mut tls,
                 addr,
                 storage,
                 &mut engine,
+                xa_coordinator,
                 resp.capability_flags,
                 4,
                 &mut ps_manager,
@@ -2416,11 +2523,13 @@ fn handle_connection(
     let mut engine =
         MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
     let mut session = SessionState::default();
+    let xa_coordinator: Arc<RwLock<XaCoordinator>> = Arc::new(RwLock::new(XaCoordinator::new()));
     let _ = do_command_loop(
         &mut &stream,
         addr,
         storage,
         &mut engine,
+        xa_coordinator,
         resp.capability_flags,
         3,
         &mut ps_manager,

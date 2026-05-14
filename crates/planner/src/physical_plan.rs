@@ -119,6 +119,9 @@ pub struct IndexScanExec {
     projection: Option<Vec<usize>>,
     row_count: u64,
     page_count: u64,
+    for_update: bool,
+    key_expr: Option<Expr>,
+    key_range: Option<(i64, i64)>,
 }
 
 impl IndexScanExec {
@@ -131,6 +134,9 @@ impl IndexScanExec {
             projection: None,
             row_count: 0,
             page_count: 0,
+            for_update: false,
+            key_expr: None,
+            key_range: None,
         }
     }
 
@@ -145,6 +151,21 @@ impl IndexScanExec {
         self
     }
 
+    pub fn with_for_update(mut self, for_update: bool) -> Self {
+        self.for_update = for_update;
+        self
+    }
+
+    pub fn with_key_expr(mut self, key_expr: Expr) -> Self {
+        self.key_expr = Some(key_expr);
+        self
+    }
+
+    pub fn with_key_range(mut self, start: i64, end: i64) -> Self {
+        self.key_range = Some((start, end));
+        self
+    }
+
     pub fn table_name(&self) -> &str {
         &self.table_name
     }
@@ -155,6 +176,18 @@ impl IndexScanExec {
 
     pub fn index_name(&self) -> &str {
         &self.index_name
+    }
+
+    pub fn for_update(&self) -> bool {
+        self.for_update
+    }
+
+    pub fn key_expr(&self) -> Option<&Expr> {
+        self.key_expr.as_ref()
+    }
+
+    pub fn key_range(&self) -> Option<&(i64, i64)> {
+        self.key_range.as_ref()
     }
 }
 
