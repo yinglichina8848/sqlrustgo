@@ -778,6 +778,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4844,6 +4853,7 @@ dependencies = [
  "env_logger",
  "hex",
  "information-schema",
+ "lazy_static",
  "log",
  "lru-cache",
  "mysql",
@@ -4862,6 +4872,7 @@ dependencies = [
  "sqlrustgo-executor",
  "sqlrustgo-gmp",
  "sqlrustgo-graph",
+ "sqlrustgo-observability",
  "sqlrustgo-optimizer",
  "sqlrustgo-parser",
  "sqlrustgo-planner",
@@ -5153,6 +5164,16 @@ dependencies = [
  "tonic",
  "tonic-build",
  "tower 0.5.3",
+]
+
+[[package]]
+name = "sqlrustgo-observability"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "serde",
+ "sqlrustgo-types",
+ "uuid",
 ]
 
 [[package]]

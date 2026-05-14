@@ -604,6 +604,14 @@ pub enum ShowStatement {
     },
     Processlist,
     Events,
+    TransactionHistory {
+        limit: Option<u32>,
+    },
+    LockWaits,
+    RecoveryHistory {
+        limit: Option<u32>,
+    },
+    WalStats,
 }
 
 /// DESCRIBE statement (aliased as DESC)
@@ -5193,6 +5201,54 @@ impl Parser {
             Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "EVENTS" => {
                 self.next();
                 Ok(Statement::Show(ShowStatement::Events))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "TRANSACTION" => {
+                self.next();
+                self.expect(Token::Identifier("HISTORY".to_string()))?;
+                let limit = if self.current() == Some(&Token::Limit) {
+                    self.next();
+                    match self.next() {
+                        Some(Token::NumberLiteral(n)) => {
+                            let val = n
+                                .parse::<u32>()
+                                .map_err(|e| format!("Invalid LIMIT: {}", e))?;
+                            Some(val)
+                        }
+                        _ => return Err("Expected number after LIMIT".to_string()),
+                    }
+                } else {
+                    None
+                };
+                Ok(Statement::Show(ShowStatement::TransactionHistory { limit }))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LOCK" => {
+                self.next();
+                self.expect(Token::Identifier("WAITS".to_string()))?;
+                Ok(Statement::Show(ShowStatement::LockWaits))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "RECOVERY" => {
+                self.next();
+                self.expect(Token::Identifier("HISTORY".to_string()))?;
+                let limit = if self.current() == Some(&Token::Limit) {
+                    self.next();
+                    match self.next() {
+                        Some(Token::NumberLiteral(n)) => {
+                            let val = n
+                                .parse::<u32>()
+                                .map_err(|e| format!("Invalid LIMIT: {}", e))?;
+                            Some(val)
+                        }
+                        _ => return Err("Expected number after LIMIT".to_string()),
+                    }
+                } else {
+                    None
+                };
+                Ok(Statement::Show(ShowStatement::RecoveryHistory { limit }))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "WAL" => {
+                self.next();
+                self.expect(Token::Identifier("STATS".to_string()))?;
+                Ok(Statement::Show(ShowStatement::WalStats))
             }
             Some(t) => Err(format!("Unexpected token after SHOW: {:?}", t)),
             None => Err("Unexpected end of input after SHOW".to_string()),
