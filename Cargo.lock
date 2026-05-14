@@ -4745,6 +4745,7 @@ dependencies = [
  "env_logger",
  "hex",
  "information-schema",
+ "lazy_static",
  "log",
  "lru-cache",
  "mysql",
@@ -4763,6 +4764,7 @@ dependencies = [
  "sqlrustgo-executor",
  "sqlrustgo-gmp",
  "sqlrustgo-graph",
+ "sqlrustgo-observability",
  "sqlrustgo-optimizer",
  "sqlrustgo-parser",
  "sqlrustgo-planner",
@@ -5063,7 +5065,6 @@ dependencies = [
  "bincode",
  "serde",
  "sqlrustgo-types",
- "tokio",
  "uuid",
 ]
 

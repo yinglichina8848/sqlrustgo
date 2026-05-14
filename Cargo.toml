@@ -141,6 +141,7 @@ sqlrustgo-storage.workspace = true
 sqlrustgo-catalog.workspace = true
 information-schema.workspace = true
 sqlrustgo-transaction.workspace = true
+sqlrustgo-observability.workspace = true
 sqlrustgo-server.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
@@ -155,6 +156,7 @@ lru-cache.workspace = true
 ctrlc.workspace = true
 serde_json.workspace = true
 regex = "1"
+lazy_static = "1.4"
 
 [[test]]
 name = "ci_test"

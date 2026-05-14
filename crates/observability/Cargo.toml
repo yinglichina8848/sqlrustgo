@@ -6,6 +6,5 @@ edition = "2021"
 [dependencies]
 sqlrustgo-types = { path = "../types" }
 serde = { version = "1.0", features = ["derive"] }
-tokio = { version = "1", features = ["sync", "rt", "macros", "rt-multi-thread"] }
 uuid = { version = "1.0", features = ["v4"] }
 bincode = "1.3"

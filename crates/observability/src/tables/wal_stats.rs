@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WalStats {
@@ -25,31 +24,31 @@ impl WalStatsCollector {
         }
     }
 
-    pub async fn record_write(&self, bytes: u64, lsn: u64) {
-        let mut stats = self.stats.lock().await;
+    pub fn record_write(&self, bytes: u64, lsn: u64) {
+        let mut stats = self.stats.lock().unwrap();
         stats.total_writes += 1;
         stats.total_bytes += bytes;
         stats.current_lsn = lsn;
     }
 
-    pub async fn record_flush(&self, lsn: u64) {
-        let mut stats = self.stats.lock().await;
+    pub fn record_flush(&self, lsn: u64) {
+        let mut stats = self.stats.lock().unwrap();
         stats.flush_count += 1;
         stats.last_flush_lsn = lsn;
     }
 
-    pub async fn record_replay(&self, time_ms: u64) {
-        let mut stats = self.stats.lock().await;
+    pub fn record_replay(&self, time_ms: u64) {
+        let mut stats = self.stats.lock().unwrap();
         stats.replay_count += 1;
         stats.replay_time_ms += time_ms;
     }
 
-    pub async fn get_stats(&self) -> WalStats {
-        self.stats.lock().await.clone()
+    pub fn get_stats(&self) -> WalStats {
+        self.stats.lock().unwrap().clone()
     }
 
-    pub async fn reset(&self) {
-        *self.stats.lock().await = WalStats::default();
+    pub fn reset(&self) {
+        *self.stats.lock().unwrap() = WalStats::default();
     }
 }
 
@@ -63,45 +62,45 @@ impl Default for WalStatsCollector {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_wal_stats_record_write() {
+    #[test]
+    fn test_wal_stats_record_write() {
         let collector = WalStatsCollector::new();
-        collector.record_write(100, 1).await;
+        collector.record_write(100, 1);
 
-        let stats = collector.get_stats().await;
+        let stats = collector.get_stats();
         assert_eq!(stats.total_writes, 1);
         assert_eq!(stats.total_bytes, 100);
         assert_eq!(stats.current_lsn, 1);
     }
 
-    #[tokio::test]
-    async fn test_wal_stats_record_flush() {
+    #[test]
+    fn test_wal_stats_record_flush() {
         let collector = WalStatsCollector::new();
-        collector.record_flush(100).await;
+        collector.record_flush(100);
 
-        let stats = collector.get_stats().await;
+        let stats = collector.get_stats();
         assert_eq!(stats.flush_count, 1);
         assert_eq!(stats.last_flush_lsn, 100);
     }
 
-    #[tokio::test]
-    async fn test_wal_stats_record_replay() {
+    #[test]
+    fn test_wal_stats_record_replay() {
         let collector = WalStatsCollector::new();
-        collector.record_replay(50).await;
+        collector.record_replay(50);
 
-        let stats = collector.get_stats().await;
+        let stats = collector.get_stats();
         assert_eq!(stats.replay_count, 1);
         assert_eq!(stats.replay_time_ms, 50);
     }
 
-    #[tokio::test]
-    async fn test_wal_stats_reset() {
+    #[test]
+    fn test_wal_stats_reset() {
         let collector = WalStatsCollector::new();
-        collector.record_write(100, 1).await;
-        collector.record_flush(1).await;
-        collector.reset().await;
+        collector.record_write(100, 1);
+        collector.record_flush(1);
+        collector.reset();
 
-        let stats = collector.get_stats().await;
+        let stats = collector.get_stats();
         assert_eq!(stats.total_writes, 0);
         assert_eq!(stats.flush_count, 0);
     }

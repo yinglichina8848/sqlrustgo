@@ -71,6 +71,12 @@ impl RecoveryHistory {
         history
     }
 
+    pub fn new_for_test(data_dir: PathBuf, max_entries: usize) -> Self {
+        let file_path = data_dir.join("recovery_history.bin");
+        let _ = std::fs::remove_file(&file_path);
+        Self::new(data_dir, max_entries)
+    }
+
     pub fn append(&mut self, entry: RecoveryHistoryEntry) -> std::io::Result<()> {
         if self.entries.len() >= self.max_entries {
             self.entries.pop_front();
@@ -137,7 +143,7 @@ mod tests {
     #[test]
     fn test_recovery_history_append_and_query() {
         let dir = std::env::temp_dir();
-        let mut history = RecoveryHistory::new(dir.clone(), 100);
+        let mut history = RecoveryHistory::new_for_test(dir.clone(), 100);
 
         let entry = RecoveryHistoryEntry::new(1, 1000, 5000, 10, RecoveryStatus::Success);
         history.append(entry).unwrap();
@@ -151,7 +157,7 @@ mod tests {
     #[test]
     fn test_recovery_history_with_error() {
         let dir = std::env::temp_dir();
-        let mut history = RecoveryHistory::new(dir.clone(), 100);
+        let mut history = RecoveryHistory::new_for_test(dir.clone(), 100);
 
         let entry = RecoveryHistoryEntry::new(1, 1000, 5000, 10, RecoveryStatus::Failed)
             .with_error("Corruption detected".to_string());
