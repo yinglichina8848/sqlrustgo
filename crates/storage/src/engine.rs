@@ -618,6 +618,10 @@ pub trait StorageEngine: Send + Sync {
     /// Create an index on a table
     fn create_index(&mut self, table: &str, column: &str, column_index: usize) -> SqlResult<()>;
 
+    /// Add a unique constraint to table metadata
+    fn add_unique_constraint(&mut self, table: &str, constraint: UniqueConstraint)
+        -> SqlResult<()>;
+
     /// Drop an index from a table
     fn drop_index(&mut self, table: &str, column: &str) -> SqlResult<()>;
 
@@ -1051,6 +1055,22 @@ impl StorageEngine for MemoryStorage {
 
         self.indexes.insert(index_key, (column_index, index_data));
         Ok(())
+    }
+
+    fn add_unique_constraint(
+        &mut self,
+        table: &str,
+        constraint: UniqueConstraint,
+    ) -> SqlResult<()> {
+        if let Some(info) = self.table_infos.get_mut(table) {
+            info.unique_constraints.push(constraint);
+            Ok(())
+        } else {
+            Err(SqlError::ExecutionError(format!(
+                "Cannot add unique constraint: table {} not found",
+                table
+            )))
+        }
     }
 
     fn drop_index(&mut self, _table: &str, _column: &str) -> SqlResult<()> {
