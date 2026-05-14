@@ -711,11 +711,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     /// Execute a prepared INSERT with parameter values
+    /// Uses fast path when table has no FK, CHECK, triggers, REPLACE, or ON DUPLICATE KEY
     pub fn execute_prepared_insert(
         &mut self,
         sql: &str,
         params: Vec<Value>,
     ) -> SqlResult<ExecutorResult> {
+        // Parse and cache if not already cached
         if !self.prepared_inserts.contains_key(sql) {
             let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
             if let Statement::Insert(insert) = statement {
@@ -724,7 +726,108 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 return Err("Not an INSERT statement".into());
             }
         }
-        let mut insert = self.prepared_inserts.get(sql).unwrap().clone();
+        let insert = self.prepared_inserts.get(sql).unwrap().clone();
+
+        // Check if we can use fast path: no REPLACE, no ON DUPLICATE KEY, no SELECT
+        let can_use_fast = !insert.is_replace
+            && insert.on_duplicate_key_update.is_none()
+            && insert.select.is_none();
+
+        if can_use_fast {
+            // Build records directly from parameters (avoid Expression -> Value -> Expression -> Value)
+            let table_name = &insert.table;
+            let columns = if insert.columns.is_empty() {
+                None
+            } else {
+                Some(&insert.columns)
+            };
+            let num_cols = if let Some(cols) = columns {
+                cols.len()
+            } else {
+                // Will be determined by table info
+                0
+            };
+
+            // Get table info to check constraints and determine column count
+            let table_info = {
+                let storage = self.storage.read().unwrap();
+                storage.get_table_info(table_name)?.clone()
+            };
+
+            let actual_num_cols = if num_cols == 0 {
+                table_info.columns.len()
+            } else {
+                num_cols
+            };
+
+            // Check if fast path is safe (no FK, CHECK, triggers)
+            let has_constraints =
+                !table_info.foreign_keys.is_empty() || !table_info.check_constraints.is_empty();
+
+            // Check for triggers
+            let trigger_executor = TriggerExecutor::new(self.storage.clone());
+            let has_triggers = !trigger_executor
+                .get_triggers_for_operation(
+                    table_name,
+                    ExecTriggerTiming::Before,
+                    ExecTriggerEvent::Insert,
+                )
+                .is_empty()
+                || !trigger_executor
+                    .get_triggers_for_operation(
+                        table_name,
+                        ExecTriggerTiming::After,
+                        ExecTriggerEvent::Insert,
+                    )
+                    .is_empty();
+
+            if !has_constraints && !has_triggers {
+                // FAST PATH: Direct insert with minimal overhead
+                let mut records: Vec<Vec<Value>> = Vec::with_capacity(insert.values.len());
+                for row_exprs in &insert.values {
+                    let mut record = Vec::with_capacity(actual_num_cols);
+                    for col_idx in 0..actual_num_cols {
+                        let value_idx = if let Some(cols) = columns {
+                            cols.iter()
+                                .position(|c| {
+                                    table_info.columns.iter().position(|tc| &tc.name == c)
+                                        == Some(col_idx)
+                                })
+                                .unwrap_or(col_idx)
+                        } else {
+                            col_idx
+                        };
+                        if let Some(expr) = row_exprs.get(value_idx) {
+                            if let sqlrustgo_parser::Expression::Parameter(idx) = expr {
+                                record.push(params.get(*idx).cloned().unwrap_or(Value::Null));
+                            } else {
+                                // Literal expression - evaluate it
+                                record.push(expression_to_value(expr));
+                            }
+                        } else {
+                            record.push(Value::Null);
+                        }
+                    }
+                    records.push(record);
+                }
+
+                // Direct insert - single lock acquisition
+                let count = records.len();
+                let mut storage = self.storage.write().unwrap();
+                storage.insert(table_name, records)?;
+                drop(storage);
+
+                self.query_cache
+                    .write()
+                    .unwrap()
+                    .invalidate_table(table_name);
+                return Ok(ExecutorResult::new(vec![], count));
+            }
+        }
+
+        // FALLBACK PATH: Use full execute_insert with all validations
+        // But first convert params back to expressions for execute_insert
+        let mut insert = insert;
         for row in &mut insert.values {
             for expr in row.iter_mut() {
                 if let sqlrustgo_parser::Expression::Parameter(idx) = expr {
