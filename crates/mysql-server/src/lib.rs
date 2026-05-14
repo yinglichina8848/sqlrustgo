@@ -1106,6 +1106,8 @@ fn value_to_string(v: &Value) -> String {
         Value::Float(f) => format!("{}", f),
         Value::Text(s) => s.clone(),
         Value::Blob(b) => format!("{:?}", b),
+        #[allow(unreachable_patterns)]
+        Value::Geometry(_) => "[Geometry]".into(),
     }
 }
 

@@ -236,6 +236,8 @@ impl ResultComparator {
             Value::Text(s) => s.clone(),
             Value::Boolean(b) => b.to_string(),
             Value::Blob(b) => format!("BLOB({})", b.len()),
+            #[allow(unreachable_patterns)]
+            Value::Geometry(_) => "GEOMETRY".to_string(),
         }
     }
 

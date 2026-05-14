@@ -152,6 +152,8 @@ fn sql_value_to_json(value: SqlValue) -> Value {
             .unwrap_or(Value::Null),
         SqlValue::Text(s) => Value::String(s),
         SqlValue::Blob(b) => Value::String(format!("[blob: {} bytes]", b.len())),
+        #[allow(unreachable_patterns)]
+        _ => Value::Null,
     }
 }
 
