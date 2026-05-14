@@ -1144,6 +1144,25 @@ impl Parser {
         } else {
             None
         };
+        if self.current() == Some(&Token::Idempotent) {
+            self.next();
+            let key = if self.current() == Some(&Token::Idempotency) {
+                self.next();
+                self.expect(Token::Key)?;
+                match self.next() {
+                    Some(Token::StringLiteral(s)) => s,
+                    Some(Token::Identifier(s)) => s,
+                    _ => return Err("Expected idempotency key string".to_string()),
+                }
+            } else {
+                match self.current() {
+                    Some(Token::StringLiteral(s)) => s,
+                    Some(Token::Identifier(s)) => s,
+                    _ => return Err("Expected idempotency key".to_string()),
+                }
+            };
+            return Ok(Statement::Transaction(TransactionStatement::BeginIdempotent { key }));
+        }
         Ok(Statement::Transaction(TransactionStatement::Begin {
             work,
             isolation_level,
@@ -7432,6 +7451,30 @@ fn test_debug_having() {
                 assert_eq!(isolation_level, Some(IsolationLevel::SnapshotIsolation));
             }
             _ => panic!("Expected BEGIN ISOLATION LEVEL REPEATABLE READ statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_begin_idempotent() {
+        let result = parse("BEGIN IDEMPOTENT 'txn-123'");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::BeginIdempotent { key }) => {
+                assert_eq!(key, "txn-123");
+            }
+            _ => panic!("Expected BEGIN IDEMPOTENT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_begin_idempotent_key() {
+        let result = parse("BEGIN IDEMPOTENCY KEY 'txn-456'");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::BeginIdempotent { key }) => {
+                assert_eq!(key, "txn-456");
+            }
+            _ => panic!("Expected BEGIN IDEMPOTENCY KEY statement"),
         }
     }
 }
