@@ -81,10 +81,7 @@ fn test_recovery_ignores_uncommitted() {
 
     // Recover - should find the uncommitted inserts
     let entries = wal_manager.recover().unwrap();
-    let uncommitted_inserts: Vec<_> = entries
-        .iter()
-        .filter(|e| e.is_insert())
-        .collect();
+    let uncommitted_inserts: Vec<_> = entries.iter().filter(|e| e.is_insert()).collect();
 
     // WAL still has the entries, but recovery logic should check commit
     // The actual replay would need to track transaction state
@@ -93,7 +90,9 @@ fn test_recovery_ignores_uncommitted() {
     // Find transaction boundary - there should be no commit for tx_id 1
     let commits: Vec<_> = entries
         .iter()
-        .filter(|e| e.entry.entry_type == crate::wal::WalEntryType::Commit && e.entry.tx_id == tx_id)
+        .filter(|e| {
+            e.entry.entry_type == crate::wal::WalEntryType::Commit && e.entry.tx_id == tx_id
+        })
         .collect();
     assert_eq!(commits.len(), 0);
 }
@@ -263,14 +262,22 @@ fn test_recover_to_timestamp() {
     assert_eq!(inserts_before.len(), 0, "Should have no inserts before tx1");
 
     // Recover after tx1 but before tx2 - should only get tx1
-    let entries_after_tx1 = wal_manager.recover_to_timestamp(timestamp_after_tx1).unwrap();
+    let entries_after_tx1 = wal_manager
+        .recover_to_timestamp(timestamp_after_tx1)
+        .unwrap();
     let inserts_after_tx1: Vec<_> = entries_after_tx1.iter().filter(|e| e.is_insert()).collect();
     assert_eq!(inserts_after_tx1.len(), 1, "Should only have tx1's insert");
 
     // Recover after tx2 - should get both
-    let entries_after_tx2 = wal_manager.recover_to_timestamp(timestamp_after_tx2).unwrap();
+    let entries_after_tx2 = wal_manager
+        .recover_to_timestamp(timestamp_after_tx2)
+        .unwrap();
     let inserts_after_tx2: Vec<_> = entries_after_tx2.iter().filter(|e| e.is_insert()).collect();
-    assert_eq!(inserts_after_tx2.len(), 2, "Should have both tx1 and tx2 inserts");
+    assert_eq!(
+        inserts_after_tx2.len(),
+        2,
+        "Should have both tx1 and tx2 inserts"
+    );
 }
 
 /// Test recovery with PrimaryKey cluster key type.

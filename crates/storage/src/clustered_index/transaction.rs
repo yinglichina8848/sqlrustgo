@@ -30,7 +30,11 @@ pub struct ClusteredPageTransaction<'a> {
 
 impl<'a> ClusteredPageTransaction<'a> {
     /// Create a new transaction wrapper.
-    pub fn new(page: &'a mut ClusteredLeafPage, wal_manager: &'a ClusteredWalManager, tx_id: u64) -> Self {
+    pub fn new(
+        page: &'a mut ClusteredLeafPage,
+        wal_manager: &'a ClusteredWalManager,
+        tx_id: u64,
+    ) -> Self {
         Self {
             page,
             wal_manager,
@@ -59,7 +63,8 @@ impl<'a> ClusteredPageTransaction<'a> {
         )?;
 
         // WAL logged successfully, now apply to page
-        self.page.insert(cluster_key, fixed_columns, varlen_columns, null_bitmap)
+        self.page
+            .insert(cluster_key, fixed_columns, varlen_columns, null_bitmap)
     }
 
     /// Delete a record with WAL logging.
@@ -119,11 +124,15 @@ impl<'a> ClusteredPageTransaction<'a> {
         self.page.delete(slot_idx)?;
 
         // Insert new record
-        self.page.insert(cluster_key, fixed_columns, varlen_columns, null_bitmap)
+        self.page
+            .insert(cluster_key, fixed_columns, varlen_columns, null_bitmap)
     }
 
     /// Get a record by slot index.
-    pub fn get(&self, slot_idx: u16) -> std::io::Result<Option<crate::row_format::types::ClusteredLeafRecord>> {
+    pub fn get(
+        &self,
+        slot_idx: u16,
+    ) -> std::io::Result<Option<crate::row_format::types::ClusteredLeafRecord>> {
         self.page.get(slot_idx)
     }
 
