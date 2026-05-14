@@ -27,6 +27,7 @@ pub struct SessionState {
     pub transaction_active: bool,
     pub autocommit: bool,
     pub current_database: Option<String>,
+    pub last_insert_id: Option<u64>,
 }
 
 mod packet_type {
@@ -1722,18 +1723,20 @@ fn execute_select(
     Ok((cols, ctypes, r.rows))
 }
 
-fn execute_write(sql: &str, engine: &mut MemoryExecutionEngine) -> MySqlResult<usize> {
-    Ok(engine.execute(sql).map_err(MySqlError::from)?.affected_rows)
+fn execute_write(
+    sql: &str,
+    engine: &mut MemoryExecutionEngine,
+) -> MySqlResult<(usize, Option<u64>)> {
+    let result = engine.execute(sql).map_err(MySqlError::from)?;
+    Ok((result.affected_rows, result.last_insert_id))
 }
 
 fn execute_write_statement(
     stmt: sqlrustgo_parser::parser::Statement,
     engine: &mut MemoryExecutionEngine,
-) -> MySqlResult<usize> {
-    Ok(engine
-        .execute_statement(stmt)
-        .map_err(MySqlError::from)?
-        .affected_rows)
+) -> MySqlResult<(usize, Option<u64>)> {
+    let result = engine.execute_statement(stmt).map_err(MySqlError::from)?;
+    Ok((result.affected_rows, result.last_insert_id))
 }
 
 #[allow(clippy::type_complexity)]
@@ -1832,8 +1835,9 @@ fn execute_transaction_queries<S: Read + Write>(
             }
         } else {
             match execute_write(stmt, engine) {
-                Ok(a) => {
-                    make_ok_packet(seq, a as u64, 0, status, 0).write_to(stream)?;
+                Ok((a, last_id)) => {
+                    make_ok_packet(seq, a as u64, last_id.unwrap_or(0), status, 0)
+                        .write_to(stream)?;
                     seq = seq.wrapping_add(1);
                 }
                 Err(e) => {
@@ -2067,8 +2071,9 @@ fn do_command_loop<S: Read + Write>(
                     }
                 } else {
                     match execute_write(&q, engine) {
-                        Ok(a) => {
-                            make_ok_packet(seq, a as u64, 0, 0x0002, 0).write_to(stream)?;
+                        Ok((a, last_id)) => {
+                            make_ok_packet(seq, a as u64, last_id.unwrap_or(0), 0x0002, 0)
+                                .write_to(stream)?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(e) => {
@@ -2120,8 +2125,9 @@ fn do_command_loop<S: Read + Write>(
                         }
                     } else {
                         match execute_write(stmt, engine) {
-                            Ok(a) => {
-                                make_ok_packet(seq, a as u64, 0, 0x0002, 0).write_to(stream)?;
+                            Ok((a, last_id)) => {
+                                make_ok_packet(seq, a as u64, last_id.unwrap_or(0), 0x0002, 0)
+                                    .write_to(stream)?;
                                 seq = seq.wrapping_add(1);
                             }
                             Err(e) => {
@@ -2326,8 +2332,9 @@ fn do_command_loop<S: Read + Write>(
                         execute_write(&final_sql, engine)
                     };
                     match write_result {
-                        Ok(a) => {
-                            make_ok_packet(seq, a as u64, 0, 0x0002, 0).write_to(stream)?;
+                        Ok((a, last_id)) => {
+                            make_ok_packet(seq, a as u64, last_id.unwrap_or(0), 0x0002, 0)
+                                .write_to(stream)?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(e) => {

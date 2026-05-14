@@ -1783,10 +1783,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Vec::new()
         };
 
+        let mut first_auto_inc: Option<u64> = None;
         if !insert.values.is_empty() {
             for row_exprs in &insert.values {
                 let mut record = Vec::with_capacity(table_info.columns.len());
-                let mut auto_inc_idx = 0;
 
                 for col_idx in 0..table_info.columns.len() {
                     if specified_cols.contains(&col_idx) {
@@ -1823,6 +1823,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             || matches!(record[*col_idx], Value::Null)
                         {
                             let auto_val = storage.get_next_auto_increment(&table_name)?;
+                            if first_auto_inc.is_none() {
+                                first_auto_inc = Some(auto_val as u64);
+                            }
                             if *col_idx < record.len() {
                                 record[*col_idx] = Value::Integer(auto_val);
                             }
@@ -1959,7 +1962,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         let updated_count = records_to_skip.len();
         let affected_rows = (insert.values.len() - updated_count) + (updated_count * 2);
 
-        Ok(ExecutorResult::new(vec![], affected_rows))
+        Ok(ExecutorResult::new(vec![], affected_rows).with_last_insert_id(first_auto_inc))
     }
 
     /// Check if a new record matches an existing row based on primary key or unique constraints
