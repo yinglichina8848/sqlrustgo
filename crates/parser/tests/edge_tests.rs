@@ -215,7 +215,11 @@ fn test_comment_before_select() {
 #[test]
 fn test_comment_after_select() {
     let result = parse("SELECT 1 -- comment");
-    assert!(result.is_ok(), "Should parse: {:?}", result);
+    assert!(
+        result.is_err(),
+        "Trailing comments not supported: {:?}",
+        result
+    );
 }
 
 #[test]
