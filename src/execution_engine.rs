@@ -14,8 +14,7 @@ use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
 use sqlrustgo_executor::ExecutorResult;
-use sqlrustgo_observability::observer::{Observable, ObservableEvent};
-use sqlrustgo_observability::tables::OBSERVABILITY;
+use sqlrustgo_observability::observability_state::{OBSERVABILITY, ObservabilityState};
 use sqlrustgo_observability::tables::{
     lock_wait_graph::LockWaitEdge, lock_wait_graph::LockWaitGraph,
     recovery_history::RecoveryHistory, recovery_history::RecoveryHistoryEntry,
@@ -48,41 +47,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-pub struct ObservabilityRecorder;
-
-impl Observable for ObservabilityRecorder {
-    fn record(&self, event: ObservableEvent) {
-        match event {
-            ObservableEvent::BeginTransaction {
-                tx_id,
-                isolation: _,
-            } => {
-                if let Ok(mut history) = OBSERVABILITY.transaction_history.write() {
-                    let entry = TransactionHistoryEntry::new(tx_id, "SI".to_string());
-                    history.append(entry);
-                }
-            }
-            ObservableEvent::CommitTransaction {
-                tx_id,
-                timestamp: _,
-            } => {
-                if let Ok(mut history) = OBSERVABILITY.transaction_history.write() {
-                    history.update_status(tx_id, TransactionStatus::Committed);
-                }
-            }
-            ObservableEvent::AbortTransaction {
-                tx_id,
-                timestamp: _,
-            } => {
-                if let Ok(mut history) = OBSERVABILITY.transaction_history.write() {
-                    history.update_status(tx_id, TransactionStatus::Aborted);
-                }
-            }
-            _ => {}
-        }
-    }
-}
 
 /// Execution engine for SQL statements
 pub struct ExecutionEngine<S: StorageEngine> {
