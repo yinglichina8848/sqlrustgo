@@ -1,6 +1,7 @@
 use crate::cli::TpchArgs;
 use crate::metrics::LatencyCollector;
 use crate::reporter::{BenchmarkResult, QueryResult};
+use crate::commands::tpch_data::generate_tpch_data;
 use sqlrustgo::ExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use std::sync::{Arc, RwLock};
@@ -15,6 +16,9 @@ pub fn run(args: TpchArgs) -> BenchmarkResult {
             "queries": args.queries,
         }),
     );
+
+    println!("Generating TPC-H data for SF={}...", args.scale);
+    let storage = generate_tpch_data(args.scale);
 
     let queries: Vec<&str> = args.queries.split(',').collect();
 
@@ -55,8 +59,8 @@ pub fn run(args: TpchArgs) -> BenchmarkResult {
 
         for _ in 0..args.iterations {
             let iteration_start = Instant::now();
-            let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-            let mut engine = ExecutionEngine::new(storage);
+            let storage_inner = (*storage).clone();
+            let mut engine = ExecutionEngine::new(Arc::new(RwLock::new(storage_inner)));
             let _ = engine.execute(sql);
             collector.record(iteration_start.elapsed().as_nanos() as u64);
         }
