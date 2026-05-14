@@ -251,12 +251,30 @@ fi
 echo ""
 echo "━━━ 第四部分: 稳定性测试 Gate (G14) ━━━"
 
-log_info "G14: Stability tests (B-S1~B-S6)"
+log_info "G14: Stability tests (G-S1~G-S2)"
 TOTAL=$((TOTAL+1))
-echo "⏭️  SKIP (G14 requires 'cargo test --test {stability_test}' manual verification)"
-echo "   Run: concurrency_stress_test, crash_recovery_test, long_run_stability_test,"
-echo "        wal_integration_test, network_tcp_smoke_test, ssi_stress_test"
-SKIP_REASONS+=("G14: Manual stability test verification required")
+STABILITY_PASS=0
+STABILITY_TOTAL=2
+
+cargo test --test long_run_stability_test -- --nocapture 2>&1 | grep -q "test result: ok" && STABILITY_PASS=$((STABILITY_PASS+1))
+if [ $? -eq 0 ]; then
+    echo "  ✅ G-S1: long_run_stability_test"
+else
+    echo "  ❌ G-S1: long_run_stability_test FAILED"
+fi
+
+cargo test --test wal_integration_test -- --nocapture 2>&1 | grep -q "test result: ok" && STABILITY_PASS=$((STABILITY_PASS+1))
+if [ $? -eq 0 ]; then
+    echo "  ✅ G-S2: wal_integration_test"
+else
+    echo "  ❌ G-S2: wal_integration_test FAILED"
+fi
+
+if [ $STABILITY_PASS -eq $STABILITY_TOTAL ]; then
+    echo "✅ PASS ($STABILITY_PASS/$STABILITY_TOTAL)"; PASS=$((PASS+1))
+else
+    echo "❌ FAIL ($STABILITY_PASS/$STABILITY_TOTAL)"; BLOCKERS=$((BLOCKERS+1)); FAIL_REASONS+=("G14: $STABILITY_PASS/$STABILITY_TOTAL stability tests passed")
+fi
 
 # ============================================================
 # 第五部分: 协议与集成测试 Gate (G15-G16)
