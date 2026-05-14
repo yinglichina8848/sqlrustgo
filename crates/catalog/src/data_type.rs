@@ -36,6 +36,22 @@ pub enum DataType {
     /// Hidden rowid type (auto-incrementing integer for tables without explicit PK)
     /// This is an internal type, not exposed to users via CREATE TABLE
     RowId,
+    /// Base geometry type (superclass for all geometry types)
+    Geometry,
+    /// Point geometry (single point in 2D space)
+    Point,
+    /// LineString geometry (sequence of points forming a line)
+    LineString,
+    /// Polygon geometry (closed ring with optional holes)
+    Polygon,
+    /// MultiPoint geometry (collection of points)
+    MultiPoint,
+    /// MultiLineString geometry (collection of line strings)
+    MultiLineString,
+    /// MultiPolygon geometry (collection of polygons)
+    MultiPolygon,
+    /// GeometryCollection (collection of arbitrary geometry types)
+    GeometryCollection,
 }
 
 impl DataType {
@@ -54,6 +70,14 @@ impl DataType {
             DataType::Array => "ARRAY",
             DataType::Enum => "ENUM",
             DataType::RowId => "ROWID",
+            DataType::Geometry => "GEOMETRY",
+            DataType::Point => "POINT",
+            DataType::LineString => "LINESTRING",
+            DataType::Polygon => "POLYGON",
+            DataType::MultiPoint => "MULTIPOINT",
+            DataType::MultiLineString => "MULTILINESTRING",
+            DataType::MultiPolygon => "MULTIPOLYGON",
+            DataType::GeometryCollection => "GEOMETRYCOLLECTION",
         }
     }
 
@@ -72,6 +96,14 @@ impl DataType {
             "UUID" => Some(DataType::Uuid),
             "ARRAY" => Some(DataType::Array),
             "ENUM" => Some(DataType::Enum),
+            "GEOMETRY" => Some(DataType::Geometry),
+            "POINT" => Some(DataType::Point),
+            "LINESTRING" => Some(DataType::LineString),
+            "POLYGON" => Some(DataType::Polygon),
+            "MULTIPOINT" => Some(DataType::MultiPoint),
+            "MULTILINESTRING" => Some(DataType::MultiLineString),
+            "MULTIPOLYGON" => Some(DataType::MultiPolygon),
+            "GEOMETRYCOLLECTION" => Some(DataType::GeometryCollection),
             _ => None,
         }
     }
@@ -86,12 +118,33 @@ impl DataType {
                 | DataType::Date
                 | DataType::Uuid
                 | DataType::RowId
+                | DataType::Geometry
+                | DataType::Point
+                | DataType::LineString
+                | DataType::Polygon
+                | DataType::MultiPoint
+                | DataType::MultiLineString
+                | DataType::MultiPolygon
+                | DataType::GeometryCollection
         )
     }
 
     /// Check if this type supports ordering comparisons
     pub fn is_orderable(&self) -> bool {
-        !matches!(self, DataType::Blob | DataType::Array | DataType::Enum)
+        !matches!(
+            self,
+            DataType::Blob
+                | DataType::Array
+                | DataType::Enum
+                | DataType::Geometry
+                | DataType::Point
+                | DataType::LineString
+                | DataType::Polygon
+                | DataType::MultiPoint
+                | DataType::MultiLineString
+                | DataType::MultiPolygon
+                | DataType::GeometryCollection
+        )
     }
 
     /// Check if this type supports equality comparisons
@@ -165,6 +218,17 @@ mod tests {
         assert_eq!(DataType::Uuid.sql_name(), "UUID");
         assert_eq!(DataType::Array.sql_name(), "ARRAY");
         assert_eq!(DataType::Enum.sql_name(), "ENUM");
+        assert_eq!(DataType::Geometry.sql_name(), "GEOMETRY");
+        assert_eq!(DataType::Point.sql_name(), "POINT");
+        assert_eq!(DataType::LineString.sql_name(), "LINESTRING");
+        assert_eq!(DataType::Polygon.sql_name(), "POLYGON");
+        assert_eq!(DataType::MultiPoint.sql_name(), "MULTIPOINT");
+        assert_eq!(DataType::MultiLineString.sql_name(), "MULTILINESTRING");
+        assert_eq!(DataType::MultiPolygon.sql_name(), "MULTIPOLYGON");
+        assert_eq!(
+            DataType::GeometryCollection.sql_name(),
+            "GEOMETRYCOLLECTION"
+        );
     }
 
     #[test]
@@ -187,6 +251,32 @@ mod tests {
         assert_eq!(DataType::parse_sql_name("UUID"), Some(DataType::Uuid));
         assert_eq!(DataType::parse_sql_name("ARRAY"), Some(DataType::Array));
         assert_eq!(DataType::parse_sql_name("ENUM"), Some(DataType::Enum));
+        assert_eq!(
+            DataType::parse_sql_name("GEOMETRY"),
+            Some(DataType::Geometry)
+        );
+        assert_eq!(DataType::parse_sql_name("POINT"), Some(DataType::Point));
+        assert_eq!(
+            DataType::parse_sql_name("LINESTRING"),
+            Some(DataType::LineString)
+        );
+        assert_eq!(DataType::parse_sql_name("POLYGON"), Some(DataType::Polygon));
+        assert_eq!(
+            DataType::parse_sql_name("MULTIPOINT"),
+            Some(DataType::MultiPoint)
+        );
+        assert_eq!(
+            DataType::parse_sql_name("MULTILINESTRING"),
+            Some(DataType::MultiLineString)
+        );
+        assert_eq!(
+            DataType::parse_sql_name("MULTIPOLYGON"),
+            Some(DataType::MultiPolygon)
+        );
+        assert_eq!(
+            DataType::parse_sql_name("GEOMETRYCOLLECTION"),
+            Some(DataType::GeometryCollection)
+        );
         assert_eq!(DataType::parse_sql_name("INVALID"), None);
     }
 
@@ -214,6 +304,14 @@ mod tests {
         assert!(!DataType::Blob.is_orderable());
         assert!(!DataType::Array.is_orderable());
         assert!(!DataType::Enum.is_orderable());
+        assert!(!DataType::Geometry.is_orderable());
+        assert!(!DataType::Point.is_orderable());
+        assert!(!DataType::LineString.is_orderable());
+        assert!(!DataType::Polygon.is_orderable());
+        assert!(!DataType::MultiPoint.is_orderable());
+        assert!(!DataType::MultiLineString.is_orderable());
+        assert!(!DataType::MultiPolygon.is_orderable());
+        assert!(!DataType::GeometryCollection.is_orderable());
     }
 
     #[test]
@@ -230,6 +328,14 @@ mod tests {
             DataType::Uuid,
             DataType::Array,
             DataType::Enum,
+            DataType::Geometry,
+            DataType::Point,
+            DataType::LineString,
+            DataType::Polygon,
+            DataType::MultiPoint,
+            DataType::MultiLineString,
+            DataType::MultiPolygon,
+            DataType::GeometryCollection,
         ] {
             assert!(dt.is_equatable(), "DataType {:?} should be equatable", dt);
         }
