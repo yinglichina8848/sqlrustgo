@@ -870,4 +870,607 @@ mod tests {
         let rule = ProjectionPruning::new();
         let _changed = rule.apply(&mut plan);
     }
+
+    // ===== Tests for predicate_pushdown on all UnifiedPlan variants =====
+
+    #[test]
+    fn test_predicate_pushdown_on_limit() {
+        let mut plan = UnifiedPlan::Limit {
+            limit: 100,
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_on_vector_scan() {
+        use crate::unified_plan::VectorScanType;
+        let mut plan = UnifiedPlan::VectorScan {
+            vector_index: "vec_idx".to_string(),
+            query_vector: vec![1.0, 2.0, 3.0],
+            scan_type: VectorScanType::Knn { k: 5 },
+            limit: Some(10),
+        };
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_on_graph_scan() {
+        use crate::unified_plan::GraphScanType;
+        let mut plan = UnifiedPlan::GraphScan {
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::Traversal { max_depth: 3 },
+            start_node: Some("user1".to_string()),
+        };
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_on_empty_relation() {
+        let mut plan = UnifiedPlan::EmptyRelation;
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_on_hybrid_vector_scan() {
+        use crate::unified_plan::VectorScanType;
+        let mut plan = UnifiedPlan::HybridVectorScan {
+            sql_filter: Some(Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("1".to_string())),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Literal("2".to_string())),
+            }),
+            vector_index: "vec_idx".to_string(),
+            query_vector: vec![1.0, 2.0, 3.0],
+            scan_type: VectorScanType::Ann { threshold: 0.8 },
+            limit: Some(10),
+        };
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(changed);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_on_hybrid_graph_scan() {
+        use crate::unified_plan::GraphScanType;
+        let mut plan = UnifiedPlan::HybridGraphScan {
+            sql_filter: Some(Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("3".to_string())),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Literal("7".to_string())),
+            }),
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::Reachability { target: "user2".to_string() },
+            start_node: Some("user1".to_string()),
+        };
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(changed);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_on_join() {
+        let mut plan = UnifiedPlan::Join {
+            left: Box::new(UnifiedPlan::TableScan {
+                table_name: "t1".to_string(),
+                projection: None,
+            }),
+            right: Box::new(UnifiedPlan::TableScan {
+                table_name: "t2".to_string(),
+                projection: None,
+            }),
+            join_type: JoinType::Inner,
+            condition: Some(Expr::BinaryExpr {
+                left: Box::new(Expr::Column("a".to_string())),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Column("b".to_string())),
+            }),
+        };
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_on_aggregate() {
+        let mut plan = UnifiedPlan::Aggregate {
+            group_by: vec![Expr::Column("dept".to_string())],
+            aggregates: vec![Expr::Column("salary".to_string())],
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "employees".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_on_sort() {
+        let mut plan = UnifiedPlan::Sort {
+            expr: vec![Expr::Column("name".to_string())],
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    // ===== Tests for prune_projections on all UnifiedPlan variants =====
+
+    #[test]
+    fn test_prune_projections_on_limit() {
+        let mut plan = UnifiedPlan::Limit {
+            limit: 100,
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ProjectionPruning::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_prune_projections_on_vector_scan() {
+        use crate::unified_plan::VectorScanType;
+        let mut plan = UnifiedPlan::VectorScan {
+            vector_index: "vec_idx".to_string(),
+            query_vector: vec![1.0, 2.0, 3.0],
+            scan_type: VectorScanType::Knn { k: 5 },
+            limit: Some(10),
+        };
+        let rule = ProjectionPruning::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_prune_projections_on_graph_scan() {
+        use crate::unified_plan::GraphScanType;
+        let mut plan = UnifiedPlan::GraphScan {
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::Traversal { max_depth: 3 },
+            start_node: Some("user1".to_string()),
+        };
+        let rule = ProjectionPruning::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_prune_projections_on_empty_relation() {
+        let mut plan = UnifiedPlan::EmptyRelation;
+        let rule = ProjectionPruning::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_prune_projections_on_hybrid_vector_scan() {
+        use crate::unified_plan::VectorScanType;
+        let mut plan = UnifiedPlan::HybridVectorScan {
+            sql_filter: None,
+            vector_index: "vec_idx".to_string(),
+            query_vector: vec![1.0, 2.0, 3.0],
+            scan_type: VectorScanType::Knn { k: 5 },
+            limit: Some(10),
+        };
+        let rule = ProjectionPruning::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    // ===== Tests for fold_constants on all UnifiedPlan variants =====
+
+    #[test]
+    fn test_fold_constants_on_limit() {
+        let mut plan = UnifiedPlan::Limit {
+            limit: 100,
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_fold_constants_on_vector_scan() {
+        use crate::unified_plan::VectorScanType;
+        let mut plan = UnifiedPlan::VectorScan {
+            vector_index: "vec_idx".to_string(),
+            query_vector: vec![1.0, 2.0, 3.0],
+            scan_type: VectorScanType::Knn { k: 5 },
+            limit: Some(10),
+        };
+        let rule = ConstantFolding::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_fold_constants_on_graph_scan() {
+        use crate::unified_plan::GraphScanType;
+        let mut plan = UnifiedPlan::GraphScan {
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::Traversal { max_depth: 3 },
+            start_node: Some("user1".to_string()),
+        };
+        let rule = ConstantFolding::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_fold_constants_on_empty_relation() {
+        let mut plan = UnifiedPlan::EmptyRelation;
+        let rule = ConstantFolding::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn test_fold_constants_on_hybrid_vector_scan() {
+        use crate::unified_plan::VectorScanType;
+        let mut plan = UnifiedPlan::HybridVectorScan {
+            sql_filter: Some(Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("1".to_string())),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Literal("2".to_string())),
+            }),
+            vector_index: "vec_idx".to_string(),
+            query_vector: vec![1.0, 2.0, 3.0],
+            scan_type: VectorScanType::Knn { k: 5 },
+            limit: Some(10),
+        };
+        let rule = ConstantFolding::new();
+        let changed = rule.apply(&mut plan);
+        assert!(changed);
+    }
+
+    #[test]
+    fn test_fold_constants_on_hybrid_graph_scan() {
+        use crate::unified_plan::GraphScanType;
+        let mut plan = UnifiedPlan::HybridGraphScan {
+            sql_filter: Some(Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("5".to_string())),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Literal("3".to_string())),
+            }),
+            graph_name: "social".to_string(),
+            scan_type: GraphScanType::Traversal { max_depth: 3 },
+            start_node: Some("user1".to_string()),
+        };
+        let rule = ConstantFolding::new();
+        let changed = rule.apply(&mut plan);
+        assert!(changed);
+    }
+
+    #[test]
+    fn test_fold_constants_on_join() {
+        let mut plan = UnifiedPlan::Join {
+            left: Box::new(UnifiedPlan::TableScan {
+                table_name: "t1".to_string(),
+                projection: None,
+            }),
+            right: Box::new(UnifiedPlan::TableScan {
+                table_name: "t2".to_string(),
+                projection: None,
+            }),
+            join_type: JoinType::Inner,
+            condition: Some(Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("1".to_string())),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Literal("1".to_string())),
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let changed = rule.apply(&mut plan);
+        assert!(changed);
+    }
+
+    #[test]
+    fn test_fold_constants_on_aggregate() {
+        let mut plan = UnifiedPlan::Aggregate {
+            group_by: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("1".to_string())),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Literal("2".to_string())),
+            }],
+            aggregates: vec![Expr::Literal("count".to_string())],
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let changed = rule.apply(&mut plan);
+        assert!(changed);
+    }
+
+    #[test]
+    fn test_fold_constants_on_sort() {
+        let mut plan = UnifiedPlan::Sort {
+            expr: vec![Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("3".to_string())),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Literal("1".to_string())),
+            }],
+            input: Box::new(UnifiedPlan::TableScan {
+                table_name: "t".to_string(),
+                projection: None,
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let changed = rule.apply(&mut plan);
+        assert!(changed);
+    }
+
+    // ===== Tests for JoinType enum =====
+
+    #[test]
+    fn test_join_type_inner() {
+        assert_eq!(format!("{:?}", JoinType::Inner), "Inner");
+    }
+
+    #[test]
+    fn test_join_type_left() {
+        assert_eq!(format!("{:?}", JoinType::Left), "Left");
+    }
+
+    #[test]
+    fn test_join_type_right() {
+        assert_eq!(format!("{:?}", JoinType::Right), "Right");
+    }
+
+    #[test]
+    fn test_join_type_full() {
+        assert_eq!(format!("{:?}", JoinType::Full), "Full");
+    }
+
+    #[test]
+    fn test_join_type_cross() {
+        assert_eq!(format!("{:?}", JoinType::Cross), "Cross");
+    }
+
+    #[test]
+    fn test_join_type_left_semi() {
+        assert_eq!(format!("{:?}", JoinType::LeftSemi), "LeftSemi");
+    }
+
+    #[test]
+    fn test_join_type_left_anti() {
+        assert_eq!(format!("{:?}", JoinType::LeftAnti), "LeftAnti");
+    }
+
+    #[test]
+    fn test_join_type_right_semi() {
+        assert_eq!(format!("{:?}", JoinType::RightSemi), "RightSemi");
+    }
+
+    #[test]
+    fn test_join_type_right_anti() {
+        assert_eq!(format!("{:?}", JoinType::RightAnti), "RightAnti");
+    }
+
+    #[test]
+    fn test_join_type_eq() {
+        assert_eq!(JoinType::Inner, JoinType::Inner);
+        assert_eq!(JoinType::Left, JoinType::Left);
+        assert_ne!(JoinType::Inner, JoinType::Left);
+    }
+
+    // ===== Additional eval_binary_op edge case tests =====
+
+    #[test]
+    fn test_eval_binary_op_plus() {
+        let result = eval_binary_op("1", "2", BinaryOperator::Plus);
+        assert_eq!(result, Some("3".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_eq_true() {
+        let result = eval_binary_op("5", "5", BinaryOperator::Eq);
+        assert_eq!(result, Some("true".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_eq_false() {
+        let result = eval_binary_op("5", "3", BinaryOperator::Eq);
+        assert_eq!(result, Some("false".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_gt() {
+        let result = eval_binary_op("5", "3", BinaryOperator::Gt);
+        assert_eq!(result, Some("true".to_string()));
+        let result2 = eval_binary_op("3", "5", BinaryOperator::Gt);
+        assert_eq!(result2, Some("false".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_invalid_string() {
+        let result = eval_binary_op("abc", "3", BinaryOperator::Plus);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_eval_binary_op_and_false_left() {
+        let result = eval_binary_op("0", "1", BinaryOperator::And);
+        assert_eq!(result, Some("false".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_and_false_right() {
+        let result = eval_binary_op("1", "0", BinaryOperator::And);
+        assert_eq!(result, Some("false".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_or_true_left() {
+        let result = eval_binary_op("1", "0", BinaryOperator::Or);
+        assert_eq!(result, Some("true".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_or_false_both() {
+        let result = eval_binary_op("0", "0", BinaryOperator::Or);
+        assert_eq!(result, Some("false".to_string()));
+    }
+
+    #[test]
+    fn test_eval_binary_op_and_with_zero() {
+        let result = eval_binary_op("0", "1", BinaryOperator::And);
+        assert_eq!(result, Some("false".to_string()));
+    }
+
+    // ===== Additional fold_constants edge cases =====
+
+    #[test]
+    fn test_fold_constants_no_change_column() {
+        let expr = Expr::Column("x".to_string());
+        let folded = expr.fold_constants();
+        assert!(matches!(folded, Expr::Column(_)));
+    }
+
+    #[test]
+    fn test_fold_constants_binary_expr_no_folding() {
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("a".to_string())),
+            op: BinaryOperator::Plus,
+            right: Box::new(Expr::Column("b".to_string())),
+        };
+        let folded = expr.fold_constants();
+        assert!(matches!(folded, Expr::BinaryExpr { .. }));
+    }
+
+    #[test]
+    fn test_fold_constants_or_simplify_right_true() {
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: BinaryOperator::Or,
+            right: Box::new(Expr::Literal("true".to_string())),
+        };
+        let folded = expr.fold_constants();
+        assert_eq!(folded, Expr::Literal("true".to_string()));
+    }
+
+    #[test]
+    fn test_fold_constants_and_simplify_right_false() {
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: BinaryOperator::And,
+            right: Box::new(Expr::Literal("false".to_string())),
+        };
+        let folded = expr.fold_constants();
+        assert_eq!(folded, Expr::Literal("false".to_string()));
+    }
+
+    #[test]
+    fn test_fold_constants_and_simplify_right_one() {
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Column("x".to_string())),
+            op: BinaryOperator::And,
+            right: Box::new(Expr::Literal("1".to_string())),
+        };
+        let folded = expr.fold_constants();
+        assert_eq!(folded, Expr::Column("x".to_string()));
+    }
+
+    #[test]
+    fn test_fold_constants_or_simplify_left_zero() {
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::Literal("0".to_string())),
+            op: BinaryOperator::Or,
+            right: Box::new(Expr::Column("y".to_string())),
+        };
+        let folded = expr.fold_constants();
+        assert_eq!(folded, Expr::Column("y".to_string()));
+    }
+
+    // ===== Additional references_columns tests =====
+
+    #[test]
+    fn test_expr_references_columns_complex() {
+        let expr = Expr::BinaryExpr {
+            left: Box::new(Expr::BinaryExpr {
+                left: Box::new(Expr::Column("a".to_string())),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Column("b".to_string())),
+            }),
+            op: BinaryOperator::Multiply,
+            right: Box::new(Expr::Literal("2".to_string())),
+        };
+        let cols = expr.references_columns();
+        assert!(cols.contains(&"a"));
+        assert!(cols.contains(&"b"));
+        assert_eq!(cols.len(), 2);
+    }
+
+    // ===== Test predicate_pushdown on IndexScan =====
+
+    #[test]
+    fn test_predicate_pushdown_on_index_scan_with_folding() {
+        let mut plan = UnifiedPlan::IndexScan {
+            table_name: "users".to_string(),
+            index_name: "idx_email".to_string(),
+            predicate: Some(Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("1".to_string())),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Literal("2".to_string())),
+            }),
+        };
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(changed);
+    }
+
+    #[test]
+    fn test_predicate_pushdown_on_index_scan_no_change() {
+        let mut plan = UnifiedPlan::IndexScan {
+            table_name: "users".to_string(),
+            index_name: "idx_email".to_string(),
+            predicate: Some(Expr::Column("email".to_string())),
+        };
+        let rule = PredicatePushdown::new();
+        let changed = rule.apply(&mut plan);
+        assert!(!changed);
+    }
+
+    // ===== Test fold_constants on IndexScan =====
+
+    #[test]
+    fn test_fold_constants_on_index_scan() {
+        let mut plan = UnifiedPlan::IndexScan {
+            table_name: "users".to_string(),
+            index_name: "idx_email".to_string(),
+            predicate: Some(Expr::BinaryExpr {
+                left: Box::new(Expr::Literal("5".to_string())),
+                op: BinaryOperator::Plus,
+                right: Box::new(Expr::Literal("3".to_string())),
+            }),
+        };
+        let rule = ConstantFolding::new();
+        let changed = rule.apply(&mut plan);
+        assert!(changed);
+    }
 }
