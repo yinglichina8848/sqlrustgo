@@ -88,6 +88,7 @@ impl BackupExporter {
             }
             Value::Boolean(b) => b.to_string(),
             Value::Blob(b) => format!("[BLOB: {} bytes]", b.len()),
+            Value::Geometry(g) => g.to_string(),
         }
     }
 
@@ -143,6 +144,7 @@ impl BackupExporter {
             Value::Text(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             Value::Boolean(b) => b.to_string(),
             Value::Blob(b) => format!("\"[BLOB: {} bytes]\"", b.len()),
+            Value::Geometry(g) => format!("\"{}\"", g),
         }
     }
 
@@ -186,6 +188,7 @@ impl BackupExporter {
                 }
             }
             Value::Blob(b) => format!("X'{}'", use_hex::encode(b)),
+            Value::Geometry(g) => format!("'{}'", g),
         }
     }
 }
@@ -239,12 +242,15 @@ impl DataRestorer {
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     primary_key: false,
+                    auto_increment: false,
                 })
                 .collect(),
             foreign_keys: vec![],
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
 
         let count = rows.len();
@@ -307,12 +313,15 @@ impl DataRestorer {
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     primary_key: false,
+                    auto_increment: false,
                 })
                 .collect(),
             foreign_keys: vec![],
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
 
         let count = rows.len();
@@ -360,6 +369,8 @@ impl DataRestorer {
                         unique_constraints: vec![],
                         check_constraints: vec![],
                         partition_info: None,
+                        has_hidden_rowid: false,
+                        next_rowid: 1,
                     };
                     storage.create_table(&table_info)?;
                 }
@@ -451,12 +462,14 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     primary_key: false,
+                    ..Default::default()
                 },
                 crate::ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     primary_key: false,
+                    ..Default::default()
                 },
             ],
             ..Default::default()
@@ -496,12 +509,14 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     primary_key: false,
+                    ..Default::default()
                 },
                 crate::ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     primary_key: false,
+                    ..Default::default()
                 },
             ],
             ..Default::default()
@@ -588,6 +603,7 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: false,
+                ..Default::default()
             }],
             ..Default::default()
         };
@@ -685,6 +701,7 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: false,
+                ..Default::default()
             }],
             ..Default::default()
         };
@@ -708,6 +725,7 @@ mod tests {
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 primary_key: false,
+                ..Default::default()
             }],
             ..Default::default()
         };
@@ -737,6 +755,7 @@ mod tests {
                 data_type: "TEXT".to_string(),
                 nullable: false,
                 primary_key: false,
+                ..Default::default()
             }],
             ..Default::default()
         };

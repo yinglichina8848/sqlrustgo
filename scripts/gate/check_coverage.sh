@@ -39,18 +39,22 @@ if [ "$MODE" = "full" ]; then
     echo "Running full coverage test..."
 
     # Run llvm-cov with timeout
+    # IMPORTANT: Must run tests FIRST, then generate report
     TIMEOUT=600
 
     if command -v timeout &>/dev/null; then
-        timeout "$TIMEOUT" cargo llvm-cov --all-features --lib --json --output-path "$COVERAGE_DIR/coverage.json" 2>&1 || {
+        timeout "$TIMEOUT" cargo llvm-cov test --workspace --all-features --lib --no-fail-fast 2>&1 || {
             # If full coverage times out, try per-crate
             echo "Full coverage timed out after ${TIMEOUT}s, trying per-crate approach..."
             bash "$SCRIPT_DIR/check_coverage_parallel.sh" --parallel 4 --timeout 300
             exit 0
         }
     else
-        cargo llvm-cov --all-features --lib --json --output-path "$COVERAGE_DIR/coverage.json"
+        cargo llvm-cov test --workspace --all-features --lib --no-fail-fast 2>&1 || true
     fi
+
+    # Generate JSON report from collected coverage data
+    cargo llvm-cov report --json --output-path "$COVERAGE_DIR/coverage.json" 2>/dev/null || true
 fi
 
 # Check if coverage report was generated
@@ -59,14 +63,25 @@ if [ ! -f "$COVERAGE_DIR/coverage.json" ]; then
     exit 1
 fi
 
-# Extract coverage percentage from llvm-cov output
+# Extract coverage percentage from JSON report
 echo "Extracting coverage percentage..."
 
-# macOS grep doesn't support -P, use grep -E or grep -o with basic regex
-COVERAGE=$(cargo llvm-cov report --json --artifacts "$COVERAGE_DIR" 2>/dev/null | grep -oE '"percent"[[:space:]]*:[[:space:]]*[0-9.]+' | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo "")
+# Parse the JSON to get line coverage percentage
+# The JSON has format: {"files": [...], "totals": {"lines": {"count": N, "covered": M, "percent": X.Y}}}
+COVERAGE=$(python3 -c "
+import json
+try:
+    with open('$COVERAGE_DIR/coverage.json') as f:
+        data = json.load(f)
+    lines = data.get('totals', {}).get('lines', {})
+    pct = lines.get('percent', 0)
+    print(f'{pct:.2f}')
+except:
+    print('')
+" 2>/dev/null || echo "")
 
 if [ -z "$COVERAGE" ]; then
-    # Fallback: try to parse from the JSON directly
+    # Fallback: try to extract from JSON manually
     COVERAGE=$(grep -oE '"percent"[[:space:]]*:[[:space:]]*[0-9.]+' "$COVERAGE_DIR/coverage.json" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo "")
 fi
 

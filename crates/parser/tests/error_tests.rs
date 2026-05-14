@@ -184,7 +184,11 @@ fn test_invalid_on_clause_no_condition() {
 #[test]
 fn test_like_without_pattern() {
     let result = parse("SELECT * FROM t WHERE a LIKE");
-    assert!(result.is_ok(), "LIKE without pattern parses: {:?}", result);
+    assert!(
+        result.is_err(),
+        "LIKE without pattern should fail: {:?}",
+        result
+    );
 }
 
 #[test]

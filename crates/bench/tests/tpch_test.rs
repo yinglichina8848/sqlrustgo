@@ -1,10 +1,14 @@
 // TPC-H benchmark tests for SQLRustGo
 // Tests cover Q1, Q3, Q4, Q5, Q18, Q21 and basic SQL operations
 
+use sqlrustgo::execution_engine::EngineConfig;
 use sqlrustgo::MemoryExecutionEngine;
+use sqlrustgo_storage::MemoryStorage;
+use std::sync::{Arc, RwLock};
 
 fn setup_engine() -> MemoryExecutionEngine {
-    let mut engine = MemoryExecutionEngine::with_memory();
+    let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
 
     // Create lineitem table (6000 rows for SF0.1)
     engine

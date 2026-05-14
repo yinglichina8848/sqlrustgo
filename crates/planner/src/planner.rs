@@ -5,8 +5,8 @@
 use crate::logical_plan::LogicalPlan;
 use crate::optimizer::{DefaultOptimizer, Optimizer};
 use crate::physical_plan::{
-    AggregateExec, DeleteExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, PhysicalPlan,
-    ProjectionExec, SeqScanExec, SortExec,
+    AggregateExec, DeleteExec, FilterExec, HashJoinExec, IndexScanExec, LimitExec, MergeExec,
+    PhysicalPlan, ProjectionExec, SeqScanExec, SortExec,
 };
 use crate::Schema;
 use crate::{Expr, JoinType};
@@ -78,19 +78,78 @@ impl DefaultPlanner {
             let storage = storage.read().unwrap();
             let indexes = storage.list_indexes(table_name);
 
+            let row_count = storage.get_row_count(table_name).unwrap_or(1);
+            let page_count = storage.get_page_count(table_name).unwrap_or(1);
+
             if !indexes.is_empty() {
-                // Use first available index for now
-                let (column, index_name) = &indexes[0];
-                return Box::new(IndexScanExec::new(
-                    table_name.to_string(),
-                    column.clone(),
-                    index_name.clone(),
-                    schema.clone(),
-                ));
+                let index_pages = storage.get_index_page_count(table_name, 0).unwrap_or(1);
+
+                let seq_cost = self.cost_model.seq_scan_cost(row_count, page_count);
+                let index_cost =
+                    self.cost_model
+                        .index_scan_cost(3, index_pages, row_count, page_count);
+
+                if index_cost.less_than(&seq_cost) {
+                    let (column, index_name) = &indexes[0];
+                    return Box::new(
+                        IndexScanExec::new(
+                            table_name.to_string(),
+                            column.clone(),
+                            index_name.clone(),
+                            schema.clone(),
+                        )
+                        .with_stats(row_count, page_count),
+                    );
+                }
             }
+
+            return Box::new(
+                SeqScanExec::new(table_name.to_string(), schema.clone())
+                    .with_stats(row_count, page_count),
+            );
         }
 
         Box::new(SeqScanExec::new(table_name.to_string(), schema.clone()))
+    }
+
+    /// Select best join method using cost model
+    fn select_join(
+        &self,
+        left_plan: Box<dyn PhysicalPlan>,
+        right_plan: Box<dyn PhysicalPlan>,
+        join_type: crate::JoinType,
+        condition: Option<crate::Expr>,
+        left_rows: u64,
+        right_rows: u64,
+    ) -> Box<dyn PhysicalPlan> {
+        let hash_join_cost = self
+            .cost_model
+            .join_cost(left_rows, right_rows, "hash_join");
+        let nested_loop_cost = self
+            .cost_model
+            .join_cost(left_rows, right_rows, "nested_loop");
+        let sort_merge_cost = self
+            .cost_model
+            .join_cost(left_rows, right_rows, "sort_merge");
+
+        let (best_method, best_cost) =
+            if hash_join_cost <= nested_loop_cost && hash_join_cost <= sort_merge_cost {
+                ("hash_join", hash_join_cost)
+            } else if nested_loop_cost <= sort_merge_cost {
+                ("nested_loop", nested_loop_cost)
+            } else {
+                ("sort_merge", sort_merge_cost)
+            };
+
+        eprintln!(
+            "[CBO] Join cost comparison: hash_join={:.2}, nested_loop={:.2}, sort_merge={:.2} -> selected: {} ({:.2})",
+            hash_join_cost, nested_loop_cost, sort_merge_cost, best_method, best_cost
+        );
+
+        let schema = Schema::new(vec![]);
+        Box::new(HashJoinExec::new(
+            left_plan, right_plan, join_type, condition, schema,
+        ))
     }
 
     fn create_physical_plan_internal(
@@ -183,7 +242,8 @@ impl DefaultPlanner {
                     | Expr::AggregateFunction { .. }
                     | Expr::Alias { .. }
                     | Expr::Wildcard
-                    | Expr::QualifiedWildcard { .. } => {
+                    | Expr::QualifiedWildcard { .. }
+                    | Expr::WindowFunction { .. } => {
                         let input_plan = self.create_physical_plan_internal(input)?;
                         Ok(Box::new(FilterExec::new(input_plan, predicate.clone())))
                     }
@@ -211,14 +271,20 @@ impl DefaultPlanner {
             } => {
                 let left_plan = self.create_physical_plan_internal(left)?;
                 let right_plan = self.create_physical_plan_internal(right)?;
-                let schema = Schema::new(vec![]); // Would need to compute from children
-                Ok(Box::new(HashJoinExec::new(
+
+                let left_rows = left_plan.row_count().max(1);
+                let right_rows = right_plan.row_count().max(1);
+
+                let join_plan = self.select_join(
                     left_plan,
                     right_plan,
                     join_type.clone(),
                     condition.clone(),
-                    schema,
-                )))
+                    left_rows,
+                    right_rows,
+                );
+
+                Ok(join_plan)
             }
             LogicalPlan::Sort { input, sort_expr } => {
                 let input_plan = self.create_physical_plan_internal(input)?;
@@ -260,6 +326,19 @@ impl DefaultPlanner {
                 // DML statements - handled differently
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
+            LogicalPlan::Merge {
+                target_table,
+                source_table,
+                on_condition,
+                matched_clause,
+                not_matched_clause,
+            } => Ok(Box::new(MergeExec::new(
+                target_table.clone(),
+                source_table.clone(),
+                on_condition.clone(),
+                matched_clause.clone(),
+                not_matched_clause.clone(),
+            ))),
             LogicalPlan::Delete {
                 table_name,
                 predicate,
@@ -377,7 +456,8 @@ impl DefaultPlanner {
                 | Expr::AggregateFunction { .. }
                 | Expr::Alias { .. }
                 | Expr::Wildcard
-                | Expr::QualifiedWildcard { .. } => {
+                | Expr::QualifiedWildcard { .. }
+                | Expr::WindowFunction { .. } => {
                     let input_plan = self.create_physical_plan_with_cte_ctx(input, cte_ctx)?;
                     Ok(Box::new(FilterExec::new(input_plan, predicate.clone())))
                 }
@@ -444,6 +524,19 @@ impl DefaultPlanner {
             LogicalPlan::Update { .. } => {
                 Ok(Box::new(SeqScanExec::new(String::new(), Schema::empty())))
             }
+            LogicalPlan::Merge {
+                target_table,
+                source_table,
+                on_condition,
+                matched_clause,
+                not_matched_clause,
+            } => Ok(Box::new(MergeExec::new(
+                target_table.clone(),
+                source_table.clone(),
+                on_condition.clone(),
+                matched_clause.clone(),
+                not_matched_clause.clone(),
+            ))),
             LogicalPlan::CreateTrigger { .. }
             | LogicalPlan::CreateProcedure { .. }
             | LogicalPlan::Call { .. } => {
@@ -537,6 +630,7 @@ mod tests {
     use crate::DataType;
     use crate::Expr;
     use crate::Field;
+    use sqlrustgo_types::Value;
 
     #[test]
     fn test_default_planner_creation() {
@@ -913,5 +1007,581 @@ mod tests {
 
         let error = PlannerError::OptimizationFailed("optimization error".to_string());
         assert_eq!(error.to_string(), "Optimization failed: optimization error");
+    }
+
+    #[test]
+    fn test_cte_physical_plan() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner_scan = LogicalPlan::TableScan {
+            table_name: "base".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+
+        let ctes = vec![crate::logical_plan::CommonTableExpression {
+            name: "cte1".to_string(),
+            subquery: Box::new(inner_scan),
+            columns: vec![],
+        }];
+
+        let cte_scan = LogicalPlan::TableScan {
+            table_name: "cte1".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+
+        let with_plan = LogicalPlan::With {
+            ctes,
+            input: Box::new(cte_scan),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&with_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "SeqScan");
+    }
+
+    #[test]
+    fn test_nested_cte_physical_plan() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+
+        let inner_cte = crate::logical_plan::CommonTableExpression {
+            name: "inner_cte".to_string(),
+            subquery: Box::new(LogicalPlan::TableScan {
+                table_name: "t".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+            columns: vec![],
+        };
+
+        let outer_cte = crate::logical_plan::CommonTableExpression {
+            name: "outer_cte".to_string(),
+            subquery: Box::new(LogicalPlan::TableScan {
+                table_name: "inner_cte".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+            columns: vec![],
+        };
+
+        let with_plan = LogicalPlan::With {
+            ctes: vec![inner_cte, outer_cte],
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "outer_cte".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&with_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "SeqScan");
+    }
+
+    #[test]
+    fn test_subquery_in_physical_plan() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = LogicalPlan::TableScan {
+            table_name: "sub".to_string(),
+            schema: subquery_schema.clone(),
+            projection: None,
+        };
+
+        let main_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let main_scan = LogicalPlan::TableScan {
+            table_name: "main".to_string(),
+            schema: main_schema.clone(),
+            projection: None,
+        };
+
+        let filter_plan = LogicalPlan::Filter {
+            predicate: Expr::In {
+                expr: Box::new(Expr::column("id")),
+                subquery: Box::new(subquery),
+            },
+            input: Box::new(main_scan),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&filter_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_subquery_not_in_physical_plan() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = LogicalPlan::TableScan {
+            table_name: "sub".to_string(),
+            schema: subquery_schema.clone(),
+            projection: None,
+        };
+
+        let main_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let main_scan = LogicalPlan::TableScan {
+            table_name: "main".to_string(),
+            schema: main_schema.clone(),
+            projection: None,
+        };
+
+        let filter_plan = LogicalPlan::Filter {
+            predicate: Expr::NotIn {
+                expr: Box::new(Expr::column("id")),
+                subquery: Box::new(subquery),
+            },
+            input: Box::new(main_scan),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&filter_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_subquery_exists_physical_plan() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = LogicalPlan::TableScan {
+            table_name: "sub".to_string(),
+            schema: subquery_schema.clone(),
+            projection: None,
+        };
+
+        let main_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let main_scan = LogicalPlan::TableScan {
+            table_name: "main".to_string(),
+            schema: main_schema.clone(),
+            projection: None,
+        };
+
+        let filter_plan = LogicalPlan::Filter {
+            predicate: Expr::Exists(Box::new(subquery)),
+            input: Box::new(main_scan),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&filter_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_subquery_not_exists_physical_plan() {
+        let subquery_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = LogicalPlan::TableScan {
+            table_name: "sub".to_string(),
+            schema: subquery_schema.clone(),
+            projection: None,
+        };
+
+        let main_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let main_scan = LogicalPlan::TableScan {
+            table_name: "main".to_string(),
+            schema: main_schema.clone(),
+            projection: None,
+        };
+
+        let filter_plan = LogicalPlan::Filter {
+            predicate: Expr::NotExists(Box::new(subquery)),
+            input: Box::new(main_scan),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&filter_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_merge_physical_plan() {
+        use crate::logical_plan::{MergeMatchedClause, MergeNotMatchedClause};
+
+        let matched = MergeMatchedClause {
+            update_columns: vec!["col".to_string()],
+            update_values: vec![Expr::literal(Value::Integer(1))],
+        };
+        let not_matched = MergeNotMatchedClause {
+            insert_columns: vec!["col".to_string()],
+            insert_values: vec![Expr::literal(Value::Integer(2))],
+        };
+
+        let merge_plan = LogicalPlan::Merge {
+            target_table: "target".to_string(),
+            source_table: "source".to_string(),
+            on_condition: Expr::column("id"),
+            matched_clause: Some(matched),
+            not_matched_clause: Some(not_matched),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&merge_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "Merge");
+    }
+
+    #[test]
+    fn test_create_trigger_physical_plan() {
+        let create_trigger_plan = LogicalPlan::CreateTrigger {
+            trigger_name: "my_trigger".to_string(),
+            table_name: "users".to_string(),
+            timing: crate::logical_plan::TriggerTiming::After,
+            event: crate::logical_plan::TriggerEvent::Insert,
+            body: "BEGIN END".to_string(),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&create_trigger_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "SeqScan");
+    }
+
+    #[test]
+    fn test_create_procedure_physical_plan() {
+        let create_proc_plan = LogicalPlan::CreateProcedure {
+            procedure_name: "my_proc".to_string(),
+            params: vec![],
+            body: vec![crate::logical_plan::ProcedureStatement::Select(
+                "SELECT 1".to_string(),
+            )],
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&create_proc_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "SeqScan");
+    }
+
+    #[test]
+    fn test_call_procedure_physical_plan() {
+        let call_plan = LogicalPlan::Call {
+            procedure_name: "my_proc".to_string(),
+            args: vec![],
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&call_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "SeqScan");
+    }
+
+    #[test]
+    fn test_default_planner_has_storage_false() {
+        let planner = DefaultPlanner::new();
+        assert!(!planner.has_storage());
+    }
+
+    #[test]
+    fn test_default_planner_optimize() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let logical_plan = LogicalPlan::Filter {
+            predicate: Expr::binary_expr(
+                Expr::column("id"),
+                crate::Operator::Eq,
+                Expr::literal(Value::Integer(10)),
+            ),
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "users".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+        };
+
+        let mut planner = DefaultPlanner::new();
+        let result = planner.optimize(logical_plan);
+
+        assert!(result.is_ok());
+        let physical_plan = result.unwrap();
+        assert!(!physical_plan.name().is_empty());
+    }
+
+    #[test]
+    fn test_subquery_cte_with_in() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let subquery = LogicalPlan::TableScan {
+            table_name: "sub".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+
+        let ctes = vec![crate::logical_plan::CommonTableExpression {
+            name: "cte_in".to_string(),
+            subquery: Box::new(subquery),
+            columns: vec![],
+        }];
+
+        let cte_scan = LogicalPlan::TableScan {
+            table_name: "cte_in".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+
+        let filter_plan = LogicalPlan::Filter {
+            predicate: Expr::In {
+                expr: Box::new(Expr::column("id")),
+                subquery: Box::new(cte_scan),
+            },
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "main".to_string(),
+                schema: inner_schema.clone(),
+                projection: None,
+            }),
+        };
+
+        let with_plan = LogicalPlan::With {
+            ctes,
+            input: Box::new(filter_plan),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&with_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_filter_with_case_when() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let case_expr = Expr::CaseWhen {
+            conditions: vec![crate::WhenClause {
+                condition: Box::new(Expr::binary_expr(
+                    Expr::column("id"),
+                    crate::Operator::Gt,
+                    Expr::literal(Value::Integer(5)),
+                )),
+                result: Box::new(Expr::literal(Value::Text("high".to_string()))),
+            }],
+            else_result: Some(Box::new(Expr::literal(Value::Text("low".to_string())))),
+        };
+
+        let filter_plan = LogicalPlan::Filter {
+            predicate: case_expr,
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "t".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&filter_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "Filter");
+    }
+
+    #[test]
+    fn test_filter_with_in_list() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let in_list_expr = Expr::InList {
+            expr: Box::new(Expr::column("id")),
+            values: vec![
+                Expr::literal(Value::Integer(1)),
+                Expr::literal(Value::Integer(2)),
+                Expr::literal(Value::Integer(3)),
+            ],
+        };
+
+        let filter_plan = LogicalPlan::Filter {
+            predicate: in_list_expr,
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "t".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&filter_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "Filter");
+    }
+
+    #[test]
+    fn test_filter_with_extract() {
+        let schema = Schema::new(vec![Field::new("dt".to_string(), DataType::Text)]);
+        let extract_expr = Expr::Extract {
+            field: "year".to_string(),
+            expr: Box::new(Expr::column("dt")),
+        };
+
+        let filter_plan = LogicalPlan::Filter {
+            predicate: extract_expr,
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "t".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&filter_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "Filter");
+    }
+
+    #[test]
+    fn test_filter_with_alias_expr() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let alias_expr = Expr::Alias {
+            expr: Box::new(Expr::column("id")),
+            name: "my_id".to_string(),
+        };
+
+        let filter_plan = LogicalPlan::Filter {
+            predicate: alias_expr,
+            input: Box::new(LogicalPlan::TableScan {
+                table_name: "t".to_string(),
+                schema: schema.clone(),
+                projection: None,
+            }),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&filter_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "Filter");
+    }
+
+    #[test]
+    fn test_planner_with_storage_none() {
+        let planner = DefaultPlanner::new();
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let logical_plan = LogicalPlan::TableScan {
+            table_name: "users".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let physical_plan = planner.create_physical_plan(&logical_plan).unwrap();
+        assert_eq!(physical_plan.name(), "SeqScan");
+    }
+
+    #[test]
+    fn test_join_with_left_join_type() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left_scan = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        let right_scan = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let join_plan = LogicalPlan::Join {
+            left: Box::new(left_scan),
+            right: Box::new(right_scan),
+            join_type: JoinType::Left,
+            condition: Some(Expr::column("id")),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&join_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_join_with_right_join_type() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left_scan = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        let right_scan = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let join_plan = LogicalPlan::Join {
+            left: Box::new(left_scan),
+            right: Box::new(right_scan),
+            join_type: JoinType::Right,
+            condition: Some(Expr::column("id")),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&join_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_join_with_full_join_type() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left_scan = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        let right_scan = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let join_plan = LogicalPlan::Join {
+            left: Box::new(left_scan),
+            right: Box::new(right_scan),
+            join_type: JoinType::Full,
+            condition: Some(Expr::column("id")),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&join_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_join_with_cross_join_type() {
+        let schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let left_scan = LogicalPlan::TableScan {
+            table_name: "t1".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+        let right_scan = LogicalPlan::TableScan {
+            table_name: "t2".to_string(),
+            schema: schema.clone(),
+            projection: None,
+        };
+
+        let join_plan = LogicalPlan::Join {
+            left: Box::new(left_scan),
+            right: Box::new(right_scan),
+            join_type: JoinType::Cross,
+            condition: None,
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&join_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "HashJoin");
+    }
+
+    #[test]
+    fn test_subquery_alias_physical_plan() {
+        let inner_schema = Schema::new(vec![Field::new("id".to_string(), DataType::Integer)]);
+        let inner_scan = LogicalPlan::TableScan {
+            table_name: "inner_t".to_string(),
+            schema: inner_schema.clone(),
+            projection: None,
+        };
+
+        let subquery_plan = LogicalPlan::Subquery {
+            subquery: Box::new(inner_scan),
+            alias: "sq".to_string(),
+        };
+
+        let planner = DefaultPlanner::new();
+        let physical_plan = planner.create_physical_plan(&subquery_plan).unwrap();
+
+        assert_eq!(physical_plan.name(), "SeqScan");
     }
 }

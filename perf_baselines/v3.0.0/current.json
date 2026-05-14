@@ -1,0 +1,15 @@
+{
+  "date": "2026-05-13T17:21:34Z",
+  "version": "v3.0.0",
+  "benchmarks": {
+    "simple_select": 324015.50,
+    "insert": 55322.74,
+    "update": 58458.25,
+    "delete": 62293.43,
+    "join": 10970.19,
+    "aggregation": 1269209.97,
+    "order_by": 19950.96,
+    "concurrent_select_8t": 487320.62,
+    "complex_where": 368.19
+  }
+}

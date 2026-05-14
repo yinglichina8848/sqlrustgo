@@ -6,13 +6,17 @@
 use serde::{Deserialize, Serialize};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
-    parse, AlterTableOperation, Expression, InsertStatement, SelectStatement, Statement, WithSelect,
+    parse, AlterTableOperation, Expression, InsertStatement, SelectStatement, ShowStatement,
+    Statement, TruncateStatement, WithSelect,
 };
+use sqlrustgo_parser::transaction::{IsolationLevel, TransactionStatement};
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_types::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+pub mod differential;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SqlTestResult {
@@ -65,12 +69,15 @@ impl SimpleExecutor {
                             data_type: c.data_type,
                             nullable: c.nullable,
                             primary_key: c.primary_key,
+                            auto_increment: c.auto_increment,
                         })
                         .collect(),
                     foreign_keys: vec![],
                     unique_constraints: vec![],
                     check_constraints: vec![],
                     partition_info: None,
+                    has_hidden_rowid: false,
+                    next_rowid: 0,
                 };
                 self.storage
                     .create_table(&info)
@@ -195,6 +202,7 @@ impl SimpleExecutor {
                             data_type: data_type.clone(),
                             nullable: *nullable,
                             primary_key: false,
+                            auto_increment: false,
                         };
                         self.storage
                             .add_column(&alter.table_name, col)
@@ -222,11 +230,12 @@ impl SimpleExecutor {
                 }
                 Ok(ExecutorResult::new(vec![], 0))
             }
-            Statement::CreateIndex(_) => Ok(ExecutorResult::new(vec![], 0)),
-            Statement::WithSelect(with_select) => {
-                self.execute_with_select(&with_select)?;
+            Statement::Truncate(truncate) => {
+                // TRUNCATE TABLE - delete all rows from table
+                self.execute_truncate(&truncate)?;
                 Ok(ExecutorResult::new(vec![], 0))
             }
+            Statement::CreateIndex(_) => Ok(ExecutorResult::new(vec![], 0)),
             Statement::Union(union_stmt) => {
                 let left_rows = self.execute_statement(&union_stmt.left)?;
                 let right_rows = self.execute_statement(&union_stmt.right)?;
@@ -238,6 +247,23 @@ impl SimpleExecutor {
                 }
                 let count = combined.len();
                 Ok(ExecutorResult::new(combined, count))
+            }
+            Statement::Analyze(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Check(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Optimize(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Vacuum(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Repair(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Backup(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Restore(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Explain(_) => Ok(ExecutorResult::new(vec![], 0)),
+            Statement::Show(show) => {
+                let rows = self.execute_show(&show);
+                let count = rows.len();
+                Ok(ExecutorResult::new(rows, count))
+            }
+            Statement::Transaction(tx_stmt) => {
+                self.execute_transaction(&tx_stmt)?;
+                Ok(ExecutorResult::new(vec![], 0))
             }
             _ => Err("Unsupported statement type".to_string()),
         }
@@ -281,6 +307,21 @@ impl SimpleExecutor {
     fn execute_select(&self, select: &SelectStatement) -> Result<Vec<Vec<Value>>, String> {
         // Use first_table() for backward compat: from.tables[0] or select.table
         let table_name = select.first_table();
+
+        // Handle INFORMATION_SCHEMA queries
+        if table_name.eq_ignore_ascii_case("information_schema.tables") {
+            return self.execute_information_schema_tables(select);
+        }
+        if table_name.eq_ignore_ascii_case("information_schema.columns") {
+            return self.execute_information_schema_columns(select);
+        }
+        if table_name.eq_ignore_ascii_case("information_schema.indexes") {
+            return self.execute_information_schema_indexes(select);
+        }
+        if table_name.eq_ignore_ascii_case("information_schema.statistics") {
+            return self.execute_information_schema_statistics(select);
+        }
+
         let mut rows = self
             .storage
             .scan(&table_name)
@@ -295,6 +336,304 @@ impl SimpleExecutor {
         }
 
         Ok(rows)
+    }
+
+    fn execute_information_schema_tables(
+        &self,
+        select: &SelectStatement,
+    ) -> Result<Vec<Vec<Value>>, String> {
+        let mut rows = Vec::new();
+        let table_names = self.storage.list_tables();
+        for name in table_names {
+            rows.push(vec![
+                Value::Text("default".to_string()),
+                Value::Text(name.clone()),
+                Value::Text("BASE TABLE".to_string()),
+                Value::Text("YES".to_string()),
+            ]);
+        }
+
+        if let Some(ref where_clause) = select.where_clause {
+            let fake_info = self.create_fake_table_info_for_tables();
+            rows.retain(|row| self.evaluate_where(where_clause, row, &fake_info));
+        }
+
+        Ok(rows)
+    }
+
+    fn execute_information_schema_columns(
+        &self,
+        select: &SelectStatement,
+    ) -> Result<Vec<Vec<Value>>, String> {
+        let mut rows = Vec::new();
+        let table_names = self.storage.list_tables();
+        for name in table_names {
+            if let Ok(info) = self.storage.get_table_info(&name) {
+                for (i, col) in info.columns.iter().enumerate() {
+                    let (char_max, num_prec, num_scale) = self.get_type_attributes(&col.data_type);
+                    rows.push(vec![
+                        Value::Text("default".to_string()),
+                        Value::Text(name.clone()),
+                        Value::Text(col.name.clone()),
+                        Value::Integer((i + 1) as i64),
+                        Value::Null,
+                        Value::Text(if col.nullable {
+                            "YES".to_string()
+                        } else {
+                            "NO".to_string()
+                        }),
+                        Value::Text(col.data_type.clone()),
+                        char_max,
+                        num_prec,
+                        num_scale,
+                    ]);
+                }
+            }
+        }
+
+        if let Some(ref where_clause) = select.where_clause {
+            let fake_info = self.create_fake_table_info_for_columns();
+            rows.retain(|row| self.evaluate_where(where_clause, row, &fake_info));
+        }
+
+        Ok(rows)
+    }
+
+    fn execute_information_schema_indexes(
+        &self,
+        select: &SelectStatement,
+    ) -> Result<Vec<Vec<Value>>, String> {
+        let mut rows = Vec::new();
+        let table_names = self.storage.list_tables();
+        for name in table_names {
+            if let Ok(info) = self.storage.get_table_info(&name) {
+                for col in &info.columns {
+                    if col.primary_key {
+                        rows.push(vec![
+                            Value::Text("default".to_string()),
+                            Value::Text(name.clone()),
+                            Value::Text(format!("idx_{}_pk", name)),
+                            Value::Text(col.name.clone()),
+                            Value::Integer(1),
+                            Value::Boolean(true),
+                            Value::Boolean(true),
+                        ]);
+                    }
+                }
+            }
+        }
+
+        if let Some(ref where_clause) = select.where_clause {
+            let fake_info = self.create_fake_table_info_for_indexes();
+            rows.retain(|row| self.evaluate_where(where_clause, row, &fake_info));
+        }
+
+        Ok(rows)
+    }
+
+    fn execute_information_schema_statistics(
+        &self,
+        select: &SelectStatement,
+    ) -> Result<Vec<Vec<Value>>, String> {
+        self.execute_information_schema_indexes(select)
+    }
+
+    fn create_fake_table_info_for_tables(&self) -> TableInfo {
+        TableInfo {
+            name: "information_schema.tables".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "table_schema".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "table_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "table_type".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "is_insertable_into".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+            ],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 0,
+        }
+    }
+
+    fn create_fake_table_info_for_columns(&self) -> TableInfo {
+        TableInfo {
+            name: "information_schema.columns".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "table_schema".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "table_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "column_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "ordinal_position".to_string(),
+                    data_type: "integer".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "column_default".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: true,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "is_nullable".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "data_type".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "character_maximum_length".to_string(),
+                    data_type: "integer".to_string(),
+                    nullable: true,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "numeric_precision".to_string(),
+                    data_type: "integer".to_string(),
+                    nullable: true,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "numeric_scale".to_string(),
+                    data_type: "integer".to_string(),
+                    nullable: true,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+            ],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 0,
+        }
+    }
+
+    fn create_fake_table_info_for_indexes(&self) -> TableInfo {
+        TableInfo {
+            name: "information_schema.indexes".to_string(),
+            columns: vec![
+                ColumnDefinition {
+                    name: "table_schema".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "table_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "index_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "column_name".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "ordinal_position".to_string(),
+                    data_type: "integer".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "is_unique".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+                ColumnDefinition {
+                    name: "is_primary".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: false,
+                    primary_key: false,
+                    auto_increment: false,
+                },
+            ],
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 0,
+        }
+    }
+
+    fn get_type_attributes(&self, data_type: &str) -> (Value, Value, Value) {
+        match data_type.to_uppercase().as_str() {
+            "TEXT" | "VARCHAR" | "CHAR" => (Value::Integer(65535), Value::Null, Value::Null),
+            "INTEGER" | "INT" => (Value::Null, Value::Integer(64), Value::Integer(0)),
+            "REAL" | "FLOAT" | "DOUBLE" => (Value::Null, Value::Integer(53), Value::Null),
+            _ => (Value::Null, Value::Null, Value::Null),
+        }
     }
 
     fn execute_statement(&self, stmt: &Statement) -> Result<Vec<Vec<Value>>, String> {
@@ -477,6 +816,89 @@ impl SimpleExecutor {
             .position(|c| c.name.eq_ignore_ascii_case(col_name))
     }
 
+    fn execute_show(&self, show: &ShowStatement) -> Vec<Vec<Value>> {
+        match show {
+            ShowStatement::Tables => {
+                let names = self.storage.list_tables();
+                names
+                    .into_iter()
+                    .map(|name| vec![Value::Text(name)])
+                    .collect()
+            }
+            ShowStatement::Databases => {
+                vec![vec![Value::Text("default".to_string())]]
+            }
+            ShowStatement::Columns { table, .. } => {
+                if let Ok(info) = self.storage.get_table_info(table) {
+                    info.columns
+                        .iter()
+                        .map(|c| {
+                            // MySQL 5.7 SHOW COLUMNS format: Field, Type, Null, Key, Default, Extra
+                            vec![
+                                Value::Text(c.name.clone()),
+                                Value::Text(c.data_type.clone()),
+                                Value::Text(if c.nullable { "YES" } else { "NO" }.to_string()),
+                                Value::Text(if c.primary_key {
+                                    "PRI".to_string()
+                                } else {
+                                    String::new()
+                                }),
+                                Value::Null,
+                                Value::Text("".to_string()),
+                            ]
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                }
+            }
+            ShowStatement::Index { table, .. } => {
+                if let Ok(_info) = self.storage.get_table_info(table) {
+                    vec![vec![Value::Text("index_on_".to_string() + table)]]
+                } else {
+                    vec![]
+                }
+            }
+            ShowStatement::CreateTable { table } => {
+                let sql = format!("CREATE TABLE {} (...)", table);
+                vec![vec![Value::Text(sql)]]
+            }
+            ShowStatement::Variables { .. } => vec![],
+            ShowStatement::Grants { .. } => {
+                vec![vec![Value::Text(
+                    "GRANT ALL ON *.* TO current_user".to_string(),
+                )]]
+            }
+            ShowStatement::TableStatus { .. } => vec![],
+            ShowStatement::Status { .. } => vec![],
+            ShowStatement::Events => vec![],
+            ShowStatement::Processlist => vec![],
+            ShowStatement::TransactionHistory { .. } => vec![],
+            ShowStatement::LockWaits => vec![],
+            ShowStatement::RecoveryHistory { .. } => vec![],
+            ShowStatement::WalStats => vec![],
+        }
+    }
+
+    fn execute_transaction(&mut self, stmt: &TransactionStatement) -> Result<(), String> {
+        match stmt {
+            TransactionStatement::Begin { .. } => Ok(()),
+            TransactionStatement::BeginIdempotent { .. } => Ok(()),
+            TransactionStatement::Commit { .. } => Ok(()),
+            TransactionStatement::Rollback { .. } => Ok(()),
+            TransactionStatement::SetTransaction { isolation_level } => match isolation_level {
+                IsolationLevel::ReadCommitted
+                | IsolationLevel::ReadUncommitted
+                | IsolationLevel::SnapshotIsolation
+                | IsolationLevel::Serializable => Ok(()),
+            },
+            TransactionStatement::StartTransaction { .. } => Ok(()),
+            TransactionStatement::Savepoint { .. } => Ok(()),
+            TransactionStatement::RollbackToSavepoint { .. } => Ok(()),
+            TransactionStatement::ReleaseSavepoint { .. } => Ok(()),
+        }
+    }
+
     fn execute_with_select(&mut self, with_select: &WithSelect) -> Result<(), String> {
         if let Some(ref with_clause) = with_select.with_clause {
             for cte in &with_clause.ctes {
@@ -500,6 +922,7 @@ impl SimpleExecutor {
                         data_type: "TEXT".to_string(),
                         nullable: true,
                         primary_key: false,
+                        auto_increment: false,
                     })
                     .collect();
                 let table_info = TableInfo {
@@ -509,6 +932,8 @@ impl SimpleExecutor {
                     unique_constraints: vec![],
                     check_constraints: vec![],
                     partition_info: None,
+                    has_hidden_rowid: false,
+                    next_rowid: 0,
                 };
                 self.storage
                     .create_table(&table_info)
@@ -521,6 +946,13 @@ impl SimpleExecutor {
             }
         }
         self.execute_select(&with_select.select)?;
+        Ok(())
+    }
+
+    fn execute_truncate(&mut self, truncate: &TruncateStatement) -> Result<(), String> {
+        self.storage
+            .delete(&truncate.name, &[])
+            .map_err(|e| format!("Truncate table error: {:?}", e))?;
         Ok(())
     }
 }

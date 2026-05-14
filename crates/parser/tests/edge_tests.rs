@@ -46,8 +46,8 @@ fn test_deeply_nested_parens() {
     let sql = "SELECT (((((1)))))";
     let result = parse(sql);
     assert!(
-        result.is_err(),
-        "Deeply nested parens not fully supported: {:?}",
+        result.is_ok(),
+        "Deeply nested parens should be supported: {:?}",
         result
     );
 }
@@ -74,8 +74,8 @@ fn test_many_digits_in_number() {
 fn test_negative_number() {
     let result = parse("SELECT -1 FROM t");
     assert!(
-        result.is_err(),
-        "Negative numbers not supported: {:?}",
+        result.is_ok(),
+        "Negative numbers should be supported: {:?}",
         result
     );
 }
@@ -90,8 +90,8 @@ fn test_decimal_number() {
 fn test_negative_decimal() {
     let result = parse("SELECT -3.14159 FROM t");
     assert!(
-        result.is_err(),
-        "Negative decimals not supported: {:?}",
+        result.is_ok(),
+        "Negative decimals should be supported: {:?}",
         result
     );
 }
@@ -215,7 +215,11 @@ fn test_comment_before_select() {
 #[test]
 fn test_comment_after_select() {
     let result = parse("SELECT 1 -- comment");
-    assert!(result.is_err(), "Comments not supported: {:?}", result);
+    assert!(
+        result.is_err(),
+        "Trailing comments not supported: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -489,7 +493,11 @@ fn test_explain_select() {
     let result = parse("EXPLAIN SELECT * FROM t");
     assert!(result.is_ok(), "EXPLAIN should parse: {:?}", result);
     match result.unwrap() {
-        Statement::Explain(ExplainStatement { analyze, statement }) => {
+        Statement::Explain(ExplainStatement {
+            analyze,
+            statement,
+            format: _,
+        }) => {
             assert!(!analyze);
             match *statement {
                 Statement::Select(s) => assert_eq!(s.table, "t"),

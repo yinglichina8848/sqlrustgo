@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum IsolationLevel {
     ReadCommitted,
     ReadUncommitted,
@@ -9,7 +9,7 @@ pub enum IsolationLevel {
     Serializable,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TransactionStatement {
     Begin {
         work: bool,
@@ -26,6 +26,18 @@ pub enum TransactionStatement {
     },
     StartTransaction {
         isolation_level: Option<IsolationLevel>,
+    },
+    Savepoint {
+        name: String,
+    },
+    RollbackToSavepoint {
+        name: String,
+    },
+    ReleaseSavepoint {
+        name: String,
+    },
+    BeginIdempotent {
+        key: String,
     },
 }
 
@@ -171,8 +183,25 @@ mod tests {
                 | TransactionStatement::Commit { .. }
                 | TransactionStatement::Rollback { .. }
                 | TransactionStatement::SetTransaction { .. }
-                | TransactionStatement::StartTransaction { .. } => {}
+                | TransactionStatement::StartTransaction { .. }
+                | TransactionStatement::Savepoint { .. }
+                | TransactionStatement::RollbackToSavepoint { .. }
+                | TransactionStatement::ReleaseSavepoint { .. }
+                | TransactionStatement::BeginIdempotent { .. } => {}
             }
+        }
+    }
+
+    #[test]
+    fn test_begin_idempotent() {
+        let stmt = TransactionStatement::BeginIdempotent {
+            key: "txn-123".to_string(),
+        };
+        match stmt {
+            TransactionStatement::BeginIdempotent { key } => {
+                assert_eq!(key, "txn-123");
+            }
+            _ => panic!("Expected BeginIdempotent"),
         }
     }
 }

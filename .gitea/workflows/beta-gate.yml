@@ -1,0 +1,56 @@
+name: Beta Gate Pipeline
+run-name: B-Gate v3.1.0
+
+on:
+  push:
+    branches:
+      - beta/v3.1.0
+    tags:
+      - v*-beta*
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  beta-gate:
+    runs-on: [hp-z6g4, hp-z6g4, hp-z6g4, hp-z6g4]
+    parallel: true
+    steps:
+      - name: Checkout
+        run: |
+          git clone --depth=1 "${{ gitea.repository_url }}" repo
+          cd repo
+          git fetch --depth=1 origin "${{ gitea.ref_name }}"
+          git checkout "${{ gitea_sha }}"
+
+      - name: B-Gate Build & Test
+        run: |
+          cd repo
+          bash scripts/test/nomad/b_gate.sh
+
+      - name: Upload Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: b-gate-report
+          path: /tmp/b_gate_artifacts/*.json
+
+  beta-gate-stability:
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          git clone --depth=1 "${{ gitea.repository_url }}" repo
+          cd repo
+          git fetch --depth=1 origin "${{ gitea.ref_name }}"
+          git checkout "${{ gitea_sha }}"
+
+      - name: Stability Tests
+        run: |
+          cd repo
+          bash scripts/gate/crash_recovery_loop.sh 10
+
+      - name: Long Run Stability
+        run: |
+          cd repo
+          timeout 3600 bash scripts/test/stability_test.sh || true

@@ -8,6 +8,8 @@ license.workspace = true
 [dependencies]
 sqlrustgo-common.workspace = true
 sqlrustgo-types.workspace = true
+sqlrustgo-gis.workspace = true
+sqlrustgo-observability.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -19,6 +21,9 @@ snap.workspace = true
 zstd.workspace = true
 parquet.workspace = true
 arrow.workspace = true
+aes-gcm = "0.10"
+rand.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -26,4 +31,8 @@ criterion = "0.8"
 
 [[bench]]
 name = "storage_benchmark"
+harness = false
+
+[[bench]]
+name = "clustered_index_benchmark"
 harness = false

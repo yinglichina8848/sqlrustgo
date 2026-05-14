@@ -25,6 +25,7 @@ pub enum Statement {
     Insert(InsertStatement),
     Update(UpdateStatement),
     Delete(DeleteStatement),
+    Merge(MergeStatement),
     CreateTable(CreateTableStatement),
     CreateIndex(CreateIndexStatement),
     CreateView(CreateViewStatement),
@@ -33,11 +34,19 @@ pub enum Statement {
     DropView(DropViewStatement),
     Truncate(TruncateStatement),
     Analyze(AnalyzeStatement),
+    Check(CheckStatement),
+    Optimize(OptimizeStatement),
+    Vacuum(VacuumStatement),
+    Repair(RepairStatement),
+    Backup(BackupStatement),
+    Restore(RestoreStatement),
     WithSelect(WithSelect),
     AlterTable(AlterTableStatement),
     Call(CallStatement),
     CreateProcedure(CreateProcedureStatement),
     Union(UnionStatement),
+    Intersect(IntersectStatement),
+    Except(ExceptStatement),
     CreateTrigger(CreateTriggerStatement),
     Transaction(TransactionStatement),
     Grant(GrantStatement),
@@ -52,6 +61,9 @@ pub enum Statement {
     SetRole(SetRoleStatement),
     ShowRoles,
     ShowGrantsFor(String),
+    CreateEvent(CreateEventStatement),
+    DropEvent(DropEventStatement),
+    AlterEvent(AlterEventStatement),
 }
 
 /// UNION statement
@@ -60,6 +72,22 @@ pub struct UnionStatement {
     pub left: Box<Statement>,
     pub right: Box<Statement>,
     pub union_all: bool,
+}
+
+/// INTERSECT statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct IntersectStatement {
+    pub left: Box<Statement>,
+    pub right: Box<Statement>,
+    pub intersect_all: bool,
+}
+
+/// EXCEPT (MINUS) statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExceptStatement {
+    pub left: Box<Statement>,
+    pub right: Box<Statement>,
+    pub except_all: bool,
 }
 
 /// CREATE INDEX statement
@@ -169,6 +197,44 @@ pub struct DropViewStatement {
     pub if_exists: bool,
 }
 
+/// Event schedule timing (ONE TIME or AT interval)
+#[derive(Debug, Clone, PartialEq)]
+pub enum EventSchedule {
+    OneTime,
+    Interval {
+        interval_value: String,
+        interval_unit: String,
+    },
+}
+
+/// CREATE EVENT statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateEventStatement {
+    pub name: String,
+    pub schedule: EventSchedule,
+    pub body: String,
+    pub enable: bool,
+    pub comment: Option<String>,
+}
+
+/// DROP EVENT statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropEventStatement {
+    pub name: String,
+    pub if_exists: bool,
+}
+
+/// ALTER EVENT statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlterEventStatement {
+    pub name: String,
+    pub new_name: Option<String>,
+    pub schedule: Option<EventSchedule>,
+    pub body: Option<String>,
+    pub enable: Option<bool>,
+    pub comment: Option<String>,
+}
+
 /// Common Table Expression (CTE)
 #[derive(Debug, Clone, PartialEq)]
 pub struct CommonTableExpression {
@@ -194,7 +260,22 @@ pub struct WithSelect {
 /// ANALYZE statement for collecting statistics
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalyzeStatement {
-    pub table_name: Option<String>,
+    pub table_names: Vec<String>,
+}
+
+/// Check option for CHECK TABLE
+#[derive(Debug, Clone, PartialEq)]
+pub enum CheckOption {
+    Quick,
+    Extended,
+}
+
+/// Vacuum mode for VACUUM
+#[derive(Debug, Clone, PartialEq)]
+pub enum VacuumMode {
+    Normal,
+    Full,
+    Analyze,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -307,6 +388,7 @@ pub struct JoinClause {
 pub struct FromTable {
     pub name: String,
     pub alias: Option<String>,
+    pub subquery: Option<Box<Statement>>,
 }
 
 /// FROM clause — holds all tables from a comma-separated list, plus explicit JOINs
@@ -343,6 +425,7 @@ pub struct SelectStatement {
     pub limit: Option<u64>,
     pub offset: Option<u64>,
     pub distinct: bool,
+    pub for_update: bool,
 }
 
 impl SelectStatement {
@@ -395,17 +478,28 @@ pub struct SelectColumn {
 pub struct InsertStatement {
     pub table: String,
     pub columns: Vec<String>,
-    pub values: Vec<Vec<Expression>>,         // For INSERT VALUES
-    pub select: Option<Box<SelectStatement>>, // For INSERT SELECT
-    pub is_replace: bool,                     // For REPLACE INTO (MySQL compatibility)
+    pub values: Vec<Vec<Expression>>,   // For INSERT VALUES
+    pub select: Option<Box<Statement>>, // For INSERT SELECT (includes UNION)
+    pub is_replace: bool,               // For REPLACE INTO (MySQL compatibility)
     pub on_duplicate_key_update: Option<Vec<(String, Expression)>>, // For ON DUPLICATE KEY UPDATE
+    pub on_conflict: Option<OnConflictClause>, // For ON CONFLICT (PostgreSQL)
+    pub with_clause: Option<WithClause>, // For WITH ... INSERT
+}
+
+/// ON CONFLICT clause for PostgreSQL UPSERT syntax
+#[derive(Debug, Clone, PartialEq)]
+pub struct OnConflictClause {
+    pub column: String,                            // The column to check for conflict
+    pub update_clauses: Vec<(String, Expression)>, // SET clauses for UPDATE
 }
 
 /// UPDATE statement
 #[derive(Debug, Clone, PartialEq)]
 pub struct UpdateStatement {
     pub table: String,
+    pub alias: Option<String>,
     pub set_clauses: Vec<(String, Expression)>,
+    pub from_clause: Option<FromClause>,
     pub where_clause: Option<Expression>,
 }
 
@@ -414,6 +508,28 @@ pub struct UpdateStatement {
 pub struct DeleteStatement {
     pub table: String,
     pub where_clause: Option<Expression>,
+}
+
+/// MERGE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeStatement {
+    pub target_table: String,
+    pub source_table: String,
+    pub on_condition: Expression,
+    pub matched_clause: Option<MergeMatchedClause>,
+    pub not_matched_clause: Option<MergeNotMatchedClause>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeMatchedClause {
+    pub update_columns: Vec<String>,
+    pub update_values: Vec<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeNotMatchedClause {
+    pub insert_columns: Vec<String>,
+    pub insert_values: Vec<Expression>,
 }
 
 /// CREATE TABLE statement
@@ -438,6 +554,45 @@ pub struct TruncateStatement {
     pub name: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckStatement {
+    pub names: Vec<String>,
+    pub option: Option<CheckOption>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptimizeStatement {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VacuumStatement {
+    pub names: Vec<String>,
+    pub mode: VacuumMode,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RepairStatement {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BackupStatement {
+    pub database: Option<String>,
+    pub destination: String,
+    pub incremental: bool,
+    pub differential: bool,
+    pub compressed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RestoreStatement {
+    pub database: Option<String>,
+    pub source: String,
+    pub to_database: Option<String>,
+    pub point_in_time: Option<String>,
+}
+
 /// SHOW statement variants
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShowStatement {
@@ -446,6 +601,7 @@ pub enum ShowStatement {
     Columns {
         table: String,
         pattern: Option<String>,
+        full: bool,
     },
     Index {
         table: String,
@@ -459,6 +615,22 @@ pub enum ShowStatement {
     Variables {
         like: Option<String>,
     },
+    Status {
+        like: Option<String>,
+    },
+    TableStatus {
+        database: Option<String>,
+    },
+    Processlist,
+    Events,
+    TransactionHistory {
+        limit: Option<u32>,
+    },
+    LockWaits,
+    RecoveryHistory {
+        limit: Option<u32>,
+    },
+    WalStats,
 }
 
 /// DESCRIBE statement (aliased as DESC)
@@ -472,6 +644,7 @@ pub struct DescribeStatement {
 pub struct ExplainStatement {
     pub analyze: bool,
     pub statement: Box<Statement>,
+    pub format: Option<String>,
 }
 
 /// Column definition
@@ -545,6 +718,14 @@ pub struct WindowCall {
     pub window_spec: WindowSpecification,
 }
 
+/// Full-text search mode for MATCH...AGAINST
+#[derive(Debug, Clone, PartialEq)]
+pub enum FtsMode {
+    Natural,        // Default: MATCH(col) AGAINST('search')
+    Boolean,        // MATCH(col) AGAINST('search' IN BOOLEAN MODE)
+    QueryExpansion, // MATCH(col) AGAINST('search' WITH QUERY EXPANSION)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     Literal(String),
@@ -578,6 +759,7 @@ pub enum Expression {
         Box<Expression>,
     ), // INSERT(str, pos, len, newstr)
     Extract(String, Box<Expression>), // EXTRACT(YEAR FROM date)
+    MatchAgainst(Vec<String>, Box<Expression>, FtsMode), // MATCH(col1, col2) AGAINST(expr) [IN BOOLEAN MODE | WITH QUERY EXPANSION]
 }
 
 impl Expression {
@@ -731,7 +913,57 @@ impl Expression {
                     Expression::CaseWhen(folded_clauses, else_folded.map(Box::new))
                 }
             }
+            Expression::MatchAgainst(cols, expr, mode) => {
+                let expr_folded = expr.fold_constants();
+                if expr_folded == **expr {
+                    self.clone()
+                } else {
+                    Expression::MatchAgainst(cols.clone(), Box::new(expr_folded), mode.clone())
+                }
+            }
             _ => self.clone(),
+        }
+    }
+
+    pub fn to_sql_string(&self) -> String {
+        match self {
+            Expression::Literal(s) => s.clone(),
+            Expression::Identifier(s) => s.clone(),
+            Expression::BinaryOp(left, op, right) => {
+                format!("{} {} {}", left.to_sql_string(), op, right.to_sql_string())
+            }
+            Expression::IsNull(expr) => format!("{} IS NULL", expr.to_sql_string()),
+            Expression::IsNotNull(expr) => format!("{} IS NOT NULL", expr.to_sql_string()),
+            Expression::Like(expr, pattern, escape) => {
+                let base = format!("{} LIKE {}", expr.to_sql_string(), pattern.to_sql_string());
+                if let Some(e) = escape {
+                    format!("{} ESCAPE '{}'", base, e)
+                } else {
+                    base
+                }
+            }
+            Expression::NotLike(expr, pattern, escape) => {
+                let base = format!(
+                    "{} NOT LIKE {}",
+                    expr.to_sql_string(),
+                    pattern.to_sql_string()
+                );
+                if let Some(e) = escape {
+                    format!("{} ESCAPE '{}'", base, e)
+                } else {
+                    base
+                }
+            }
+            Expression::Between(expr, low, high) => {
+                format!(
+                    "{} BETWEEN {} AND {}",
+                    expr.to_sql_string(),
+                    low.to_sql_string(),
+                    high.to_sql_string()
+                )
+            }
+            Expression::UnaryOp(op, expr) => format!("{} {}", op, expr.to_sql_string()),
+            _ => format!("{:?}", self),
         }
     }
 }
@@ -823,18 +1055,40 @@ impl Parser {
             Some(Token::Insert) | Some(Token::Replace) => self.parse_insert(),
             Some(Token::Update) => self.parse_update(),
             Some(Token::Delete) => self.parse_delete(),
+            Some(Token::Merge) => self.parse_merge(),
             Some(Token::Create) => self.parse_create(),
             Some(Token::Drop) => self.parse_drop(),
             Some(Token::Truncate) => self.parse_truncate(),
             Some(Token::Analyze) => self.parse_analyze(),
-            Some(Token::With) => self.parse_with_select(),
-            Some(Token::Alter) => self.parse_alter_table(),
+            Some(Token::Check) => self.parse_check(),
+            Some(Token::Optimize) => self.parse_optimize(),
+            Some(Token::Vacuum) => self.parse_vacuum(),
+            Some(Token::Repair) => self.parse_repair(),
+            Some(Token::Backup) => self.parse_backup(),
+            Some(Token::Restore) => self.parse_restore(),
+            Some(Token::With) => {
+                if let Some(Token::Insert) = self.peek() {
+                    self.parse_with_insert()
+                } else {
+                    self.parse_with_select()
+                }
+            }
+            Some(Token::Alter) => {
+                // Peek to decide between ALTER TABLE vs ALTER EVENT
+                if let Some(Token::Event) = self.peek() {
+                    self.parse_alter_event()
+                } else {
+                    self.parse_alter_table()
+                }
+            }
             Some(Token::Call) => self.parse_call(),
             Some(Token::Begin)
             | Some(Token::Commit)
             | Some(Token::Rollback)
             | Some(Token::Set)
-            | Some(Token::Start) => self.parse_transaction(),
+            | Some(Token::Start)
+            | Some(Token::Savepoint)
+            | Some(Token::Release) => self.parse_transaction(),
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
             Some(Token::Show) => self.parse_show(),
@@ -859,6 +1113,15 @@ impl Parser {
                 }
             }
             Some(Token::Start) => self.parse_start_transaction(),
+            Some(Token::Savepoint) => self.parse_savepoint(),
+            Some(Token::Release) => {
+                // Check if this is RELEASE SAVEPOINT
+                if let Some(Token::Savepoint) = self.peek() {
+                    self.parse_release_savepoint()
+                } else {
+                    Err("Unexpected token after RELEASE".to_string())
+                }
+            }
             Some(t) => Err(format!("Unexpected transaction token: {:?}", t)),
             None => Err("Unexpected end of input".to_string()),
         }
@@ -893,9 +1156,13 @@ impl Parser {
                     self.next();
                     Some(IsolationLevel::ReadUncommitted)
                 }
+                Some(Token::Only) => {
+                    self.next();
+                    None
+                }
                 Some(t) => {
                     return Err(format!(
-                        "Expected COMMITTED or UNCOMMITTED after READ, got {:?}",
+                        "Expected COMMITTED, UNCOMMITTED, or ONLY after READ, got {:?}",
                         t
                     ))
                 }
@@ -904,10 +1171,67 @@ impl Parser {
         } else {
             None
         };
+        if self.current() == Some(&Token::Idempotent) {
+            self.next();
+            let key: String = if self.current() == Some(&Token::Key) {
+                self.next();
+                match self.current() {
+                    Some(Token::StringLiteral(s)) => s.clone(),
+                    Some(Token::Identifier(s)) => s.clone(),
+                    _ => return Err("Expected idempotency key string".to_string()),
+                }
+            } else {
+                match self.current() {
+                    Some(Token::StringLiteral(s)) => s.clone(),
+                    Some(Token::Identifier(s)) => s.clone(),
+                    _ => return Err("Expected idempotency key".to_string()),
+                }
+            };
+            return Ok(Statement::Transaction(
+                TransactionStatement::BeginIdempotent { key },
+            ));
+        }
+        if self.current() == Some(&Token::Idempotency) {
+            self.next();
+            self.expect(Token::Key)?;
+            let key = match self.current() {
+                Some(Token::StringLiteral(s)) => s.clone(),
+                Some(Token::Identifier(s)) => s.clone(),
+                _ => return Err("Expected idempotency key".to_string()),
+            };
+            return Ok(Statement::Transaction(
+                TransactionStatement::BeginIdempotent { key },
+            ));
+        }
         Ok(Statement::Transaction(TransactionStatement::Begin {
             work,
             isolation_level,
         }))
+    }
+
+    fn parse_savepoint(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Savepoint)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            _ => return Err("Expected savepoint name".to_string()),
+        };
+        Ok(Statement::Transaction(TransactionStatement::Savepoint {
+            name,
+        }))
+    }
+
+    fn parse_release_savepoint(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Release)?;
+        self.expect(Token::Savepoint)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            _ => return Err("Expected savepoint name".to_string()),
+        };
+        Ok(Statement::Transaction(
+            TransactionStatement::ReleaseSavepoint { name },
+        ))
     }
 
     fn parse_commit(&mut self) -> Result<Statement, String> {
@@ -931,6 +1255,22 @@ impl Parser {
         } else {
             false
         };
+
+        // Check for ROLLBACK TO SAVEPOINT
+        if self.current() == Some(&Token::To) {
+            self.expect(Token::To)?;
+            self.expect(Token::Savepoint)?;
+            let name = match self.current() {
+                Some(Token::Identifier(name)) => name.clone(),
+                Some(Token::StringLiteral(s)) => s.clone(),
+                _ => return Err("Expected savepoint name".to_string()),
+            };
+            self.next(); // Advance past the name
+            return Ok(Statement::Transaction(
+                TransactionStatement::RollbackToSavepoint { name },
+            ));
+        }
+
         Ok(Statement::Transaction(TransactionStatement::Rollback {
             work,
         }))
@@ -1002,6 +1342,14 @@ impl Parser {
                     None => Err("Unexpected end of input after READ".to_string()),
                 }
             }
+            Some(Token::Default) => {
+                self.next();
+                Ok(IsolationLevel::Serializable)
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "SNAPSHOT" => {
+                self.next();
+                Ok(IsolationLevel::SnapshotIsolation)
+            }
             Some(t) => Err(format!("Unexpected isolation level keyword: {:?}", t)),
             None => Err("Unexpected end of input after READ".to_string()),
         }
@@ -1024,12 +1372,13 @@ impl Parser {
             Some(Token::Trigger) => self.parse_create_trigger(),
             Some(Token::Role) => self.parse_create_role(),
             Some(Token::View) => self.parse_create_view(),
+            Some(Token::Event) => self.parse_create_event(),
             Some(t) => Err(format!(
-                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, or VIEW after CREATE, got {:?}",
+                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, VIEW, or EVENT after CREATE, got {:?}",
                 t
             )),
             None => Err(
-                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, or VIEW after CREATE".to_string(),
+                "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, VIEW, or EVENT after CREATE".to_string(),
             ),
         }
     }
@@ -1276,6 +1625,124 @@ impl Parser {
         }))
     }
 
+    fn parse_create_event(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Event)?;
+
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected event name, got {:?}", t)),
+            None => return Err("Expected event name".to_string()),
+        };
+
+        // Parse ON SCHEDULE clause
+        self.expect(Token::On)?;
+        self.expect(Token::Schedule)?;
+
+        let schedule = if matches!(self.current(), Some(Token::At)) {
+            self.next();
+            let interval_value = match self.next() {
+                Some(Token::StringLiteral(s)) => s,
+                Some(Token::Identifier(s)) => s,
+                Some(Token::NumberLiteral(n)) => n,
+                Some(t) => return Err(format!("Expected interval value, got {:?}", t)),
+                None => return Err("Expected interval value".to_string()),
+            };
+            let interval_unit = match self.current() {
+                Some(Token::Identifier(ref s)) => {
+                    let unit = s.to_uppercase();
+                    self.next();
+                    unit
+                }
+                Some(t) => return Err(format!("Expected interval unit, got {:?}", t)),
+                None => "HOUR".to_string(),
+            };
+            EventSchedule::Interval {
+                interval_value,
+                interval_unit,
+            }
+        } else if matches!(self.current(), Some(Token::Every)) {
+            self.next();
+            let interval_value = match self.next() {
+                Some(Token::NumberLiteral(n)) => n,
+                Some(Token::StringLiteral(s)) => s,
+                Some(Token::Identifier(s)) => s,
+                Some(t) => return Err(format!("Expected interval value, got {:?}", t)),
+                None => return Err("Expected interval value".to_string()),
+            };
+            let interval_unit = match self.current() {
+                Some(Token::Identifier(ref s)) => {
+                    let unit = s.to_uppercase();
+                    self.next();
+                    unit
+                }
+                Some(t) => return Err(format!("Expected interval unit, got {:?}", t)),
+                None => "HOUR".to_string(),
+            };
+            EventSchedule::Interval {
+                interval_value,
+                interval_unit,
+            }
+        } else {
+            EventSchedule::OneTime
+        };
+
+        // Parse optional ENABLE/DISABLE
+        let enable = match self.current() {
+            Some(Token::Enable) => {
+                self.next();
+                true
+            }
+            Some(Token::Disable) => {
+                self.next();
+                false
+            }
+            _ => true,
+        };
+
+        // Parse optional COMMENT
+        let comment = if matches!(self.current(), Some(Token::Comment)) {
+            self.next();
+            match self.next() {
+                Some(Token::StringLiteral(s)) => Some(s),
+                Some(t) => return Err(format!("Expected comment string, got {:?}", t)),
+                None => return Err("Expected comment string".to_string()),
+            }
+        } else {
+            None
+        };
+
+        // Parse DO clause with body
+        self.expect(Token::Do)?;
+        self.expect(Token::Begin)?;
+        let mut body = String::new();
+        while !matches!(self.current(), Some(Token::End) | None) {
+            match self.next() {
+                Some(Token::Semicolon) => {
+                    body.push(';');
+                    body.push(' ');
+                }
+                Some(Token::Identifier(sql)) => {
+                    body.push_str(&sql);
+                    body.push(' ');
+                }
+                Some(t) => {
+                    body.push_str(&t.to_string());
+                    body.push(' ');
+                }
+                None => return Err("Expected END".to_string()),
+            }
+        }
+        self.expect(Token::End)?;
+
+        Ok(Statement::CreateEvent(CreateEventStatement {
+            name,
+            schedule,
+            body: body.trim().to_string(),
+            enable,
+            comment,
+        }))
+    }
+
     fn parse_drop_view(&mut self) -> Result<Statement, String> {
         self.expect(Token::View)?;
         let if_exists = if matches!(self.current(), Some(Token::If)) {
@@ -1296,6 +1763,28 @@ impl Parser {
             None => return Err("Expected view name".to_string()),
         };
         Ok(Statement::DropView(DropViewStatement { name, if_exists }))
+    }
+
+    fn parse_drop_event(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Event)?;
+        let if_exists = if matches!(self.current(), Some(Token::If)) {
+            self.next();
+            match self.current() {
+                Some(Token::Exists) => {
+                    self.next();
+                    true
+                }
+                _ => return Err("Expected 'EXISTS' after 'IF'".to_string()),
+            }
+        } else {
+            false
+        };
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected event name, got {:?}", t)),
+            None => return Err("Expected event name".to_string()),
+        };
+        Ok(Statement::DropEvent(DropEventStatement { name, if_exists }))
     }
 
     fn parse_trigger_events(&mut self) -> Result<Vec<String>, String> {
@@ -1366,6 +1855,40 @@ impl Parser {
             }));
         }
 
+        if matches!(self.current(), Some(Token::Intersect)) {
+            self.next();
+            let intersect_all = if matches!(self.current(), Some(Token::All)) {
+                self.next();
+                true
+            } else {
+                false
+            };
+            let second_select = self.parse_select_statement()?;
+
+            return Ok(Statement::Intersect(IntersectStatement {
+                left: Box::new(Statement::Select(first_select)),
+                right: Box::new(Statement::Select(second_select)),
+                intersect_all,
+            }));
+        }
+
+        if matches!(self.current(), Some(Token::Except)) {
+            self.next();
+            let except_all = if matches!(self.current(), Some(Token::All)) {
+                self.next();
+                true
+            } else {
+                false
+            };
+            let second_select = self.parse_select_statement()?;
+
+            return Ok(Statement::Except(ExceptStatement {
+                left: Box::new(Statement::Select(first_select)),
+                right: Box::new(Statement::Select(second_select)),
+                except_all,
+            }));
+        }
+
         Ok(Statement::Select(first_select))
     }
 
@@ -1428,11 +1951,145 @@ impl Parser {
             break;
         }
 
+        // Check if this is WITH ... INSERT (PostgreSQL-style)
+        if matches!(self.current(), Some(Token::Insert)) {
+            let with_clause = WithClause { recursive, ctes };
+            return self.parse_insert_with_clause(with_clause);
+        }
+
         let select = self.parse_select_statement()?;
 
         Ok(Statement::WithSelect(WithSelect {
             with_clause: Some(WithClause { recursive, ctes }),
             select,
+        }))
+    }
+
+    fn parse_with_insert(&mut self) -> Result<Statement, String> {
+        self.expect(Token::With)?;
+
+        let recursive = if matches!(self.current(), Some(Token::Recursive)) {
+            self.next();
+            true
+        } else {
+            false
+        };
+
+        let mut ctes = Vec::new();
+        loop {
+            let cte_name = match self.next() {
+                Some(Token::Identifier(name)) => name,
+                _ => return Err("Expected CTE name".to_string()),
+            };
+
+            let columns = if matches!(self.current(), Some(Token::LParen)) {
+                self.next();
+                let mut cols = Vec::new();
+                loop {
+                    match self.current() {
+                        Some(Token::Identifier(name)) => {
+                            cols.push(name.clone());
+                            self.next();
+                        }
+                        Some(Token::Comma) => {
+                            self.next();
+                        }
+                        Some(Token::RParen) => {
+                            self.next();
+                            break;
+                        }
+                        _ => return Err("Expected column name".to_string()),
+                    }
+                }
+                cols
+            } else {
+                Vec::new()
+            };
+
+            self.expect(Token::As)?;
+            self.expect(Token::LParen)?;
+            let subquery = self.parse_select_or_union()?;
+            self.expect(Token::RParen)?;
+
+            ctes.push(CommonTableExpression {
+                name: cte_name,
+                columns,
+                subquery: Box::new(subquery),
+            });
+
+            if matches!(self.current(), Some(Token::Comma)) {
+                self.next();
+                continue;
+            }
+            break;
+        }
+
+        let with_clause = WithClause { recursive, ctes };
+
+        let insert = self.parse_insert_with_clause(with_clause)?;
+        Ok(insert)
+    }
+
+    fn parse_insert_with_clause(&mut self, with_clause: WithClause) -> Result<Statement, String> {
+        let is_replace = if matches!(self.current(), Some(Token::Replace)) {
+            self.next();
+            true
+        } else {
+            self.expect(Token::Insert)?;
+            false
+        };
+
+        self.expect(Token::Into)?;
+
+        let table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+
+        let columns = if matches!(self.current(), Some(Token::LParen)) {
+            self.next();
+            let mut cols = Vec::new();
+            loop {
+                match self.current() {
+                    Some(Token::Identifier(name)) => {
+                        cols.push(name.clone());
+                        self.next();
+                    }
+                    Some(Token::RParen) => {
+                        self.next();
+                        break;
+                    }
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    _ => return Err("Expected column name".to_string()),
+                }
+            }
+            cols
+        } else {
+            Vec::new()
+        };
+
+        let select = if matches!(self.current(), Some(Token::Select)) {
+            let select_stmt = self.parse_select()?;
+            match select_stmt {
+                Statement::Select(s) => Some(Box::new(Statement::Select(s))),
+                Statement::Union(u) => Some(Box::new(Statement::Union(u))),
+                _ => return Err("Expected SELECT or UNION statement".to_string()),
+            }
+        } else {
+            None
+        };
+
+        Ok(Statement::Insert(InsertStatement {
+            table,
+            columns,
+            values: Vec::new(),
+            select,
+            is_replace,
+            on_duplicate_key_update: None,
+            on_conflict: None,
+            with_clause: Some(with_clause),
         }))
     }
 
@@ -1468,7 +2125,12 @@ impl Parser {
 
         loop {
             match self.current() {
-                Some(Token::From) | Some(Token::Eof) | Some(Token::RParen) => break,
+                Some(Token::From)
+                | Some(Token::Eof)
+                | Some(Token::RParen)
+                | Some(Token::Union)
+                | Some(Token::Intersect)
+                | Some(Token::Except) => break,
                 Some(Token::Star) => {
                     columns.push(SelectColumn {
                         name: "*".to_string(),
@@ -1730,8 +2392,29 @@ impl Parser {
                     }
                 }
                 Some(Token::LParen) => {
-                    let expr = self.parse_expression()?;
+                    self.next();
+                    let inner_expr = self.parse_or_expression()?;
                     self.expect(Token::RParen)?;
+                    let mut expr = inner_expr;
+                    while matches!(self.current(), Some(Token::Plus))
+                        || matches!(self.current(), Some(Token::Minus))
+                        || matches!(self.current(), Some(Token::Star))
+                        || matches!(self.current(), Some(Token::Slash))
+                        || matches!(self.current(), Some(Token::Percent))
+                    {
+                        let op = match self.current() {
+                            Some(Token::Plus) => "+",
+                            Some(Token::Minus) => "-",
+                            Some(Token::Star) => "*",
+                            Some(Token::Slash) => "/",
+                            Some(Token::Percent) => "%",
+                            _ => break,
+                        };
+                        self.next();
+                        let right = self.parse_or_expression()?;
+                        expr =
+                            Expression::BinaryOp(Box::new(expr), op.to_string(), Box::new(right));
+                    }
                     let alias = if matches!(self.current(), Some(Token::As)) {
                         self.next();
                         match self.current() {
@@ -1775,21 +2458,104 @@ impl Parser {
                 }
                 // Handle NULL literal in SELECT
                 Some(Token::Null) => {
-                    columns.push(SelectColumn {
-                        name: "NULL".to_string(),
-                        alias: None,
-                        expression: Some(Expression::Literal("NULL".to_string())),
-                    });
-                    self.next();
+                    let is_operator = matches!(self.peek(), Some(Token::Plus))
+                        || matches!(self.peek(), Some(Token::Minus))
+                        || matches!(self.peek(), Some(Token::Star))
+                        || matches!(self.peek(), Some(Token::Slash))
+                        || matches!(self.peek(), Some(Token::Percent));
+                    if is_operator {
+                        let expr = self.parse_expression()?;
+                        let alias = if matches!(self.current(), Some(Token::As)) {
+                            self.next();
+                            match self.current() {
+                                Some(Token::Identifier(name)) => {
+                                    let alias_name = name.clone();
+                                    self.next();
+                                    Some(alias_name)
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
+                        columns.push(SelectColumn {
+                            name: format!("{:?}", expr),
+                            alias,
+                            expression: Some(expr),
+                        });
+                    } else {
+                        columns.push(SelectColumn {
+                            name: "NULL".to_string(),
+                            alias: None,
+                            expression: Some(Expression::Literal("NULL".to_string())),
+                        });
+                        self.next();
+                    }
                 }
                 // Handle NumberLiteral in SELECT (e.g., SELECT 123, SELECT 3.14)
                 Some(Token::NumberLiteral(ref n)) => {
-                    columns.push(SelectColumn {
-                        name: n.to_string(),
-                        alias: None,
-                        expression: Some(Expression::Literal(n.to_string())),
-                    });
-                    self.next();
+                    let is_operator = matches!(self.peek(), Some(Token::Plus))
+                        || matches!(self.peek(), Some(Token::Minus))
+                        || matches!(self.peek(), Some(Token::Star))
+                        || matches!(self.peek(), Some(Token::Slash))
+                        || matches!(self.peek(), Some(Token::Percent))
+                        || matches!(self.peek(), Some(Token::Equal))
+                        || matches!(self.peek(), Some(Token::NotEqual))
+                        || matches!(self.peek(), Some(Token::Greater))
+                        || matches!(self.peek(), Some(Token::Less))
+                        || matches!(self.peek(), Some(Token::GreaterEqual))
+                        || matches!(self.peek(), Some(Token::LessEqual))
+                        || matches!(self.peek(), Some(Token::LShift))
+                        || matches!(self.peek(), Some(Token::RShift));
+                    if is_operator {
+                        let left = Expression::Literal(n.to_string());
+                        self.next();
+                        let op = match self.current() {
+                            Some(Token::Plus) => "+",
+                            Some(Token::Minus) => "-",
+                            Some(Token::Star) => "*",
+                            Some(Token::Slash) => "/",
+                            Some(Token::Percent) => "%",
+                            Some(Token::Equal) => "=",
+                            Some(Token::NotEqual) => "<>",
+                            Some(Token::Greater) => ">",
+                            Some(Token::Less) => "<",
+                            Some(Token::GreaterEqual) => ">=",
+                            Some(Token::LessEqual) => "<=",
+                            Some(Token::LShift) => "<<",
+                            Some(Token::RShift) => ">>",
+                            _ => return Err("Expected operator".to_string()),
+                        };
+                        self.next();
+                        let right = self.parse_expression()?;
+                        let expr =
+                            Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+                        let alias = if matches!(self.current(), Some(Token::As)) {
+                            self.next();
+                            match self.current() {
+                                Some(Token::Identifier(name)) => {
+                                    let alias_name = name.clone();
+                                    self.next();
+                                    Some(alias_name)
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
+                        columns.push(SelectColumn {
+                            name: format!("{:?}", expr),
+                            alias,
+                            expression: Some(expr),
+                        });
+                    } else {
+                        columns.push(SelectColumn {
+                            name: n.to_string(),
+                            alias: None,
+                            expression: Some(Expression::Literal(n.to_string())),
+                        });
+                        self.next();
+                    }
                 }
                 // Handle StringLiteral in SELECT (e.g., SELECT 'hello')
                 Some(Token::StringLiteral(s)) => {
@@ -1957,6 +2723,71 @@ impl Parser {
                 Some(Token::As) => {
                     self.next();
                 }
+                // Handle unary +/- expressions at the start (e.g., SELECT -10 / 3, SELECT +5 * 2)
+                Some(Token::Minus) | Some(Token::Plus) => {
+                    let expr = self.parse_expression()?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias,
+                        expression: Some(expr),
+                    });
+                }
+                Some(Token::Exists) | Some(Token::Not) => {
+                    let expr = self.parse_expression()?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias,
+                        expression: Some(expr),
+                    });
+                }
+                // Handle MATCH...AGAINST (Full-text search) in SELECT list
+                Some(Token::Match) => {
+                    let expr = self.parse_match_against()?;
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    columns.push(SelectColumn {
+                        name: format!("{:?}", expr),
+                        alias,
+                        expression: Some(expr),
+                    });
+                }
                 _ => {
                     return Err("Expected FROM or column name".to_string());
                 }
@@ -1964,6 +2795,27 @@ impl Parser {
         }
 
         // Handle SELECT without FROM (e.g., SELECT NULL, SELECT 1, SELECT 'hello')
+        // Check for UNION/INTERSECT/EXCEPT - these are handled by parse_select_or_union
+        if matches!(self.current(), Some(Token::Union))
+            || matches!(self.current(), Some(Token::Intersect))
+            || matches!(self.current(), Some(Token::Except))
+        {
+            return Ok(SelectStatement {
+                distinct: false,
+                columns,
+                table: String::new(),
+                from: None,
+                where_clause: None,
+                join_clause: None,
+                aggregates: Vec::new(),
+                group_by: Vec::new(),
+                having: None,
+                order_by: Vec::new(),
+                limit: None,
+                offset: None,
+                for_update: false,
+            });
+        }
         let mut tables: Vec<FromTable> = Vec::new();
         let mut primary_table = String::new();
 
@@ -1973,8 +2825,32 @@ impl Parser {
                 loop {
                     match self.next() {
                         Some(Token::Identifier(name)) => {
+                            // Check for qualified table name (e.g., `FROM information_schema.schemata`)
+                            let (table_name, is_qualified) =
+                                if matches!(self.current(), Some(Token::Dot)) {
+                                    self.next(); // consume DOT
+                                    match self.next() {
+                                        Some(Token::Identifier(second)) => {
+                                            (format!("{}.{}", name, second), true)
+                                        }
+                                        Some(t) => {
+                                            return Err(format!(
+                                                "Expected table name after DOT, got {:?}",
+                                                t
+                                            ))
+                                        }
+                                        None => {
+                                            return Err("Expected table name after DOT".to_string())
+                                        }
+                                    }
+                                } else {
+                                    (name.clone(), false)
+                                };
+
                             // Check for table alias (e.g., `FROM users u`)
-                            let alias = if matches!(self.current(), Some(Token::Identifier(_)))
+                            // Only check for alias if name was NOT qualified (qualified names can't have alias on first identifier)
+                            let alias = if !is_qualified
+                                && matches!(self.current(), Some(Token::Identifier(_)))
                                 && !matches!(self.peek(), Some(Token::Dot))
                             {
                                 let a = match self.current().cloned() {
@@ -1987,20 +2863,21 @@ impl Parser {
                                 None
                             };
                             tables.push(FromTable {
-                                name: name.clone(),
+                                name: table_name.clone(),
                                 alias,
+                                subquery: None,
                             });
                             if primary_table.is_empty() {
-                                primary_table = name;
+                                primary_table = table_name;
                             }
                         }
                         Some(Token::LParen) => {
-                            // Handle subquery: FROM (SELECT ...)
-                            let _subquery_stmt = Box::new(self.parse_select()?);
+                            let subquery_stmt = Box::new(self.parse_select()?);
                             self.expect(Token::RParen)?;
                             tables.push(FromTable {
                                 name: "__subquery".to_string(),
                                 alias: None,
+                                subquery: Some(subquery_stmt),
                             });
                             if primary_table.is_empty() {
                                 primary_table = "__subquery".to_string();
@@ -2129,16 +3006,65 @@ impl Parser {
             Vec::new()
         };
 
-        // Parse LIMIT clause
-        let limit = if matches!(self.current(), Some(Token::Limit)) {
+        // Parse LIMIT clause (supports MySQL's "LIMIT offset, count" syntax)
+        let mut limit: Option<u64> = None;
+        let mut offset: Option<u64> = None;
+        if matches!(self.current(), Some(Token::Limit)) {
             self.next();
             match self.current() {
                 Some(Token::NumberLiteral(n)) => {
-                    let val = n
+                    let first_val = n
                         .parse::<u64>()
                         .map_err(|e| format!("Invalid LIMIT: {}", e))?;
                     self.next();
-                    Some(val)
+                    // Check for MySQL's LIMIT offset, count syntax
+                    if matches!(self.current(), Some(Token::Comma)) {
+                        self.next();
+                        // First value is offset, now parse limit
+                        match self.current() {
+                            Some(Token::NumberLiteral(m)) => {
+                                let val = m
+                                    .parse::<u64>()
+                                    .map_err(|e| format!("Invalid LIMIT: {}", e))?;
+                                self.next();
+                                limit = Some(val);
+                                offset = Some(first_val);
+                            }
+                            Some(Token::Identifier(ref s)) => {
+                                let val = s
+                                    .parse::<u64>()
+                                    .map_err(|e| format!("Invalid LIMIT: {}", e))?;
+                                self.next();
+                                limit = Some(val);
+                                offset = Some(first_val);
+                            }
+                            _ => return Err("Expected count after comma in LIMIT".to_string()),
+                        }
+                    } else {
+                        // Standard syntax: LIMIT count [OFFSET offset]
+                        limit = Some(first_val);
+                        // Parse OFFSET clause if present
+                        if matches!(self.current(), Some(Token::Offset)) {
+                            self.next();
+                            match self.current() {
+                                Some(Token::NumberLiteral(o)) => {
+                                    let val = o
+                                        .parse::<u64>()
+                                        .map_err(|e| format!("Invalid OFFSET: {}", e))?;
+                                    self.next();
+                                    offset = Some(val);
+                                }
+                                Some(Token::Identifier(ref s)) => {
+                                    let val = s
+                                        .parse::<u64>()
+                                        .map_err(|e| format!("Invalid OFFSET: {}", e))?;
+                                    self.next();
+                                    offset = Some(val);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
                 }
                 Some(Token::Identifier(ref s)) => {
                     // Support LIMIT variable (e.g., @limit)
@@ -2146,36 +3072,21 @@ impl Parser {
                         .parse::<u64>()
                         .map_err(|e| format!("Invalid LIMIT: {}", e))?;
                     self.next();
-                    Some(val)
+                    limit = Some(val);
                 }
-                _ => None,
+                _ => {}
             }
-        } else {
-            None
-        };
+        }
 
-        // Parse OFFSET clause
-        let offset = if matches!(self.current(), Some(Token::Offset)) {
-            self.next();
-            match self.current() {
-                Some(Token::NumberLiteral(n)) => {
-                    let val = n
-                        .parse::<u64>()
-                        .map_err(|e| format!("Invalid OFFSET: {}", e))?;
-                    self.next();
-                    Some(val)
-                }
-                Some(Token::Identifier(ref s)) => {
-                    let val = s
-                        .parse::<u64>()
-                        .map_err(|e| format!("Invalid OFFSET: {}", e))?;
-                    self.next();
-                    Some(val)
-                }
-                _ => None,
-            }
+        // Parse FOR UPDATE clause (must come after ORDER BY/LIMIT)
+        let for_update = if matches!(self.current(), Some(Token::For))
+            && matches!(self.peek(), Some(Token::Update))
+        {
+            self.next(); // consume FOR
+            self.next(); // consume UPDATE
+            true
         } else {
-            None
+            false
         };
 
         Ok(SelectStatement {
@@ -2191,6 +3102,7 @@ impl Parser {
             limit,
             offset,
             distinct,
+            for_update,
         })
     }
 
@@ -2522,14 +3434,18 @@ impl Parser {
         } else if matches!(self.current(), Some(Token::Select)) {
             let select_stmt = self.parse_select()?;
             match select_stmt {
-                Statement::Select(s) => (Vec::new(), Some(Box::new(s))),
-                _ => return Err("Expected SELECT statement".to_string()),
+                Statement::Select(s) => (Vec::new(), Some(Box::new(Statement::Select(s)))),
+                Statement::Union(u) => (Vec::new(), Some(Box::new(Statement::Union(u)))),
+                _ => return Err("Expected SELECT or UNION statement".to_string()),
             }
         } else {
             return Err("Expected VALUES or SELECT".to_string());
         };
 
-        let on_duplicate_key_update = if matches!(self.current(), Some(Token::On)) {
+        let on_duplicate_key_update;
+        let on_conflict;
+
+        if matches!(self.current(), Some(Token::On)) {
             self.next();
             match self.current() {
                 Some(Token::Duplicate) => {
@@ -2569,13 +3485,63 @@ impl Parser {
                             "Expected column assignments after ON DUPLICATE KEY UPDATE".to_string()
                         );
                     }
-                    Some(updates)
+                    on_duplicate_key_update = Some(updates);
+                    on_conflict = None;
                 }
-                _ => return Err("Expected 'DUPLICATE KEY' after 'ON'".to_string()),
+                Some(Token::Conflict) => {
+                    self.next(); // consume Conflict
+                    self.expect(Token::LParen)?;
+                    let column = match self.next() {
+                        Some(Token::Identifier(name)) => name,
+                        _ => return Err("Expected column name in ON CONFLICT clause".to_string()),
+                    };
+                    self.expect(Token::RParen)?;
+                    self.expect(Token::Do)?;
+                    self.expect(Token::Update)?;
+                    self.expect(Token::Set)?;
+                    let mut updates = Vec::new();
+                    loop {
+                        match self.current() {
+                            Some(Token::Identifier(_)) => {
+                                let expr = self.parse_expression()?;
+                                match expr {
+                                    Expression::BinaryOp(left, op, right) if op == "=" => {
+                                        match (*left, *right) {
+                                            (Expression::Identifier(col), val) => {
+                                                updates.push((col, val));
+                                            }
+                                            _ => {
+                                                return Err("Expected column = value assignment"
+                                                    .to_string())
+                                            }
+                                        }
+                                    }
+                                    _ => {
+                                        return Err("Expected column = value assignment".to_string())
+                                    }
+                                }
+                            }
+                            Some(Token::Comma) => {
+                                self.next();
+                            }
+                            _ => break,
+                        }
+                    }
+                    if updates.is_empty() {
+                        return Err("Expected column assignments after DO UPDATE SET".to_string());
+                    }
+                    on_conflict = Some(OnConflictClause {
+                        column,
+                        update_clauses: updates,
+                    });
+                    on_duplicate_key_update = None;
+                }
+                _ => return Err("Expected 'DUPLICATE KEY' or 'CONFLICT' after 'ON'".to_string()),
             }
         } else {
-            None
-        };
+            on_duplicate_key_update = None;
+            on_conflict = None;
+        }
 
         Ok(Statement::Insert(InsertStatement {
             table,
@@ -2584,6 +3550,8 @@ impl Parser {
             select,
             is_replace,
             on_duplicate_key_update,
+            on_conflict,
+            with_clause: None,
         }))
     }
 
@@ -2592,6 +3560,18 @@ impl Parser {
         let table = match self.next() {
             Some(Token::Identifier(name)) => name,
             _ => return Err("Expected table name".to_string()),
+        };
+
+        // Parse optional table alias (e.g., UPDATE users u SET ...)
+        let alias = if matches!(self.current(), Some(Token::Identifier(_))) {
+            let alias_name = match self.current() {
+                Some(Token::Identifier(name)) => Some(name.clone()),
+                _ => None,
+            };
+            self.next();
+            alias_name
+        } else {
+            None
         };
 
         // Expect SET keyword
@@ -2603,11 +3583,26 @@ impl Parser {
         // Parse SET clause: column = value [, column = value ...]
         let mut set_clauses = Vec::new();
         loop {
+            // Parse column name, potentially qualified (e.g., u.email)
             let column = match self.current() {
-                Some(Token::Identifier(name)) => name.clone(),
+                Some(Token::Identifier(name)) => {
+                    let col_name = name.clone();
+                    self.next();
+                    // Check for qualified name (table.column)
+                    if matches!(self.current(), Some(Token::Dot)) {
+                        self.next(); // consume dot
+                        match self.next() {
+                            Some(Token::Identifier(col)) => {
+                                format!("{}.{}", col_name, col)
+                            }
+                            _ => return Err("Expected column name after DOT".to_string()),
+                        }
+                    } else {
+                        col_name
+                    }
+                }
                 _ => return Err("Expected column name in SET".to_string()),
             };
-            self.next();
 
             // Expect =
             match self.current() {
@@ -2621,15 +3616,64 @@ impl Parser {
 
             set_clauses.push((column, value));
 
-            // Check for more SET clauses or WHERE
+            // Check for more SET clauses or WHERE or FROM
             match self.current() {
                 Some(Token::Comma) => {
                     self.next(); // consume comma, continue to parse next column
                 }
-                Some(Token::Where) | None | Some(Token::Eof) => break,
-                _ => return Err("Expected , or WHERE".to_string()),
+                Some(Token::Where) | Some(Token::From) | None | Some(Token::Eof) => break,
+                _ => return Err("Expected , or WHERE or FROM".to_string()),
             }
         }
+
+        // Parse FROM clause (optional) - for UPDATE with JOIN support
+        let from_clause = if matches!(self.current(), Some(Token::From)) {
+            self.next(); // consume FROM
+            let mut tables = Vec::new();
+            loop {
+                match self.next() {
+                    Some(Token::Identifier(name)) => {
+                        let table_name = name.clone();
+                        let alias = if matches!(self.current(), Some(Token::Identifier(_)))
+                            && !matches!(self.peek(), Some(Token::Dot))
+                        {
+                            let a = match self.current().cloned() {
+                                Some(Token::Identifier(ident)) => Some(ident),
+                                _ => None,
+                            };
+                            self.next();
+                            a
+                        } else {
+                            None
+                        };
+                        tables.push(FromTable {
+                            name: table_name,
+                            alias,
+                            subquery: None,
+                        });
+                    }
+                    Some(Token::LParen) => {
+                        let subquery_stmt = Box::new(self.parse_select()?);
+                        self.expect(Token::RParen)?;
+                        tables.push(FromTable {
+                            name: "__subquery".to_string(),
+                            alias: None,
+                            subquery: Some(subquery_stmt),
+                        });
+                    }
+                    Some(Token::Comma) => {
+                        self.next(); // consume comma, continue to next table
+                    }
+                    _ => break,
+                }
+            }
+            Some(FromClause {
+                tables,
+                join_clauses: vec![],
+            })
+        } else {
+            None
+        };
 
         // Parse WHERE clause (optional)
         let where_clause = if matches!(self.current(), Some(Token::Where)) {
@@ -2641,7 +3685,9 @@ impl Parser {
 
         Ok(Statement::Update(UpdateStatement {
             table,
+            alias,
             set_clauses,
+            from_clause,
             where_clause,
         }))
     }
@@ -2680,6 +3726,12 @@ impl Parser {
     }
 
     fn parse_comparison_expression(&mut self) -> Result<Expression, String> {
+        // Check for MATCH...AGAINST (Full-text search) BEFORE parse_additive_expression
+        // because MATCH starts a standalone expression, not a binary operator
+        if matches!(self.current(), Some(Token::Match)) {
+            return self.parse_match_against();
+        }
+
         let left = self.parse_additive_expression()?;
 
         if matches!(self.current(), Some(Token::In)) {
@@ -2774,6 +3826,10 @@ impl Parser {
                 self.next();
                 let pattern = self.parse_primary_expression()?;
                 return Ok(Expression::NotRegexp(Box::new(left), Box::new(pattern)));
+            }
+            // Check for MATCH...AGAINST (Full-text search)
+            if matches!(self.current(), Some(Token::Match)) {
+                return self.parse_match_against();
             }
             return Err("NOT must be followed by IN, LIKE, BETWEEN, or REGEXP".to_string());
         }
@@ -2908,12 +3964,30 @@ impl Parser {
     }
 
     fn parse_additive_expression(&mut self) -> Result<Expression, String> {
-        let mut left = self.parse_multiplicative_expression()?;
+        let mut left = self.parse_shift_expression()?;
 
-        while let Some(Token::Plus) | Some(Token::Minus) = self.current() {
+        while let Some(Token::Plus) | Some(Token::Minus) | Some(Token::Concat) = self.current() {
             let op = match self.current() {
                 Some(Token::Plus) => "+",
                 Some(Token::Minus) => "-",
+                Some(Token::Concat) => "||",
+                _ => break,
+            };
+            self.next();
+            let right = self.parse_shift_expression()?;
+            left = Expression::BinaryOp(Box::new(left), op.to_string(), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    fn parse_shift_expression(&mut self) -> Result<Expression, String> {
+        let mut left = self.parse_multiplicative_expression()?;
+
+        while let Some(Token::LShift) | Some(Token::RShift) = self.current() {
+            let op = match self.current() {
+                Some(Token::LShift) => "<<",
+                Some(Token::RShift) => ">>",
                 _ => break,
             };
             self.next();
@@ -2927,10 +4001,11 @@ impl Parser {
     fn parse_multiplicative_expression(&mut self) -> Result<Expression, String> {
         let mut left = self.parse_primary_expression()?;
 
-        while let Some(Token::Star) | Some(Token::Slash) = self.current() {
+        while let Some(Token::Star) | Some(Token::Slash) | Some(Token::Percent) = self.current() {
             let op = match self.current() {
                 Some(Token::Star) => "*",
                 Some(Token::Slash) => "/",
+                Some(Token::Percent) => "%",
                 _ => break,
             };
             self.next();
@@ -3031,6 +4106,85 @@ impl Parser {
         self.expect(Token::RParen)?;
 
         Ok(Expression::FunctionCall("IF".to_string(), args))
+    }
+
+    /// Parse MATCH (col1, col2, ...) AGAINST (expr) full-text search expression
+    fn parse_match_against(&mut self) -> Result<Expression, String> {
+        // Consume Token::Match
+        self.next();
+        self.expect(Token::LParen)?;
+
+        // Parse column list: col1, col2, ...
+        // Note: column names can be identifiers or keywords used as column names (e.g., 'text')
+        let mut columns = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::Identifier(ref name)) => {
+                    columns.push(name.clone());
+                    self.next();
+                }
+                // Allow type keywords to be used as column names
+                Some(Token::Text) | Some(Token::Integer) | Some(Token::Blob) => {
+                    let name = format!("{:?}", self.current().unwrap()).to_lowercase();
+                    columns.push(name);
+                    self.next();
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                    continue;
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                _ => return Err("Expected column name, comma, or ')' in MATCH clause".to_string()),
+            }
+        }
+
+        // Expect AGAINST (expr [IN BOOLEAN MODE | WITH QUERY EXPANSION])
+        self.expect(Token::Against)?;
+        self.expect(Token::LParen)?;
+
+        // Parse the search expression
+        let search_expr = self.parse_additive_expression()?;
+
+        // Parse optional mode: IN BOOLEAN MODE or WITH QUERY EXPANSION (comes AFTER the search expr, before final RParen)
+        let mode = if matches!(self.current(), Some(Token::In)) {
+            self.next();
+            if matches!(self.current(), Some(Token::Boolean)) {
+                self.next();
+                if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "MODE")
+                {
+                    self.next();
+                }
+                FtsMode::Boolean
+            } else {
+                FtsMode::Natural
+            }
+        } else if matches!(self.current(), Some(Token::With)) {
+            self.next();
+            if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "QUERY")
+            {
+                self.next();
+                if matches!(self.current(), Some(Token::Identifier(ref n)) if n.to_uppercase() == "EXPANSION")
+                {
+                    self.next();
+                }
+                FtsMode::QueryExpansion
+            } else {
+                FtsMode::Natural
+            }
+        } else {
+            FtsMode::Natural
+        };
+
+        self.expect(Token::RParen)?;
+
+        Ok(Expression::MatchAgainst(
+            columns,
+            Box::new(search_expr),
+            mode,
+        ))
     }
 
     /// Parse primary expression (identifier, literal, or parenthesized)
@@ -3163,14 +4317,39 @@ impl Parser {
                 self.next();
                 Ok(expr)
             }
+            Some(Token::Default) => {
+                let expr = Expression::Literal("DEFAULT".to_string());
+                self.next();
+                Ok(expr)
+            }
             Some(Token::Minus) => {
                 self.next();
                 if let Some(Token::NumberLiteral(n)) = self.current() {
                     let expr = Expression::Literal(format!("-{}", n));
                     self.next();
+                    if matches!(self.current(), Some(Token::Star))
+                        || matches!(self.current(), Some(Token::Slash))
+                        || matches!(self.current(), Some(Token::Percent))
+                    {
+                        let left = expr;
+                        let op = match self.current() {
+                            Some(Token::Star) => "*",
+                            Some(Token::Slash) => "/",
+                            Some(Token::Percent) => "%",
+                            _ => return Ok(left),
+                        };
+                        self.next();
+                        let right = self.parse_primary_expression()?;
+                        return Ok(Expression::BinaryOp(
+                            Box::new(left),
+                            op.to_string(),
+                            Box::new(right),
+                        ));
+                    }
                     Ok(expr)
                 } else {
-                    Err("Expected number after -".to_string())
+                    let expr = self.parse_multiplicative_expression()?;
+                    Ok(Expression::UnaryOp("-".to_string(), Box::new(expr)))
                 }
             }
             Some(Token::LParen) => {
@@ -3408,6 +4587,102 @@ impl Parser {
         Ok(Statement::Delete(DeleteStatement {
             table,
             where_clause,
+        }))
+    }
+
+    fn parse_merge(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Merge)?;
+        self.expect(Token::Into)?;
+
+        let target_table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected target table name".to_string()),
+        };
+
+        self.expect(Token::Using)?;
+        let source_table = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected source table name".to_string()),
+        };
+
+        self.expect(Token::On)?;
+        let on_condition = self.parse_expression()?;
+
+        let mut matched_clause = None;
+        let mut not_matched_clause = None;
+
+        while matches!(self.current(), Some(Token::When)) {
+            self.next();
+            if matches!(self.current(), Some(Token::Matched)) {
+                self.next();
+                self.expect(Token::Then)?;
+                if matches!(self.current(), Some(Token::Update)) {
+                    self.next();
+                    self.expect(Token::Set)?;
+                    let mut update_columns = Vec::new();
+                    let mut update_values = Vec::new();
+                    while let Some(Token::Identifier(col)) = self.next() {
+                        update_columns.push(col);
+                        if matches!(self.current(), Some(Token::Equal)) {
+                            self.next();
+                            update_values.push(self.parse_expression()?);
+                        }
+                        if matches!(self.current(), Some(Token::Comma)) {
+                            self.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    matched_clause = Some(MergeMatchedClause {
+                        update_columns,
+                        update_values,
+                    });
+                }
+            } else if matches!(self.current(), Some(Token::Not)) {
+                self.next();
+                self.expect(Token::Matched)?;
+                self.expect(Token::Then)?;
+                if matches!(self.current(), Some(Token::Insert)) {
+                    self.next();
+                    let mut insert_columns = Vec::new();
+                    let mut insert_values = Vec::new();
+                    if matches!(self.current(), Some(Token::LParen)) {
+                        self.next();
+                        while let Some(Token::Identifier(col)) = self.next() {
+                            insert_columns.push(col);
+                            if matches!(self.current(), Some(Token::Comma)) {
+                                self.next();
+                            } else {
+                                break;
+                            }
+                        }
+                        self.expect(Token::RParen)?;
+                    }
+                    self.expect(Token::Values)?;
+                    self.expect(Token::LParen)?;
+                    loop {
+                        insert_values.push(self.parse_expression()?);
+                        if matches!(self.current(), Some(Token::Comma)) {
+                            self.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    self.expect(Token::RParen)?;
+                    not_matched_clause = Some(MergeNotMatchedClause {
+                        insert_columns,
+                        insert_values,
+                    });
+                }
+            }
+        }
+
+        Ok(Statement::Merge(MergeStatement {
+            target_table,
+            source_table,
+            on_condition,
+            matched_clause,
+            not_matched_clause,
         }))
     }
 
@@ -3797,11 +5072,12 @@ impl Parser {
             Some(Token::Index) => self.parse_drop_index(),
             Some(Token::View) => self.parse_drop_view(),
             Some(Token::Role) => self.parse_drop_role(),
+            Some(Token::Event) => self.parse_drop_event(),
             Some(t) => Err(format!(
-                "Expected TABLE, INDEX, VIEW or ROLE after DROP, got {:?}",
+                "Expected TABLE, INDEX, VIEW, ROLE or EVENT after DROP, got {:?}",
                 t
             )),
-            None => Err("Expected TABLE, INDEX, VIEW or ROLE after DROP".to_string()),
+            None => Err("Expected TABLE, INDEX, VIEW, ROLE or EVENT after DROP".to_string()),
         }
     }
 
@@ -3869,14 +5145,29 @@ impl Parser {
                 };
                 Ok(Statement::Show(ShowStatement::CreateTable { table }))
             }
+            Some(Token::Create) => {
+                self.next();
+                self.expect(Token::Table)?;
+                let table = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected table name".to_string()),
+                };
+                Ok(Statement::Show(ShowStatement::CreateTable { table }))
+            }
             Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "COLUMNS" => {
                 self.next();
+                let full = matches!(self.current(), Some(Token::Identifier(ref i)) if i.to_uppercase() == "FULL")
+                    || matches!(self.current(), Some(Token::Full));
+                if full {
+                    self.next();
+                }
                 self.expect(Token::From)?;
                 let table = match self.next() {
                     Some(Token::Identifier(name)) => name,
                     _ => return Err("Expected table name".to_string()),
                 };
-                let pattern = if matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LIKE")
+                let pattern = if matches!(self.current(), Some(Token::Like))
+                    || matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LIKE")
                 {
                     self.next();
                     match self.next() {
@@ -3886,9 +5177,34 @@ impl Parser {
                 } else {
                     None
                 };
-                Ok(Statement::Show(ShowStatement::Columns { table, pattern }))
+                Ok(Statement::Show(ShowStatement::Columns {
+                    table,
+                    pattern,
+                    full,
+                }))
             }
-            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "INDEX" => {
+            Some(Token::Full) => {
+                self.next();
+                match self.current() {
+                    Some(Token::Identifier(ref name)) if name.to_uppercase() == "COLUMNS" => {
+                        self.next();
+                        self.expect(Token::From)?;
+                        let table = match self.next() {
+                            Some(Token::Identifier(name)) => name,
+                            _ => return Err("Expected table name".to_string()),
+                        };
+                        Ok(Statement::Show(ShowStatement::Columns {
+                            table,
+                            pattern: None,
+                            full: true,
+                        }))
+                    }
+                    _ => Err("Expected FULL COLUMNS".to_string()),
+                }
+            }
+            Some(Token::Identifier(ref ident))
+                if ident.to_uppercase() == "INDEX" || ident.to_uppercase() == "INDEXES" =>
+            {
                 self.next();
                 self.expect(Token::From)?;
                 let table = match self.next() {
@@ -3934,6 +5250,94 @@ impl Parser {
                 };
                 Ok(Statement::Show(ShowStatement::Variables { like }))
             }
+            Some(Token::Table) => {
+                self.next();
+                match self.current() {
+                    Some(Token::Identifier(ref s)) if s.to_uppercase() == "STATUS" => {
+                        self.next();
+                        let database = if self.current() == Some(&Token::From) {
+                            self.next();
+                            match self.next() {
+                                Some(Token::Identifier(db)) => Some(db),
+                                _ => return Err("Expected database name".to_string()),
+                            }
+                        } else {
+                            None
+                        };
+                        Ok(Statement::Show(ShowStatement::TableStatus { database }))
+                    }
+                    _ => Err("Expected TABLE STATUS".to_string()),
+                }
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "STATUS" => {
+                self.next();
+                let like = if self.current() == Some(&Token::Like) {
+                    self.next();
+                    match self.next() {
+                        Some(Token::StringLiteral(s)) => Some(s),
+                        _ => return Err("Expected pattern after LIKE".to_string()),
+                    }
+                } else {
+                    None
+                };
+                Ok(Statement::Show(ShowStatement::Status { like }))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "PROCESSLIST" => {
+                self.next();
+                Ok(Statement::Show(ShowStatement::Processlist))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "EVENTS" => {
+                self.next();
+                Ok(Statement::Show(ShowStatement::Events))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "TRANSACTION" => {
+                self.next();
+                self.expect(Token::Identifier("HISTORY".to_string()))?;
+                let limit = if self.current() == Some(&Token::Limit) {
+                    self.next();
+                    match self.next() {
+                        Some(Token::NumberLiteral(n)) => {
+                            let val = n
+                                .parse::<u32>()
+                                .map_err(|e| format!("Invalid LIMIT: {}", e))?;
+                            Some(val)
+                        }
+                        _ => return Err("Expected number after LIMIT".to_string()),
+                    }
+                } else {
+                    None
+                };
+                Ok(Statement::Show(ShowStatement::TransactionHistory { limit }))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LOCK" => {
+                self.next();
+                self.expect(Token::Identifier("WAITS".to_string()))?;
+                Ok(Statement::Show(ShowStatement::LockWaits))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "RECOVERY" => {
+                self.next();
+                self.expect(Token::Identifier("HISTORY".to_string()))?;
+                let limit = if self.current() == Some(&Token::Limit) {
+                    self.next();
+                    match self.next() {
+                        Some(Token::NumberLiteral(n)) => {
+                            let val = n
+                                .parse::<u32>()
+                                .map_err(|e| format!("Invalid LIMIT: {}", e))?;
+                            Some(val)
+                        }
+                        _ => return Err("Expected number after LIMIT".to_string()),
+                    }
+                } else {
+                    None
+                };
+                Ok(Statement::Show(ShowStatement::RecoveryHistory { limit }))
+            }
+            Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "WAL" => {
+                self.next();
+                self.expect(Token::Identifier("STATS".to_string()))?;
+                Ok(Statement::Show(ShowStatement::WalStats))
+            }
             Some(t) => Err(format!("Unexpected token after SHOW: {:?}", t)),
             None => Err("Unexpected end of input after SHOW".to_string()),
         }
@@ -3941,14 +5345,31 @@ impl Parser {
 
     fn parse_explain(&mut self) -> Result<Statement, String> {
         self.expect(Token::Explain)?;
-        let analyze = if self.current() == Some(&Token::Analyze) {
+
+        let mut analyze = false;
+        let mut format: Option<String> = None;
+
+        if self.current() == Some(&Token::Analyze) {
             self.next();
-            true
-        } else {
-            false
-        };
+            analyze = true;
+        } else if matches!(self.current(), Some(Token::Identifier(ref i)) if i.to_uppercase() == "FORMAT")
+        {
+            self.next();
+            self.expect(Token::Equal)?;
+            match self.next() {
+                Some(Token::Identifier(ref fmt)) => {
+                    format = Some(fmt.to_uppercase());
+                }
+                _ => return Err("Expected format identifier".to_string()),
+            }
+        }
+
         let statement = Box::new(self.parse_statement()?);
-        Ok(Statement::Explain(ExplainStatement { analyze, statement }))
+        Ok(Statement::Explain(ExplainStatement {
+            analyze,
+            statement,
+            format,
+        }))
     }
 
     fn parse_describe(&mut self) -> Result<Statement, String> {
@@ -3968,17 +5389,262 @@ impl Parser {
     fn parse_analyze(&mut self) -> Result<Statement, String> {
         self.expect(Token::Analyze)?;
 
-        let table_name = match self.current() {
-            Some(Token::Identifier(name)) => {
-                let n = name.clone();
-                self.next();
-                Some(n)
+        // Optional TABLE keyword
+        if matches!(self.current(), Some(Token::Table)) {
+            self.next();
+        }
+
+        let mut table_names: Vec<String> = Vec::new();
+        while let Some(Token::Identifier(name)) = self.next() {
+            table_names.push(name);
+            if !matches!(self.current(), Some(Token::Comma)) {
+                break;
             }
-            Some(Token::Semicolon) | None => None,
-            _ => return Err("Expected table name or semicolon".to_string()),
+            self.next();
+        }
+
+        Ok(Statement::Analyze(AnalyzeStatement { table_names }))
+    }
+
+    fn parse_check(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Check)?;
+        self.expect(Token::Table)?;
+
+        let mut names: Vec<String> = Vec::new();
+        match self.next() {
+            Some(Token::Identifier(name)) => names.push(name),
+            _ => return Err("Expected table name".to_string()),
+        }
+        while matches!(self.current(), Some(Token::Comma)) {
+            self.next();
+            match self.next() {
+                Some(Token::Identifier(name)) => names.push(name),
+                _ => return Err("Expected table name after comma".to_string()),
+            }
+        }
+
+        let option = match self.current() {
+            Some(Token::Identifier(name)) if name.to_uppercase() == "QUICK" => {
+                self.next();
+                Some(CheckOption::Quick)
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() == "EXTENDED" => {
+                self.next();
+                Some(CheckOption::Extended)
+            }
+            _ => None,
         };
 
-        Ok(Statement::Analyze(AnalyzeStatement { table_name }))
+        Ok(Statement::Check(CheckStatement { names, option }))
+    }
+
+    fn parse_optimize(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Optimize)?;
+        self.expect(Token::Table)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+        Ok(Statement::Optimize(OptimizeStatement { name }))
+    }
+
+    fn parse_vacuum(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Vacuum)?;
+
+        match self.current() {
+            Some(Token::Analyze) => {
+                self.next();
+                let name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    _ => return Err("Expected table name".to_string()),
+                };
+                return Ok(Statement::Vacuum(VacuumStatement {
+                    names: vec![name],
+                    mode: VacuumMode::Analyze,
+                }));
+            }
+            Some(Token::Table) => {
+                self.next();
+            }
+            _ => return Err("Expected TABLE or ANALYZE after VACUUM".to_string()),
+        }
+
+        let mut names: Vec<String> = Vec::new();
+        match self.next() {
+            Some(Token::Identifier(name)) => names.push(name),
+            _ => return Err("Expected table name".to_string()),
+        }
+        while matches!(self.current(), Some(Token::Comma)) {
+            self.next();
+            match self.next() {
+                Some(Token::Identifier(name)) => names.push(name),
+                _ => return Err("Expected table name after comma".to_string()),
+            }
+        }
+
+        let mode = match self.current() {
+            Some(Token::Identifier(name)) if name.to_uppercase() == "FULL" => {
+                self.next();
+                VacuumMode::Full
+            }
+            _ => VacuumMode::Normal,
+        };
+
+        Ok(Statement::Vacuum(VacuumStatement { names, mode }))
+    }
+
+    fn parse_repair(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Repair)?;
+        self.expect(Token::Table)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            _ => return Err("Expected table name".to_string()),
+        };
+        Ok(Statement::Repair(RepairStatement { name }))
+    }
+
+    fn parse_backup(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Backup)?;
+
+        let mut database = None;
+        #[allow(unused_variables, unused_assignments)]
+        let destination = String::new();
+        let mut incremental = false;
+        let mut differential = false;
+        let mut compressed = false;
+
+        // Optional DATABASE keyword or database name
+        match self.current() {
+            Some(Token::Identifier(name)) if name.to_uppercase() == "DATABASE" => {
+                self.next();
+                // Check if there's a database name after DATABASE
+                if let Some(Token::Identifier(db_name)) = self.current() {
+                    if db_name.to_uppercase() != "TO" {
+                        database = Some(db_name.clone());
+                        self.next();
+                    }
+                }
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() != "TO" => {
+                database = Some(name.clone());
+                self.next();
+            }
+            _ => {}
+        }
+
+        // Expect TO
+        self.expect(Token::To)?;
+
+        // Expect destination path
+        let destination: String = match self.next() {
+            Some(Token::StringLiteral(path)) => path,
+            Some(Token::Identifier(path)) => path,
+            _ => return Err("Expected destination path".to_string()),
+        };
+
+        // Parse optional modifiers
+        while let Some(token) = self.current() {
+            match token {
+                Token::Identifier(name) => {
+                    let upper = name.to_uppercase();
+                    if upper == "INCREMENTAL" {
+                        incremental = true;
+                    } else if upper == "DIFFERENTIAL" {
+                        differential = true;
+                    } else if upper == "COMPRESSED" {
+                        compressed = true;
+                    } else {
+                        break;
+                    }
+                    self.next();
+                }
+                _ => break,
+            }
+        }
+
+        Ok(Statement::Backup(BackupStatement {
+            database,
+            destination,
+            incremental,
+            differential,
+            compressed,
+        }))
+    }
+
+    fn parse_restore(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Restore)?;
+
+        let mut database = None;
+        #[allow(unused_variables, unused_assignments)]
+        let source = String::new();
+        let mut to_database = None;
+        let mut point_in_time = None;
+
+        // Optional DATABASE keyword or database name
+        match self.current() {
+            Some(Token::Identifier(name)) if name.to_uppercase() == "DATABASE" => {
+                self.next();
+                // Check if there's a database name after DATABASE
+                if let Some(Token::Identifier(db_name)) = self.current() {
+                    if db_name.to_uppercase() != "FROM" {
+                        database = Some(db_name.clone());
+                        self.next();
+                    }
+                }
+            }
+            Some(Token::Identifier(name)) if name.to_uppercase() != "FROM" => {
+                database = Some(name.clone());
+                self.next();
+            }
+            _ => {}
+        }
+
+        // Expect FROM
+        self.expect(Token::From)?;
+
+        // Expect source path
+        let source: String = match self.next() {
+            Some(Token::StringLiteral(path)) => path,
+            Some(Token::Identifier(path)) => path,
+            _ => return Err("Expected source path".to_string()),
+        };
+
+        // Parse optional TO database
+        if let Some(Token::Identifier(name)) = self.current() {
+            if name.to_uppercase() == "TO" {
+                self.next();
+                if let Some(Token::StringLiteral(db)) = self.next() {
+                    to_database = Some(db);
+                }
+            }
+        }
+
+        // Parse optional POINT IN TIME
+        if let Some(Token::Identifier(name)) = self.current() {
+            if name.to_uppercase() == "POINT" {
+                self.next();
+                if let Some(Token::Identifier(name)) = self.current() {
+                    if name.to_uppercase() == "IN" {
+                        self.next();
+                        if let Some(Token::Identifier(name)) = self.current() {
+                            if name.to_uppercase() == "TIME" {
+                                self.next();
+                                if let Some(Token::StringLiteral(ts)) = self.next() {
+                                    point_in_time = Some(ts);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(Statement::Restore(RestoreStatement {
+            database,
+            source,
+            to_database,
+            point_in_time,
+        }))
     }
 
     fn parse_grant(&mut self) -> Result<Statement, String> {
@@ -4532,6 +6198,143 @@ impl Parser {
             _ => Err("Expected ADD, DROP, MODIFY or RENAME".to_string()),
         }
     }
+
+    fn parse_alter_event(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Alter)?;
+        self.expect(Token::Event)?;
+
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(t) => return Err(format!("Expected event name, got {:?}", t)),
+            None => return Err("Expected event name".to_string()),
+        };
+
+        let mut new_name = None;
+        let mut schedule = None;
+        let mut body = None;
+        let mut enable = None;
+        let mut comment = None;
+
+        loop {
+            match self.current() {
+                Some(Token::Rename) => {
+                    self.next();
+                    self.expect(Token::To)?;
+                    new_name = match self.next() {
+                        Some(Token::Identifier(name)) => Some(name),
+                        Some(t) => return Err(format!("Expected new event name, got {:?}", t)),
+                        None => return Err("Expected new event name".to_string()),
+                    };
+                }
+                Some(Token::Enable) => {
+                    self.next();
+                    enable = Some(true);
+                }
+                Some(Token::Disable) => {
+                    self.next();
+                    enable = Some(false);
+                }
+                Some(Token::Comment) => {
+                    self.next();
+                    comment = match self.next() {
+                        Some(Token::StringLiteral(s)) => Some(s),
+                        Some(t) => return Err(format!("Expected comment string, got {:?}", t)),
+                        None => return Err("Expected comment string".to_string()),
+                    };
+                }
+                Some(Token::On) => {
+                    self.next();
+                    self.expect(Token::Schedule)?;
+                    schedule = Some(if matches!(self.current(), Some(Token::At)) {
+                        self.next();
+                        let interval_value = match self.next() {
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            Some(Token::NumberLiteral(n)) => n,
+                            Some(t) => return Err(format!("Expected interval value, got {:?}", t)),
+                            None => return Err("Expected interval value".to_string()),
+                        };
+                        let interval_unit = match self.current() {
+                            Some(Token::Identifier(ref s)) => {
+                                let unit = s.to_uppercase();
+                                self.next();
+                                unit
+                            }
+                            Some(t) => return Err(format!("Expected interval unit, got {:?}", t)),
+                            None => "HOUR".to_string(),
+                        };
+                        EventSchedule::Interval {
+                            interval_value,
+                            interval_unit,
+                        }
+                    } else if matches!(self.current(), Some(Token::Every)) {
+                        self.next();
+                        let interval_value = match self.next() {
+                            Some(Token::NumberLiteral(n)) => n,
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            Some(t) => return Err(format!("Expected interval value, got {:?}", t)),
+                            None => return Err("Expected interval value".to_string()),
+                        };
+                        let interval_unit = match self.current() {
+                            Some(Token::Identifier(ref s)) => {
+                                let unit = s.to_uppercase();
+                                self.next();
+                                unit
+                            }
+                            Some(t) => return Err(format!("Expected interval unit, got {:?}", t)),
+                            None => "HOUR".to_string(),
+                        };
+                        EventSchedule::Interval {
+                            interval_value,
+                            interval_unit,
+                        }
+                    } else {
+                        EventSchedule::OneTime
+                    });
+                }
+                Some(Token::Do) => {
+                    self.next();
+                    self.expect(Token::Begin)?;
+                    let mut body_str = String::new();
+                    while !matches!(self.current(), Some(Token::End) | None) {
+                        match self.next() {
+                            Some(Token::Semicolon) => {
+                                body_str.push(';');
+                                body_str.push(' ');
+                            }
+                            Some(Token::Identifier(sql)) => {
+                                body_str.push_str(&sql);
+                                body_str.push(' ');
+                            }
+                            Some(t) => {
+                                body_str.push_str(&t.to_string());
+                                body_str.push(' ');
+                            }
+                            None => return Err("Expected END".to_string()),
+                        }
+                    }
+                    self.expect(Token::End)?;
+                    body = Some(body_str.trim().to_string());
+                }
+                Some(Token::Identifier(_)) | None => {
+                    break;
+                }
+                Some(t) => {
+                    return Err(format!("Unexpected token in ALTER EVENT: {:?}", t));
+                }
+            }
+        }
+
+        Ok(Statement::AlterEvent(AlterEventStatement {
+            name,
+            new_name,
+            schedule,
+            body,
+            enable,
+            comment,
+        }))
+    }
 }
 
 /// Parse a SQL string into statements
@@ -4635,8 +6438,13 @@ mod tests {
                     "INSERT SELECT should have a select statement"
                 );
                 let select = i.select.as_ref().unwrap();
-                assert_eq!(select.table, "old_users");
-                assert_eq!(select.columns.len(), 1); // * expands to one column
+                match select.as_ref() {
+                    Statement::Select(s) => {
+                        assert_eq!(s.table, "old_users");
+                        assert_eq!(s.columns.len(), 1); // * expands to one column
+                    }
+                    _ => panic!("Expected SELECT statement"),
+                }
             }
             _ => panic!("Expected INSERT statement"),
         }
@@ -4684,8 +6492,13 @@ mod tests {
                     "INSERT SELECT should have a select statement"
                 );
                 let select = i.select.as_ref().unwrap();
-                assert_eq!(select.table, "old_users");
-                assert!(select.where_clause.is_some());
+                match select.as_ref() {
+                    Statement::Select(s) => {
+                        assert_eq!(s.table, "old_users");
+                        assert!(s.where_clause.is_some());
+                    }
+                    _ => panic!("Expected SELECT statement"),
+                }
             }
             _ => panic!("Expected INSERT statement"),
         }
@@ -4957,14 +6770,158 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_merge_basic() {
+        let result = parse("MERGE INTO target USING source ON condition");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Merge(m) => {
+                assert_eq!(m.target_table, "target");
+                assert_eq!(m.source_table, "source");
+            }
+            _ => panic!("Expected MERGE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_merge_matched() {
+        let result =
+            parse("MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET name = s.name");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Merge(m) => {
+                assert_eq!(m.target_table, "t");
+                assert_eq!(m.source_table, "s");
+                assert!(m.matched_clause.is_some());
+                let clause = m.matched_clause.unwrap();
+                assert_eq!(clause.update_columns.len(), 1);
+                assert_eq!(clause.update_columns[0], "name");
+            }
+            _ => panic!("Expected MERGE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_merge_not_matched() {
+        let result = parse("MERGE INTO t USING s ON t.id = s.id WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Merge(m) => {
+                assert_eq!(m.target_table, "t");
+                assert_eq!(m.source_table, "s");
+                assert!(m.not_matched_clause.is_some());
+                let clause = m.not_matched_clause.unwrap();
+                assert_eq!(clause.insert_columns.len(), 2);
+            }
+            _ => panic!("Expected MERGE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_merge_both_clauses() {
+        let result = parse("MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET name = s.name WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name)");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Merge(m) => {
+                assert!(m.matched_clause.is_some());
+                assert!(m.not_matched_clause.is_some());
+            }
+            _ => panic!("Expected MERGE statement"),
+        }
+    }
+
+    #[test]
     fn test_parse_analyze() {
         let result = parse("ANALYZE users");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
             Statement::Analyze(a) => {
-                assert_eq!(a.table_name, Some("users".to_string()));
+                assert_eq!(a.table_names, vec!["users".to_string()]);
             }
             _ => panic!("Expected ANALYZE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_analyze_table() {
+        let result = parse("ANALYZE TABLE users");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Analyze(a) => {
+                assert_eq!(a.table_names, vec!["users".to_string()]);
+            }
+            _ => panic!("Expected ANALYZE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_check_table() {
+        let result = parse("CHECK TABLE t1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Check(c) => {
+                assert_eq!(c.names, vec!["t1".to_string()]);
+                assert_eq!(c.option, None);
+            }
+            _ => panic!("Expected CHECK TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_check_table_quick() {
+        let result = parse("CHECK TABLE t1 QUICK");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Check(c) => {
+                assert_eq!(c.names, vec!["t1".to_string()]);
+                assert_eq!(c.option, Some(CheckOption::Quick));
+            }
+            _ => panic!("Expected CHECK TABLE QUICK statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_optimize_table() {
+        let result = parse("OPTIMIZE TABLE t1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Optimize(_) => {}
+            _ => panic!("Expected OPTIMIZE TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_vacuum_table() {
+        let result = parse("VACUUM TABLE t1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Vacuum(v) => {
+                assert_eq!(v.names, vec!["t1".to_string()]);
+                assert_eq!(v.mode, VacuumMode::Normal);
+            }
+            _ => panic!("Expected VACUUM TABLE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_vacuum_analyze() {
+        let result = parse("VACUUM ANALYZE t1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Vacuum(v) => {
+                assert_eq!(v.names, vec!["t1".to_string()]);
+                assert_eq!(v.mode, VacuumMode::Analyze);
+            }
+            _ => panic!("Expected VACUUM ANALYZE statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_repair_table() {
+        let result = parse("REPAIR TABLE t1");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Repair(_) => {}
+            _ => panic!("Expected REPAIR TABLE statement"),
         }
     }
 
@@ -4983,7 +6940,11 @@ mod tests {
         let result = parse("SHOW COLUMNS FROM users");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
-            Statement::Show(ShowStatement::Columns { table, pattern }) => {
+            Statement::Show(ShowStatement::Columns {
+                table,
+                pattern,
+                full: _,
+            }) => {
                 assert_eq!(table, "users");
                 assert!(pattern.is_none());
             }
@@ -4996,7 +6957,11 @@ mod tests {
         let result = parse("SHOW COLUMNS FROM users LIKE '%name%'");
         assert!(result.is_ok(), "Parse failed: {:?}", result);
         match result.unwrap() {
-            Statement::Show(ShowStatement::Columns { table, pattern }) => {
+            Statement::Show(ShowStatement::Columns {
+                table,
+                pattern,
+                full: _,
+            }) => {
                 assert_eq!(table, "users");
                 assert_eq!(pattern, Some("%name%".to_string()));
             }
@@ -5611,6 +7576,30 @@ fn test_debug_having() {
                 assert_eq!(isolation_level, Some(IsolationLevel::SnapshotIsolation));
             }
             _ => panic!("Expected BEGIN ISOLATION LEVEL REPEATABLE READ statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_begin_idempotent() {
+        let result = parse("BEGIN IDEMPOTENT 'txn-123'");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::BeginIdempotent { key }) => {
+                assert_eq!(key, "txn-123");
+            }
+            _ => panic!("Expected BEGIN IDEMPOTENT statement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_begin_idempotent_key() {
+        let result = parse("BEGIN IDEMPOTENCY KEY 'txn-456'");
+        assert!(result.is_ok(), "Parse failed: {:?}", result);
+        match result.unwrap() {
+            Statement::Transaction(TransactionStatement::BeginIdempotent { key }) => {
+                assert_eq!(key, "txn-456");
+            }
+            _ => panic!("Expected BEGIN IDEMPOTENCY KEY statement"),
         }
     }
 }

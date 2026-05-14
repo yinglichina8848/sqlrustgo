@@ -183,7 +183,7 @@ gh issue reopen <issue_number> -c "<原因说明>"
 ## 八、相关文档
 
 - [RC_TO_GA_GATE_CHECKLIST.md](./RC_TO_GA_GATE_CHECKLIST.md) - 发布门禁清单
-- [BRANCH_GOVERNANCE.md](./BRANCH_GOVERNANCE.md) - 分支治理
+- [BRANCH_GOVERNANCE.md](./CONTRIBUTING.md) - 分支治理
 - [DOCUMENT_REVIEW_WORKFLOW.md](./DOCUMENT_REVIEW_WORKFLOW.md) - 文档审查流程
 
 ---

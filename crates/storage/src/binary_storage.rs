@@ -127,6 +127,7 @@ impl BinaryTableStorage {
                 },
                 nullable: true,
                 primary_key: false,
+                auto_increment: false,
             })
             .collect();
 
@@ -137,6 +138,8 @@ impl BinaryTableStorage {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
 
         // Read rows
@@ -197,6 +200,7 @@ mod tests {
             data_type: "INTEGER".to_string(),
             nullable: false,
             primary_key: false,
+            ..Default::default()
         }];
         let rows = vec![vec![sqlrustgo_types::Value::Integer(42)]];
 
@@ -251,6 +255,7 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: false,
+                ..Default::default()
             }];
             let rows = vec![vec![sqlrustgo_types::Value::Integer(i)]];
             let data = TableData {
@@ -282,6 +287,7 @@ mod tests {
             data_type: "REAL".to_string(),
             nullable: false,
             primary_key: false,
+            ..Default::default()
         }];
         let rows = vec![vec![sqlrustgo_types::Value::Float(3.14159)]];
 
@@ -311,6 +317,7 @@ mod tests {
             data_type: "TEXT".to_string(),
             nullable: false,
             primary_key: false,
+            ..Default::default()
         }];
         let rows = vec![vec![sqlrustgo_types::Value::Text("hello".to_string())]];
 
@@ -340,6 +347,7 @@ mod tests {
             data_type: "INTEGER".to_string(),
             nullable: false,
             primary_key: false,
+            ..Default::default()
         }];
         let rows: Vec<Vec<sqlrustgo_types::Value>> = (1..=100)
             .map(|i| vec![sqlrustgo_types::Value::Integer(i)])

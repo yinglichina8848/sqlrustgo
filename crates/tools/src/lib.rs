@@ -16,6 +16,7 @@
 
 pub mod backup_restore;
 pub mod mysqldump;
+#[allow(dead_code)]
 pub mod upgrade;
 
 pub use backup_restore::{

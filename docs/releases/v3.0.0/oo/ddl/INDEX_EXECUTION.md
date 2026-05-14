@@ -1,0 +1,850 @@
+# INDEX 执行链路
+
+> CREATE INDEX / DROP INDEX / UNIQUE INDEX / 索引使用分析
+
+## 1. INDEX 整体架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      INDEX 架构                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                   Index Types                         │   │
+│  ├─────────────────────────────────────────────────────┤   │
+│  │                                                       │   │
+│  │  PRIMARY KEY INDEX                                    │   │
+│  │  ├─ B+Tree, Clustered (future)                      │   │
+│  │  └─ 唯一, 非空                                       │   │
+│  │                                                       │   │
+│  │  UNIQUE INDEX                                         │   │
+│  │  ├─ B+Tree                                           │   │
+│  │  └─ 唯一, 可空                                        │   │
+│  │                                                       │   │
+│  │  SECONDARY INDEX                                      │   │
+│  │  ├─ B+Tree                                           │   │
+│  │  └─ 非唯一                                           │   │
+│  │                                                       │   │
+│  │  COMPOSITE INDEX                                      │   │
+│  │  ├─ B+Tree (leftmost prefix)                        │   │
+│  │  └─ 多列组合                                         │   │
+│  │                                                       │   │
+│  │  HASH INDEX                                           │   │
+│  │  └─ Memory table only                               │   │
+│  │                                                       │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                   B+Tree Index                       │   │
+│  │                                                       │   │
+│  │           ┌───┬───┬───┬───┬───┬───┐               │   │
+│  │           │ 5 │10 │15 │20 │25 │30 │               │   │
+│  │           └─┬─┴─┬─┴─┬─┴─┬─┴─┬─┴─┬─┘               │   │
+│  │             │   │   │   │   │   │                  │   │
+│  │         ┌───┴┐ ┌┴┐ ┌┴┐ ┌┴┐ ┌┴┐ ┌┴───┐           │   │
+│  │         │Leaf│ │Leaf│ │Leaf│ │Leaf│ │Leaf│           │   │
+│  │         │Pages│ │Pages│ │Pages│ │Pages│ │Pages│           │   │
+│  │         └────┘ └─┬┘ └─┬┘ └─┬┘ └─┬┘ └─┬──┘           │   │
+│  │                   └─────┴─────┴─────┴─────┘           │   │
+│  │                          │                              │   │
+│  │                    ┌─────┴─────┐                       │   │
+│  │                    │  Data Row │                       │   │
+│  │                    │  (value)  │                       │   │
+│  │                    └───────────┘                       │   │
+│  │                                                       │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 2. CREATE INDEX 执行链路
+
+### 2.1 CREATE INDEX 时序图
+
+```
+CREATE INDEX idx_name ON users(age)
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Parser                                    │
+│  CreateIndexStmt {                                         │
+│    index_name: "idx_age",                                  │
+│    table_name: "users",                                    │
+│    columns: ["age"],                                       │
+│    unique: false,                                          │
+│    index_type: BTree,                                     │
+│    if_not_exists: false,                                   │
+│  }                                                        │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Catalog Validation                            │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ 1. table_exists("users") → true                      │ │
+│  │ 2. index_not_exists("idx_age") → true                │ │
+│  │ 3. column_exists("age") → true                       │ │
+│  │ 4. index_type_valid(BTree) → true                     │ │
+│  │ 5. Generate index_id = next_index_id()               │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Index Build (Phase 1: Schema)                   │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ 1. 创建 IndexDef:                                   │ │
+│  │    IndexDef {                                       │ │
+│  │      id: idx_age,                                    │ │
+│  │      name: "idx_age",                               │ │
+│  │      table_id: users,                               │ │
+│  │      columns: [("age", ASC)],                        │ │
+│  │      unique: false,                                  │ │
+│  │      status: Building,                              │ │
+│  │    }                                                │ │
+│  │                                                       │ │
+│  │ 2. 注册到 catalog:                                   │ │
+│  │    catalog.add_index(index_def)                      │ │
+│  │                                                       │ │
+│  │ 3. 更新 table schema:                                │ │
+│  │    table.indexes += [idx_age]                        │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Index Build (Phase 2: Data)                     │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │                                                       │ │
+│  │  获取 TABLE_SHARE_READ_LOCK (允许并发读取)             │ │
+│  │                                                       │ │
+│  │  ┌─────────────────────────────────────────────────┐ │ │
+│  │  │           Sequential Scan                        │ │ │
+│  │  │                                                 │ │ │
+│  │  │   for each page in table:                      │ │ │
+│  │  │     for each row in page:                      │ │ │
+│  │  │       key = row[age]                          │ │ │
+│  │  │       value = (page_id, slot_id)              │ │ │
+│  │  │       bptree.insert(key, value)                │ │ │
+│  │  │                                                 │ │ │
+│  │  └─────────────────────────────────────────────────┘ │ │
+│  │                                                       │ │
+│  │  Bulk Load 优化:                                     │ │
+│  │  ┌─────────────────────────────────────────────────┐ │ │
+│  │  │  1. 收集所有 (key, rid) 对                    │ │ │
+│  │  │  2. 按 key 排序 (external merge sort)         │ │ │
+│  │  │  3. 批量插入 B+Tree (bulk_load)              │ │ │
+│  │  └─────────────────────────────────────────────────┘ │ │
+│  │                                                       │ │
+│  │  释放 TABLE_SHARE_READ_LOCK                         │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Index Build (Phase 3: Finalize)                  │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ 1. 索引状态 = Active                                │ │
+│  │ 2. 写入 index header (root page, stats)            │ │
+│  │ 3. 同步刷盘 (fsync)                                │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     DDL WAL                                 │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ DDLLogEntry::CreateIndex {                          │ │
+│  │   index_id: 123,                                    │ │
+│  │   table_name: "users",                              │ │
+│  │   columns: ["age"],                                 │ │
+│  │   unique: false,                                   │ │
+│  │ }                                                  │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 CREATE UNIQUE INDEX 时序图
+
+```
+CREATE UNIQUE INDEX idx_email ON users(email)
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Parser                                    │
+│  CreateIndexStmt { unique: true, ... }                     │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Unique Constraint Validation                     │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ Phase 1: 检查重复                                     │ │
+│  │   for each page in table:                           │ │
+│  │     for each row in page:                           │ │
+│  │       if key_exists_in_temp_set(key):               │ │
+│  │         return DuplicateKeyError                     │ │
+│  │       add_to_temp_set(key)                          │ │
+│  │                                                       │ │
+│  │ 时间复杂度: O(n)                                     │ │
+│  │ 空间复杂度: O(n) - 需要哈希集合                      │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Index Build + Unique Constraint              │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ 1. 构建 B+Tree (same as regular index)              │ │
+│  │ 2. 在 B+Tree 内部强制唯一性:                        │ │
+│  │    - 插入时检查 key 是否已存在                       │ │
+│  │    - 如果已存在，报错 DuplicateKeyError             │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 2.3 状态图
+
+```
+                    ┌─────────────────┐
+                    │     PARSE       │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  VALIDATE      │
+                    │  (catalog,col) │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  SCHEMA UPDATE │
+                    │ (index_def,    │
+                    │  table.indexes)│
+                    └────────┬────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              │                              │
+     ┌────────▼────────┐          ┌────────▼────────┐
+     │  UNIQUE INDEX  │          │ REGULAR INDEX  │
+     └────────┬────────┘          └────────┬────────┘
+              │                              │
+     ┌────────▼────────┐          ┌────────▼────────┐
+     │ CHECK DUPLICATE│          │   SEQUENTIAL   │
+     │   (hash set)   │          │     SCAN       │
+     └────────┬────────┘          └────────┬────────┘
+              │                              │
+              │    ┌─────────────────┐        │
+              │    │  DUPLICATE     │        │
+              │    │   FOUND        │        │
+              │    └─────────────────┘        │
+              │                              │
+     ┌────────▼────────────────────────────────────▼────────┐
+     │                    B+Tree BUILD                         │
+     │  ┌──────────────────────────────────────────────────┐ │
+     │  │ 1. Sequential scan all rows                     │ │
+     │  │ 2. Collect (key, rid) pairs                     │ │
+     │  │ 3. Sort by key (external merge sort)            │ │
+     │  │ 4. Bulk load into B+Tree                        │ │
+     │  └──────────────────────────────────────────────────┘ │
+     └───────────────────────────────────────────────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  SET STATUS =   │
+                    │    ACTIVE       │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  WRITE DDL WAL  │
+                    │   + COMMIT      │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │    COMPLETE     │
+                    └─────────────────┘
+```
+
+## 3. DROP INDEX 执行链路
+
+### 3.1 时序图
+
+```
+DROP INDEX idx_age ON users
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Parser                                    │
+│  DropIndexStmt { index_name: "idx_age", table: "users" }    │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Catalog Validation                           │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ 1. table_exists("users") → true                     │ │
+│  │ 2. index_exists("idx_age") → true                   │ │
+│  │ 3. index.belongs_to_table("idx_age", "users") → true│ │
+│  │ 4. index.is_primary_key() → false (禁止删除 PK)      │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Metadata Update                                  │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ 1. 获取表排他锁 (TABLE_EXCLUSIVE)                    │ │
+│  │ 2. 从 table.indexes 移除 idx_age                     │ │
+│  │ 3. 从 catalog 删除 index_def                         │ │
+│  │ 4. 释放排他锁                                       │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Storage Cleanup                                 │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ 1. 删除索引文件 (idx_age.bptree)                    │ │
+│  │ 2. 更新表文件头 (移除索引引用)                       │ │
+│  │ 3. 释放索引占用的磁盘空间                           │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     DDL WAL + Commit                         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 状态图
+
+```
+                ┌─────────────────┐
+                │     PARSE       │
+                └────────┬────────┘
+                         │
+                ┌────────▼────────┐
+                │    VALIDATE     │
+                │(exists, owned)  │
+                └────────┬────────┘
+                         │
+                ┌────────▼────────┐
+                │  ACQUIRE LOCK   │
+                │ (TABLE_EXCLUSIVE)│
+                └────────┬────────┘
+                         │
+                ┌────────▼────────┐
+                │REMOVE FROM TABLE│
+                │    .indexes     │
+                └────────┬────────┘
+                         │
+                ┌────────▼────────┐
+                │DELETE FROM     │
+                │   CATALOG      │
+                └────────┬────────┘
+                         │
+                ┌────────▼────────┐
+                │DELETE INDEX    │
+                │     FILE       │
+                └────────┬────────┘
+                         │
+                ┌────────▼────────┐
+                │  RELEASE LOCK   │
+                └────────┬────────┘
+                         │
+                ┌────────▼────────┐
+                │ WRITE DDL WAL   │
+                └────────┬────────┘
+                         │
+                ┌────────▼────────┐
+                │    COMPLETE     │
+                └─────────────────┘
+```
+
+## 4. 索引使用 (Index Usage)
+
+### 4.1 索引选择流程
+
+```
+SELECT * FROM users WHERE age = 25
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Optimizer                                   │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ candidates: [idx_age, idx_name, PRIMARY_KEY]         │ │
+│  │                                                       │ │
+│  │ 选择 idx_age 因为:                                    │ │
+│  │  1. 列 age 在 WHERE 条件中                          │ │
+│  │  2. idx_age 是 B+Tree 索引                           │ │
+│  │  3. age = 25 是点查 (range_type = POINT)            │ │
+│  │  4. 选择性高 (distinct values / total > 0.1)       │ │
+│  │                                                       │ │
+│  │ cost(idx_age) = 3  // B+Tree 高度 + 1次 IO         │ │
+│  │ cost(full_scan) = 1000 // 全表扫描                   │ │
+│  │                                                       │ │
+│  │ 选择: idx_age (cost更低)                             │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Index Scan Executor                           │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ 1. 从 B+Tree root 开始                               │ │
+│  │ 2. 搜索 leaf page 包含 key=25                       │ │
+│  │ 3. 在 leaf page 中查找 (key=25, rid) 对             │ │
+│  │ 4. 使用 rid (page_id, slot_id) 读取数据行           │ │
+│  │ 5. 返回结果                                          │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 4.2 索引类型匹配
+
+| WHERE 条件 | 可用索引类型 | 索引使用 |
+|------------|-------------|---------|
+| `age = 25` | B+Tree, Hash | B+Tree EQ / Hash EQ |
+| `age > 25` | B+Tree | B+Tree Range |
+| `age < 25` | B+Tree | B+Tree Range |
+| `age BETWEEN 20 AND 30` | B+Tree | B+Tree Range |
+| `name LIKE 'A%'` | B+Tree | B+Tree Prefix |
+| `name LIKE '%A'` | 无 | 全表扫描 |
+| `age IN (20, 25, 30)` | B+Tree | B+Tree IN (多个点查) |
+| `age = 25 AND name = 'Bob'` | Composite | Composite Index |
+
+### 4.3 Composite Index 选择规则
+
+```
+CREATE INDEX idx_name_age ON users(name, age)
+
+┌─────────────────────────────────────────────────────────────┐
+│              Composite Index 匹配规则                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  WHERE 子句                    │ 索引使用                    │
+│  ─────────────────────────────┼────────────                 │
+│  name = 'Bob'                 │ ✅ 有效 (leftmost prefix)  │
+│  name = 'Bob' AND age = 25   │ ✅ 有效 (完整匹配)        │
+│  age = 25                     │ ❌ 无效 (非 leftmost)     │
+│  age = 25 AND name = 'Bob'   │ ✅ 有效 (顺序无关)        │
+│  name LIKE 'B%' AND age = 25 │ ✅ 有效 (前缀匹配 + 列)   │
+│  name LIKE '%b'               │ ❌ 无效 (非前缀)          │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 5. 索引维护
+
+### 5.1 插入时索引维护
+
+```
+INSERT INTO users VALUES (1, 'Bob', 25)
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Index Maintenance                             │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │                                                       │ │
+│  │  PRIMARY KEY (id):                                   │ │
+│  │    bptree.insert(1, (page_id, slot_id))              │ │
+│  │    if duplicate → DuplicateKeyError                    │ │
+│  │                                                       │ │
+│  │  UNIQUE INDEX (email):                               │ │
+│  │    bptree.insert('bob@test.com', (page_id, slot_id)) │ │
+│  │    if duplicate → DuplicateKeyError                   │ │
+│  │                                                       │ │
+│  │  SECONDARY INDEX (age):                              │ │
+│  │    bptree.insert(25, (page_id, slot_id))             │ │
+│  │    // 允许重复                                         │ │
+│  │                                                       │ │
+│  │  COMPOSITE INDEX (name, age):                        │ │
+│  │    bptree.insert(('Bob', 25), (page_id, slot_id))   │ │
+│  │    // 允许重复                                         │ │
+│  │                                                       │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 5.2 更新时索引维护
+
+```
+UPDATE users SET age = 30 WHERE id = 1
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Index Maintenance                             │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │                                                       │ │
+│  │  旧值: age = 25                                      │ │
+│  │  新值: age = 30                                      │ │
+│  │                                                       │ │
+│  │  索引维护策略:                                       │ │
+│  │  ┌─────────────────────────────────────────────────┐ │ │
+│  │  │  Strategy 1: Delete + Insert (当前实现)        │ │ │
+│  │  │    bptree.delete(25, rid)                     │ │ │
+│  │  │    bptree.insert(30, rid)                     │ │ │
+│  │  │                                                 │ │ │
+│  │  │  Strategy 2: Update In-place (未来优化)        │ │ │
+│  │  │    // B+Tree 不支持 update，需要 delete+insert  │ │ │
+│  │  └─────────────────────────────────────────────────┘ │ │
+│  │                                                       │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 5.3 删除时索引维护
+
+```
+DELETE FROM users WHERE id = 1
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Index Maintenance                             │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │                                                       │ │
+│  │  获取 row 的 rid (page_id, slot_id)                   │ │
+│  │                                                       │ │
+│  │  删除所有索引中的条目:                                 │ │
+│  │    bptree.delete(pk_value, rid)                       │ │
+│  │    bptree.delete(email_value, rid)                    │ │
+│  │    bptree.delete(age_value, rid)                      │ │
+│  │    bptree.delete((name, age), rid)                   │ │
+│  │                                                       │ │
+│  │  注意: 使用 rid 精确定位，不依赖索引键值               │ │
+│  │                                                       │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 6. 索引统计信息
+
+### 6.1 统计数据结构
+
+```rust
+struct IndexStats {
+    // 基础统计
+    row_count: u64,              // 表总行数
+    distinct_keys: u64,          // 索引键去重后的数量
+    null_count: u64,            // 值为 NULL 的行数
+
+    // 分布统计 (直方图)
+    histogram: Vec<Bucket>,      // 值分布直方图
+
+    // B+Tree 统计
+    bptree_height: u32,          // B+Tree 树高
+    leaf_pages: u32,             // 叶子页数量
+    index_size_bytes: u64,       // 索引总大小
+
+    // 使用统计
+    index_uses: u64,            // 被 optimizer 选中的次数
+    index_reads: u64,           // 实际使用索引的查询数
+}
+
+struct Bucket {
+    low_value: Value,
+    high_value: Value,
+    count: u64,                 // 在这个范围内的行数
+}
+```
+
+### 6.2 统计信息收集
+
+```
+ANALYZE TABLE users
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Statistics Collection                         │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │                                                       │ │
+│  │  1. 采样表数据 (sample 10% rows)                      │ │
+│  │     rows = sample_table(rows, 0.1)                   │ │
+│  │                                                       │ │
+│  │  2. 计算基础统计                                       │ │
+│  │     for each col in index_columns:                     │ │
+│  │       distinct = count_distinct(values)               │ │
+│  │       null_count = count_null(values)                 │ │
+│  │       row_count = total_count                         │ │
+│  │                                                       │ │
+│  │  3. 构建直方图 (equi-height histogram)                │ │
+│  │     buckets = build_histogram(values, 100)             │ │
+│  │                                                       │ │
+│  │  4. 更新 B+Tree 统计                                  │ │
+│  │     height = bptree.get_height()                      │ │
+│  │     leaf_pages = bptree.count_leaf_pages()            │ │
+│  │     index_size = bptree.total_size()                  │ │
+│  │                                                       │ │
+│  │  5. 保存到 catalog                                     │ │
+│  │     index.stats = IndexStats { ... }                  │ │
+│  │                                                       │ │
+│  └───────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 7. 索引性能分析
+
+### 7.1 索引代价模型
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   索引代价估算                               │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  INDEX SCAN COST =                                         │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  I/O 成本:                                           │   │
+│  │    height(bptree) - 1    // 搜索路径上的内部页        │   │
+│  │    + 1                  // 目标 leaf page            │   │
+│  │    + matching_rows / rows_per_page  // 数据页         │   │
+│  │                                                       │   │
+│  │  CPU 成本:                                           │   │
+│  │    search_cost = height(bptree) * 0.1               │   │
+│  │    decode_cost = matching_rows * 0.01                │   │
+│  │                                                       │   │
+│  │  TOTAL = I/O + CPU                                  │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│  FULL TABLE SCAN COST =                                    │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  I/O 成本:                                           │   │
+│  │    total_pages = table_size / page_size              │   │
+│  │                                                       │   │
+│  │  CPU 成本:                                           │   │
+│  │    scan_cost = total_rows * 0.001                   │   │
+│  │    filter_cost = total_rows * predicate_cost        │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 7.2 选择性计算
+
+```rust
+fn selectivity(index: &IndexDef, predicate: &Predicate) -> f64 {
+    match predicate {
+        Predicate::Eq(column, value) if column == index.columns[0] => {
+            // 等值谓词: 1 / distinct_keys
+            1.0 / index.stats.distinct_keys as f64
+        },
+        Predicate::Range(column, low, high) if column == index.columns[0] => {
+            // 范围谓词: (high - low) / value_range
+            let value_range = index.stats.max_value - index.stats.min_value;
+            (high - low) / value_range
+        },
+        Predicate::In(column, values) if column == index.columns[0] => {
+            // IN 谓词: len(values) / distinct_keys
+            values.len() as f64 / index.stats.distinct_keys as f64
+        },
+        _ => {
+            // 无法使用索引
+            1.0  // 全表扫描
+        }
+    }
+}
+```
+
+## 8. 关键测试用例
+
+### 8.1 索引构建测试
+
+```rust
+#[test]
+fn test_create_index_on_empty_table() {
+    let tbl = create_table("t1", vec![("id", INT), ("val", INT)]);
+    create_index("idx_val", "t1", vec!["val"]);
+
+    let idx = get_index("idx_val");
+    assert_eq!(idx.status, IndexStatus::Active);
+    assert_eq!(idx.row_count, 0);
+}
+
+#[test]
+fn test_create_index_with_data() {
+    let tbl = create_table("t1", vec![("id", INT), ("val", INT)]);
+    insert_into("t1", (1..=1000).map(|i| (i, i % 100)));
+
+    create_index("idx_val", "t1", vec!["val"]);
+
+    // 验证索引包含所有行
+    let idx = get_index("idx_val");
+    assert_eq!(idx.row_count, 1000);
+    assert_eq!(idx.stats.distinct_keys, 100);  // val = 0..99
+}
+
+#[test]
+fn test_create_unique_index_no_duplicates() {
+    let tbl = create_table("t1", vec![("id", INT), ("code", VARCHAR)]);
+    insert_into("t1", vec![(1, "A"), (2, "B"), (3, "C")]);
+
+    let result = create_unique_index("idx_code", "t1", vec!["code"]);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_create_unique_index_with_duplicates() {
+    let tbl = create_table("t1", vec![("id", INT), ("code", VARCHAR)]);
+    insert_into("t1", vec![(1, "A"), (2, "A")]);  // 重复
+
+    let result = create_unique_index("idx_code", "t1", vec!["code"]);
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err(), Error::DuplicateKey));
+}
+```
+
+### 8.2 索引使用测试
+
+```rust
+#[test]
+fn test_index_used_for_equality() {
+    let tbl = create_table_with_index("t1", vec![("id", INT), ("val", INT)], "idx_val");
+    insert_sequential("t1", 1000);
+
+    let plan = explain("SELECT * FROM t1 WHERE val = 500");
+    assert_uses_index(plan, "idx_val");
+}
+
+#[test]
+fn test_index_used_for_range() {
+    let tbl = create_table_with_index("t1", vec![("id", INT), ("val", INT)], "idx_val");
+    insert_sequential("t1", 1000);
+
+    let plan = explain("SELECT * FROM t1 WHERE val > 500 AND val < 600");
+    assert_uses_index(plan, "idx_val");
+}
+
+#[test]
+fn test_index_not_used_for_like_suffix() {
+    let tbl = create_table_with_index("t1", vec![("id", INT), ("name", VARCHAR)], "idx_name");
+    insert_sequential("t1", 1000);
+
+    let plan = explain("SELECT * FROM t1 WHERE name LIKE '%abc'");
+    assert!(!uses_index(plan));  // 后缀匹配无法使用索引
+}
+
+#[test]
+fn test_composite_index_leftmost_prefix() {
+    let tbl = create_table_with_index("t1",
+        vec![("a", INT), ("b", INT), ("c", INT)],
+        "idx_ab",  // CREATE INDEX idx_ab ON t1(a, b)
+    );
+
+    // 使用 leftmost prefix
+    let plan1 = explain("SELECT * FROM t1 WHERE a = 1");
+    assert_uses_index(plan1, "idx_ab");
+
+    // 使用完整索引
+    let plan2 = explain("SELECT * FROM t1 WHERE a = 1 AND b = 2");
+    assert_uses_index(plan2, "idx_ab");
+
+    // 无法使用索引 (非 leftmost)
+    let plan3 = explain("SELECT * FROM t1 WHERE b = 2");
+    assert!(!uses_index(plan3));
+}
+```
+
+### 8.3 索引维护测试
+
+```rust
+#[test]
+fn test_insert_maintains_all_indexes() {
+    let tbl = create_table_with_indexes("t1",
+        vec![("id", INT PK), ("email", VARCHAR UNIQUE), ("age", INT), ("name", INT)],
+        vec!["idx_age", "idx_name"],
+    );
+
+    insert_into("t1", vec![(1, "a@test.com", 25, "Bob")]);
+
+    // 验证所有索引都包含新行
+    assert!(index_contains("idx_age", (25, rid_of(1))));
+    assert!(index_contains("idx_name", ("Bob", rid_of(1))));
+    assert!(index_contains("PRIMARY_KEY", (1, rid_of(1))));
+}
+
+#[test]
+fn test_update_maintains_indexes() {
+    let tbl = create_table_with_indexes("t1",
+        vec![("id", INT PK), ("age", INT)],
+        vec!["idx_age"],
+    );
+    insert_into("t1", vec![(1, 25)]);
+
+    // UPDATE age = 30
+    update_set("t1", vec![("age", 30)], "id = 1");
+
+    // 验证索引: 删除旧值，插入新值
+    assert!(!index_contains("idx_age", (25, rid_of(1))));
+    assert!(index_contains("idx_age", (30, rid_of(1))));
+}
+
+#[test]
+fn test_delete_removes_from_indexes() {
+    let tbl = create_table_with_indexes("t1",
+        vec![("id", INT PK), ("age", INT)],
+        vec!["idx_age"],
+    );
+    insert_into("t1", vec![(1, 25)]);
+
+    delete_from("t1", "id = 1");
+
+    // 验证索引不包含已删除的行
+    assert!(!index_contains("idx_age", (25, rid_of(1))));
+    assert!(!index_contains("PRIMARY_KEY", (1, rid_of(1))));
+}
+```
+
+### 8.4 索引崩溃恢复测试
+
+```rust
+#[test]
+fn test_index_recovery_from_crash() {
+    let tbl = create_table_with_index("t1",
+        vec![("id", INT), ("val", INT)],
+        "idx_val",
+    );
+    insert_sequential("t1", 1000);
+
+    // 崩溃模拟
+    crash_after_index_build();
+
+    // 恢复后验证
+    restart_and_recover();
+
+    let idx = get_index("idx_val");
+    assert_eq!(idx.status, IndexStatus::Active);
+    assert_eq!(idx.row_count, 1000);
+
+    // 验证索引功能正常
+    let result = select_where("t1", "val = 500");
+    assert_eq!(result.len(), 1);
+}
+```
+
+## 9. 覆盖率差距
+
+| 场景 | 当前覆盖 | 目标覆盖 | 差距 |
+|------|---------|---------|------|
+| CREATE INDEX | 75% | 95% | 20% |
+| CREATE UNIQUE INDEX | 70% | 95% | 25% |
+| DROP INDEX | 80% | 95% | 15% |
+| Index Scan (EQ) | 85% | 95% | 10% |
+| Index Scan (Range) | 80% | 95% | 15% |
+| Composite Index | 65% | 90% | 25% |
+| Index Maintenance (Insert) | 75% | 95% | 20% |
+| Index Maintenance (Update) | 70% | 90% | 20% |
+| Index Maintenance (Delete) | 75% | 95% | 20% |
+| Index Statistics | 60% | 90% | 30% |
+| Index Recovery | 55% | 90% | 35% |
+
+## 10. 相关文件
+
+| 文件 | 说明 |
+|------|------|
+| `storage/src/bptree.rs` | B+Tree 索引实现 |
+| `storage/src/index.rs` | 索引管理 |
+| `executor/src/index_executor.rs` | 索引执行器 |
+| `planner/src/optimizer.rs` | 索引选择优化 |
+| `catalog/src/index.rs` | 索引元数据 |
+| `transaction/src/wal.rs` | DDL WAL |
+
+---
+
+*文档版本: v3.0.0*
+*最后更新: 2026-05-11*

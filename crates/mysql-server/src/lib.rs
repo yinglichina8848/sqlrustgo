@@ -5,7 +5,9 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use rcgen::{CertificateParams, KeyPair};
 use sha1::{Digest, Sha1};
+use sqlrustgo::execution_engine::EngineConfig;
 use sqlrustgo::MemoryExecutionEngine;
+use sqlrustgo_distributed::{XaCoordinator, XaRecoverRow};
 use sqlrustgo_storage::{MemoryStorage, StorageEngine};
 use sqlrustgo_types::{SqlError, Value};
 use std::collections::HashMap;
@@ -25,6 +27,7 @@ pub struct SessionState {
     pub transaction_active: bool,
     pub autocommit: bool,
     pub current_database: Option<String>,
+    pub last_insert_id: Option<u64>,
 }
 
 mod packet_type {
@@ -35,6 +38,7 @@ mod packet_type {
     pub const COM_STMT_PREPARE: u8 = 0x16;
     pub const COM_STMT_EXECUTE: u8 = 0x17;
     pub const COM_STMT_CLOSE: u8 = 0x19;
+    pub const COM_MULTI: u8 = 0x11;
 }
 
 mod capability {
@@ -785,6 +789,17 @@ impl Packet {
         w.write_u24::<LittleEndian>(self.length)?;
         w.write_u8(self.sequence)?;
         w.write_all(&self.payload)?;
+        // Note: flush() removed for performance. Caller should flush after
+        // batching multiple packets. See Packet::write_all_to for batched writes.
+        Ok(())
+    }
+
+    /// Write multiple packets with a single flush at the end.
+    /// More efficient than calling write_to repeatedly.
+    pub fn write_all_to<W: Write>(packets: &[Packet], w: &mut W) -> MySqlResult<()> {
+        for pkt in packets {
+            pkt.write_to(w)?;
+        }
         w.flush()?;
         Ok(())
     }
@@ -1091,6 +1106,8 @@ fn value_to_string(v: &Value) -> String {
         Value::Float(f) => format!("{}", f),
         Value::Text(s) => s.clone(),
         Value::Blob(b) => format!("{:?}", b),
+        #[allow(unreachable_patterns)]
+        Value::Geometry(_) => "[Geometry]".into(),
     }
 }
 
@@ -1108,7 +1125,7 @@ fn write_text_row<W: Write>(w: &mut W, row: &[Value]) -> MySqlResult<()> {
     Ok(())
 }
 
-fn write_column_def<W: Write>(w: &mut W, name: &str, sql_type: &str, seq: u8) -> MySqlResult<()> {
+fn build_column_def_packet(name: &str, sql_type: &str, seq: u8) -> Packet {
     let mut p = Vec::new();
     write_lenenc_string(&mut p, b"def").unwrap();
     write_lenenc_string(&mut p, b"").unwrap();
@@ -1129,8 +1146,6 @@ fn write_column_def<W: Write>(w: &mut W, name: &str, sql_type: &str, seq: u8) ->
         sequence: seq,
         payload: p,
     }
-    .write_to(w)?;
-    Ok(())
 }
 
 fn send_result_set<W: Write>(
@@ -1147,50 +1162,132 @@ fn send_result_set<W: Write>(
         rows.len(),
         seq
     );
+
+    // Batch all packets for efficient writing
+    let mut packets: Vec<Packet> = Vec::with_capacity(2 + cols.len() + rows.len());
+
+    // Column count packet
     {
         let mut p = Vec::new();
         write_lenenc_int(&mut p, cols.len() as u64).unwrap();
-        Packet {
+        packets.push(Packet {
             length: p.len() as u32,
             sequence: seq,
             payload: p,
-        }
-        .write_to(w)?;
+        });
         seq = seq.wrapping_add(1);
     }
+
+    // Column definition packets
     for (i, n) in cols.iter().enumerate() {
-        write_column_def(
-            w,
+        let col_packet = build_column_def_packet(
             n,
             ctypes.get(i).map(|s| s.as_str()).unwrap_or("VARCHAR(255)"),
             seq,
-        )?;
+        );
+        packets.push(col_packet);
         seq = seq.wrapping_add(1);
     }
+
+    // EOF packet (if not deprecated)
     if cap & capability::DEPRECATE_EOF == 0 {
-        make_eof_packet(seq, 0x0002).write_to(w)?;
+        packets.push(make_eof_packet(seq, 0x0002));
         seq = seq.wrapping_add(1);
     }
+
+    // Row packets
     for (ri, r) in rows.iter().enumerate() {
         let mut p = Vec::new();
         write_text_row(&mut p, r)?;
         tracing::debug!("Row {}: {} bytes, seq={}", ri, p.len(), seq);
-        Packet {
+        packets.push(Packet {
             length: p.len() as u32,
             sequence: seq,
             payload: p,
-        }
-        .write_to(w)?;
+        });
         seq = seq.wrapping_add(1);
     }
+
+    // Final EOF or OK packet
     if cap & capability::DEPRECATE_EOF == 0 {
-        make_eof_packet(seq, 0x0002).write_to(w)?;
-        seq = seq.wrapping_add(1);
+        packets.push(make_eof_packet(seq, 0x0002));
     } else {
-        make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(w)?;
+        packets.push(make_ok_packet(seq, 0, 0, 0x0002, 0));
+    }
+
+    // Write all packets with single flush
+    Packet::write_all_to(&packets, w)?;
+    seq = seq.wrapping_add(1);
+
+    tracing::info!("send_result_set done: final_seq={}", seq);
+    Ok(seq)
+}
+
+fn send_xa_recover_result_set<W: Write>(
+    w: &mut W,
+    rows: &[XaRecoverRow],
+    mut seq: u8,
+    cap: u32,
+) -> MySqlResult<u8> {
+    tracing::info!(
+        "send_xa_recover_result_set: 4 cols, {} rows, start_seq={}",
+        rows.len(),
+        seq
+    );
+
+    let col_names = ["formatID", "gtrid_length", "bqual_length", "data"];
+    let mut packets: Vec<Packet> = Vec::with_capacity(2 + 4 + rows.len());
+
+    {
+        let mut p = Vec::new();
+        write_lenenc_int(&mut p, 4u64).unwrap();
+        packets.push(Packet {
+            length: p.len() as u32,
+            sequence: seq,
+            payload: p,
+        });
         seq = seq.wrapping_add(1);
     }
-    tracing::info!("send_result_set done: final_seq={}", seq);
+
+    packets.push(build_column_def_packet(col_names[0], "BIGINT", seq));
+    seq = seq.wrapping_add(1);
+    packets.push(build_column_def_packet(col_names[1], "BIGINT", seq));
+    seq = seq.wrapping_add(1);
+    packets.push(build_column_def_packet(col_names[2], "BIGINT", seq));
+    seq = seq.wrapping_add(1);
+    packets.push(build_column_def_packet(col_names[3], "BINARY(64)", seq));
+    seq = seq.wrapping_add(1);
+
+    if cap & capability::DEPRECATE_EOF == 0 {
+        packets.push(make_eof_packet(seq, 0x0002));
+        seq = seq.wrapping_add(1);
+    }
+
+    for (ri, row) in rows.iter().enumerate() {
+        let mut p = Vec::new();
+        write_lenenc_int(&mut p, row.format_id as u64)?;
+        write_lenenc_int(&mut p, row.gtrid_length as u64)?;
+        write_lenenc_int(&mut p, row.bqual_length as u64)?;
+        write_lenenc_string(&mut p, &row.data)?;
+        tracing::debug!("XA recover row {}: {} bytes, seq={}", ri, p.len(), seq);
+        packets.push(Packet {
+            length: p.len() as u32,
+            sequence: seq,
+            payload: p,
+        });
+        seq = seq.wrapping_add(1);
+    }
+
+    if cap & capability::DEPRECATE_EOF == 0 {
+        packets.push(make_eof_packet(seq, 0x0002));
+    } else {
+        packets.push(make_ok_packet(seq, 0, 0, 0x0002, 0));
+    }
+
+    Packet::write_all_to(&packets, w)?;
+    seq = seq.wrapping_add(1);
+
+    tracing::info!("send_xa_recover_result_set done: final_seq={}", seq);
     Ok(seq)
 }
 
@@ -1248,6 +1345,268 @@ fn count_placeholders(sql: &str) -> u16 {
     sql.chars().filter(|&c| c == '?').count() as u16
 }
 
+fn parse_stmt_execute_params(payload: &[u8], param_count: usize) -> Vec<Vec<u8>> {
+    // COM_STMT_EXECUTE binary protocol layout:
+    //   [4 bytes] statement_id
+    //   [1 byte]  flags (0x00 = CURSOR_TYPE_NO_CURSOR)
+    //   [4 bytes] iteration_count (always 1)
+    //   [ceil(param_count/8) bytes] null_bitmap
+    //   [1 byte]  new_params_bound_flag
+    //   IF new_params_bound_flag == 0x01:
+    //     [param_count * 2 bytes] type definitions (type + unsigned_flag)
+    //     [variable] values (encoding depends on type)
+    if payload.len() < 9 || param_count == 0 {
+        return Vec::new();
+    }
+
+    let null_bitmap_len = param_count.div_ceil(8);
+    // Fixed header ends at byte 9 (4+1+4), then null_bitmap follows
+    let null_bitmap_end = 9 + null_bitmap_len;
+
+    if payload.len() <= null_bitmap_end {
+        return vec![Vec::new(); param_count];
+    }
+
+    // Read new_params_bound_flag to determine if type info follows
+    let new_params_bound_flag = payload[null_bitmap_end];
+
+    // Calculate where value data and type info start based on whether type info is present
+    let type_start = if new_params_bound_flag == 0x01 {
+        // Type info present: skip flag byte + type bytes
+        null_bitmap_end + 1
+    } else {
+        // No type info: values directly follow null_bitmap
+        null_bitmap_end + 1
+    };
+
+    let value_start = if new_params_bound_flag == 0x01 {
+        // Type info present: skip flag byte + type bytes
+        null_bitmap_end + 1 + param_count * 2
+    } else {
+        // No type info: values directly follow null_bitmap (skip flag byte only)
+        null_bitmap_end + 1
+    };
+
+    if payload.len() < value_start {
+        return vec![Vec::new(); param_count];
+    }
+
+    let null_bitmap = &payload[9..null_bitmap_end];
+    let mut params: Vec<Vec<u8>> = Vec::with_capacity(param_count);
+    let mut pos = value_start;
+
+    for i in 0..param_count {
+        let byte_idx = i / 8;
+        let bit_idx = i % 8;
+        let is_null = (null_bitmap.get(byte_idx).unwrap_or(&0) >> bit_idx) & 1 == 1;
+
+        if is_null {
+            params.push(Vec::new());
+            continue;
+        }
+
+        if pos >= payload.len() {
+            params.push(Vec::new());
+            continue;
+        }
+
+        // Read 2-byte type definition: [type_byte, unsigned_flag] (only when new_params_bound_flag == 0x01)
+        let param_type = if new_params_bound_flag == 0x01 {
+            let type_base = type_start + i * 2;
+            payload.get(type_base).copied().unwrap_or(0)
+        } else {
+            // When no type info, assume LONG (i32) as default
+            0x03
+        };
+
+        // Parse value based on MySQL binary protocol encoding
+        match param_type {
+            // MYSQL_TYPE_TINY (1 byte signed)
+            0x01 => {
+                if pos < payload.len() {
+                    let val = (payload[pos] as i8).to_string().into_bytes();
+                    params.push(val);
+                    pos += 1;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_SHORT (2 bytes signed, little-endian)
+            0x02 => {
+                if pos + 2 <= payload.len() {
+                    let val = i16::from_le_bytes([payload[pos], payload[pos + 1]])
+                        .to_string()
+                        .into_bytes();
+                    params.push(val);
+                    pos += 2;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_LONG (4 bytes signed, little-endian)
+            0x03 => {
+                if pos + 4 <= payload.len() {
+                    let val = i32::from_le_bytes([
+                        payload[pos],
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                    ])
+                    .to_string()
+                    .into_bytes();
+                    params.push(val);
+                    pos += 4;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_FLOAT (4 bytes IEEE 754, little-endian)
+            0x04 => {
+                if pos + 4 <= payload.len() {
+                    let val = f32::from_le_bytes([
+                        payload[pos],
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                    ])
+                    .to_string()
+                    .into_bytes();
+                    params.push(val);
+                    pos += 4;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_DOUBLE (8 bytes IEEE 754, little-endian)
+            0x05 => {
+                if pos + 8 <= payload.len() {
+                    let val = f64::from_le_bytes([
+                        payload[pos],
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                        payload[pos + 4],
+                        payload[pos + 5],
+                        payload[pos + 6],
+                        payload[pos + 7],
+                    ])
+                    .to_string()
+                    .into_bytes();
+                    params.push(val);
+                    pos += 8;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_LONGLONG (8 bytes signed, little-endian)
+            0x08 => {
+                if pos + 8 <= payload.len() {
+                    let val = i64::from_le_bytes([
+                        payload[pos],
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                        payload[pos + 4],
+                        payload[pos + 5],
+                        payload[pos + 6],
+                        payload[pos + 7],
+                    ])
+                    .to_string()
+                    .into_bytes();
+                    params.push(val);
+                    pos += 8;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_INT24 / MEDIUMINT (4 bytes signed, same as LONG)
+            0x09 => {
+                if pos + 4 <= payload.len() {
+                    let val = i32::from_le_bytes([
+                        payload[pos],
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                    ])
+                    .to_string()
+                    .into_bytes();
+                    params.push(val);
+                    pos += 4;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // MYSQL_TYPE_DATE, TIME, DATETIME, TIMESTAMP
+            // Format: [1 byte length] [data bytes]
+            0x0a..=0x0d => {
+                if pos < payload.len() {
+                    let len = payload[pos] as usize;
+                    pos += 1;
+                    if pos + len <= payload.len() {
+                        params.push(payload[pos..pos + len].to_vec());
+                        pos += len;
+                    } else {
+                        params.push(Vec::new());
+                    }
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            // String types: VARCHAR(0x0f), BLOB(0xfc), VARSTRING(0xfd), STRING(0xfe)
+            // Encoded as: net_store_length(data_len) + data_bytes
+            0x0f | 0xfc | 0xfd | 0xfe => {
+                if pos >= payload.len() {
+                    params.push(Vec::new());
+                    continue;
+                }
+                // Read variable-length length prefix
+                let first = payload[pos];
+                let (str_len, consumed): (usize, usize) = if first < 0xfb {
+                    (first as usize, 1)
+                } else if first == 0xfc && pos + 3 <= payload.len() {
+                    (
+                        u16::from_le_bytes([payload[pos + 1], payload[pos + 2]]) as usize,
+                        3,
+                    )
+                } else if first == 0xfd && pos + 4 <= payload.len() {
+                    let v = (payload[pos + 1] as u32)
+                        | ((payload[pos + 2] as u32) << 8)
+                        | ((payload[pos + 3] as u32) << 16);
+                    (v as usize, 4)
+                } else if first == 0xfe && pos + 9 <= payload.len() {
+                    let v = u64::from_le_bytes([
+                        payload[pos + 1],
+                        payload[pos + 2],
+                        payload[pos + 3],
+                        payload[pos + 4],
+                        payload[pos + 5],
+                        payload[pos + 6],
+                        payload[pos + 7],
+                        payload[pos + 8],
+                    ]);
+                    (v as usize, 9)
+                } else {
+                    params.push(Vec::new());
+                    continue;
+                };
+                pos += consumed;
+                if pos + str_len <= payload.len() {
+                    params.push(payload[pos..pos + str_len].to_vec());
+                    pos += str_len;
+                } else {
+                    params.push(Vec::new());
+                }
+            }
+            _ => {
+                // Unknown type - push NULL
+                params.push(Vec::new());
+            }
+        }
+    }
+
+    params
+}
+
 fn replace_placeholders(sql: &str, params: &[Vec<u8>]) -> String {
     let mut result = sql.to_string();
     for param in params.iter() {
@@ -1265,31 +1624,49 @@ fn replace_placeholders(sql: &str, params: &[Vec<u8>]) -> String {
 }
 
 fn extract_table_name(sql: &str) -> Option<String> {
-    let u = sql.trim().to_uppercase();
-    if let Some(rest) = u.strip_prefix("SELECT") {
-        if let Some(from_pos) = rest.find("FROM") {
-            let after_from = rest[from_pos + 4..].trim();
-            let table_end = after_from
-                .find(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == ')')
-                .unwrap_or(after_from.len());
-            let table = after_from[..table_end].trim();
-            if !table.is_empty() {
-                let orig_after = sql.to_uppercase().find("FROM").unwrap();
-                let orig_from = sql[orig_after + 4..].trim();
-                let orig_end = orig_from
-                    .find(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == ')')
-                    .unwrap_or(orig_from.len());
-                return Some(orig_from[..orig_end].trim().to_string());
-            }
-        }
+    let trimmed = sql.trim();
+    let upper = trimmed.to_uppercase();
+    // Find "SELECT" position in uppercased string
+    let select_pos = upper.find("SELECT")?;
+    // Find "FROM" after SELECT in uppercased string
+    let from_pos = upper[select_pos..].find("FROM")? + select_pos;
+    // Extract from original string using these positions
+    let after_from = trimmed[from_pos + 4..].trim();
+    let table_end = after_from
+        .find(|c: char| c.is_whitespace() || c == ',' || c == ';' || c == ')')
+        .unwrap_or(after_from.len());
+    let table = after_from[..table_end].trim();
+    if table.is_empty() {
+        None
+    } else {
+        Some(table.to_string())
     }
-    None
 }
 
 fn extract_column_names(sql: &str, storage: &Arc<RwLock<MemoryStorage>>) -> Vec<String> {
-    let u = sql.trim().to_uppercase();
-    if u.starts_with("SHOW") || u.starts_with("DESCRIBE") || u.starts_with("EXPLAIN") {
-        return vec![];
+    // Fast path: check first char to avoid allocation
+    let trimmed = sql.trim();
+    match trimmed.as_bytes().first().copied() {
+        Some(b'S') | Some(b's') => {
+            if trimmed.starts_with("SHOW") || trimmed.starts_with("show") {
+                return vec![];
+            }
+        }
+        Some(b'D') | Some(b'd') => {
+            if trimmed.starts_with("DESCRIBE")
+                || trimmed.starts_with("describe")
+                || trimmed.starts_with("DESC")
+                || trimmed.starts_with("desc")
+            {
+                return vec![];
+            }
+        }
+        Some(b'E') | Some(b'e') => {
+            if trimmed.starts_with("EXPLAIN") || trimmed.starts_with("explain") {
+                return vec![];
+            }
+        }
+        _ => {}
     }
     if let Some(table_name) = extract_table_name(sql) {
         if let Ok(storage_guard) = storage.try_read() {
@@ -1348,18 +1725,20 @@ fn execute_select(
     Ok((cols, ctypes, r.rows))
 }
 
-fn execute_write(sql: &str, engine: &mut MemoryExecutionEngine) -> MySqlResult<usize> {
-    Ok(engine.execute(sql).map_err(MySqlError::from)?.affected_rows)
+fn execute_write(
+    sql: &str,
+    engine: &mut MemoryExecutionEngine,
+) -> MySqlResult<(usize, Option<u64>)> {
+    let result = engine.execute(sql).map_err(MySqlError::from)?;
+    Ok((result.affected_rows, result.last_insert_id))
 }
 
 fn execute_write_statement(
     stmt: sqlrustgo_parser::parser::Statement,
     engine: &mut MemoryExecutionEngine,
-) -> MySqlResult<usize> {
-    Ok(engine
-        .execute_statement(stmt)
-        .map_err(MySqlError::from)?
-        .affected_rows)
+) -> MySqlResult<(usize, Option<u64>)> {
+    let result = engine.execute_statement(stmt).map_err(MySqlError::from)?;
+    Ok((result.affected_rows, result.last_insert_id))
 }
 
 #[allow(clippy::type_complexity)]
@@ -1384,11 +1763,25 @@ fn execute_select_statement(
 }
 
 fn is_select(sql: &str) -> bool {
-    let u = sql.trim().to_uppercase();
-    u.starts_with("SELECT")
-        || u.starts_with("SHOW")
-        || u.starts_with("DESCRIBE")
-        || u.starts_with("EXPLAIN")
+    let trimmed = sql.trim();
+    // Fast path: check first char to avoid allocation in common case
+    // MySQL protocol typically sends uppercase commands
+    match trimmed.as_bytes().first().copied() {
+        Some(b'S') | Some(b's') => {
+            trimmed.starts_with("SELECT")
+                || trimmed.starts_with("select")
+                || trimmed.starts_with("SHOW")
+                || trimmed.starts_with("show")
+        }
+        Some(b'D') | Some(b'd') => {
+            trimmed.starts_with("DESCRIBE")
+                || trimmed.starts_with("describe")
+                || trimmed.starts_with("DESC")
+                || trimmed.starts_with("desc")
+        }
+        Some(b'E') | Some(b'e') => trimmed.starts_with("EXPLAIN") || trimmed.starts_with("explain"),
+        _ => false,
+    }
 }
 
 const SERVER_MORE_RESULTS_EXISTS: u16 = 0x0008;
@@ -1444,8 +1837,9 @@ fn execute_transaction_queries<S: Read + Write>(
             }
         } else {
             match execute_write(stmt, engine) {
-                Ok(a) => {
-                    make_ok_packet(seq, a as u64, 0, status, 0).write_to(stream)?;
+                Ok((a, last_id)) => {
+                    make_ok_packet(seq, a as u64, last_id.unwrap_or(0), status, 0)
+                        .write_to(stream)?;
                     seq = seq.wrapping_add(1);
                 }
                 Err(e) => {
@@ -1460,20 +1854,43 @@ fn execute_transaction_queries<S: Read + Write>(
 }
 
 fn is_transaction_cmd(sql: &str) -> bool {
-    let u = sql.trim().to_uppercase();
-    u == "BEGIN" || u == "COMMIT" || u == "ROLLBACK" || u == "START TRANSACTION"
+    let trimmed = sql.trim();
+    // Fast path: check first char to avoid allocation
+    match trimmed.as_bytes().first().copied() {
+        Some(b'B') | Some(b'b') => trimmed.eq_ignore_ascii_case("BEGIN"),
+        Some(b'C') | Some(b'c') => trimmed.eq_ignore_ascii_case("COMMIT"),
+        Some(b'R') | Some(b'r') => trimmed.eq_ignore_ascii_case("ROLLBACK"),
+        Some(b'S') | Some(b's') => trimmed.eq_ignore_ascii_case("START TRANSACTION"),
+        _ => false,
+    }
+}
+
+fn is_xa_recover_cmd(sql: &str) -> bool {
+    let trimmed = sql.trim();
+    // Fast path: check first char to avoid allocation
+    match trimmed.as_bytes().first().copied() {
+        Some(b'X') | Some(b'x') => trimmed.to_uppercase().starts_with("XA RECOVER"),
+        _ => false,
+    }
 }
 
 pub fn parse_transaction_command(sql: &str) -> TransactionCommand {
-    let u = sql.trim().to_uppercase();
-    if u == "BEGIN" || u == "START TRANSACTION" {
-        TransactionCommand::Begin
-    } else if u == "COMMIT" {
-        TransactionCommand::Commit
-    } else if u == "ROLLBACK" {
-        TransactionCommand::Rollback
-    } else {
-        TransactionCommand::None
+    let trimmed = sql.trim();
+    // Fast path: check first char to avoid allocation
+    match trimmed.as_bytes().first().copied() {
+        Some(b'B') | Some(b'b') if trimmed.eq_ignore_ascii_case("BEGIN") => {
+            TransactionCommand::Begin
+        }
+        Some(b'S') | Some(b's') if trimmed.eq_ignore_ascii_case("START TRANSACTION") => {
+            TransactionCommand::Begin
+        }
+        Some(b'C') | Some(b'c') if trimmed.eq_ignore_ascii_case("COMMIT") => {
+            TransactionCommand::Commit
+        }
+        Some(b'R') | Some(b'r') if trimmed.eq_ignore_ascii_case("ROLLBACK") => {
+            TransactionCommand::Rollback
+        }
+        _ => TransactionCommand::None,
     }
 }
 
@@ -1510,6 +1927,7 @@ fn do_command_loop<S: Read + Write>(
     addr: SocketAddr,
     storage: Arc<RwLock<MemoryStorage>>,
     engine: &mut MemoryExecutionEngine,
+    xa_coordinator: Arc<RwLock<XaCoordinator>>,
     cap: u32,
     mut seq: u8,
     ps_manager: &mut PreparedStatementManager,
@@ -1549,14 +1967,79 @@ fn do_command_loop<S: Read + Write>(
                 }
                 if is_transaction_cmd(&q) {
                     match parse_transaction_command(&q) {
-                        TransactionCommand::Begin => session.transaction_active = true,
-                        TransactionCommand::Commit | TransactionCommand::Rollback => {
-                            session.transaction_active = false
+                        TransactionCommand::Begin => {
+                            if let Err(e) = engine.begin_transaction(
+                                sqlrustgo_transaction::IsolationLevel::SnapshotIsolation,
+                            ) {
+                                make_err_packet(
+                                    seq,
+                                    2000,
+                                    "HY000",
+                                    &format!("Begin failed: {}", e),
+                                )
+                                .write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                continue;
+                            }
+                            session.transaction_active = true;
+                        }
+                        TransactionCommand::Commit => {
+                            if let Err(e) = engine.commit_transaction() {
+                                make_err_packet(
+                                    seq,
+                                    2000,
+                                    "HY000",
+                                    &format!("Commit failed: {}", e),
+                                )
+                                .write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                continue;
+                            }
+                            session.transaction_active = false;
+                        }
+                        TransactionCommand::Rollback => {
+                            if let Err(e) = engine.rollback_transaction() {
+                                make_err_packet(
+                                    seq,
+                                    2000,
+                                    "HY000",
+                                    &format!("Rollback failed: {}", e),
+                                )
+                                .write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                continue;
+                            }
+                            session.transaction_active = false;
                         }
                         TransactionCommand::None => {}
                     }
                     make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
                     seq = seq.wrapping_add(1);
+                    continue;
+                }
+                if is_xa_recover_cmd(&q) {
+                    match xa_coordinator.read() {
+                        Ok(coordinator) => match coordinator.xa_recover_mysql_format() {
+                            Ok(rows) => {
+                                seq = send_xa_recover_result_set(stream, &rows, seq, cap)?;
+                            }
+                            Err(e) => {
+                                make_err_packet(
+                                    seq,
+                                    2000,
+                                    "HY000",
+                                    &format!("XA recover error: {}", e),
+                                )
+                                .write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                            }
+                        },
+                        Err(e) => {
+                            make_err_packet(seq, 2000, "HY000", &format!("Lock error: {}", e))
+                                .write_to(stream)?;
+                            seq = seq.wrapping_add(1);
+                        }
+                    }
                     continue;
                 }
                 if session.transaction_active {
@@ -1590,13 +2073,71 @@ fn do_command_loop<S: Read + Write>(
                     }
                 } else {
                     match execute_write(&q, engine) {
-                        Ok(a) => {
-                            make_ok_packet(seq, a as u64, 0, 0x0002, 0).write_to(stream)?;
+                        Ok((a, last_id)) => {
+                            make_ok_packet(seq, a as u64, last_id.unwrap_or(0), 0x0002, 0)
+                                .write_to(stream)?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(e) => {
                             make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
                             seq = seq.wrapping_add(1);
+                        }
+                    }
+                }
+            }
+            packet_type::COM_MULTI => {
+                let q = String::from_utf8_lossy(payload)
+                    .trim_end_matches('\0')
+                    .trim()
+                    .to_string();
+                tracing::info!("COM_MULTI [{}]: {}", addr, q);
+
+                for (idx, stmt) in q.split(';').enumerate() {
+                    let stmt = stmt.trim();
+                    if stmt.is_empty() {
+                        continue;
+                    }
+
+                    tracing::info!("COM_MULTI[{}]: {}", idx, stmt);
+
+                    if is_select(stmt) {
+                        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            execute_select(stmt, engine, &storage)
+                        })) {
+                            Ok(Ok((c, t, r))) => {
+                                seq = send_result_set(stream, &c, &t, &r, seq, cap)?;
+                            }
+                            Ok(Err(e)) => {
+                                let code = match &e {
+                                    MySqlError::Sql(s) if s.contains("not found") => 1146,
+                                    MySqlError::Sql(_) => 1064,
+                                    _ => 2000,
+                                };
+                                make_err_packet(seq, code, "42000", &e.to_string())
+                                    .write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                break;
+                            }
+                            Err(_) => {
+                                make_err_packet(seq, 2000, "HY000", "Internal error")
+                                    .write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                break;
+                            }
+                        }
+                    } else {
+                        match execute_write(stmt, engine) {
+                            Ok((a, last_id)) => {
+                                make_ok_packet(seq, a as u64, last_id.unwrap_or(0), 0x0002, 0)
+                                    .write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                            }
+                            Err(e) => {
+                                make_err_packet(seq, 1064, "42000", &e.to_string())
+                                    .write_to(stream)?;
+                                seq = seq.wrapping_add(1);
+                                break;
+                            }
                         }
                     }
                 }
@@ -1700,7 +2241,7 @@ fn do_command_loop<S: Read + Write>(
                 if column_count > 0 {
                     for i in 0..column_count {
                         let col_name = format!("col_{}", i + 1);
-                        write_column_def(stream, &col_name, "VARCHAR(255)", seq)?;
+                        build_column_def_packet(&col_name, "VARCHAR(255)", seq).write_to(stream)?;
                         seq = seq.wrapping_add(1);
                     }
                     if cap & capability::DEPRECATE_EOF != 0 {
@@ -1740,25 +2281,26 @@ fn do_command_loop<S: Read + Write>(
                 };
                 let stmt_sql = &stmt_info.sql;
                 let stmt_col_count = stmt_info.column_count;
+                let param_count = stmt_info.param_count as usize;
 
-                let params: Vec<Vec<u8>> = Vec::new();
-                let _final_sql = replace_placeholders(stmt_sql, &params);
+                let params = parse_stmt_execute_params(payload, param_count);
+                let final_sql = replace_placeholders(stmt_sql, &params);
 
-                tracing::info!("STMT EXECUTE (id={}): {}", stmt_id, stmt_sql);
+                tracing::info!("STMT EXECUTE (id={}): {}", stmt_id, final_sql);
 
-                if is_select(stmt_sql) {
+                if is_select(&final_sql) {
                     let result = if let Some(ref parsed_stmt) = stmt_info.parsed_stmt {
                         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                             execute_select_statement(
                                 parsed_stmt.clone(),
-                                stmt_sql,
+                                &final_sql,
                                 engine,
                                 &storage,
                             )
                         }))
                     } else {
                         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            execute_select(stmt_sql, engine, &storage)
+                            execute_select(&final_sql, engine, &storage)
                         }))
                     };
                     match result {
@@ -1789,11 +2331,12 @@ fn do_command_loop<S: Read + Write>(
                     let write_result = if let Some(ref parsed_stmt) = stmt_info.parsed_stmt {
                         execute_write_statement(parsed_stmt.clone(), engine)
                     } else {
-                        execute_write(stmt_sql, engine)
+                        execute_write(&final_sql, engine)
                     };
                     match write_result {
-                        Ok(a) => {
-                            make_ok_packet(seq, a as u64, 0, 0x0002, 0).write_to(stream)?;
+                        Ok((a, last_id)) => {
+                            make_ok_packet(seq, a as u64, last_id.unwrap_or(0), 0x0002, 0)
+                                .write_to(stream)?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(e) => {
@@ -1843,6 +2386,11 @@ fn handle_connection(
 
     if let Err(e) = make_handshake_packet(0, &scramble).write_to(&mut &stream) {
         tracing::error!("Handshake send: {}", e);
+        return;
+    }
+    // Flush immediately - client needs handshake packet before responding
+    if let Err(e) = stream.flush() {
+        tracing::error!("Handshake flush: {}", e);
         return;
     }
 
@@ -1922,13 +2470,18 @@ fn handle_connection(
             make_ok_packet(3, 0, 0, 0x0002, 0).write_to(&mut tls).ok();
             tracing::info!("Starting command loop, seq=4");
             let mut ps_manager = PreparedStatementManager::new();
-            let mut engine = MemoryExecutionEngine::new(storage.clone());
+            #[allow(deprecated)]
+            let mut engine =
+                MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
             let mut session = SessionState::default();
+            let xa_coordinator: Arc<RwLock<XaCoordinator>> =
+                Arc::new(RwLock::new(XaCoordinator::new()));
             let _ = do_command_loop(
                 &mut tls,
                 addr,
                 storage,
                 &mut engine,
+                xa_coordinator,
                 resp.capability_flags,
                 4,
                 &mut ps_manager,
@@ -1975,13 +2528,17 @@ fn handle_connection(
         .ok();
     tracing::info!("Starting command loop, seq=3");
     let mut ps_manager = PreparedStatementManager::new();
-    let mut engine = MemoryExecutionEngine::new(storage.clone());
+    #[allow(deprecated)]
+    let mut engine =
+        MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
     let mut session = SessionState::default();
+    let xa_coordinator: Arc<RwLock<XaCoordinator>> = Arc::new(RwLock::new(XaCoordinator::new()));
     let _ = do_command_loop(
         &mut &stream,
         addr,
         storage,
         &mut engine,
+        xa_coordinator,
         resp.capability_flags,
         3,
         &mut ps_manager,
@@ -1998,13 +2555,23 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
 
     let storage: Arc<RwLock<MemoryStorage>> = Arc::new(RwLock::new(MemoryStorage::new()));
     {
-        let mut eng = MemoryExecutionEngine::new(storage.clone());
+        #[allow(deprecated)]
+        let mut eng =
+            MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
         for sql in ["CREATE TABLE content (hash TEXT PRIMARY KEY, doc TEXT NOT NULL, created_at TEXT NOT NULL)",
             "CREATE TABLE vectors (hash_seq TEXT PRIMARY KEY, hash TEXT NOT NULL, embedding TEXT NOT NULL, created_at TEXT NOT NULL)",
             "CREATE TABLE documents (id TEXT PRIMARY KEY, title TEXT, content TEXT, created_at TEXT)"] {
             if let Err(e) = eng.execute(sql) { tracing::warn!("Init: {}", e); }
         }
     }
+
+    // TODO: Event Scheduler Integration
+    // - Requires global Catalog with Event storage
+    // - Requires Catalog-backed MemoryExecutionEngine
+    // - EventSchedulerService should be spawned as async task
+    // - See crates/server/src/event_scheduler.rs for EventSchedulerService
+    tracing::info!("Event scheduler: requires global Catalog integration");
+
     let user_store = UserStore::new();
     for s in listener.incoming() {
         match s {

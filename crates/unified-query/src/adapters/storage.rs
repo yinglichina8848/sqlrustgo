@@ -114,12 +114,15 @@ impl StorageAdapter {
                     data_type: dtype.to_string(),
                     nullable: true,
                     primary_key: false,
+                    auto_increment: false,
                 })
                 .collect(),
             foreign_keys: vec![],
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
 
         // Create table schema
@@ -149,6 +152,9 @@ fn sql_value_to_json(value: SqlValue) -> Value {
             .unwrap_or(Value::Null),
         SqlValue::Text(s) => Value::String(s),
         SqlValue::Blob(b) => Value::String(format!("[blob: {} bytes]", b.len())),
+        SqlValue::Geometry(g) => Value::String(g.to_string()),
+        #[allow(unreachable_patterns)]
+        _ => Value::Null,
     }
 }
 

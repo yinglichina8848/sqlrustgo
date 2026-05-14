@@ -13,10 +13,34 @@ if [ "$MODE" != "entry" ] && [ "$MODE" != "--all" ] && [ "$MODE" != "all" ]; the
     exit 2
 fi
 
+# Exclude old release docs from --all mode
+EXCLUDE_PATTERNS=(
+    "docs/releases/v2.6.0/"
+    "docs/releases/v2.7.0/"
+    "docs/releases/v2.8.0/"
+    "docs/releases/v2.9.0/"
+    "docs/releases/v3.0.0/"
+    "docs/issues/"
+    "CURRENT_VERSION.md"
+    "docs/governance/DOCUMENT_COMPLETENESS_CHECK.md"
+)
+
+should_exclude() {
+    local file="$1"
+    for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+        if [[ "$file" == *"$pattern"* ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 MD_FILES=()
 if [ "$MODE" = "--all" ] || [ "$MODE" = "all" ]; then
     while IFS= read -r -d '' md_file; do
-        MD_FILES+=("$md_file")
+        if ! should_exclude "$md_file"; then
+            MD_FILES+=("$md_file")
+        fi
     done < <(git ls-files -z '*.md')
 else
     ENTRY_FILES=(

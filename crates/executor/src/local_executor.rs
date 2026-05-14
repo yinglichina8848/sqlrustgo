@@ -47,6 +47,120 @@ impl MemoryTracker {
     }
 }
 
+/// Streaming aggregation accumulator - reduces memory from O(n_rows) to O(n_groups)
+struct GroupAccumulator {
+    count: i64,
+    sum: i64,
+    min_val: Option<i64>,
+    max_val: Option<i64>,
+    distinct_values: std::collections::HashSet<String>,
+}
+
+impl GroupAccumulator {
+    fn new() -> Self {
+        Self {
+            count: 0,
+            sum: 0,
+            min_val: None,
+            max_val: None,
+            distinct_values: std::collections::HashSet::new(),
+        }
+    }
+
+    fn accumulate(&mut self, func: &AggregateFunction, value: &Value) {
+        match func {
+            AggregateFunction::Count => {
+                self.count += 1;
+            }
+            AggregateFunction::Sum => {
+                if let Value::Integer(n) = value {
+                    self.sum += n;
+                }
+            }
+            AggregateFunction::Avg => {
+                if let Value::Integer(n) = value {
+                    self.sum += n;
+                    self.count += 1;
+                }
+            }
+            AggregateFunction::Min => {
+                if let Value::Integer(n) = value {
+                    match self.min_val {
+                        Some(m) if *n < m => self.min_val = Some(*n),
+                        None => self.min_val = Some(*n),
+                        _ => {}
+                    }
+                }
+            }
+            AggregateFunction::Max => {
+                if let Value::Integer(n) = value {
+                    match self.max_val {
+                        Some(m) if *n > m => self.max_val = Some(*n),
+                        None => self.max_val = Some(*n),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    fn add_distinct_value(&mut self, value: &Value) {
+        self.distinct_values.insert(format!("{:?}", value));
+    }
+
+    fn finalize(&self, func: &AggregateFunction) -> Value {
+        match func {
+            AggregateFunction::Count => Value::Integer(self.count),
+            AggregateFunction::Sum => Value::Integer(self.sum),
+            AggregateFunction::Avg => {
+                if self.count > 0 {
+                    Value::Integer(self.sum / self.count)
+                } else {
+                    Value::Null
+                }
+            }
+            AggregateFunction::Min => self.min_val.map(Value::Integer).unwrap_or(Value::Null),
+            AggregateFunction::Max => self.max_val.map(Value::Integer).unwrap_or(Value::Null),
+        }
+    }
+
+    fn finalize_distinct(&self, func: &AggregateFunction) -> Value {
+        let distinct_count = self.distinct_values.len() as i64;
+        match func {
+            AggregateFunction::Count => Value::Integer(distinct_count),
+            AggregateFunction::Sum | AggregateFunction::Avg => {
+                let mut sum: i64 = 0;
+                for v in &self.distinct_values {
+                    if let Ok(n) = v.parse::<i64>() {
+                        sum += n;
+                    }
+                }
+                if distinct_count > 0 {
+                    Value::Integer(sum / distinct_count)
+                } else {
+                    Value::Null
+                }
+            }
+            AggregateFunction::Min => {
+                self.distinct_values
+                    .iter()
+                    .filter_map(|v| v.parse::<i64>().ok())
+                    .min()
+                    .map(Value::Integer)
+                    .unwrap_or(Value::Null)
+            }
+            AggregateFunction::Max => {
+                self.distinct_values
+                    .iter()
+                    .filter_map(|v| v.parse::<i64>().ok())
+                    .max()
+                    .map(Value::Integer)
+                    .unwrap_or(Value::Null)
+            }
+        }
+    }
+}
+
 use parking_lot::RwLock;use query_stats::SlowQueryConfig;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -173,6 +287,7 @@ impl<'a> LocalExecutor<'a> {
                 "Sort" => self.execute_sort(plan),
                 "Limit" => self.execute_limit(plan),
                 "Delete" => self.execute_delete(plan),
+                "Merge" => self.execute_merge(plan),
                 _ => Ok(ExecutorResult::empty()),
             }?;
             let duration_ms = start.elapsed().as_millis() as u64;
@@ -528,8 +643,10 @@ impl<'a> LocalExecutor<'a> {
 
             Ok(ExecutorResult::empty())
         } else {
-            let mut groups: std::collections::HashMap<Vec<Value>, Vec<Vec<Value>>> =
-                std::collections::HashMap::new();
+            let mut groups: std::collections::HashMap<
+                Vec<Value>,
+                GroupAccumulator,
+            > = std::collections::HashMap::new();
 
             for row in &child_result.rows {
                 let key: Vec<Value> = group_expr
@@ -539,34 +656,54 @@ impl<'a> LocalExecutor<'a> {
                             .unwrap_or(Value::Null)
                     })
                     .collect();
-                groups.entry(key).or_default().push(row.clone());
-            }
 
-            let mut results = vec![];
-            for (key, group_rows) in groups {
-                let mut row = key;
+                let accumulator = groups.entry(key).or_insert_with(GroupAccumulator::new);
+
                 for agg_expr in aggregate_expr {
                     if let sqlrustgo_planner::Expr::AggregateFunction {
                         func,
                         args,
+                        distinct: false,
+                    } = agg_expr
+                    {
+                        let value = if let Some(arg) = args.first() {
+                            arg.evaluate(row, children[0].schema()).unwrap_or(Value::Null)
+                        } else {
+                            Value::Integer(1)
+                        };
+                        accumulator.accumulate(func, &value);
+                    }
+                    if let sqlrustgo_planner::Expr::AggregateFunction {
+                        func: _,
+                        args: _,
+                        distinct: true,
+                    } = agg_expr
+                    {
+                        let value = if let Some(arg) = agg_expr.get_arg() {
+                            arg.evaluate(row, children[0].schema()).unwrap_or(Value::Null)
+                        } else {
+                            Value::Null
+                        };
+                        accumulator.add_distinct_value(&value);
+                    }
+                }
+            }
+
+            let mut results = vec![];
+            let mut results = vec![];
+            for (key, mut accumulator) in groups {
+                let mut row = key;
+                for agg_expr in aggregate_expr {
+                    if let sqlrustgo_planner::Expr::AggregateFunction {
+                        func,
+                        args: _,
                         distinct,
                     } = agg_expr
                     {
-                        let values: Vec<Value> = group_rows
-                            .iter()
-                            .map(|r| {
-                                if let Some(arg) = args.first() {
-                                    arg.evaluate(r, children[0].schema()).unwrap_or(Value::Null)
-                                } else {
-                                    Value::Integer(group_rows.len() as i64)
-                                }
-                            })
-                            .collect();
-
                         let result = if *distinct {
-                            self.compute_aggregate_distinct(func, &values)
+                            accumulator.finalize_distinct(func)
                         } else {
-                            self.compute_aggregate(func, &values)
+                            accumulator.finalize(func)
                         };
                         row.push(result);
                     }
@@ -1255,26 +1392,129 @@ impl<'a> LocalExecutor<'a> {
     /// Execute delete
     fn execute_delete(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
         use sqlrustgo_planner::DeleteExec;
-        
+
         let delete_exec = plan.as_any().downcast_ref::<DeleteExec>();
-        
+
         match delete_exec {
             Some(delete_plan) => {
                 let table_name = delete_plan.table_name();
-                
-                // For now, delete all rows if no predicate
-                // Full predicate evaluation would require expression evaluation
-                if delete_plan.predicate().is_some() {
-                    // TODO: Implement predicate-based delete
-                    // For now, return empty result
-                    return Ok(ExecutorResult::empty());
-                }
+
+                let deleted = if let Some(predicate) = delete_plan.predicate() {
+                    let pred_sql = predicate.to_sql_string();
+                    eprintln!("DEBUG execute_delete: table={}, predicate={}", table_name, pred_sql);
+                    self.storage.delete_by_predicate(table_name, &pred_sql)?
+                } else {
+                    eprintln!("DEBUG execute_delete: table={}, no predicate, deleting all", table_name);
+                    self.storage.delete(table_name, &[])?
+                };
+                eprintln!("DEBUG execute_delete: deleted {} rows", deleted);
+                Ok(ExecutorResult::new(vec![], deleted))
+            }
+            None => Ok(ExecutorResult::empty()),
+        }
+    }
                 
                 // Delete all rows from table
                 let deleted = self.storage.delete(table_name, &[])?;
                 Ok(ExecutorResult::new(vec![], deleted))
             }
             None => Ok(ExecutorResult::empty()),
+        }
+    }
+
+    /// Execute merge
+    fn execute_merge(&self, plan: &dyn PhysicalPlan) -> SqlResult<ExecutorResult> {
+        use sqlrustgo_planner::MergeExec;
+
+        let merge_exec = plan.as_any().downcast_ref::<MergeExec>();
+
+        match merge_exec {
+            Some(merge_plan) => {
+                let target_table = merge_plan.target_table();
+                let source_table = merge_plan.source_table();
+
+                let source_records = self.storage.scan(source_table).unwrap_or_default();
+                let mut matched_count = 0u64;
+                let mut inserted_count = 0u64;
+
+                for source_record in source_records.iter() {
+                    let on_cond = merge_plan.on_condition();
+                    let matches = self.evaluate_merge_condition(on_cond, source_record);
+
+                    if matches {
+                        if let Some(ref clause) = merge_plan.matched_clause() {
+                            let updates: Vec<(String, sqlrustgo_types::Value)> = clause
+                                .update_columns
+                                .iter()
+                                .zip(clause.update_values.iter())
+                                .map(|(col, val)| {
+                                    let evaluated = self.evaluate_expression(val, source_record);
+                                    (col.clone(), evaluated)
+                                })
+                                .collect();
+                            self.storage.update(target_table, &[], &updates)?;
+                            matched_count += 1;
+                        }
+                    } else {
+                        if let Some(ref clause) = merge_plan.not_matched_clause() {
+                            let values: Vec<sqlrustgo_types::Value> = clause
+                                .insert_values
+                                .iter()
+                                .map(|val| self.evaluate_expression(val, source_record))
+                                .collect();
+                            self.storage.insert(target_table, vec![values])?;
+                            inserted_count += 1;
+                        }
+                    }
+                }
+
+                Ok(ExecutorResult::new(
+                    vec![],
+                    matched_count + inserted_count,
+                ))
+            }
+            None => Ok(ExecutorResult::empty()),
+        }
+    }
+
+    /// Evaluate merge condition against a source record
+    fn evaluate_merge_condition(
+        &self,
+        condition: &sqlrustgo_planner::Expr,
+        _record: &[sqlrustgo_types::Value],
+    ) -> bool {
+        use sqlrustgo_planner::Expr;
+
+        match condition {
+            Expr::Literal(sqlrustgo_types::Value::Boolean(b)) => *b,
+            Expr::BinaryExpr { left, op: _, right } => {
+                let left_val = match left.as_ref() {
+                    Expr::Literal(v) => v.clone(),
+                    _ => sqlrustgo_types::Value::Null,
+                };
+                let right_val = match right.as_ref() {
+                    Expr::Literal(v) => v.clone(),
+                    _ => sqlrustgo_types::Value::Null,
+                };
+                left_val == right_val
+            }
+            _ => false,
+        }
+    }
+
+    /// Evaluate an expression against a record
+    fn evaluate_expression(
+        &self,
+        expr: &sqlrustgo_planner::Expr,
+        _record: &[sqlrustgo_types::Value],
+    ) -> sqlrustgo_types::Value {
+        use sqlrustgo_planner::Expr;
+
+        match expr {
+            Expr::Literal(v) => v.clone(),
+            Expr::Column(_) => sqlrustgo_types::Value::Null,
+            Expr::BinaryExpr { .. } => sqlrustgo_types::Value::Null,
+            _ => sqlrustgo_types::Value::Null,
         }
     }
 

@@ -50,8 +50,8 @@ A-Gate → B-Gate → R-Gate → G-Gate
 || 门禁 | 名称 | 目标 | 覆盖率目标 |
 ||------|------|------|-----------|
 || **A-Gate** | Alpha Gate | 开发完成 | ≥50% |
-|| **B-Gate** | Beta Gate | 功能冻结 | ≥75% |
-|| **R-Gate** | RC Gate | 发布候选 | ≥75% |
+|| **B-Gate** | Beta Gate | 功能冻结 | ≥85% |
+|| **R-Gate** | RC Gate | 发布候选 | ≥85% |
 || **G-Gate** | GA Gate | 正式发布 | ≥85% |
 
 ### 2.2 阶段与门禁对应

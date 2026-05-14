@@ -1,0 +1,921 @@
+# CBO 代价模型详解
+
+> Cost-Based Optimizer 代价计算核心算法与公式
+
+## 1. 代价模型概述
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     代价模型架构                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  TotalCost = CPUCost + IOCost + MemoryCost + NetworkCost   │
+│                                                              │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │                    代价要素分解                           │ │
+│  ├───────────────────────────────────────────────────────┤ │
+│  │                                                       │ │
+│  │  CPUCost = Σ(row_count × cpu_cost_per_row)          │ │
+│  │           + Σ(tuple_decode_cost)                     │ │
+│  │           + Σ(comparison_cost)                       │ │
+│  │                                                       │ │
+│  │  IOCost = Σ(page_count × io_latency)                │ │
+│  │          + Σ(index_lookup_count × index_io_cost)     │ │
+│  │          + buffer_pool_miss_cost                     │ │
+│  │                                                       │ │
+│  │  MemoryCost = peak_memory / available_memory        │ │
+│  │              × memory_pressure_factor                │ │
+│  │                                                       │ │
+│  │  NetworkCost = data_transfer_bytes / bandwidth       │ │
+│  │               + latency × num_messages               │ │
+│  │                                                       │ │
+│  └───────────────────────────────────────────────────────┘ │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 2. 基础代价常数
+
+### 2.1 系统级常数
+
+```rust
+/// 代价模型常数配置
+pub struct CostConstants {
+    /// CPU 每行处理代价 (相对单位)
+    pub cpu_cost_per_row: f64 = 1.0,
+
+    /// 磁盘顺序读延迟 (毫秒)
+    pub seq_io_latency_ms: f64 = 0.1,
+
+    /// 磁盘随机读延迟 (毫秒)
+    pub random_io_latency_ms: f64 = 1.0,
+
+    /// 内存访问延迟 (纳秒)
+    pub memory_latency_ns: f64 = 100.0,
+
+    /// 页面大小 (字节)
+    pub page_size_bytes: u64 = 16384,  // 16KB
+
+    /// 排序内存缓冲 (页面数)
+    pub sort_buffer_pages: u64 = 1024,
+
+    /// Hash join 探测代价因子
+    pub hash_probe_cost_factor: f64 = 1.2,
+
+    /// 网络传输延迟系数
+    pub network_latency_ms: f64 = 0.5,
+}
+```
+
+### 2.2 算子基础代价
+
+```rust
+/// 物理算子基础代价
+pub struct OperatorBaseCost {
+    /// 扫描算子基础代价
+    pub seq_scan_base: f64 = 0.0,      // 全表扫描无固定代价
+
+    /// 索引扫描基础代价
+    pub index_scan_base: f64 = 0.1,    // 索引B+Tree搜索固定代价
+
+    /// Hash join 基础代价
+    pub hash_join_base: f64 = 0.5,     // Hash表构建固定代价
+
+    /// Sort 基础代价
+    pub sort_base: f64 = 0.2,          // 排序初始化代价
+
+    /// Aggregate 基础代价
+    pub aggregate_base: f64 = 0.1,     // 聚合初始化代价
+}
+```
+
+## 3. 扫描代价计算
+
+### 3.1 全表扫描代价
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   全表扫描代价公式                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  SeqScanCost =                                             │
+│      pages_to_read × seq_io_latency                       │
+│    + rows_to_process × cpu_cost_per_row                    │
+│    + decode_cost_per_row × rows_to_process                 │
+│                                                              │
+│  其中:                                                      │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  pages_to_read = table_pages × cache_hit_ratio    │   │
+│  │                                                      │   │
+│  │  cache_hit_ratio = 1 - (cold_pages / total_pages) │   │
+│  │                  = 1 - cold_page_ratio            │   │
+│  │                                                      │   │
+│  │  decode_cost_per_row = row_width × decode_factor   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 索引扫描代价
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   索引扫描代价公式                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  IndexScanCost =                                            │
+│      index_search_cost                                     │
+│    + index_io_cost                                         │
+│    + data_io_cost                                          │
+│    + cpu_cost                                               │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  index_search_cost = B+Tree_height × index_page_io │   │
+│  │                                                      │   │
+│  │  index_io_cost =                                    │   │
+│  │    range_type == POINT  ? 1 page                  │   │
+│  │    range_type == RANGE ? height + leaf_pages       │   │
+│  │    range_type == FULL  ? all_index_pages          │   │
+│  │                                                      │   │
+│  │  data_io_cost = matching_rows × page_io_per_row   │   │
+│  │    × cache_hit_ratio (数据页缓存命中率)             │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.3 索引扫描代价详细计算
+
+```rust
+pub fn compute_index_scan_cost(
+    index: &IndexDef,
+    predicate: &Predicate,
+    table_stats: &TableStats,
+) -> Cost {
+    let selectivity = compute_selectivity(predicate, index, table_stats);
+    let matching_rows = (table_stats.row_count as f64 * selectivity).ceil() as u64;
+
+    // 索引搜索代价 (B+Tree 高度)
+    let index_height = index.bptree.height();
+    let index_search_cpu = index_height * CPU_COST_INDEX_SEARCH;
+
+    // 索引 I/O 代价
+    let index_io = match predicate.rang_type() {
+        RangeType::Point => 1.0 * RANDOM_IO_COST,
+        RangeType::Range(range) => {
+            let leaf_pages = estimate_leaf_pages_for_range(index, range);
+            (index_height as f64 * RANDOM_IO_COST) + (leaf_pages as f64 * SEQ_IO_COST)
+        }
+        RangeType::Full => index.total_pages() as f64 * SEQ_IO_COST,
+    };
+
+    // 数据 I/O 代价
+    let data_pages = estimate_data_pages(matching_rows, table_stats.row_width);
+    let data_io = data_pages as f64 * (RANDOM_IO_COST * (1.0 - CACHE_HIT_RATIO)
+                                      + SEQ_IO_COST * CACHE_HIT_RATIO);
+
+    // CPU 代价
+    let cpu_cost = matching_rows as f64 * CPU_COST_PER_ROW
+                 + index_io as f64 * CPU_COST_PER_PAGE;
+
+    Cost {
+        io_cost: index_io + data_io,
+        cpu_cost,
+        memory_cost: 0.0,
+        network_cost: 0.0,
+    }
+}
+```
+
+## 4. Join 代价计算
+
+### 4.1 Hash Join 代价模型
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Hash Join 代价公式                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  HashJoinCost = BuildCost + ProbeCost                      │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  BuildPhase:                                       │   │
+│  │    build_rows × cpu_cost_per_row  // 构建 Hash 表   │   │
+│  │    + hash_table_size × memory_cost                │   │
+│  │    + overflow_cost (if hash table overflows)      │   │
+│  │                                                      │   │
+│  │  ProbePhase:                                       │   │
+│  │    probe_rows × cpu_cost_per_row  // 探测 hash 表  │   │
+│  │    + matching_build × probe_cost_factor            │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│  特殊情况:                                                   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  Hash Table 溢出 (内存不足):                        │   │
+│  │    overflow_cost = num_partitions × partition_cost │   │
+│  │                 × spill_to_disk_penalty            │   │
+│  │                                                      │   │
+│  │  Build 侧可Broadcast (小表 join 大表):             │   │
+│  │    broadcast_cost = build_side_size                │   │
+│  │                     × network_cost_per_byte        │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 4.2 Nested Loop Join 代价模型
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                Nested Loop Join 代价公式                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  NLJoinCost =                                             │
+│      outer_rows × outer_cpu_cost                           │
+│    + outer_rows × inner_rows × inner_probe_cost            │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  块嵌套循环 (Block Nested Loop):                    │   │
+│  │    cost = outer_blocks × block_size                │   │
+│  │         + outer_blocks × inner_blocks × block_io   │   │
+│  │                                                      │   │
+│  │  索引嵌套循环 (Index Nested Loop):                 │   │
+│  │    cost = outer_rows × index_lookup_cost          │   │
+│  │         + outer_rows × matching_rows × probe_cost  │   │
+│  │                                                      │   │
+│  │  where:                                            │   │
+│  │    index_lookup_cost = BTree_height × page_io    │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 4.3 Sort-Merge Join 代价模型
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                Sort-Merge Join 代价公式                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  SortMergeCost = SortCost + MergeCost                      │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  SortPhase (两侧分别排序):                          │   │
+│  │    sort_cost = rows × log2(rows) × sort_cmp_cost  │   │
+│  │              + sort_io_cost (if doesn't fit in mem)│   │
+│  │                                                      │   │
+│  │  MergePhase:                                       │   │
+│  │    merge_cost = (left_rows + right_rows)          │   │
+│  │                × comparison_cost                    │   │
+│  │                                                      │   │
+│  │  如果数据已排序 (来自索引):                          │   │
+│  │    sort_cost = 0  // 跳过排序                       │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 4.4 Join 策略选择决策树
+
+```
+                    ┌─────────────────┐
+                    │   JOIN START   │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              │                              │
+    ┌─────────▼─────────┐          ┌─────────▼─────────┐
+    │  join_attr       │          │   join_attr       │
+    │  has equality?   │          │   has inequality? │
+    └─────────┬─────────┘          └─────────┬─────────┘
+              │                              │
+     ┌────────▼─────────┐                    │
+     │  one side small?│                    │
+     └─────────┬─────────┘                    │
+       │             │                        │
+      YES           NO                        │
+       │             │                        │
+ ┌─────▼─────┐  ┌────▼────────────┐           │
+ │Broadcast   │  │ suitable index │           │
+ │ Hash Join  │  │ for inner?    │           │
+ └────────────┘  └────┬────────────┘           │
+                │           │                   │
+               YES         NO                  │
+                │           │                  │
+         ┌──────▼──────┐    │          ┌──────▼──────┐
+         │Index Nested │    │          │Sort-Merge   │
+         │Loop Join    │    │          │Join         │
+         └─────────────┘    │          └─────────────┘
+                      ┌─────▼─────┐
+                      │ Hash Join │
+                      │(partitioned)│
+                      └───────────┘
+```
+
+## 5. 聚合代价计算
+
+### 5.1 Hash Aggregate 代价模型
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 Hash Aggregate 代价公式                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  HashAggregateCost = BuildCost + SpillCost                 │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  BuildPhase:                                       │   │
+│  │    hash_cost = rows × hash_function_cost           │   │
+│  │    group_by_cost = rows × comparison_cost           │   │
+│  │    memory_usage = num_groups × group_size          │   │
+│  │                                                      │   │
+│  │  如果 memory 不足:                                  │   │
+│  │    spill_cost = rows × spill_penalty               │   │
+│  │                                                      │   │
+│  │  Total = hash_cost + group_by_cost + spill_cost   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 5.2 Sort Aggregate 代价模型
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 Sort Aggregate 代价公式                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  SortAggregateCost = SortCost + AggregateCost               │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  SortPhase:                                        │   │
+│  │    sort_cost = rows × log2(rows) × comparison_cost│   │
+│  │                                                      │   │
+│  │  AggregatePhase:                                   │   │
+│  │    agg_cost = rows × aggregate_function_cost       │   │
+│  │                                                      │   │
+│  │  如果数据已排序 (GROUP BY idx):                      │   │
+│  │    sort_cost = 0                                   │   │
+│  │    total = rows × aggregate_function_cost          │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 5.3 聚合策略选择
+
+```rust
+pub fn select_aggregate_strategy(
+    group_by_cols: &[ColumnRef],
+    aggregate_fns: &[AggregateFunction],
+    input_stats: &Stats,
+) -> AggregateStrategy {
+    let row_count = input_stats.row_count;
+    let num_groups = estimate_num_groups(group_by_cols, input_stats);
+
+    // 策略选择决策
+    match (num_groups, row_count) {
+        // 小数据量：Sort Aggregate 通常更快
+        (n, r) if n < 1000 && r < 10000 => {
+            if has_sorted_input(group_by_cols) {
+                AggregateStrategy::SortAggregate { presorted: true }
+            } else {
+                AggregateStrategy::SortAggregate { presorted: false }
+            }
+        }
+
+        // 大数据量：Hash Aggregate 更优
+        (n, r) if n > r / 10 => {
+            // 高基数：Hash Aggregate
+            AggregateStrategy::HashAggregate {
+                estimated_groups: n,
+                spillable: true,
+            }
+        }
+
+        // 数据已排序：使用 Sort Aggregate
+        _ if has_sorted_input(group_by_cols) => {
+            AggregateStrategy::SortAggregate { presorted: true }
+        }
+
+        // 默认：Hash Aggregate
+        _ => AggregateStrategy::HashAggregate {
+            estimated_groups: num_groups,
+            spillable: true,
+        },
+    }
+}
+```
+
+## 6. 排序代价计算
+
+### 6.1 External Merge Sort 代价模型
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                External Merge Sort 代价公式                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  SortCost = InputSortCost + MergeCost + IOCost             │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  InputSortCost (内存内排序):                          │   │
+│  │    if rows_fit_in_buffer:                           │   │
+│  │      sort_cost = rows × log2(rows) × cmp_cost      │   │
+│  │    else:  // 需要分片                                │   │
+│  │      sort_cost = num_runs × runs_sort_cost         │   │
+│  │                                                      │   │
+│  │  MergeCost (K-way merge):                          │   │
+│  │    merge_passes = log_k(num_runs)                 │   │
+│  │    merge_cost = rows × merge_passes × cmp_cost    │   │
+│  │                                                      │   │
+│  │  IOCost:                                            │   │
+│  │    reads = num_runs × pages_per_run × 2           │   │
+│  │    writes = reads  // 写临时文件                    │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│  where:                                                     │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  k = merge_buffer_size / page_size                 │   │
+│  │  num_runs = rows / (buffer_pages × fanout)         │   │
+│  │  fanout = (buffer_pages / 2) + 1  // B+Tree fanout │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 6.2 Top-N Sort 优化
+
+```rust
+pub fn compute_top_n_sort_cost(
+    n: u64,
+    row_count: u64,
+    row_width: u64,
+) -> Cost {
+    if n < row_count / 10 {
+        // Top-N 优化: 只需要保持一个大小为 N 的小顶堆
+        // 代价 = O(row_count × log N)
+        let heap_cost = row_count as f64 * (n as f64).log2();
+        let io_cost = estimate_pages(row_count, row_width) as f64 * SEQ_IO_COST;
+
+        Cost {
+            cpu_cost: heap_cost * CPU_COST_COMPARE,
+            io_cost,
+            memory_cost: n as f64 * row_width as f64,
+            network_cost: 0.0,
+        }
+    } else {
+        // 全排序
+        compute_full_sort_cost(row_count, row_width)
+    }
+}
+```
+
+## 7. 子查询代价计算
+
+### 7.1 标量子查询代价
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   标量子查询代价公式                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ScalarSubqueryCost =                                      │
+│      correlated_cost (如果相关子查询)                       │
+│    + uncorrelated_cost (如果非相关子查询)                   │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  非相关标量子查询 (计算一次，结果缓存):               │   │
+│  │    cost = subquery_cost × 1                        │   │
+│  │                                                      │   │
+│  │  相关标量子查询 (每行计算一次):                      │   │
+│  │    cost = outer_rows × subquery_cost × correlation_factor │   │
+│  │                                                      │   │
+│  │  其中:                                              │   │
+│  │    correlation_factor = 1 / selectivity(join_cond)  │   │
+│  │                           = estimated_rewrites      │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 7.2 EXISTS/IN 子查询代价
+
+```rust
+pub fn compute_subquery_cost(
+    subquery: &Subquery,
+    outer_row_count: u64,
+    is_correlated: bool,
+) -> Cost {
+    match subquery.subquery_type {
+        SubqueryType::Scalar => {
+            if is_correlated {
+                // 相关标量子查询：每行执行一次
+                let exec_count = outer_row_count;
+                let single_cost = estimate_subquery_cost(&subquery.plan);
+                Cost {
+                    cpu_cost: exec_count as f64 * single_cost.cpu_cost,
+                    io_cost: exec_count as f64 * single_cost.io_cost,
+                    memory_cost: single_cost.memory_cost,
+                    network_cost: 0.0,
+                }
+            } else {
+                // 非相关：执行一次
+                estimate_subquery_cost(&subquery.plan)
+            }
+        }
+
+        SubqueryType::Exists => {
+            // EXISTS: 找到第一行就返回
+            if is_correlated {
+                Cost {
+                    cpu_cost: outer_row_count as f64 * EARLY_EXIT_COST,
+                    io_cost: 0.0,
+                    memory_cost: 0.0,
+                    network_cost: 0.0,
+                }
+            } else {
+                Cost {
+                    cpu_cost: EARLY_EXIT_COST,
+                    io_cost: 0.0,
+                    memory_cost: 0.0,
+                    network_cost: 0.0,
+                }
+            }
+        }
+
+        SubqueryType::In => {
+            // IN: 构建哈希集
+            if is_correlated {
+                // 相关 IN: 每行执行一次
+                let probe_cost = outer_row_count as f64 * PROBE_HASH_COST;
+                Cost {
+                    cpu_cost: probe_cost,
+                    io_cost: 0.0,
+                    memory_cost: estimate_hash_set_size(&subquery.plan),
+                    network_cost: 0.0,
+                }
+            } else {
+                // 非相关 IN: 构建一次
+                let build_cost = estimate_subquery_cost(&subquery.plan);
+                Cost {
+                    cpu_cost: build_cost.cpu_cost,
+                    io_cost: build_cost.io_cost,
+                    memory_cost: estimate_hash_set_size(&subquery.plan),
+                    network_cost: 0.0,
+                }
+            }
+        }
+    }
+}
+```
+
+## 8. 代价计算完整流程
+
+### 8.1 代价计算状态机
+
+```
+                    ┌─────────────────┐
+                    │  INIT COST     │
+                    │    = 0         │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  ADD OPERATOR  │
+                    │    BASE COST   │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              │                              │
+     ┌────────▼────────┐          ┌────────▼────────┐
+     │   CHILD EXISTS  │          │  NO CHILDREN   │
+     │  (e.g., Join)  │          │ (e.g., Scan)   │
+     └────────┬────────┘          └────────┬────────┘
+              │                              │
+     ┌────────▼────────┐                    │
+     │  RECURSIVE     │                    │
+     │  COST COMPUTE  │                    │
+     │  (children)    │                    │
+     └────────┬────────┘                    │
+              │                              │
+              └──────────────┬───────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │   COMPUTE      │
+                    │   THIS OP COST │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  TOTAL COST   │
+                    │  = SUM(CHILD) │
+                    │  + THIS_OP    │
+                    └────────────────┘
+```
+
+### 8.2 代价计算代码结构
+
+```rust
+pub trait PhysicalCost {
+    fn cost(&self, context: &CostContext) -> Cost;
+}
+
+pub struct CostContext<'a> {
+    pub stats_cache: &'a StatsCache,
+    pub config: &'a CostConfig,
+    pub buffer_pool_size: u64,
+}
+
+pub struct CostConfig {
+    pub cpu_cost_weight: f64 = 1.0,
+    pub io_cost_weight: f64 = 10.0,      // I/O 相对更贵
+    pub memory_cost_weight: f64 = 5.0,
+    pub network_cost_weight: f64 = 20.0,  // 网络最贵
+
+    pub random_io_cost: f64 = 1.0,
+    pub seq_io_cost: f64 = 0.1,
+    pub cpu_cost_per_row: f64 = 0.01,
+}
+
+impl Cost {
+    /// 合并多个子代价
+    pub fn merge<C: PhysicalCost>(costs: &[Cost], ops: &[&C]) -> Cost {
+        let mut total = Cost::zero();
+        for cost in costs {
+            total = total.add(cost);
+        }
+        // 添加算子自身代价
+        for op in ops {
+            total = total.add(op.operator_cost());
+        }
+        total
+    }
+
+    /// 考虑配置权重的最终代价
+    pub fn weighted(&self, config: &CostConfig) -> f64 {
+        self.cpu_cost * config.cpu_cost_weight
+            + self.io_cost * config.io_cost_weight
+            + self.memory_cost * config.memory_cost_weight
+            + self.network_cost * config.network_cost_weight
+    }
+}
+```
+
+## 9. 选择性计算
+
+### 9.1 谓词选择性公式
+
+```rust
+pub fn compute_selectivity(
+    predicate: &Predicate,
+    column_stats: &ColumnStats,
+    table_stats: &TableStats,
+) -> f64 {
+    match predicate {
+        Predicate::Eq(col, val) => {
+            // 等值谓词: 1 / NDV
+            1.0 / column_stats.ndv as f64
+        }
+
+        Predicate::Range(col, low, high) => {
+            // 范围谓词: (high - low) / (max - min)
+            let value_range = column_stats.max_value - column_stats.min_value;
+            if value_range == 0 {
+                0.0
+            } else {
+                ((high - low) as f64 / value_range as f64).min(1.0)
+            }
+        }
+
+        Predicate::In(col, values) => {
+            // IN 谓词: len(values) / NDV
+            (values.len() as f64 / column_stats.ndv as f64).min(1.0)
+        }
+
+        Predicate::Like(col, pattern) => {
+            // LIKE 谓词 (简化)
+            if pattern.starts_with('%') && pattern.ends_with('%') {
+                0.5  // 两端通配：50% 选择性
+            } else if pattern.starts_with('%') {
+                0.3  // 前缀通配
+            } else if pattern.ends_with('%') {
+                0.1  // 后缀通配 (前缀匹配)
+            } else {
+                0.01  // 精确前缀
+            }
+        }
+
+        Predicate::IsNull(col) => {
+            // NULL 检查: null_count / total_rows
+            column_stats.null_count as f64 / table_stats.row_count as f64
+        }
+
+        Predicate::And(left, right) => {
+            // AND: 乘积 (独立假设)
+            compute_selectivity(left, column_stats, table_stats)
+                * compute_selectivity(right, column_stats, table_stats)
+        }
+
+        Predicate::Or(left, right) => {
+            // OR: 1 - (1-p1) * (1-p2)
+            let p1 = compute_selectivity(left, column_stats, table_stats);
+            let p2 = compute_selectivity(right, column_stats, table_stats);
+            1.0 - (1.0 - p1) * (1.0 - p2)
+        }
+
+        Predicate::Not(child) => {
+            // NOT: 1 - p
+            1.0 - compute_selectivity(child, column_stats, table_stats)
+        }
+    }
+}
+```
+
+### 9.2 直方图选择
+
+```rust
+pub fn selectivity_from_histogram(
+    predicate: &Predicate,
+    histogram: &[HistogramBucket],
+) -> f64 {
+    match predicate {
+        Predicate::Eq(_, val) => {
+            // 二分查找直方图桶
+            let bucket_idx = binary_search_histogram(histogram, val);
+            if bucket_idx < histogram.len() {
+                histogram[bucket_idx].count as f64
+                    / histogram[bucket_idx].total_count as f64
+            } else {
+                0.0
+            }
+        }
+
+        Predicate::Range(_, low, high) => {
+            // 范围查询：累加覆盖的桶
+            let mut total_selectivity = 0.0;
+            let mut total_count = 0u64;
+            for bucket in histogram {
+                total_count += bucket.count;
+            }
+
+            for bucket in histogram {
+                if bucket.low_value >= *low && bucket.high_value <= *high {
+                    total_selectivity += bucket.count as f64;
+                }
+            }
+
+            total_selectivity / total_count as f64
+        }
+
+        _ => 0.5,  // 未知谓词默认 50%
+    }
+}
+```
+
+## 10. 关键测试用例
+
+### 10.1 扫描代价测试
+
+```rust
+#[test]
+fn test_seq_scan_cost_small_table() {
+    // 小表：全表扫描应该比索引更快
+    let table = TableStats {
+        row_count: 100,
+        page_count: 1,
+        ..Default::default()
+    };
+
+    let cost = compute_seq_scan_cost(&table);
+    assert!(cost.io_cost < compute_index_scan_cost(...).io_cost);
+}
+
+#[test]
+fn test_index_scan_cost_high_selectivity() {
+    // 高选择性：索引应该更快
+    let table = TableStats {
+        row_count: 100000,
+        page_count: 1000,
+        ..Default::default()
+    };
+
+    // 1% 选择性
+    let predicate = Predicate::Eq("status", "active");
+    let cost = compute_index_scan_cost(&index, &predicate, &table);
+
+    // 全表扫描代价
+    let seq_cost = compute_seq_scan_cost(&table);
+
+    assert!(cost.io_cost < seq_cost.io_cost);
+}
+```
+
+### 10.2 Join 代价测试
+
+```rust
+#[test]
+fn test_hash_join_cost_vs_nl_join() {
+    let left = TableStats { row_count: 1000000, ... };
+    let right = TableStats { row_count: 100, ... };
+
+    // Hash Join: 大表 build
+    let hash_cost = compute_hash_join_cost(&left, &right, BuildSide::Left);
+
+    // Index NL Join
+    let nl_cost = compute_index_nl_join_cost(&left, &right);
+
+    // 小表做 build 侧，Hash Join 应该更优
+    assert!(hash_cost.cpu_cost < nl_cost.cpu_cost);
+}
+
+#[test]
+fn test_sort_merge_join_when_data_sorted() {
+    // 数据已排序：Sort-Merge 应该接近零排序代价
+    let left = TableStats { row_count: 100000, sorted_by: vec!["id"], ... };
+    let right = TableStats { row_count: 100000, sorted_by: vec!["id"], ... };
+
+    let cost = compute_sort_merge_join_cost(&left, &right, &["id"]);
+
+    // 排序代价应该为 0
+    assert!(cost.cpu_cost < 1000.0);  // 几乎没有排序代价
+}
+```
+
+### 10.3 选择性计算测试
+
+```rust
+#[test]
+fn test_equality_selectivity() {
+    let col_stats = ColumnStats {
+        ndv: 1000,  // 1000 个不同值
+        ..Default::default()
+    };
+
+    let selectivity = compute_selectivity(
+        &Predicate::Eq("col", Value::Int(42)),
+        &col_stats,
+        &TableStats::default(),
+    );
+
+    assert!((selectivity - 0.001).abs() < 0.0001);  // 1/1000 = 0.001
+}
+
+#[test]
+fn test_range_selectivity() {
+    let col_stats = ColumnStats {
+        ndv: 100,
+        min_value: Value::Int(0),
+        max_value: Value::Int(100),
+        ..Default::default()
+    };
+
+    // 范围 [20, 30]
+    let selectivity = compute_selectivity(
+        &Predicate::Range("col", Value::Int(20), Value::Int(30)),
+        &col_stats,
+        &TableStats::default(),
+    );
+
+    // (30-20)/(100-0) = 0.1
+    assert!((selectivity - 0.1).abs() < 0.01);
+}
+
+#[test]
+fn test_and_selectivity() {
+    // AND: 乘积
+    let col1_stats = ColumnStats { ndv: 100, ... };
+    let col2_stats = ColumnStats { ndv: 50, ... };
+
+    let sel1 = compute_selectivity(&Predicate::Eq("c1", ...), &col1_stats, ...);
+    let sel2 = compute_selectivity(&Predicate::Eq("c2", ...), &col2_stats, ...);
+
+    let and_sel = compute_selectivity(
+        &Predicate::And(p1, p2),
+        &col1_stats,
+        ...
+    );
+
+    assert!((and_sel - sel1 * sel2).abs() < 0.0001);
+}
+```
+
+## 11. 覆盖率差距
+
+| 场景 | 当前覆盖 | 目标覆盖 | 差距 |
+|------|---------|---------|------|
+| SeqScan 代价 | 85% | 95% | 10% |
+| IndexScan 代价 | 80% | 95% | 15% |
+| HashJoin 代价 | 75% | 95% | 20% |
+| NLJoin 代价 | 70% | 90% | 20% |
+| SortMergeJoin 代价 | 65% | 90% | 25% |
+| HashAggregate 代价 | 70% | 90% | 20% |
+| SortAggregate 代价 | 70% | 90% | 20% |
+| Sort 代价 | 75% | 95% | 20% |
+| 选择性计算 (Eq) | 90% | 95% | 5% |
+| 选择性计算 (Range) | 80% | 95% | 15% |
+| 选择性计算 (Histogram) | 60% | 90% | 30% |
+| 子查询代价 | 50% | 85% | 35% |
+
+---
+
+*文档版本: v3.0.0*
+*最后更新: 2026-05-11*

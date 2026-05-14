@@ -41,10 +41,13 @@ members = [
     "crates/mysql-server",
     "crates/qmd-bridge",
     "crates/fuzz",
+    "crates/observability",
+    "crates/sync",
+    "crates/gis",
 ]
 
 [workspace.package]
-version = "2.5.0"
+version = "3.0.0"
 edition = "2021"
 authors = ["SQLRustGo Team"]
 license = "MIT"
@@ -69,6 +72,9 @@ sqlrustgo-vector = { path = "crates/vector" }
 sqlrustgo-graph = { path = "crates/graph" }
 sqlrustgo-sql-corpus = { path = "crates/sql-corpus" }
 sqlrustgo-qmd-bridge = { path = "crates/qmd-bridge" }
+sqlrustgo-gis = { path = "crates/gis" }
+information-schema = { path = "crates/information-schema" }
+sqlrustgo-observability = { path = "crates/observability" }
 
 tokio = { version = "1.0", features = ["full"] }
 tonic = "0.14"
@@ -119,6 +125,7 @@ sqlrustgo-vector = { path = "crates/vector" }
 sqlrustgo-graph = { path = "crates/graph" }
 sqlrustgo-unified-query = { path = "crates/unified-query" }
 sqlrustgo-distributed = { path = "crates/distributed" }
+sqlrustgo-gis = { path = "crates/gis" }
 
 [package]
 name = "sqlrustgo"
@@ -136,7 +143,9 @@ sqlrustgo-optimizer.workspace = true
 sqlrustgo-executor.workspace = true
 sqlrustgo-storage.workspace = true
 sqlrustgo-catalog.workspace = true
+information-schema.workspace = true
 sqlrustgo-transaction.workspace = true
+sqlrustgo-observability.workspace = true
 sqlrustgo-server.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
@@ -151,6 +160,7 @@ lru-cache.workspace = true
 ctrlc.workspace = true
 serde_json.workspace = true
 regex = "1"
+lazy_static = "1.4"
 
 [[test]]
 name = "ci_test"
@@ -257,6 +267,18 @@ path = "tests/e2e/observability_test.rs"
 [[test]]
 name = "e2e_monitoring_test"
 path = "tests/e2e/monitoring_test.rs"
+
+[[test]]
+name = "e2e_window_function_test"
+path = "tests/e2e/e2e_window_function_test.rs"
+
+[[test]]
+name = "e2e_merge_test"
+path = "tests/e2e/e2e_merge_test.rs"
+
+[[test]]
+name = "e2e_fts_test"
+path = "tests/e2e/e2e_fts_test.rs"
 
 [[test]]
 name = "stored_procedure_parser_test"

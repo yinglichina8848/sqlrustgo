@@ -72,6 +72,7 @@ fn value_to_string(v: Value) -> String {
         }
         Value::Text(s) => s,
         Value::Blob(b) => format!("{:?}", b),
+        Value::Geometry(_) => "GEOMETRY".to_string(),
     }
 }
 
@@ -90,12 +91,15 @@ fn execute_sql(storage: &mut MemoryStorage, sql: &str) -> Result<ExecutorResult,
                         data_type: c.data_type,
                         nullable: c.nullable,
                         primary_key: c.primary_key,
+                        auto_increment: c.auto_increment,
                     })
                     .collect(),
                 foreign_keys: vec![],
                 unique_constraints: vec![],
                 check_constraints: vec![],
                 partition_info: None,
+                has_hidden_rowid: false,
+                next_rowid: 1,
             };
             storage
                 .create_table(&info)

@@ -25,6 +25,7 @@ pub use sqlrustgo_storage::{
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
 
 pub use execution_engine::{ExecutionEngine, MemoryExecutionEngine};
+pub use sqlrustgo_transaction::IsolationLevel;
 
 /// Initialize the database system
 pub fn init() {

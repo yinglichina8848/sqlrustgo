@@ -125,6 +125,8 @@ impl ReadWriteSplitter {
             sqlrustgo_parser::Statement::Explain(_) => QueryClass::Read,
             sqlrustgo_parser::Statement::Call(_) => QueryClass::Read,
             sqlrustgo_parser::Statement::Union(_) => QueryClass::Read,
+            sqlrustgo_parser::Statement::Intersect(_) => QueryClass::Read,
+            sqlrustgo_parser::Statement::Except(_) => QueryClass::Read,
             sqlrustgo_parser::Statement::WithSelect(_) => QueryClass::Read,
             // Write queries
             sqlrustgo_parser::Statement::Insert(_) => QueryClass::Write,
@@ -135,6 +137,9 @@ impl ReadWriteSplitter {
             sqlrustgo_parser::Statement::CreateTrigger(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::CreateProcedure(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::CreateView(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::CreateEvent(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::DropEvent(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::AlterEvent(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::DropTable(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::DropIndex(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::DropView(_) => QueryClass::Write,
@@ -144,6 +149,12 @@ impl ReadWriteSplitter {
             sqlrustgo_parser::Statement::Revoke(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::Transaction(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::Analyze(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::Check(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::Optimize(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::Vacuum(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::Repair(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::Backup(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::Restore(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::CreateRole(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::DropRole(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::GrantRole(_) => QueryClass::Write,
@@ -151,7 +162,7 @@ impl ReadWriteSplitter {
             sqlrustgo_parser::Statement::SetRole(_) => QueryClass::Write,
             sqlrustgo_parser::Statement::ShowRoles => QueryClass::Read,
             sqlrustgo_parser::Statement::ShowGrantsFor(_) => QueryClass::Read,
-            sqlrustgo_parser::Statement::Explain(_) => QueryClass::Read,
+            sqlrustgo_parser::Statement::Merge(_) => QueryClass::Write,
         }
     }
 

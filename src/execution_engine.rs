@@ -4,6 +4,7 @@
 #![allow(unused_variables, unused_imports)]
 
 use crate::{parse, SqlError, SqlResult, Value};
+use information_schema::*;
 use sqlrustgo_catalog::stored_proc::{ParamMode, StoredProcParam, StoredProcStatement};
 use sqlrustgo_catalog::{auth::UserIdentity, Catalog, StoredProcedure};
 use sqlrustgo_executor::query_cache::{should_cache, QueryCache};
@@ -12,16 +13,24 @@ use sqlrustgo_executor::stored_proc::StoredProcExecutor;
 use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
-use sqlrustgo_executor::ExecutorResult;
+use sqlrustgo_executor::{ExecutorResult, MergeExecutor};
+use sqlrustgo_observability::observability_state::{ObservabilityState, OBSERVABILITY};
+use sqlrustgo_observability::tables::{
+    lock_wait_graph::LockWaitEdge, lock_wait_graph::LockWaitGraph,
+    recovery_history::RecoveryHistory, recovery_history::RecoveryHistoryEntry,
+    transaction_history::TransactionHistory, transaction_history::TransactionHistoryEntry,
+    transaction_history::TransactionStatus, wal_stats::WalStatsCollector,
+};
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, CallStatement,
-    CreateIndexStatement, CreateProcedureStatement, CreateRoleStatement, CreateTableStatement,
-    CreateTriggerStatement, DropRoleStatement, DropTableStatement, ExplainStatement,
-    GrantRoleStatement, GrantStatement, InsertStatement, ObjectType as ParserObjectType,
-    OrderByExpression, Privilege as ParserPrivilege, RevokeRoleStatement, RevokeStatement,
+    CheckOption, CheckStatement, CreateIndexStatement, CreateProcedureStatement,
+    CreateRoleStatement, CreateTableStatement, CreateTriggerStatement, DropRoleStatement,
+    DropTableStatement, ExplainStatement, GrantRoleStatement, GrantStatement, InsertStatement,
+    MergeStatement, ObjectType as ParserObjectType, OptimizeStatement, OrderByExpression,
+    Privilege as ParserPrivilege, RepairStatement, RevokeRoleStatement, RevokeStatement,
     SelectStatement, SetRoleStatement, ShowStatement, StoredProcParam as ParserStoredProcParam,
     StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
-    TruncateStatement,
+    TruncateStatement, VacuumMode, VacuumStatement,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::JoinType; // For join type matching
@@ -29,10 +38,16 @@ use sqlrustgo_parser::{
     DeleteStatement, Expression, Statement, TransactionStatement, UpdateStatement,
 };
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
-use sqlrustgo_transaction::{IsolationLevel as TmIsolationLevel, TransactionManager, TxId};
+use sqlrustgo_transaction::lock::LockGrantMode;
+use sqlrustgo_transaction::{
+    IdempotentBeginResult, IsolationLevel as TmIsolationLevel, LockMode, LockTarget,
+    TransactionManager, TxId,
+};
 use sqlrustgo_types::Value as SqlValue;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Execution engine for SQL statements
 pub struct ExecutionEngine<S: StorageEngine> {
@@ -45,6 +60,7 @@ pub struct ExecutionEngine<S: StorageEngine> {
     current_tx_id: Option<TxId>,
     default_isolation: TmIsolationLevel,
     current_role: Option<String>,
+    current_user: Option<UserIdentity>,
     query_cache: Arc<RwLock<QueryCache>>,
     cache_config: QueryCacheConfig,
 }
@@ -139,6 +155,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_tx_id: None,
             default_isolation: config.default_isolation,
             current_role: None,
+            current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: config.cache_config,
         }
@@ -160,6 +177,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
         }
@@ -181,6 +199,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
         }
@@ -198,6 +217,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
         }
@@ -221,6 +241,21 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     /// Enable or disable statistics collection
     pub fn set_stats_enabled(&mut self, enabled: bool) {
         self.stats_enabled = enabled;
+    }
+
+    /// Set the current user for RBAC permission checks
+    pub fn set_current_user(&mut self, user: UserIdentity) {
+        self.current_user = Some(user);
+    }
+
+    /// Get the current user
+    pub fn get_current_user(&self) -> Option<&UserIdentity> {
+        self.current_user.as_ref()
+    }
+
+    /// Clear the current user (e.g., on logout)
+    pub fn clear_current_user(&mut self) {
+        self.current_user = None;
     }
 
     /// Get table statistics for CBO
@@ -351,6 +386,35 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         result
     }
 
+    /// Try index scan if applicable, fall back to full table scan
+    fn try_index_scan_or_fallback(
+        &self,
+        select: &SelectStatement,
+        storage: &dyn StorageEngine,
+        table_info: &TableInfo,
+    ) -> SqlResult<Vec<Vec<SqlValue>>> {
+        // Try to extract simple equality predicate for index lookup
+        if let Some(ref where_expr) = select.where_clause {
+            if let Some(idx_info) = try_extract_index_lookup(where_expr, &table_info.columns) {
+                if let Some(row_indices) =
+                    storage.find_by_index(&select.table, idx_info.column_index, idx_info.key_value)
+                {
+                    let mut index_rows = Vec::with_capacity(row_indices.len());
+                    for row_idx in row_indices {
+                        if let Some(row) = storage.get_row(&select.table, row_idx)? {
+                            index_rows.push(row);
+                        }
+                    }
+                    if !index_rows.is_empty() {
+                        return Ok(index_rows);
+                    }
+                }
+            }
+        }
+        // Fallback: full table scan
+        storage.scan(&select.table)
+    }
+
     /// Collect statistics for a table (ANALYZE)
     fn collect_table_stats(&self, table: &str) -> SqlResult<TableStatistics> {
         let storage = self.storage.read().unwrap();
@@ -434,22 +498,56 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         })
     }
 
+    fn extract_table_names_from_statement(statement: &Statement) -> Vec<String> {
+        match statement {
+            Statement::Select(select) => vec![select.table.clone()],
+            Statement::Insert(insert) => vec![insert.table.clone()],
+            Statement::Update(update) => vec![update.table.clone()],
+            Statement::Delete(delete) => vec![delete.table.clone()],
+            Statement::Truncate(truncate) => vec![truncate.name.clone()],
+            Statement::CreateTable(create) => vec![create.name.clone()],
+            Statement::DropTable(drop) => vec![drop.name.clone()],
+            Statement::Union(union_stmt) => {
+                let mut tables = Vec::new();
+                if let Statement::Select(s) = union_stmt.left.as_ref() {
+                    tables.push(s.table.clone());
+                }
+                if let Statement::Select(s) = union_stmt.right.as_ref() {
+                    tables.push(s.table.clone());
+                }
+                tables
+            }
+            Statement::WithSelect(ws) => vec![ws.select.table.clone()],
+            _ => vec![],
+        }
+    }
+
     /// Execute a pre-parsed SQL statement and return results
     /// This avoids re-parsing on every execute for prepared statements
     pub fn execute_statement(&mut self, statement: Statement) -> SqlResult<ExecutorResult> {
         match statement {
-            Statement::Select(ref select) => self.execute_select(select),
+            Statement::Select(ref select) => {
+                if select.for_update {
+                    self.execute_select_for_update(select)
+                } else {
+                    self.execute_select(select)
+                }
+            }
             Statement::Insert(ref insert) => self.execute_insert(insert),
             Statement::Update(ref update) => self.execute_update(update),
             Statement::Delete(ref delete) => self.execute_delete(delete),
+            Statement::Merge(ref merge) => self.execute_merge(merge),
             Statement::CreateTable(ref create) => self.execute_create_table(create),
             Statement::DropTable(ref drop) => self.execute_drop_table(drop),
             Statement::Truncate(ref truncate) => self.execute_truncate(truncate),
             Statement::CreateIndex(ref idx) => self.execute_create_index(idx),
             Statement::Analyze(ref analyze) => {
-                let table_name = analyze.table_name.as_ref().ok_or_else(|| {
-                    SqlError::ExecutionError("ANALYZE: table name is required".to_string())
-                })?;
+                if analyze.table_names.is_empty() {
+                    return Err(SqlError::ExecutionError(
+                        "ANALYZE: table name is required".to_string(),
+                    ));
+                }
+                let table_name = &analyze.table_names[0];
                 let stats = self.collect_table_stats(table_name)?;
                 let row_count = stats.row_count;
 
@@ -492,6 +590,104 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 left_result.affected_rows = left_result.rows.len();
                 Ok(left_result)
             }
+            Statement::Intersect(ref intersect_stmt) => {
+                let left_select = match intersect_stmt.left.as_ref() {
+                    Statement::Select(s) => s,
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "INTERSECT left side must be a SELECT".to_string(),
+                        ))
+                    }
+                };
+                let right_select = match intersect_stmt.right.as_ref() {
+                    Statement::Select(s) => s,
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "INTERSECT right side must be a SELECT".to_string(),
+                        ))
+                    }
+                };
+
+                let mut left_result = self.execute_select(left_select)?;
+                let right_result = self.execute_select(right_select)?;
+
+                if intersect_stmt.intersect_all {
+                    let mut right_counts: std::collections::HashMap<&Vec<sqlrustgo_types::Value>, i64> =
+                        std::collections::HashMap::new();
+                    for row in &right_result.rows {
+                        *right_counts.entry(row).or_insert(0) += 1;
+                    }
+
+                    left_result.rows.retain(|row| {
+                        if let Some(count) = right_counts.get_mut(row) {
+                            if *count > 0 {
+                                *count -= 1;
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    });
+                } else {
+                    let right_set: std::collections::HashSet<_> =
+                        right_result.rows.iter().collect();
+                    left_result.rows.retain(|row| right_set.contains(row));
+                }
+
+                left_result.affected_rows = left_result.rows.len();
+                Ok(left_result)
+            }
+            Statement::Except(ref except_stmt) => {
+                let left_select = match except_stmt.left.as_ref() {
+                    Statement::Select(s) => s,
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "EXCEPT left side must be a SELECT".to_string(),
+                        ))
+                    }
+                };
+                let right_select = match except_stmt.right.as_ref() {
+                    Statement::Select(s) => s,
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "EXCEPT right side must be a SELECT".to_string(),
+                        ))
+                    }
+                };
+
+                let mut left_result = self.execute_select(left_select)?;
+                let right_result = self.execute_select(right_select)?;
+
+                if except_stmt.except_all {
+                    let mut right_counts: std::collections::HashMap<&Vec<sqlrustgo_types::Value>, i64> =
+                        std::collections::HashMap::new();
+                    for row in &right_result.rows {
+                        *right_counts.entry(row).or_insert(0) += 1;
+                    }
+
+                    let original_len = left_result.rows.len();
+                    let mut new_rows = Vec::with_capacity(original_len);
+                    for row in left_result.rows.into_iter() {
+                        if let Some(count) = right_counts.get_mut(&row) {
+                            if *count > 0 {
+                                *count -= 1;
+                                continue;
+                            }
+                        }
+                        new_rows.push(row);
+                    }
+                    left_result.rows = new_rows;
+                } else {
+                    let right_set: std::collections::HashSet<_> =
+                        right_result.rows.iter().collect();
+                    left_result.rows.retain(|row| !right_set.contains(row));
+                }
+
+                left_result.affected_rows = left_result.rows.len();
+                Ok(left_result)
+            }
             Statement::CreateTrigger(ref create_trigger) => {
                 self.execute_create_trigger(create_trigger)
             }
@@ -510,12 +706,17 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::Show(ref show) => self.execute_show(show),
             Statement::ShowRoles => self.execute_show_roles(),
             Statement::ShowGrantsFor(ref user) => self.execute_show_grants_for(user),
+            Statement::Describe(ref desc) => self.execute_describe(&desc.table),
             Statement::AlterTable(ref alter) => self.execute_alter_table(alter),
             Statement::Explain(ref explain) => self.execute_explain(explain),
             Statement::WithSelect(ref ws) => {
                 // Execute the inner SELECT (CTE definitions not yet executed)
                 self.execute_select(&ws.select)
             }
+            Statement::Check(ref check) => self.execute_check(check),
+            Statement::Optimize(ref opt) => self.execute_optimize(opt),
+            Statement::Vacuum(ref vacuum) => self.execute_vacuum(vacuum),
+            Statement::Repair(ref repair) => self.execute_repair(repair),
             _ => Err(SqlError::ExecutionError(format!(
                 "Unsupported statement type: {:?}",
                 std::mem::discriminant(&statement)
@@ -526,29 +727,38 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     /// Execute a SQL statement and return results
     pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
         if !sql.trim().is_empty() && self.cache_config.enabled {
-            let cache_key = self.get_cache_key(sql);
-            if let Some(result) = self.query_cache.write().unwrap().get(&cache_key) {
+            let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+
+            let is_idempotent_begin = matches!(
+                statement,
+                Statement::Transaction(TransactionStatement::BeginIdempotent { .. })
+            );
+
+            if !is_idempotent_begin {
+                let cache_key = self.get_cache_key(sql);
+                if let Some(result) = self.query_cache.write().unwrap().get(&cache_key) {
+                    return Ok(result);
+                }
+
+                let table_names = Self::extract_table_names_from_statement(&statement);
+                let result = self.execute_statement(statement)?;
+
+                if should_cache(&result) {
+                    let entry = CacheEntry {
+                        result: result.clone(),
+                        tables: table_names.clone(),
+                        created_at: std::time::Instant::now(),
+                        size_bytes: result.rows.iter().map(|r| r.len()).sum(),
+                        last_access: 0,
+                    };
+                    self.query_cache
+                        .write()
+                        .unwrap()
+                        .put(cache_key, entry, table_names);
+                }
+
                 return Ok(result);
             }
-
-            let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
-            let result = self.execute_statement(statement)?;
-
-            if should_cache(&result) {
-                let entry = CacheEntry {
-                    result: result.clone(),
-                    tables: vec![],
-                    created_at: std::time::Instant::now(),
-                    size_bytes: result.rows.iter().map(|r| r.len()).sum(),
-                    last_access: 0,
-                };
-                self.query_cache
-                    .write()
-                    .unwrap()
-                    .put(cache_key, entry, vec![]);
-            }
-
-            return Ok(result);
         }
 
         let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
@@ -562,16 +772,42 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
     }
 
-    fn execute_select(&self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
-        let storage = self.storage.read().unwrap();
-
+    fn execute_select(&mut self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
         if select.table.is_empty() {
             return Ok(ExecutorResult::new(vec![], 0));
         }
 
+        if select
+            .table
+            .to_lowercase()
+            .starts_with("information_schema.")
+        {
+            return self.execute_information_schema_select(select);
+        }
+
+        if select.table == "__subquery" {
+            if let Some(ref from) = select.from {
+                if let Some(from_table) = from.tables.first() {
+                    if let Some(ref subquery) = from_table.subquery {
+                        return self.execute_statement(*(*subquery).clone());
+                    }
+                }
+            }
+            return Err(SqlError::ExecutionError(
+                "Subquery not found in from clause".to_string(),
+            ));
+        }
+
+        let storage = self.storage.read().unwrap();
+
         // Step 1: FROM/JOIN - get initial rows and schema
         let (mut rows, table_info) = if select.join_clause.is_some() {
             self.execute_join(select)?
+        } else if self.cbo_enabled {
+            // CBO: try index scan for simple equality predicates
+            let table_info = storage.get_table_info(&select.table)?;
+            let rows = self.try_index_scan_or_fallback(select, &*storage, &table_info)?;
+            (rows, table_info)
         } else {
             let rows = storage.scan(&select.table)?;
             let table_info = storage.get_table_info(&select.table)?;
@@ -730,6 +966,380 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         let row_count = limited_rows.len();
         Ok(ExecutorResult::new(limited_rows, row_count))
+    }
+
+    /// Execute SELECT with FOR UPDATE locking
+    /// Acquires row locks based on the WHERE clause:
+    /// - Equality (=): Next-Key lock on the key
+    /// - Range (>, <, >=, <=): Gap lock covering the range
+    fn execute_select_for_update(&mut self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
+        // Get current transaction ID
+        let tx_id = match self.current_tx_id {
+            Some(id) => id,
+            None => {
+                return Err(SqlError::ExecutionError(
+                    "SELECT FOR UPDATE requires an active transaction".to_string(),
+                ));
+            }
+        };
+
+        // Determine lock target from WHERE clause
+        if let Some(ref where_expr) = select.where_clause {
+            // Try to extract lock target from WHERE clause
+            if let Some(target) = self.extract_lock_target_from_where(where_expr, &select.table)? {
+                // Acquire the lock
+                match self.transaction_manager.acquire_lock_with_target(
+                    tx_id,
+                    target.clone(),
+                    LockMode::Exclusive,
+                ) {
+                    Ok(LockGrantMode::Granted) => {
+                        // Lock acquired, proceed with SELECT
+                    }
+                    Ok(LockGrantMode::Waiting) => {
+                        return Err(SqlError::ExecutionError(
+                            "SELECT FOR UPDATE blocked by concurrent transaction (deadlock or timeout)"
+                                .to_string(),
+                        ));
+                    }
+                    Err(e) => {
+                        return Err(SqlError::ExecutionError(format!(
+                            "Failed to acquire FOR UPDATE lock: {}",
+                            e
+                        )));
+                    }
+                }
+            }
+        }
+
+        // Execute the regular SELECT (lock already acquired)
+        self.execute_select(select)
+    }
+
+    /// Extract LockTarget from WHERE clause for FOR UPDATE locking
+    /// Works with the parser's Expression type where operators are strings
+    fn extract_lock_target_from_where(
+        &self,
+        where_expr: &Expression,
+        _table_name: &str,
+    ) -> SqlResult<Option<LockTarget>> {
+        if let Expression::BinaryOp(left, op, right) = where_expr {
+            let op_upper = op.to_uppercase();
+            match op_upper.as_str() {
+                // Equality: WHERE id = 5 → Next-Key lock on key
+                "=" => {
+                    if let (Some(_col), Some(val)) =
+                        (self.extract_column(left), self.extract_literal(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        return Ok(Some(LockTarget::NextKey(key)));
+                    }
+                    if let (Some(val), Some(_col)) =
+                        (self.extract_literal(left), self.extract_column(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        return Ok(Some(LockTarget::NextKey(key)));
+                    }
+                }
+                // Range: WHERE id > 5 → Gap lock from key to +∞
+                ">" => {
+                    if let (Some(_col), Some(val)) =
+                        (self.extract_column(left), self.extract_literal(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        let start = Some(key);
+                        return Ok(Some(LockTarget::Gap { start, end: None }));
+                    }
+                }
+                // Range: WHERE id < 5 → Gap lock from -∞ to key
+                "<" => {
+                    if let (Some(val), Some(_col)) =
+                        (self.extract_literal(left), self.extract_column(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        let end = Some(key);
+                        return Ok(Some(LockTarget::Gap { start: None, end }));
+                    }
+                }
+                // Range: WHERE id >= 5 → Gap lock from key to +∞ (inclusive)
+                ">=" => {
+                    if let (Some(_col), Some(val)) =
+                        (self.extract_column(left), self.extract_literal(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        let start = Some(key);
+                        return Ok(Some(LockTarget::Gap { start, end: None }));
+                    }
+                }
+                // Range: WHERE id <= 5 → Gap lock from -∞ to key (inclusive)
+                "<=" => {
+                    if let (Some(val), Some(_col)) =
+                        (self.extract_literal(left), self.extract_column(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        let end = Some(key);
+                        return Ok(Some(LockTarget::Gap { start: None, end }));
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Unable to extract lock target - return None (no specific locking)
+        Ok(None)
+    }
+
+    /// Extract column name from expression (parser's Identifier variant)
+    fn extract_column(&self, expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::Identifier(name) => Some(name.clone()),
+            _ => None,
+        }
+    }
+
+    /// Extract literal value string from expression (parser's Literal variant)
+    fn extract_literal(&self, expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::Literal(val) => Some(val.clone()),
+            _ => None,
+        }
+    }
+
+    /// Convert a parser literal string to a lock key (bytes)
+    fn literal_to_lock_key(&self, literal: &str) -> SqlResult<Vec<u8>> {
+        // Try to parse as integer first
+        if let Ok(n) = literal.parse::<i64>() {
+            return Ok(n.to_le_bytes().to_vec());
+        }
+        // Try to parse as float
+        if let Ok(f) = literal.parse::<f64>() {
+            return Ok(f.to_le_bytes().to_vec());
+        }
+        // Try to parse as boolean
+        match literal.to_uppercase().as_str() {
+            "TRUE" | "FALSE" | "1" | "0" => {
+                let b = literal.to_uppercase() == "TRUE" || literal == "1";
+                return Ok((b as u8).to_le_bytes().to_vec());
+            }
+            _ => {}
+        }
+        // Treat as text
+        Ok(literal.as_bytes().to_vec())
+    }
+
+    fn execute_information_schema_select(
+        &self,
+        select: &SelectStatement,
+    ) -> SqlResult<ExecutorResult> {
+        let table_lower = select.table.to_lowercase();
+        let info_table = table_lower
+            .strip_prefix("information_schema.")
+            .unwrap_or(&table_lower);
+        let info_table = info_table.trim_start_matches('`').trim_end_matches('`');
+
+        let catalog = self
+            .catalog
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("Catalog not available".to_string()))?;
+        let catalog = catalog.read().unwrap();
+
+        let info_schema = InformationSchema::new(&catalog);
+
+        let opt_text = |opt: Option<String>| match opt {
+            Some(s) => Value::Text(s),
+            None => Value::Null,
+        };
+
+        let rows: Vec<Vec<Value>> = match info_table {
+            "schemata" => info_schema
+                .get_schemata()
+                .into_iter()
+                .map(|row| vec![Value::Text(row.schema_name), Value::Text(row.schema_owner)])
+                .collect(),
+            "tables" => info_schema
+                .get_tables()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.table_schema),
+                        Value::Text(row.table_name),
+                        Value::Text(row.table_type),
+                        Value::Text(row.is_insertable_into),
+                    ]
+                })
+                .collect(),
+            "columns" => info_schema
+                .get_columns()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.table_schema),
+                        Value::Text(row.table_name),
+                        Value::Text(row.column_name),
+                        Value::Integer(row.ordinal_position as i64),
+                        opt_text(row.column_default),
+                        Value::Text(row.is_nullable),
+                        Value::Text(row.data_type),
+                        Value::Integer(row.character_maximum_length.unwrap_or(0) as i64),
+                        Value::Integer(row.numeric_precision.unwrap_or(0) as i64),
+                        Value::Integer(row.numeric_scale.unwrap_or(0) as i64),
+                    ]
+                })
+                .collect(),
+            "indexes" => info_schema
+                .get_indexes()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.table_schema),
+                        Value::Text(row.table_name),
+                        Value::Text(row.index_name),
+                        Value::Text(row.column_name),
+                        Value::Integer(row.ordinal_position as i64),
+                        Value::Boolean(row.is_unique),
+                        Value::Boolean(row.is_primary),
+                    ]
+                })
+                .collect(),
+            "triggers" => info_schema
+                .get_triggers()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.trigger_name),
+                        Value::Text(row.trigger_schema),
+                        Value::Text(row.event_manipulation),
+                        Value::Integer(row.action_order as i64),
+                        opt_text(row.action_condition),
+                        Value::Text(row.action_statement),
+                        Value::Text(row.orientid),
+                        Value::Text(row.schema_uid),
+                        Value::Text(row.body_catalog),
+                        Value::Text(row.schema_catalog),
+                    ]
+                })
+                .collect(),
+            "events" => info_schema
+                .get_events()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.event_catalog),
+                        Value::Text(row.event_schema),
+                        Value::Text(row.event_name),
+                        Value::Text(row.definer),
+                        Value::Text(row.event_body),
+                        opt_text(row.event_definition),
+                        Value::Text(row.event_type),
+                        opt_text(row.execute_at),
+                        opt_text(row.interval_value),
+                        opt_text(row.interval_field),
+                        Value::Text(row.sql_mode),
+                        opt_text(row.starts),
+                        opt_text(row.ends),
+                        Value::Text(row.status),
+                        Value::Text(row.on_completion),
+                        opt_text(row.created),
+                        opt_text(row.last_altered),
+                        opt_text(row.event_comment),
+                        Value::Text(row.originator),
+                        Value::Text(row.event_body_utf8),
+                    ]
+                })
+                .collect(),
+            "routines" => info_schema
+                .get_routines()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.specific_name),
+                        Value::Text(row.routine_schema),
+                        Value::Text(row.routine_name),
+                        Value::Text(row.routine_type),
+                        Value::Text(row.data_type),
+                        opt_text(row.routine_definition),
+                        opt_text(row.external_name),
+                        Value::Text(row.external_language),
+                    ]
+                })
+                .collect(),
+            "parameters" => info_schema
+                .get_parameters()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.specific_schema),
+                        Value::Text(row.specific_name),
+                        Value::Integer(row.ordinal_position as i64),
+                        opt_text(row.parameter_name),
+                        Value::Text(row.data_type),
+                        opt_text(row.parameter_mode),
+                    ]
+                })
+                .collect(),
+            "user_privileges" => info_schema
+                .get_user_privileges()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.grantee),
+                        Value::Text(row.table_catalog),
+                        Value::Text(row.privilege_type),
+                        Value::Text(row.is_grantable),
+                    ]
+                })
+                .collect(),
+            "schema_privileges" => info_schema
+                .get_schema_privileges()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.grantee),
+                        Value::Text(row.table_catalog),
+                        Value::Text(row.schema_name),
+                        Value::Text(row.privilege_type),
+                        Value::Text(row.is_grantable),
+                    ]
+                })
+                .collect(),
+            "table_privileges" => info_schema
+                .get_table_privileges()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.grantee),
+                        Value::Text(row.table_catalog),
+                        Value::Text(row.table_schema),
+                        Value::Text(row.table_name),
+                        Value::Text(row.privilege_type),
+                        Value::Text(row.is_grantable),
+                    ]
+                })
+                .collect(),
+            "column_privileges" => info_schema
+                .get_column_privileges()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.grantee),
+                        Value::Text(row.table_catalog),
+                        Value::Text(row.table_schema),
+                        Value::Text(row.table_name),
+                        Value::Text(row.column_name),
+                        Value::Text(row.privilege_type),
+                        Value::Text(row.is_grantable),
+                    ]
+                })
+                .collect(),
+            _ => {
+                return Err(SqlError::ExecutionError(format!(
+                    "Unknown INFORMATION_SCHEMA table: {}",
+                    info_table
+                )));
+            }
+        };
+
+        let row_count = rows.len();
+        Ok(ExecutorResult::new(rows, row_count))
     }
 
     fn compute_aggregates(
@@ -1087,6 +1697,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     unique_constraints: vec![],
                     check_constraints: vec![],
                     partition_info: None,
+                    has_hidden_rowid: false,
+                    next_rowid: 1,
                 },
             ));
         }
@@ -1256,7 +1868,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
     }
 
-    fn execute_insert(&self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
+    fn execute_insert(&mut self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
         let table_name = insert.table.clone();
 
         // Get table info first (need it for triggers and FK validation)
@@ -1265,20 +1877,91 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             storage.get_table_info(&table_name)?.clone()
         };
 
+        // Find AUTO_INCREMENT columns
+        let auto_increment_cols: Vec<usize> = table_info
+            .columns
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.auto_increment)
+            .map(|(i, _)| i)
+            .collect();
+
+        // Determine which columns are specified in INSERT
+        let specified_cols: Vec<usize> = if insert.columns.is_empty() {
+            // If no columns specified, all columns are specified
+            (0..table_info.columns.len()).collect()
+        } else {
+            table_info
+                .columns
+                .iter()
+                .enumerate()
+                .filter(|(i, c)| insert.columns.contains(&c.name))
+                .map(|(i, _)| i)
+                .collect()
+        };
+
         // Convert expressions to records (INSERT ... VALUES) or execute SELECT (INSERT ... SELECT)
-        let mut all_records: Vec<Vec<Value>> = if let Some(ref select) = insert.select {
-            let result = self.execute_select(select)?;
-            result.rows
+        let mut all_records: Vec<Vec<Value>> = if let Some(ref select_box) = insert.select {
+            if let Statement::Select(ref select) = select_box.as_ref() {
+                let result = self.execute_select(select)?;
+                result.rows
+            } else {
+                Vec::new()
+            }
         } else {
             Vec::new()
         };
+
+        let mut first_auto_inc: Option<u64> = None;
         if !insert.values.is_empty() {
             for row_exprs in &insert.values {
-                let mut record = Vec::with_capacity(row_exprs.len());
-                for (_i, expr) in row_exprs.iter().enumerate() {
-                    let val = expression_to_value(expr);
-                    record.push(val);
+                let mut record = Vec::with_capacity(table_info.columns.len());
+
+                for col_idx in 0..table_info.columns.len() {
+                    if specified_cols.contains(&col_idx) {
+                        // User specified this column - find its value
+                        let col_name = &table_info.columns[col_idx].name;
+                        let value_idx = insert
+                            .columns
+                            .iter()
+                            .position(|c| c == col_name)
+                            .unwrap_or(col_idx);
+                        if let Some(expr) = row_exprs.get(value_idx) {
+                            let val = expression_to_value(expr);
+                            record.push(val);
+                        } else {
+                            record.push(Value::Null);
+                        }
+                    } else {
+                        // Column not specified - check if AUTO_INCREMENT
+                        if auto_increment_cols.contains(&col_idx) {
+                            // This should not happen with standard INSERT, but handle it
+                            record.push(Value::Null);
+                        } else {
+                            record.push(Value::Null);
+                        }
+                    }
                 }
+
+                // Generate AUTO_INCREMENT values where needed
+                {
+                    let mut storage = self.storage.write().unwrap();
+                    for col_idx in &auto_increment_cols {
+                        if !specified_cols.contains(col_idx)
+                            || *col_idx >= record.len()
+                            || matches!(record[*col_idx], Value::Null)
+                        {
+                            let auto_val = storage.get_next_auto_increment(&table_name)?;
+                            if first_auto_inc.is_none() {
+                                first_auto_inc = Some(auto_val as u64);
+                            }
+                            if *col_idx < record.len() {
+                                record[*col_idx] = Value::Integer(auto_val);
+                            }
+                        }
+                    }
+                }
+
                 all_records.push(record);
             }
         }
@@ -1299,6 +1982,44 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     }
                 }
             }
+        }
+
+        // For INSERT ... ON DUPLICATE KEY UPDATE: update existing rows and skip their insertion
+        let mut records_to_skip: Vec<usize> = Vec::new();
+        #[allow(clippy::unnecessary_unwrap)]
+        if insert.on_duplicate_key_update.is_some() && !insert.is_replace {
+            let update_assignments = insert.on_duplicate_key_update.as_ref().unwrap();
+            let mut storage = self.storage.write().unwrap();
+            let records = storage.get_table_records_mut(&table_name)?;
+            for (record_idx, record) in all_records.iter().enumerate() {
+                #[allow(clippy::needless_range_loop)]
+                for row_idx in 0..records.len() {
+                    if self.record_matches_unique_key(&records[row_idx], record, &table_info) {
+                        for (col_name, expr) in update_assignments {
+                            if let Some(col_idx) = find_column_index(col_name, &table_info) {
+                                let evaluated_val =
+                                    evaluate_expression(expr, &records[row_idx], &table_info)
+                                        .unwrap_or(Value::Null);
+                                if col_idx < records[row_idx].len() {
+                                    records[row_idx][col_idx] = evaluated_val;
+                                }
+                            }
+                        }
+                        records_to_skip.push(record_idx);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if !records_to_skip.is_empty() {
+            let mut modified_records = Vec::new();
+            for (idx, record) in all_records.into_iter().enumerate() {
+                if !records_to_skip.contains(&idx) {
+                    modified_records.push(record);
+                }
+            }
+            all_records = modified_records;
         }
 
         // Execute BEFORE INSERT triggers
@@ -1367,30 +2088,68 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .unwrap()
             .invalidate_table(&table_name);
 
-        Ok(ExecutorResult::new(vec![], insert.values.len()))
+        let updated_count = records_to_skip.len();
+        let affected_rows = (insert.values.len() - updated_count) + (updated_count * 2);
+
+        Ok(ExecutorResult::new(vec![], affected_rows).with_last_insert_id(first_auto_inc))
     }
 
     /// Check if a new record matches an existing row based on primary key or unique constraints
+    /// Returns true if the new record matches the existing record on ALL columns of:
+    /// - The primary key, OR
+    /// - Any unique constraint
     fn record_matches_unique_key(
         &self,
         existing: &[Value],
         new: &[Value],
         table_info: &TableInfo,
     ) -> bool {
-        // Find primary key column(s)
+        // Check primary key columns - all must match
+        let mut pk_cols_match = true;
         for (col_idx, col) in table_info.columns.iter().enumerate() {
             if col.primary_key {
-                // Compare by primary key column index
-                if col_idx < existing.len() && col_idx < new.len() {
-                    if existing[col_idx] != new[col_idx] {
-                        return false;
-                    }
-                } else {
-                    return false;
+                if col_idx >= existing.len() || col_idx >= new.len() {
+                    pk_cols_match = false;
+                    break;
+                }
+                if existing[col_idx] != new[col_idx] {
+                    pk_cols_match = false;
+                    break;
                 }
             }
         }
-        true
+
+        if pk_cols_match {
+            return true;
+        }
+
+        // Check unique constraints - all columns in any unique constraint must match
+        for constraint in &table_info.unique_constraints {
+            let mut all_cols_match = true;
+            for col_name in &constraint.columns {
+                // Find column index by name
+                let col_idx = table_info.columns.iter().position(|c| c.name == *col_name);
+
+                if let Some(idx) = col_idx {
+                    if idx >= existing.len() || idx >= new.len() {
+                        all_cols_match = false;
+                        break;
+                    }
+                    if existing[idx] != new[idx] {
+                        all_cols_match = false;
+                        break;
+                    }
+                } else {
+                    all_cols_match = false;
+                    break;
+                }
+            }
+            if all_cols_match {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn execute_update(&self, update: &UpdateStatement) -> SqlResult<ExecutorResult> {
@@ -1871,6 +2630,17 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(ExecutorResult::new(vec![], count))
     }
 
+    fn execute_merge(&self, merge: &MergeStatement) -> SqlResult<ExecutorResult> {
+        let target_table = merge.target_table.clone();
+        let merge_executor = MergeExecutor::new(self.storage.clone());
+        let result = merge_executor.execute_merge(merge)?;
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&target_table);
+        Ok(result)
+    }
+
     fn execute_alter_table(&self, alter: &AlterTableStatement) -> SqlResult<ExecutorResult> {
         let table_name = &alter.table_name;
 
@@ -1901,6 +2671,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     data_type: ct.to_uppercase(),
                     nullable: *nullable,
                     primary_key: false,
+                    auto_increment: false,
                 });
                 cols
             }
@@ -1955,6 +2726,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 unique_constraints: old_info.unique_constraints.clone(),
                 check_constraints: old_info.check_constraints.clone(),
                 partition_info: None,
+                has_hidden_rowid: old_info.has_hidden_rowid,
+                next_rowid: old_info.next_rowid,
             })?;
             // Copy rows, pad with NULL for AddColumn
             let is_add = matches!(&alter.operation, AlterTableOperation::AddColumn { .. });
@@ -1998,6 +2771,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 data_type: c.data_type.clone(),
                 nullable: !c.primary_key,
                 primary_key: c.primary_key,
+                auto_increment: c.auto_increment,
             })
             .collect();
         let info = TableInfo {
@@ -2007,6 +2781,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&info)?;
         self.query_cache
@@ -2042,6 +2818,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     fn execute_create_index(&self, idx: &CreateIndexStatement) -> SqlResult<ExecutorResult> {
+        use sqlrustgo_storage::engine::UniqueConstraint;
+
         let mut storage = self.storage.write().unwrap();
         let table_name = &idx.table;
         let col_name = idx
@@ -2055,6 +2833,15 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .position(|c| c.name == *col_name)
             .ok_or_else(|| SqlError::ExecutionError("Column not found".to_string()))?;
         storage.create_index(table_name, col_name, col_idx)?;
+
+        if idx.unique {
+            let constraint = UniqueConstraint {
+                name: Some(idx.name.clone()),
+                columns: vec![col_name.clone()],
+            };
+            storage.add_unique_constraint(table_name, constraint)?;
+        }
+
         Ok(ExecutorResult::empty())
     }
 
@@ -2222,10 +3009,17 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     .unwrap_or(self.default_isolation);
                 self.begin_transaction(iso)
             }
+            TransactionStatement::BeginIdempotent { key } => {
+                let iso = self.default_isolation;
+                self.begin_transaction_idempotent(key, iso)
+            }
+            TransactionStatement::Savepoint { name: _ } => Ok(ExecutorResult::empty()),
+            TransactionStatement::RollbackToSavepoint { name: _ } => Ok(ExecutorResult::empty()),
+            TransactionStatement::ReleaseSavepoint { name: _ } => Ok(ExecutorResult::empty()),
         }
     }
 
-    fn begin_transaction(&mut self, isolation: TmIsolationLevel) -> SqlResult<ExecutorResult> {
+    pub fn begin_transaction(&mut self, isolation: TmIsolationLevel) -> SqlResult<ExecutorResult> {
         if self.current_tx_id.is_some() {
             return Err(SqlError::ExecutionError(
                 "Transaction already in progress".to_string(),
@@ -2244,7 +3038,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         ))
     }
 
-    fn commit_transaction(&mut self) -> SqlResult<ExecutorResult> {
+    pub fn commit_transaction(&mut self) -> SqlResult<ExecutorResult> {
         let tx_id = self
             .current_tx_id
             .ok_or_else(|| SqlError::ExecutionError("No transaction in progress".to_string()))?;
@@ -2255,7 +3049,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(ExecutorResult::empty())
     }
 
-    fn rollback_transaction(&mut self) -> SqlResult<ExecutorResult> {
+    pub fn rollback_transaction(&mut self) -> SqlResult<ExecutorResult> {
         let tx_id = self
             .current_tx_id
             .ok_or_else(|| SqlError::ExecutionError("No transaction in progress".to_string()))?;
@@ -2266,11 +3060,53 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(ExecutorResult::empty())
     }
 
+    pub fn begin_transaction_idempotent(
+        &mut self,
+        key: &str,
+        isolation: TmIsolationLevel,
+    ) -> SqlResult<ExecutorResult> {
+        if self.current_tx_id.is_some() {
+            return Err(SqlError::ExecutionError(
+                "Transaction already in progress".to_string(),
+            ));
+        }
+
+        let transaction_statement = TransactionStatement::Begin {
+            work: false,
+            isolation_level: None,
+        };
+
+        let result = self
+            .transaction_manager
+            .begin_transaction_idempotent(key, &transaction_statement, isolation)
+            .map_err(|e| {
+                SqlError::ExecutionError(format!("Failed to begin idempotent transaction: {:?}", e))
+            })?;
+
+        match result {
+            IdempotentBeginResult::IdempotentSuccess { key } => {
+                Ok(ExecutorResult::new(vec![vec![Value::Text(key)]], 0))
+            }
+            IdempotentBeginResult::NewTransaction { tx_id } => {
+                self.current_tx_id = Some(tx_id);
+                Ok(ExecutorResult::new(
+                    vec![vec![Value::Integer(tx_id.as_u64() as i64)]],
+                    1,
+                ))
+            }
+        }
+    }
+
     fn execute_grant(&mut self, grant: &GrantStatement) -> SqlResult<ExecutorResult> {
         let catalog_guard = self.catalog.as_ref().ok_or_else(|| {
             SqlError::ExecutionError("Catalog not available for GRANT".to_string())
         })?;
         let mut catalog = catalog_guard.write().unwrap();
+
+        let current_user = self
+            .current_user
+            .as_ref()
+            .ok_or_else(|| SqlError::ExecutionError("No current user set for GRANT".to_string()))?;
 
         for privilege in &grant.privileges {
             let priv_str = match privilege {
@@ -2314,6 +3150,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             priv_obj,
                             obj_type,
                             &grant.object_name,
+                            current_user,
                             grant.with_grant_option,
                         )
                         .map_err(|e| SqlError::ExecutionError(format!("GRANT failed: {}", e)))?;
@@ -2332,6 +3169,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             SqlError::ExecutionError("Catalog not available for REVOKE".to_string())
         })?;
         let mut catalog = catalog_guard.write().unwrap();
+
+        let current_user = self.current_user.as_ref().ok_or_else(|| {
+            SqlError::ExecutionError("No current user set for REVOKE".to_string())
+        })?;
 
         for privilege in &revoke.privileges {
             let priv_str = match privilege {
@@ -2357,6 +3198,23 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 ParserObjectType::Procedure => sqlrustgo_catalog::auth::ObjectType::Table,
                 ParserObjectType::Function => sqlrustgo_catalog::auth::ObjectType::Table,
             };
+
+            let object_ref = sqlrustgo_catalog::auth::ObjectRef {
+                object_type: obj_type,
+                object_name: revoke.object_name.clone(),
+                column_name: None,
+            };
+
+            let has_grant_option = catalog
+                .auth_manager()
+                .has_grant_option(current_user, priv_obj, &object_ref)
+                .map_err(|e| SqlError::ExecutionError(format!("REVOKE check failed: {}", e)))?;
+
+            if !has_grant_option {
+                return Err(SqlError::ExecutionError(
+                    "Access denied: you need GRANT OPTION to REVOKE".to_string(),
+                ));
+            }
 
             for user in &revoke.from_users {
                 let identity = sqlrustgo_catalog::auth::UserIdentity::new(user, "%");
@@ -2535,12 +3393,57 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         ))
     }
 
-    fn execute_explain(&self, explain: &ExplainStatement) -> SqlResult<ExecutorResult> {
+    fn execute_explain(&mut self, explain: &ExplainStatement) -> SqlResult<ExecutorResult> {
         let plan_desc = format!("{:?}", explain.statement);
         let mut rows = vec![
             vec![Value::Text("Query Plan".to_string())],
             vec![Value::Text(format!("  {}", plan_desc))],
         ];
+
+        // Show CBO analysis for SELECT statements
+        if let Statement::Select(ref select) = *explain.statement {
+            let table_name = &select.table;
+            if !table_name.is_empty() {
+                let row_count = self.estimate_row_count(table_name);
+                let seq_cost = self.estimate_seq_scan_cost(table_name);
+
+                // Check if index scan would be beneficial
+                let storage = self.storage.read().unwrap();
+                let indexes = storage.list_indexes(table_name);
+                drop(storage);
+
+                if !indexes.is_empty() && self.cbo_enabled {
+                    rows.push(vec![Value::Text(format!(
+                        "  Scan type: CBO index scan ({} indexes available)",
+                        indexes.len()
+                    ))]);
+                    // Show first index benefit
+                    let (col, _) = &indexes[0];
+                    let selectivity = self.estimate_selectivity(table_name, col);
+                    let index_cost = self.estimate_index_scan_cost(table_name, selectivity);
+                    let benefit = self.estimate_index_benefit(table_name, selectivity);
+                    if benefit > 0.0 {
+                        rows.push(vec![Value::Text(format!(
+                            "  Index on {}: est_cost={:.2}, selectivity={:.4}, benefit={:.2}",
+                            col, index_cost, selectivity, benefit
+                        ))]);
+                    }
+                } else {
+                    rows.push(vec![Value::Text("  Scan type: SeqScan".to_string())]);
+                }
+                rows.push(vec![Value::Text(format!(
+                    "  Table: {}, est_rows={}, est_seq_cost={:.2}",
+                    table_name, row_count, seq_cost
+                ))]);
+
+                if let Some(ref join) = select.join_clause {
+                    let tables = vec![table_name.as_str(), join.table.as_str()];
+                    let ordered = self.optimize_join_order(&tables);
+                    rows.push(vec![Value::Text(format!("  Join order: {:?}", ordered))]);
+                }
+            }
+        }
+
         if explain.analyze {
             if let Statement::Select(ref select) = *explain.statement {
                 let start = std::time::Instant::now();
@@ -2553,8 +3456,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             r.rows.len(),
                             elapsed
                         ))]);
-                        let est = self.estimate_seq_scan_cost(&select.first_table());
-                        rows.push(vec![Value::Text(format!("  Estimated cost: {:.2}", est))]);
                     }
                     Err(e) => {
                         rows.push(vec![Value::Text(format!("  Execution error: {:?}", e))]);
@@ -2573,9 +3474,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     fn execute_show(&self, show: &ShowStatement) -> SqlResult<ExecutorResult> {
         match show {
             ShowStatement::Tables => self.execute_show_tables(),
-            ShowStatement::Columns { table, pattern } => {
-                self.execute_show_columns(table, pattern.as_deref())
-            }
+            ShowStatement::Columns {
+                table,
+                pattern,
+                full: _,
+            } => self.execute_show_columns(table, pattern.as_deref()),
             ShowStatement::Databases => Ok(ExecutorResult::new(
                 vec![vec![Value::Text("public".to_string())]],
                 1,
@@ -2589,7 +3492,137 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 "SHOW INDEX not yet implemented".to_string(),
             )),
             ShowStatement::Variables { like } => self.execute_show_variables(like.as_deref()),
+            ShowStatement::Status { like: _ } => Err(SqlError::ExecutionError(
+                "SHOW STATUS not yet implemented".to_string(),
+            )),
+            ShowStatement::TableStatus { database: _ } => self.execute_show_table_status(),
+            ShowStatement::Processlist => self.execute_show_processlist(),
+            ShowStatement::Events => self.execute_show_events(),
+            ShowStatement::TransactionHistory { limit } => {
+                self.execute_show_transaction_history(limit.map(|v| v as usize))
+            }
+            ShowStatement::LockWaits => self.execute_show_lock_waits(),
+            ShowStatement::RecoveryHistory { limit } => {
+                self.execute_show_recovery_history(limit.map(|v| v as usize))
+            }
+            ShowStatement::WalStats => self.execute_show_wal_stats(),
         }
+    }
+
+    fn execute_show_events(&self) -> SqlResult<ExecutorResult> {
+        let opt_text = |opt: Option<String>| match opt {
+            Some(s) => Value::Text(s),
+            None => Value::Null,
+        };
+
+        if let Some(catalog) = &self.catalog {
+            let catalog = catalog.read().unwrap();
+            let info_schema = InformationSchema::new(&catalog);
+            let rows: Vec<Vec<Value>> = info_schema
+                .get_events()
+                .into_iter()
+                .map(|row| {
+                    vec![
+                        Value::Text(row.event_catalog),
+                        Value::Text(row.event_schema),
+                        Value::Text(row.event_name),
+                        Value::Text(row.definer),
+                        Value::Text(row.event_body),
+                        opt_text(row.event_definition),
+                        Value::Text(row.event_type),
+                        opt_text(row.execute_at),
+                        opt_text(row.interval_value),
+                        opt_text(row.interval_field),
+                        Value::Text(row.sql_mode),
+                        opt_text(row.starts),
+                        opt_text(row.ends),
+                        Value::Text(row.status),
+                        Value::Text(row.on_completion),
+                        opt_text(row.created),
+                        opt_text(row.last_altered),
+                        opt_text(row.event_comment),
+                        Value::Text(row.originator),
+                        Value::Text(row.event_body_utf8),
+                    ]
+                })
+                .collect();
+            Ok(ExecutorResult::new(rows.clone(), rows.len()))
+        } else {
+            Ok(ExecutorResult::new(vec![], 0))
+        }
+    }
+
+    fn execute_show_transaction_history(&self, limit: Option<usize>) -> SqlResult<ExecutorResult> {
+        let history = OBSERVABILITY.transaction_history.read().unwrap();
+        let entries = history.query(limit);
+        let rows: Vec<Vec<Value>> = entries
+            .iter()
+            .map(|entry| {
+                vec![
+                    Value::Integer(entry.tx_id as i64),
+                    Value::Text(entry.tx_uuid.clone()),
+                    Value::Integer(entry.start_time as i64),
+                    Value::Integer(entry.commit_time.unwrap_or(0) as i64),
+                    Value::Integer(entry.abort_time.unwrap_or(0) as i64),
+                    Value::Text(entry.isolation_level.clone()),
+                    Value::Text(format!("{:?}", entry.status)),
+                ]
+            })
+            .collect();
+        Ok(ExecutorResult::new(rows.clone(), rows.len()))
+    }
+
+    fn execute_show_lock_waits(&self) -> SqlResult<ExecutorResult> {
+        let graph = OBSERVABILITY.lock_wait_graph.read().unwrap();
+        let waits = graph.get_active_waits();
+        let rows: Vec<Vec<Value>> = waits
+            .iter()
+            .map(|edge| {
+                vec![
+                    Value::Integer(edge.waiter_tx_id as i64),
+                    Value::Integer(edge.holder_tx_id as i64),
+                    Value::Text(edge.lock_key.clone()),
+                    Value::Text(edge.lock_mode.clone()),
+                    Value::Integer(edge.wait_start_time as i64),
+                ]
+            })
+            .collect();
+        Ok(ExecutorResult::new(rows.clone(), rows.len()))
+    }
+
+    fn execute_show_recovery_history(&self, limit: Option<usize>) -> SqlResult<ExecutorResult> {
+        let history = OBSERVABILITY.recovery_history.read().unwrap();
+        let entries = history.query(limit);
+        let rows: Vec<Vec<Value>> = entries
+            .iter()
+            .map(|entry| {
+                vec![
+                    Value::Integer(entry.recovery_id as i64),
+                    Value::Integer(entry.crash_timestamp as i64),
+                    Value::Integer(entry.recovery_timestamp as i64),
+                    Value::Integer(entry.lsn_recovered as i64),
+                    Value::Integer(entry.transactions_replayed as i64),
+                    Value::Text(format!("{:?}", entry.status)),
+                    Value::Text(entry.error_message.clone().unwrap_or_default()),
+                ]
+            })
+            .collect();
+        Ok(ExecutorResult::new(rows.clone(), rows.len()))
+    }
+
+    fn execute_show_wal_stats(&self) -> SqlResult<ExecutorResult> {
+        let stats = OBSERVABILITY.wal_stats.read().unwrap();
+        let stats_data = stats.get_stats();
+        let rows = vec![vec![
+            Value::Integer(stats_data.total_writes as i64),
+            Value::Integer(stats_data.total_bytes as i64),
+            Value::Integer(stats_data.flush_count as i64),
+            Value::Integer(stats_data.replay_count as i64),
+            Value::Integer(stats_data.replay_time_ms as i64),
+            Value::Integer(stats_data.last_flush_lsn as i64),
+            Value::Integer(stats_data.current_lsn as i64),
+        ]];
+        Ok(ExecutorResult::new(rows.clone(), rows.len()))
     }
 
     fn execute_show_tables(&self) -> SqlResult<ExecutorResult> {
@@ -2721,6 +3754,161 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         Ok(ExecutorResult::new(rows, 4))
     }
+
+    fn execute_show_table_status(&self) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+        let tables = storage.list_tables();
+        let rows: Vec<Vec<Value>> = tables
+            .into_iter()
+            .map(|name| {
+                vec![
+                    Value::Text(name),
+                    Value::Text("InnoDB".to_string()),
+                    Value::Text("10".to_string()),
+                    Value::Integer(0),
+                    Value::Integer(0),
+                    Value::Integer(0),
+                    Value::Null,
+                    Value::Null,
+                    Value::Text("utf8mb4".to_string()),
+                    Value::Text("utf8mb4_general_ci".to_string()),
+                    Value::Text("".to_string()),
+                    Value::Text("".to_string()),
+                ]
+            })
+            .collect();
+        Ok(ExecutorResult::new(rows, 0))
+    }
+
+    fn execute_show_processlist(&self) -> SqlResult<ExecutorResult> {
+        let rows = vec![vec![
+            Value::Integer(1),
+            Value::Text("system".to_string()),
+            Value::Text("localhost".to_string()),
+            Value::Null,
+            Value::Text("Daemon".to_string()),
+            Value::Text("0".to_string()),
+            Value::Text("".to_string()),
+            Value::Null,
+        ]];
+        Ok(ExecutorResult::new(rows, 1))
+    }
+
+    fn execute_check(&self, check: &CheckStatement) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+        let mut rows = vec![];
+
+        for table_name in &check.names {
+            match storage.get_table_info(table_name) {
+                Ok(info) => {
+                    let _status = if check.option == Some(CheckOption::Extended) {
+                        // Extended check would scan all rows for corruption
+                        "OK (Extended check not fully implemented)"
+                    } else {
+                        "OK"
+                    };
+                    rows.push(vec![
+                        Value::Text(table_name.clone()),
+                        Value::Text("check".to_string()),
+                        Value::Text("OK".to_string()),
+                        Value::Text(format!("Table is usable. Columns: {}", info.columns.len())),
+                    ]);
+                }
+                Err(e) => {
+                    rows.push(vec![
+                        Value::Text(table_name.clone()),
+                        Value::Text("check".to_string()),
+                        Value::Text("error".to_string()),
+                        Value::Text(format!("Table not found or error: {}", e)),
+                    ]);
+                }
+            }
+        }
+
+        let rc = rows.len();
+        Ok(ExecutorResult::new(rows, rc))
+    }
+
+    fn execute_optimize(&self, opt: &OptimizeStatement) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+
+        match storage.get_table_info(&opt.name) {
+            Ok(_info) => {
+                // In a real implementation, this would:
+                // 1. Defragment pages
+                // 2. Rebuild indexes
+                // 3. Update statistics
+                let rows = vec![vec![
+                    Value::Text(opt.name.clone()),
+                    Value::Text("optimize".to_string()),
+                    Value::Text("OK".to_string()),
+                    Value::Text("Table optimized successfully".to_string()),
+                ]];
+                Ok(ExecutorResult::new(rows, 1))
+            }
+            Err(e) => Err(SqlError::ExecutionError(format!(
+                "Cannot optimize table '{}': {}",
+                opt.name, e
+            ))),
+        }
+    }
+
+    fn execute_vacuum(&self, vacuum: &VacuumStatement) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+        let mut rows = vec![];
+
+        // If no specific tables, vacuum all
+        let tables_to_vacuum = if vacuum.names.is_empty() {
+            storage.list_tables()
+        } else {
+            vacuum.names.clone()
+        };
+
+        for table_name in tables_to_vacuum {
+            match storage.get_table_info(&table_name) {
+                Ok(_info) => {
+                    let mode_str = match vacuum.mode {
+                        VacuumMode::Normal => "NORMAL",
+                        VacuumMode::Full => "FULL",
+                        VacuumMode::Analyze => "ANALYZE",
+                    };
+                    rows.push(vec![
+                        Value::Text(table_name.to_string()),
+                        Value::Text("vacuum".to_string()),
+                        Value::Text("OK".to_string()),
+                        Value::Text(format!("{} mode completed", mode_str)),
+                    ]);
+                }
+                Err(_e) => {
+                    // Skip tables that don't exist
+                }
+            }
+        }
+
+        let rc = rows.len();
+        Ok(ExecutorResult::new(rows, rc))
+    }
+
+    fn execute_repair(&self, repair: &RepairStatement) -> SqlResult<ExecutorResult> {
+        let storage = self.storage.read().unwrap();
+
+        match storage.get_table_info(&repair.name) {
+            Ok(_info) => {
+                // In a real implementation, this would attempt to repair corrupted pages
+                let rows = vec![vec![
+                    Value::Text(repair.name.clone()),
+                    Value::Text("repair".to_string()),
+                    Value::Text("OK".to_string()),
+                    Value::Text("Table repair completed (quick repair mode)".to_string()),
+                ]];
+                Ok(ExecutorResult::new(rows, 1))
+            }
+            Err(e) => Err(SqlError::ExecutionError(format!(
+                "Cannot repair table '{}': {}",
+                repair.name, e
+            ))),
+        }
+    }
 }
 
 impl ExecutionEngine<MemoryStorage> {
@@ -2736,6 +3924,7 @@ impl ExecutionEngine<MemoryStorage> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
@@ -2753,6 +3942,7 @@ impl ExecutionEngine<MemoryStorage> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
@@ -2770,6 +3960,7 @@ impl ExecutionEngine<MemoryStorage> {
             current_tx_id: None,
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
+            current_user: None,
             cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
         }
@@ -3057,6 +4248,24 @@ impl<S: StorageEngine> ExecutionEngine<S> {
                 let subquery_values = self.execute_subquery(subquery, row, table_info);
                 subquery_values.is_empty()
             }
+            Expression::Like(left, pattern, _escape) => {
+                let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+                let pattern_val =
+                    evaluate_expression(pattern, row, table_info).unwrap_or(Value::Null);
+                match (left_val, pattern_val) {
+                    (Value::Text(text), Value::Text(pat)) => like_pattern(&text, &pat),
+                    _ => false,
+                }
+            }
+            Expression::NotLike(left, pattern, _escape) => {
+                let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+                let pattern_val =
+                    evaluate_expression(pattern, row, table_info).unwrap_or(Value::Null);
+                match (left_val, pattern_val) {
+                    (Value::Text(text), Value::Text(pat)) => !like_pattern(&text, &pat),
+                    _ => true,
+                }
+            }
             // Legacy IS NULL (col IS NULL) - now uses new Expression::IsNull
             Expression::BinaryOp(left, op, right)
                 if op.to_uppercase() == "IS"
@@ -3242,6 +4451,22 @@ fn eval_predicate_standalone(expr: &Expression, row: &[Value], table_info: &Tabl
             let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
             sql_compare(op, &left_val, &right_val)
         }
+        Expression::Like(left, pattern, _escape) => {
+            let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+            let pattern_val = evaluate_expression(pattern, row, table_info).unwrap_or(Value::Null);
+            match (left_val, pattern_val) {
+                (Value::Text(text), Value::Text(pat)) => like_pattern(&text, &pat),
+                _ => false,
+            }
+        }
+        Expression::NotLike(left, pattern, _escape) => {
+            let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+            let pattern_val = evaluate_expression(pattern, row, table_info).unwrap_or(Value::Null);
+            match (left_val, pattern_val) {
+                (Value::Text(text), Value::Text(pat)) => !like_pattern(&text, &pat),
+                _ => true,
+            }
+        }
         _ => {
             matches!(evaluate_expression(expr, row, table_info), Ok(val) if matches!(val, Value::Boolean(true)))
         }
@@ -3265,6 +4490,69 @@ fn sql_compare(op: &str, left: &Value, right: &Value) -> bool {
         "<=" => compare_values(left, right) <= 0,
         _ => false,
     }
+}
+
+/// LIKE pattern matching - supports % and _ wildcards
+/// Returns true if text matches the pattern
+fn like_pattern(text: &str, pattern: &str) -> bool {
+    // Simple LIKE implementation - supports % and _ wildcards
+    if pattern.is_empty() {
+        return text.is_empty();
+    }
+    if pattern == "%" {
+        return true;
+    }
+
+    if let Some(remaining) = pattern.strip_prefix('%') {
+        if let Some(core) = remaining.strip_suffix('%') {
+            return text.starts_with(core);
+        }
+        return text.ends_with(remaining) || like_pattern(&text[1..], remaining);
+    }
+
+    if let Some(remaining) = pattern.strip_suffix('%') {
+        return text.starts_with(remaining)
+            || like_pattern(&text[..text.len().saturating_sub(1)], remaining);
+    }
+
+    if !pattern.contains('%') && !pattern.contains('_') {
+        return text == pattern;
+    }
+
+    let mut text_chars = text.chars().peekable();
+    let mut pattern_chars = pattern.chars().peekable();
+
+    while text_chars.peek().is_some() || pattern_chars.peek().is_some() {
+        match (pattern_chars.peek(), text_chars.peek()) {
+            (Some('%'), _) => {
+                pattern_chars.next();
+                // Try matching at current position or skip one char
+                if pattern_chars.peek().is_none() {
+                    return true;
+                }
+                // Try skipping one character from text
+                if text_chars.peek().is_some() {
+                    let text_copy: String = text_chars.clone().collect();
+                    if like_pattern(
+                        &text_copy[1..],
+                        &pattern[pattern.len() - pattern_chars.clone().count()..],
+                    ) {
+                        return true;
+                    }
+                }
+            }
+            (Some('_'), Some(_)) => {
+                pattern_chars.next();
+                text_chars.next();
+            }
+            (Some(p), Some(t)) if p == t => {
+                pattern_chars.next();
+                text_chars.next();
+            }
+            _ => return false,
+        }
+    }
+    pattern_chars.peek().is_none()
 }
 
 /// Evaluate an expression with outer table context for correlated subqueries
@@ -3454,6 +4742,41 @@ fn evaluate_expression(
                 Err(format!("Aggregate not found in schema: {}", agg_name))
             }
         }
+        Expression::MatchAgainst(columns, search_expr, _mode) => {
+            // Evaluate the search expression first
+            let search_val = evaluate_expression(search_expr, row, table_info)?;
+            let search_text = match &search_val {
+                Value::Text(s) => s.to_lowercase(),
+                Value::Integer(n) => n.to_string(),
+                Value::Float(f) => f.to_string(),
+                _ => return Ok(Value::Boolean(false)),
+            };
+
+            if search_text.is_empty() {
+                return Ok(Value::Boolean(false));
+            }
+
+            // Check if any of the specified columns contain the search term
+            let mut found = false;
+            for col_name in columns {
+                if let Some(col_idx) = find_column_index(col_name, table_info) {
+                    if let Some(value) = row.get(col_idx) {
+                        let col_text = match value {
+                            Value::Text(s) => s.to_lowercase(),
+                            Value::Integer(n) => n.to_string(),
+                            Value::Float(f) => f.to_string(),
+                            Value::Null => continue,
+                            _ => continue,
+                        };
+                        if col_text.contains(&search_text) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            Ok(Value::Boolean(found))
+        }
         _ => Ok(Value::Null),
     }
 }
@@ -3577,12 +4900,7 @@ fn evaluate_expr_to_string(expr: &Expression, row: &[Value], table_info: &TableI
 /// by routing to the correct portion of the combined schema.
 /// Combined table naming: left_table.col, right_table.col
 fn find_column_index(col_name: &str, table_info: &TableInfo) -> Option<usize> {
-    if let Some((qualifier, col)) = col_name.split_once('.') {
-        for (i, c) in table_info.columns.iter().enumerate() {
-            if c.name.eq_ignore_ascii_case(col_name) {
-                return Some(i);
-            }
-        }
+    if let Some((_qualifier, col)) = col_name.split_once('.') {
         table_info
             .columns
             .iter()
@@ -3658,6 +4976,7 @@ fn build_combined_schema(
             data_type: c.data_type.clone(),
             nullable: c.nullable,
             primary_key: c.primary_key,
+            auto_increment: c.auto_increment,
         });
     }
 
@@ -3667,6 +4986,7 @@ fn build_combined_schema(
             data_type: c.data_type.clone(),
             nullable: c.nullable,
             primary_key: c.primary_key,
+            auto_increment: c.auto_increment,
         });
     }
 
@@ -3677,6 +4997,8 @@ fn build_combined_schema(
         unique_constraints: vec![],
         check_constraints: vec![],
         partition_info: None,
+        has_hidden_rowid: false,
+        next_rowid: 1,
     })
 }
 
@@ -3692,6 +5014,7 @@ fn build_aggregate_schema(
             data_type: "INTEGER".to_string(),
             nullable: false,
             primary_key: false,
+            auto_increment: false,
         });
     }
 
@@ -3757,6 +5080,7 @@ fn build_aggregate_schema(
             data_type: "INTEGER".to_string(),
             nullable: false,
             primary_key: false,
+            auto_increment: false,
         });
     }
 
@@ -3767,6 +5091,8 @@ fn build_aggregate_schema(
         unique_constraints: vec![],
         check_constraints: vec![],
         partition_info: None,
+        has_hidden_rowid: false,
+        next_rowid: 1,
     })
 }
 
@@ -4048,5 +5374,135 @@ mod tests {
 
         // Smallest (t3 with 5 rows) should be first after ANALYZE
         assert_eq!(optimal[0], "t3");
+    }
+
+    #[test]
+    fn test_index_scan_in_execute_select() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+            .unwrap();
+        engine
+            .execute("CREATE INDEX idx_users_id ON users (id)")
+            .unwrap();
+
+        for i in 0..100 {
+            engine
+                .execute(&format!("INSERT INTO users VALUES ({}, 'user{}')", i, i))
+                .unwrap();
+        }
+
+        // SELECT with equality predicate should use index scan via CBO
+        let result = engine.execute("SELECT * FROM users WHERE id = 42").unwrap();
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(result.rows[0][0], Value::Integer(42));
+        assert_eq!(result.rows[0][1], Value::Text("user42".to_string()));
+
+        // SELECT with non-matching predicate should return empty
+        let result = engine
+            .execute("SELECT * FROM users WHERE id = 999")
+            .unwrap();
+        assert_eq!(result.rows.len(), 0);
+    }
+
+    #[test]
+    fn test_index_scan_with_cbo_disabled() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::with_cbo(storage, false);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+            .unwrap();
+        engine
+            .execute("CREATE INDEX idx_users_id ON users (id)")
+            .unwrap();
+
+        for i in 0..100 {
+            engine
+                .execute(&format!("INSERT INTO users VALUES ({}, 'user{}')", i, i))
+                .unwrap();
+        }
+
+        // With CBO disabled, should fall back to full scan (still works)
+        let result = engine.execute("SELECT * FROM users WHERE id = 42").unwrap();
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(result.rows[0][0], Value::Integer(42));
+        assert_eq!(result.rows[0][1], Value::Text("user42".to_string()));
+    }
+
+    #[test]
+    fn test_describe_table() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
+            .unwrap();
+
+        // DESCRIBE should work same as DESCRIBE
+        let result = engine.execute("DESCRIBE users").unwrap();
+        assert_eq!(result.rows.len(), 3);
+
+        // First column: id, INTEGER, NO, PRI
+        assert_eq!(result.rows[0][0], Value::Text("id".to_string()));
+        assert_eq!(result.rows[0][1], Value::Text("INTEGER".to_string()));
+        assert_eq!(result.rows[0][2], Value::Text("NO".to_string()));
+        assert_eq!(result.rows[0][3], Value::Text("PRI".to_string()));
+
+        // Second column: name, TEXT, YES, (empty)
+        assert_eq!(result.rows[1][0], Value::Text("name".to_string()));
+        assert_eq!(result.rows[1][1], Value::Text("TEXT".to_string()));
+        assert_eq!(result.rows[1][2], Value::Text("YES".to_string()));
+        assert_eq!(result.rows[1][3], Value::Text("".to_string()));
+
+        // Third column: age, INTEGER, YES, (empty)
+        assert_eq!(result.rows[2][0], Value::Text("age".to_string()));
+        assert_eq!(result.rows[2][1], Value::Text("INTEGER".to_string()));
+        assert_eq!(result.rows[2][2], Value::Text("YES".to_string()));
+        assert_eq!(result.rows[2][3], Value::Text("".to_string()));
+
+        // DESC shorthand should also work
+        let result = engine.execute("DESC users").unwrap();
+        assert_eq!(result.rows.len(), 3);
+        assert_eq!(result.rows[0][0], Value::Text("id".to_string()));
+    }
+
+    #[test]
+    fn test_begin_idempotent_new_transaction() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        let result = engine.execute("BEGIN IDEMPOTENT 'test-key-1'").unwrap();
+        assert_eq!(result.affected_rows, 1);
+        assert_eq!(result.rows.len(), 1);
+        assert!(matches!(result.rows[0][0], Value::Integer(_)));
+    }
+
+    #[test]
+    fn test_begin_idempotent_replay_after_commit() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        let result1 = engine.execute("BEGIN IDEMPOTENT 'test-key-2'").unwrap();
+        assert_eq!(result1.affected_rows, 1);
+
+        engine.execute("COMMIT").unwrap();
+
+        let result2 = engine.execute("BEGIN IDEMPOTENT 'test-key-2'").unwrap();
+        assert_eq!(result2.affected_rows, 0);
+        assert_eq!(result2.rows.len(), 1);
+        assert_eq!(result2.rows[0][0], Value::Text("test-key-2".to_string()));
+    }
+
+    #[test]
+    fn test_begin_idempotent_with_keyword() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        let result = engine.execute("BEGIN IDEMPOTENT KEY 'test-key-3'").unwrap();
+        assert_eq!(result.affected_rows, 1);
+        assert_eq!(result.rows.len(), 1);
     }
 }

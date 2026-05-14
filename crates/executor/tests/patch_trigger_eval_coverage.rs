@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use sqlrustgo::ExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use sqlrustgo_types::Value;
@@ -71,6 +72,7 @@ fn value_to_string(v: &Value) -> String {
             }
         }
         Value::Blob(b) => format!("[BLOB {} bytes]", b.len()),
+        Value::Geometry(g) => format!("{:?}", g),
     }
 }
 

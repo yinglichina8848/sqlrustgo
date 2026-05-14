@@ -189,8 +189,20 @@ impl<'a> Lexer<'a> {
                     Token::Not
                 }
             }
+            '|' => {
+                if self.input[self.position..].starts_with("||") {
+                    self.position += 2;
+                    Token::Concat
+                } else {
+                    self.position += 1;
+                    Token::Not
+                }
+            }
             '>' => {
-                if self.input[self.position..].starts_with(">=") {
+                if self.input[self.position..].starts_with(">>") {
+                    self.position += 2;
+                    Token::RShift
+                } else if self.input[self.position..].starts_with(">=") {
                     self.position += 2;
                     Token::GreaterEqual
                 } else {
@@ -199,7 +211,10 @@ impl<'a> Lexer<'a> {
                 }
             }
             '<' => {
-                if self.input[self.position..].starts_with("<=") {
+                if self.input[self.position..].starts_with("<<") {
+                    self.position += 2;
+                    Token::LShift
+                } else if self.input[self.position..].starts_with("<=") {
                     self.position += 2;
                     Token::LessEqual
                 } else if self.input[self.position..].starts_with("<>") {
@@ -225,6 +240,8 @@ impl<'a> Lexer<'a> {
                     "CREATE" => Token::Create,
                     "TABLE" => Token::Table,
                     "DROP" => Token::Drop,
+                    "DUPLICATE" => Token::Duplicate,
+                    "CONFLICT" => Token::Conflict,
                     "ALTER" => Token::Alter,
                     "INDEX" => Token::Index,
                     "EXPLAIN" => Token::Explain,
@@ -237,9 +254,13 @@ impl<'a> Lexer<'a> {
                     "TO" => Token::To,
                     "BEGIN" => Token::Begin,
                     "COMMIT" => Token::Commit,
+                    "COMMITTED" => Token::Committed,
+                    "UNCOMMITTED" => Token::Uncommitted,
                     "ROLLBACK" => Token::Rollback,
                     "GRANT" => Token::Grant,
                     "REVOKE" => Token::Revoke,
+                    "ROLE" => Token::Role,
+                    "ROLES" => Token::Roles,
                     "ANALYZE" => Token::Analyze,
                     "FOREIGN" => Token::Foreign,
                     "REFERENCES" => Token::References,
@@ -327,6 +348,18 @@ impl<'a> Lexer<'a> {
                     "AFTER" => Token::After,
                     "FOR" => Token::For,
                     "EACH" => Token::Each,
+                    "EVENT" => Token::Event,
+                    "ENABLE" => Token::Enable,
+                    "DISABLE" => Token::Disable,
+                    "SCHEDULE" => Token::Schedule,
+                    "AT" => Token::At,
+                    "EVERY" => Token::Every,
+                    "STARTS" => Token::Starts,
+                    "ENDS" => Token::Ends,
+                    "PRESERVE" => Token::Preserve,
+                    "DO" => Token::Do,
+                    "COMMENT" => Token::Comment,
+                    "COLLECTOR" => Token::Collector,
                     "UNBOUNDED" => Token::Unbounded,
                     "PRECEDING" => Token::Preceding,
                     "FOLLOWING" => Token::Following,
@@ -338,11 +371,24 @@ impl<'a> Lexer<'a> {
                     "CUBE" => Token::Cube,
                     "ASOF" => Token::AsOf,
                     "REPLACE" => Token::Replace,
+                    "OPTIMIZE" => Token::Optimize,
+                    "VACUUM" => Token::Vacuum,
+                    "REPAIR" => Token::Repair,
+                    "BACKUP" => Token::Backup,
+                    "RESTORE" => Token::Restore,
+                    "MERGE" => Token::Merge,
+                    "MATCHED" => Token::Matched,
+                    "MATCH" => Token::Match,
+                    "AGAINST" => Token::Against,
+                    "USING" => Token::Using,
                     "WINDOW" => Token::Window,
                     "PARTITION" => Token::Partition,
                     "RANGE" => Token::Range,
+                    "LIKE" => Token::Like,
                     "LIST" => Token::List,
                     "FULLTEXT" => Token::Fulltext,
+                    "IDEMPOTENCY" => Token::Idempotency,
+                    "IDEMPOTENT" => Token::Idempotent,
                     "OVER" => Token::Over,
                     "BETWEEN" => Token::Between,
                     _ => Token::Identifier(ident),

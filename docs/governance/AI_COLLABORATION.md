@@ -4,7 +4,7 @@
 > **更新日期**: 2026-05-05
 > **维护人**: hermes-z6g4
 
-> **SSOT 声明**: 门禁定义以 `gate_spec.md` 为唯一权威。本文档的 R1-R10 描述仅供参考，不自行定义检查命令和阈值。
+> **SSOT 声明**: 门禁定义以 `gate_spec_v300.md` 为唯一权威。本文档的 R1-R10 描述仅供参考，不自行定义检查命令和阈值。
 
 ---
 
@@ -234,7 +234,7 @@ PR 必须包含:
 
 Release Gate 是代码合并到主分支前必须通过的质量检查点。**AI 不可绕过**。
 
-v2.9.0 采用 R1-R10 + G-Gate 门禁体系。详细命令、阈值、证据格式见 [gate_spec.md](./gate_spec.md)。
+v2.9.0 采用 R1-R10 + G-Gate 门禁体系。详细命令、阈值、证据格式见 [gate_spec_v300.md](./gate_spec_v300.md)。
 
 | Gate | 检查项 | 执行者 |
 |------|--------|--------|
@@ -350,7 +350,7 @@ Human Architect 对以下事项负责:
 |------|------|
 | [RELEASE_LIFECYCLE.md](./RELEASE_LIFECYCLE.md) | 版本生命周期 (A/B/R/G 门禁) |
 | [RELEASE_POLICY.md](./RELEASE_POLICY.md) | 发布策略 |
-| [gate_spec.md](./gate_spec.md) | 门禁规范 (v2.9.0 R1-R10) |
+| [gate_spec_v300.md](./gate_spec_v300.md) | 门禁规范 (v2.9.0 R1-R10) |
 | [GATE_CI_CD.md](./GATE_CI_CD.md) | CI/CD 门禁集成 |
 
 ---
@@ -359,10 +359,10 @@ Human Architect 对以下事项负责:
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| 2.1 | 2026-05-05 | 对齐 v2.9.0: R1-R10 引用 gate_spec.md(唯一权威), 添加 SSOT 声明 |
+| 2.1 | 2026-05-05 | 对齐 v2.9.0: R1-R10 引用 gate_spec_v300.md(唯一权威), 添加 SSOT 声明 |
 | 2.0 | 2026-05-05 | 更新为 Hermes+Gitea 架构, R1-R10 门禁体系, Gitea 替换 GitHub |
 | 1.0 | 2026-03-07 | 初始版本 |
 
 ---
 
-*本文档由 hermes-z6g4 维护。门禁权威来源: gate_spec.md*
+*本文档由 hermes-z6g4 维护。门禁权威来源: gate_spec_v300.md*

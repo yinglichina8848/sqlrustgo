@@ -759,6 +759,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64ct"
+version = "1.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
+
+[[package]]
 name = "bigdecimal"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -769,6 +775,15 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
+]
+
+[[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1169,6 +1184,12 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
 name = "const-oid"
+version = "0.9.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
+
+[[package]]
+name = "const-oid"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
@@ -1470,6 +1491,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "curve25519-dalek"
+version = "4.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97fb8b7c4503de7d6ae7b42ab72a5a59857b4c937ec27a3d4539dba95b5ab2be"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.2.17",
+ "curve25519-dalek-derive",
+ "digest 0.10.7",
+ "fiat-crypto",
+ "rustc_version",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "curve25519-dalek-derive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f46882e17999c6cc590af592290432be3bce0428cb0d5f8b6715e4dc7b383eb3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "darling"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1516,6 +1564,16 @@ dependencies = [
  "lock_api",
  "once_cell",
  "parking_lot_core",
+]
+
+[[package]]
+name = "der"
+version = "0.7.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb"
+dependencies = [
+ "const-oid 0.9.6",
+ "zeroize",
 ]
 
 [[package]]
@@ -1579,7 +1637,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4850db49bf08e663084f7fb5c87d202ef91a3907271aff24a94eb97ff039153c"
 dependencies = [
  "block-buffer 0.12.0",
- "const-oid",
+ "const-oid 0.10.2",
  "crypto-common 0.2.1",
  "ctutils",
 ]
@@ -1633,6 +1691,30 @@ name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
+name = "ed25519"
+version = "2.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
+dependencies = [
+ "pkcs8",
+ "signature",
+]
+
+[[package]]
+name = "ed25519-dalek"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
+dependencies = [
+ "curve25519-dalek",
+ "ed25519",
+ "serde",
+ "sha2 0.10.9",
+ "subtle",
+ "zeroize",
+]
 
 [[package]]
 name = "educe"
@@ -1748,6 +1830,12 @@ name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
+
+[[package]]
+name = "fiat-crypto"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
 name = "filetime"
@@ -2588,9 +2676,11 @@ dependencies = [
 name = "information-schema"
 version = "0.1.0"
 dependencies = [
+ "lazy_static",
  "serde",
  "sqlrustgo",
  "sqlrustgo-catalog",
+ "sqlrustgo-observability",
  "sqlrustgo-storage",
  "thiserror 1.0.69",
 ]
@@ -3616,6 +3706,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
+name = "pkcs8"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7"
+dependencies = [
+ "der",
+ "spki",
+]
+
+[[package]]
 name = "pkg-config"
 version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4614,6 +4714,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "signature"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
+dependencies = [
+ "rand_core 0.6.4",
+]
+
+[[package]]
 name = "simd-adler32"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4676,6 +4785,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "spki"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
+dependencies = [
+ "base64ct",
+ "der",
+]
+
+[[package]]
 name = "sqlancer"
 version = "0.1.0"
 dependencies = [
@@ -4725,7 +4844,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4735,6 +4854,8 @@ dependencies = [
  "ctrlc",
  "env_logger",
  "hex",
+ "information-schema",
+ "lazy_static",
  "log",
  "lru-cache",
  "mysql",
@@ -4751,8 +4872,10 @@ dependencies = [
  "sqlrustgo-common",
  "sqlrustgo-distributed",
  "sqlrustgo-executor",
+ "sqlrustgo-gis",
  "sqlrustgo-gmp",
  "sqlrustgo-graph",
+ "sqlrustgo-observability",
  "sqlrustgo-optimizer",
  "sqlrustgo-parser",
  "sqlrustgo-planner",
@@ -4842,13 +4965,14 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-catalog"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "hmac 0.12.1",
  "log",
  "pbkdf2",
  "rand 0.8.6",
  "serde",
+ "serde_json",
  "sha2 0.10.9",
  "sqlrustgo-common",
  "sqlrustgo-storage",
@@ -4892,7 +5016,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-common"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4917,6 +5041,7 @@ dependencies = [
  "serde_json",
  "sqlrustgo-graph",
  "sqlrustgo-parser",
+ "sqlrustgo-transaction",
  "sqlrustgo-vector",
  "tempfile",
  "thiserror 1.0.69",
@@ -4930,17 +5055,20 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-executor"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
+ "criterion 0.5.1",
  "log",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sqlrustgo",
  "sqlrustgo-catalog",
  "sqlrustgo-common",
  "sqlrustgo-parser",
  "sqlrustgo-planner",
  "sqlrustgo-storage",
+ "sqlrustgo-transaction",
  "sqlrustgo-types",
  "tempfile",
  "thiserror 2.0.18",
@@ -4948,7 +5076,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-expr"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "regex",
  "serde",
@@ -4958,10 +5086,24 @@ dependencies = [
 [[package]]
 name = "sqlrustgo-fuzz"
 version = "0.1.0"
+dependencies = [
+ "sqlrustgo-storage",
+ "sqlrustgo-types",
+]
+
+[[package]]
+name = "sqlrustgo-gis"
+version = "3.0.0"
+dependencies = [
+ "hex",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
+]
 
 [[package]]
 name = "sqlrustgo-gmp"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5002,6 +5144,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "clap 4.6.1",
+ "mysql",
  "rand 0.8.6",
  "rcgen",
  "rustls",
@@ -5010,10 +5153,12 @@ dependencies = [
  "sha1 0.10.6",
  "sqlrustgo",
  "sqlrustgo-common",
+ "sqlrustgo-distributed",
  "sqlrustgo-executor",
  "sqlrustgo-parser",
  "sqlrustgo-planner",
  "sqlrustgo-storage",
+ "sqlrustgo-transaction",
  "sqlrustgo-types",
  "thiserror 1.0.69",
  "tracing",
@@ -5035,8 +5180,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlrustgo-observability"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "lazy_static",
+ "serde",
+ "sqlrustgo-types",
+ "uuid",
+]
+
+[[package]]
 name = "sqlrustgo-optimizer"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "async-trait",
  "log",
@@ -5050,7 +5206,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-parser"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "log",
  "serde",
@@ -5061,7 +5217,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-planner"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "log",
  "serde",
@@ -5127,7 +5283,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-server"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "actix-web",
  "async-trait",
@@ -5177,7 +5333,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-sql-corpus"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "serde",
  "sqlrustgo",
@@ -5190,8 +5346,9 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-storage"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
+ "aes-gcm",
  "arrow",
  "async-trait",
  "criterion 0.8.2",
@@ -5199,10 +5356,14 @@ dependencies = [
  "lz4_flex 0.11.6",
  "miniz_oxide 0.7.4",
  "parquet",
+ "rand 0.8.6",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "snap",
  "sqlrustgo-common",
+ "sqlrustgo-gis",
+ "sqlrustgo-observability",
  "sqlrustgo-types",
  "tempfile",
  "thiserror 2.0.18",
@@ -5210,8 +5371,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlrustgo-sync"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "prost",
+ "prost-build",
+ "serde",
+ "serde_json",
+ "sqlrustgo-storage",
+ "sqlrustgo-transaction",
+ "sqlrustgo-types",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-test",
+ "tonic",
+ "tonic-build",
+ "tracing",
+]
+
+[[package]]
 name = "sqlrustgo-telemetry"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "log",
  "parking_lot",
@@ -5223,7 +5405,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-tools"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -5242,30 +5424,38 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-transaction"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
+ "ed25519-dalek",
+ "hex",
  "log",
+ "rand 0.8.6",
  "serde",
+ "sha2 0.10.9",
  "sqlrustgo-common",
+ "sqlrustgo-observability",
+ "sqlrustgo-parser",
  "sqlrustgo-storage",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
 name = "sqlrustgo-types"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "hex",
  "log",
  "serde",
+ "sqlrustgo-gis",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "sqlrustgo-unified-query"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "lru-cache",
@@ -5283,7 +5473,7 @@ dependencies = [
 
 [[package]]
 name = "sqlrustgo-unified-storage"
-version = "2.5.0"
+version = "3.0.0"
 dependencies = [
  "serde",
  "serde_json",

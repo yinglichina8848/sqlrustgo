@@ -482,7 +482,6 @@ pub mod vectorized_expr {
     }
 
     pub(crate) fn like_pattern(text: &str, pattern: &str) -> bool {
-        // Simple LIKE implementation - supports % and _ wildcards
         if pattern.is_empty() {
             return text.is_empty();
         }
@@ -490,56 +489,90 @@ pub mod vectorized_expr {
             return true;
         }
 
-        // Handle patterns that start with %
-        if let Some(remaining) = pattern.strip_prefix('%') {
-            return text.ends_with(remaining) || like_pattern(&text[1..], remaining);
+        let pattern_bytes = pattern.as_bytes();
+        let text_bytes = text.as_bytes();
+        let pattern_len = pattern_bytes.len();
+        let text_len = text_bytes.len();
+
+        if pattern_len == 0 {
+            return text_len == 0;
         }
 
-        // Handle patterns that end with %
-        if let Some(remaining) = pattern.strip_suffix('%') {
-            return text.starts_with(remaining) || like_pattern(&text[..text.len() - 1], remaining);
+        let leading_percent = pattern_bytes[0] == b'%';
+        let trailing_percent = pattern_bytes[pattern_len - 1] == b'%';
+
+        if leading_percent && trailing_percent && pattern_len > 2 {
+            let inner = &pattern_bytes[1..pattern_len - 1];
+            if inner.iter().all(|&b| b != b'%' && b != b'_') {
+                return text_bytes.windows(inner.len()).any(|w| w == inner);
+            }
         }
 
-        // No wildcards - exact match
-        if !pattern.contains('%') && !pattern.contains('_') {
+        if leading_percent && pattern_len == 1 {
+            return true;
+        }
+
+        if leading_percent {
+            let remaining = &pattern[1..];
+            if text_len >= remaining.len() {
+                for i in 0..=(text_len - remaining.len()) {
+                    if text_bytes[i..].starts_with(remaining.as_bytes()) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        if trailing_percent {
+            let remaining = &pattern[..pattern_len - 1];
+            if text_bytes.starts_with(remaining.as_bytes()) {
+                return true;
+            }
+            return false;
+        }
+
+        if !pattern_bytes.iter().any(|&b| b == b'%' || b == b'_') {
             return text == pattern;
         }
 
-        // Simple pattern with no wildcards at boundaries
-        let mut text_chars = text.chars().peekable();
-        let mut pattern_chars = pattern.chars().peekable();
+        let mut ti = 0;
+        let mut pi = 0;
+        let mut percent_pos = Vec::new();
 
-        while text_chars.peek().is_some() || pattern_chars.peek().is_some() {
-            match (pattern_chars.peek(), text_chars.peek()) {
-                (Some('%'), _) => {
-                    pattern_chars.next();
-                    // Try matching at current position or skip one char
-                    if pattern_chars.peek().is_none() {
-                        return true;
+        while pi < pattern_len {
+            if pattern_bytes[pi] == b'%' {
+                percent_pos.push(ti);
+            } else if pattern_bytes[pi] == b'_' {
+                ti += 1;
+            } else {
+                if ti >= text_len || text_bytes[ti] != pattern_bytes[pi] {
+                    if percent_pos.is_empty() {
+                        return false;
                     }
-                    // Try skipping one character from text
-                    if text_chars.peek().is_some() {
-                        let text_copy: String = text_chars.clone().collect();
-                        if like_pattern(
-                            &text_copy[1..],
-                            &pattern[pattern.len() - pattern_chars.clone().count()..],
-                        ) {
-                            return true;
+                    let last_percent = percent_pos.pop().unwrap();
+                    pi += 1;
+                    if pi < pattern_len && pattern_bytes[pi] != b'%' && pattern_bytes[pi] != b'_' {
+                        ti = last_percent + 1;
+                        if ti >= text_len || text_bytes[ti] != pattern_bytes[pi] {
+                            if percent_pos.is_empty() {
+                                return false;
+                            }
+                            ti = percent_pos.pop().unwrap() + 1;
                         }
                     }
+                    continue;
                 }
-                (Some('_'), Some(_)) => {
-                    pattern_chars.next();
-                    text_chars.next();
-                }
-                (Some(p), Some(t)) if p == t => {
-                    pattern_chars.next();
-                    text_chars.next();
-                }
-                _ => return false,
+                ti += 1;
             }
+            pi += 1;
         }
-        pattern_chars.peek().is_none()
+
+        while pi < pattern_len && pattern_bytes[pi] == b'%' {
+            pi += 1;
+        }
+
+        ti == text_len && pi == pattern_len
     }
 
     /// Evaluate expression against a DataChunk
@@ -820,20 +853,6 @@ impl RecordBatch {
 
     pub fn schema(&self) -> &[String] {
         &self.schema
-    }
-}
-
-/// Conversion from StorageColumnArray (storage layer) to ColumnArray (executor layer)
-impl From<sqlrustgo_storage::columnar::convert::StorageColumnArray> for ColumnArray {
-    fn from(arr: sqlrustgo_storage::columnar::convert::StorageColumnArray) -> Self {
-        use sqlrustgo_storage::columnar::convert::StorageColumnArray as S;
-        match arr {
-            S::Int64(v) => ColumnArray::Int64(v),
-            S::Float64(v) => ColumnArray::Float64(v),
-            S::Boolean(v) => ColumnArray::Boolean(v),
-            S::Text(v) => ColumnArray::Text(v),
-            S::Null => ColumnArray::Null,
-        }
     }
 }
 

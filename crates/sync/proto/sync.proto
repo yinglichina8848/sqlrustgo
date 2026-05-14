@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package sqlrustgo.sync;
+
+message ClientGtid {
+    string client_id = 1;
+    uint64 txn_seq = 2;
+    VectorClock vector_clock = 3;
+}
+
+message VectorClock {
+    message Entry {
+        string node_id = 1;
+        uint64 counter = 2;
+    }
+    repeated Entry entries = 1;
+}
+
+message Operation {
+    oneof op {
+        BusinessOperation business_op = 1;
+        SqlOperation sql_op = 2;
+    }
+}
+
+message BusinessOperation {
+    string op_type = 1;
+    string entity_type = 2;
+    string entity_id = 3;
+    map<string, string> params = 4;
+    int64 timestamp = 5;
+}
+
+message SqlOperation {
+    string sql = 1;
+    repeated bytes params = 2;
+}
+
+message SyncRequest {
+    ClientGtid cgtid = 1;
+    repeated Operation operations = 2;
+    string device_info = 10;
+    int64 client_timestamp = 11;
+}
+
+message SyncResponse {
+    oneof result {
+        CommitResult commit = 1;
+        ConflictResult conflict = 2;
+        ErrorResult error = 3;
+    }
+}
+
+message CommitResult {
+    ClientGtid cgtid = 1;
+    string gtid = 2;
+    int64 commit_timestamp = 3;
+    bytes response_blob = 4;
+    VectorClock updated_clock = 5;
+}
+
+message ConflictResult {
+    ClientGtid cgtid = 1;
+    repeated Operation transformed_ops = 2;
+    repeated string conflicts = 3;
+}
+
+message ErrorResult {
+    ClientGtid cgtid = 1;
+    string error_code = 2;
+    string error_message = 3;
+    bool retryable = 4;
+}
+
+message BatchSyncRequest {
+    repeated SyncRequest requests = 1;
+}
+
+message BatchSyncResponse {
+    repeated SyncResponse responses = 1;
+}
+
+service SyncService {
+    rpc Sync(SyncRequest) returns (SyncResponse);
+    rpc BatchSync(BatchSyncRequest) returns (BatchSyncResponse);
+    rpc StreamingSync(stream SyncRequest) returns (stream SyncResponse);
+}

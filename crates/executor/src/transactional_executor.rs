@@ -1,6 +1,6 @@
 use parking_lot::RwLock;
 use sqlrustgo_storage::{StorageEngine, WalStorage};
-use sqlrustgo_transaction::{TransactionError, TransactionManager, TxId};
+use sqlrustgo_transaction::{LockGrantMode, LockMode, LockTarget, TransactionError, TransactionManager, TxId};
 use sqlrustgo_types::SqlError;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -63,6 +63,45 @@ impl<S: StorageEngine> TransactionalExecutor<S> {
             .map_err(|e| TransactionError::StorageError(e.to_string()))?;
         let storage = self.storage.read();
         Ok(f(&*storage))
+    }
+
+    pub fn acquire_lock(
+        &self,
+        key: Vec<u8>,
+        mode: LockMode,
+    ) -> Result<LockGrantMode, TransactionError> {
+        let tx_id = self
+            .tx_manager
+            .read()
+            .get_current_tx_id()
+            .ok_or(TransactionError::NoTransaction)?;
+        self.tx_manager
+            .write()
+            .acquire_lock(tx_id, key, mode)
+            .map_err(|e| TransactionError::LockError)
+    }
+
+    pub fn acquire_for_update_lock(
+        &self,
+        key: Vec<u8>,
+    ) -> Result<LockGrantMode, TransactionError> {
+        self.acquire_lock(key, LockMode::Exclusive)
+    }
+
+    pub fn acquire_range_lock(
+        &self,
+        target: LockTarget,
+        mode: LockMode,
+    ) -> Result<LockGrantMode, TransactionError> {
+        let tx_id = self
+            .tx_manager
+            .read()
+            .get_current_tx_id()
+            .ok_or(TransactionError::NoTransaction)?;
+        self.tx_manager
+            .write()
+            .acquire_lock_with_target(tx_id, target, mode)
+            .map_err(|e| TransactionError::LockError)
     }
 }
 

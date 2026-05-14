@@ -2,11 +2,8 @@
 //!
 //! Tests for error handling, signal/handler, cursor misuse, and invalid control flow.
 
-use sqlrustgo_catalog::stored_proc::{
-    HandlerCondition, ParamMode, StoredProcParam, StoredProcStatement, StoredProcedure,
-};
+use sqlrustgo_catalog::stored_proc::{HandlerCondition, StoredProcStatement, StoredProcedure};
 use sqlrustgo_storage::MemoryStorage;
-use sqlrustgo_types::Value;
 use std::sync::{Arc, RwLock};
 
 fn new_exec(

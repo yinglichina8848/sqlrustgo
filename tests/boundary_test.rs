@@ -153,3 +153,22 @@ fn test_bit_value() {
     let result = parse(sql);
     assert!(result.is_ok());
 }
+
+#[test]
+fn test_auto_increment_parsing() {
+    // Test that AUTO_INCREMENT is parsed correctly
+    let sql = "CREATE TABLE users (id INTEGER PRIMARY KEY AUTO_INCREMENT, name TEXT)";
+    let result = parse(sql);
+    assert!(result.is_ok());
+    if let Ok(stmt) = result {
+        match stmt {
+            sqlrustgo_parser::Statement::CreateTable(create) => {
+                // First column should have auto_increment: true
+                assert!(create.columns[0].auto_increment);
+                // Second column should have auto_increment: false
+                assert!(!create.columns[1].auto_increment);
+            }
+            _ => panic!("Expected CreateTable statement"),
+        }
+    }
+}

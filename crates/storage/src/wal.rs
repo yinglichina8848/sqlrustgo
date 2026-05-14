@@ -6,6 +6,77 @@
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+/// Crash injection points for testing crash recovery
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CrashPoint {
+    /// Before WAL write (data not persisted)
+    BeforeWalWrite = 1,
+    /// After WAL write but before commit (uncommitted data)
+    AfterWalWrite = 2,
+    /// Before commit mark
+    BeforeCommit = 3,
+    /// After commit mark
+    AfterCommit = 4,
+    /// Before checkpoint
+    BeforeCheckpoint = 5,
+    /// After checkpoint
+    AfterCheckpoint = 6,
+}
+
+/// Crash injection state (global for testing)
+static CRASH_INJECT_ENABLED: AtomicBool = AtomicBool::new(false);
+static CRASH_INJECT_POINT: AtomicUsize = AtomicUsize::new(0);
+
+impl CrashPoint {
+    pub fn from_usize(v: usize) -> Option<Self> {
+        match v {
+            1 => Some(CrashPoint::BeforeWalWrite),
+            2 => Some(CrashPoint::AfterWalWrite),
+            3 => Some(CrashPoint::BeforeCommit),
+            4 => Some(CrashPoint::AfterCommit),
+            5 => Some(CrashPoint::BeforeCheckpoint),
+            6 => Some(CrashPoint::AfterCheckpoint),
+            _ => None,
+        }
+    }
+}
+
+/// Enable crash injection at the specified point
+pub fn enable_crash_injection(point: CrashPoint) {
+    CRASH_INJECT_ENABLED.store(true, Ordering::SeqCst);
+    CRASH_INJECT_POINT.store(point as usize, Ordering::SeqCst);
+}
+
+/// Disable crash injection
+pub fn disable_crash_injection() {
+    CRASH_INJECT_ENABLED.store(false, Ordering::SeqCst);
+    CRASH_INJECT_POINT.store(0, Ordering::SeqCst);
+}
+
+/// Check if crash should be injected at this point
+fn should_crash_at(point: CrashPoint) -> bool {
+    if !CRASH_INJECT_ENABLED.load(Ordering::SeqCst) {
+        return false;
+    }
+    let target = CRASH_INJECT_POINT.load(Ordering::SeqCst);
+    target == point as usize
+}
+
+/// Trigger crash for crash injection testing
+#[cfg(not(test))]
+fn trigger_crash() {
+    // In production, crash injection should never happen
+    unreachable!("Crash injection triggered in non-test build");
+}
+
+/// Trigger crash in test mode
+#[cfg(test)]
+fn trigger_crash() {
+    eprintln!("[CRASH INJECTION] Triggering crash at configured point");
+    std::process::abort();
+}
 
 /// WAL magic number for validation
 #[allow(dead_code)]
@@ -241,10 +312,28 @@ impl WalWriter {
         let lsn = self.lsn;
         let bytes = entry.to_bytes();
 
+        // Crash injection: before WAL write
+        if should_crash_at(CrashPoint::BeforeWalWrite) {
+            trigger_crash();
+        }
+
         // Write length prefix (4 bytes)
         self.writer.write_all(&(bytes.len() as u32).to_le_bytes())?;
         // Write entry data
         self.writer.write_all(&bytes)?;
+
+        // Record WAL stats
+        if let Ok(stats) = sqlrustgo_observability::tables::OBSERVABILITY
+            .wal_stats
+            .write()
+        {
+            stats.record_write(bytes.len() as u64, lsn);
+        }
+
+        // Crash injection: after WAL write but before commit
+        if should_crash_at(CrashPoint::AfterWalWrite) {
+            trigger_crash();
+        }
 
         // 批量模式优化：只在达到阈值或显式调用时 flush
         if self.batch_mode {
@@ -252,10 +341,22 @@ impl WalWriter {
             if self.records_since_flush >= self.flush_threshold {
                 self.writer.flush()?;
                 self.records_since_flush = 0;
+                if let Ok(stats) = sqlrustgo_observability::tables::OBSERVABILITY
+                    .wal_stats
+                    .write()
+                {
+                    stats.record_flush(lsn);
+                }
             }
         } else {
             // 默认模式：每次都 flush，保证持久性
             self.writer.flush()?;
+            if let Ok(stats) = sqlrustgo_observability::tables::OBSERVABILITY
+                .wal_stats
+                .write()
+            {
+                stats.record_flush(lsn);
+            }
         }
 
         self.lsn += 1;
@@ -266,6 +367,12 @@ impl WalWriter {
     pub fn flush(&mut self) -> std::io::Result<()> {
         self.writer.flush()?;
         self.records_since_flush = 0;
+        if let Ok(stats) = sqlrustgo_observability::tables::OBSERVABILITY
+            .wal_stats
+            .write()
+        {
+            stats.record_flush(self.lsn);
+        }
         Ok(())
     }
 
@@ -355,7 +462,7 @@ fn current_timestamp() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_secs()
+        .as_millis() as u64
 }
 
 /// WAL reader
@@ -536,10 +643,7 @@ impl WalManager {
             key: None,
             data: None,
             lsn: writer.current_lsn(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
         };
 
         writer.append(&entry)
@@ -562,10 +666,7 @@ impl WalManager {
             key: Some(key),
             data: Some(data),
             lsn: writer.current_lsn(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
         };
 
         writer.append(&entry)
@@ -588,10 +689,7 @@ impl WalManager {
             key: Some(key),
             data: Some(data),
             lsn: writer.current_lsn(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
         };
 
         writer.append(&entry)
@@ -608,10 +706,7 @@ impl WalManager {
             key: Some(key),
             data: None,
             lsn: writer.current_lsn(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
         };
 
         writer.append(&entry)
@@ -628,10 +723,7 @@ impl WalManager {
             key: None,
             data: None,
             lsn: writer.current_lsn(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
         };
 
         writer.append(&entry)
@@ -1764,10 +1856,13 @@ mod tests {
         let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
         let _ = manager.log_commit(1).unwrap();
 
+        // Ensure different millisecond timestamp
+        std::thread::sleep(std::time::Duration::from_millis(2));
+
         let ts1 = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_millis() as u64;
 
         let _ = manager.log_begin(2).unwrap();
         let _ = manager.log_insert(2, 1, vec![2], vec![20]).unwrap();
@@ -1776,7 +1871,7 @@ mod tests {
         let ts2 = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_millis() as u64;
 
         // Recover to ts1 - should only get first transaction
         let recovered = manager.recover_to_timestamp(ts1).unwrap();
@@ -1807,7 +1902,7 @@ mod tests {
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_millis() as u64;
 
         // Recover only table 1
         let recovered = manager.recover_table_to_timestamp(1, ts).unwrap();

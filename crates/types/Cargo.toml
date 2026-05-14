@@ -10,3 +10,4 @@ serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
 hex.workspace = true
+sqlrustgo-gis = { path = "../gis" }

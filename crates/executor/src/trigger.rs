@@ -357,6 +357,7 @@ impl TriggerExecutor {
                 }
             }
             Value::Blob(b) => format!("X'{}'", String::from_utf8_lossy(b)),
+            Value::Geometry(g) => format!("'{}'", g),
         }
     }
 
@@ -821,6 +822,7 @@ impl TriggerExecutionResult {
 }
 
 #[cfg(test)]
+#[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
     use sqlrustgo_storage::{
@@ -1431,7 +1433,7 @@ mod tests {
 
     #[test]
     fn test_expand_row_variables_new_references() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let new_row = vec![Value::Integer(1), Value::Float(10.0)];
@@ -1442,7 +1444,7 @@ mod tests {
 
     #[test]
     fn test_expand_row_variables_old_references() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let old_row = vec![Value::Integer(1), Value::Float(10.0)];
@@ -1453,7 +1455,7 @@ mod tests {
 
     #[test]
     fn test_expand_row_variables_uppercase_column() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let new_row = vec![Value::Integer(42), Value::Float(10.0)];
@@ -1464,7 +1466,7 @@ mod tests {
 
     #[test]
     fn test_expand_row_variables_no_matching_column() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let new_row = vec![Value::Integer(1), Value::Float(10.0)];
@@ -1716,7 +1718,7 @@ mod tests {
 
     #[test]
     fn test_execute_trigger_body_no_statements() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let trigger = StorageTriggerInfo {
@@ -1739,7 +1741,7 @@ mod tests {
 
     #[test]
     fn test_execute_trigger_body_with_set_statement() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let trigger = StorageTriggerInfo {
@@ -1782,7 +1784,7 @@ mod tests {
 
     #[test]
     fn test_execute_triggers_before_insert() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let new_row = vec![
@@ -1800,12 +1802,11 @@ mod tests {
             Some(&new_row),
         );
         assert!(result.is_ok());
-        assert!(result.unwrap().is_modified() || true);
     }
 
     #[test]
     fn test_execute_triggers_after_insert() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let new_row = vec![
@@ -1827,7 +1828,7 @@ mod tests {
 
     #[test]
     fn test_execute_triggers_before_update() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let old_row = vec![
@@ -1855,7 +1856,7 @@ mod tests {
 
     #[test]
     fn test_execute_triggers_after_update() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let old_row = vec![
@@ -1883,7 +1884,7 @@ mod tests {
 
     #[test]
     fn test_execute_triggers_before_delete() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let old_row = vec![
@@ -1905,7 +1906,7 @@ mod tests {
 
     #[test]
     fn test_execute_triggers_after_delete() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let old_row = vec![
@@ -1958,7 +1959,7 @@ mod tests {
 
     #[test]
     fn test_execute_trigger_set_with_valid_assignments() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let new_row = vec![
@@ -1974,7 +1975,7 @@ mod tests {
 
     #[test]
     fn test_execute_trigger_set_with_invalid_assignments() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let new_row = vec![
@@ -1990,7 +1991,7 @@ mod tests {
 
     #[test]
     fn test_execute_trigger_select_validates_columns() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let new_row = vec![
@@ -2007,7 +2008,7 @@ mod tests {
 
     #[test]
     fn test_execute_trigger_select_with_literal_expression() {
-        let mut storage = create_test_storage();
+        let storage = create_test_storage();
         let executor = TriggerExecutor::new(Arc::new(RwLock::new(storage)));
 
         let new_row = vec![

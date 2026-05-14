@@ -11,22 +11,25 @@
 
 | 指标 | 目标 | 当前 |
 |------|------|------|
-| Point SELECT QPS | ≥20,000 | **7,312**（待 CBO 优化） |
+| Point SELECT QPS | ≥20,000 | **7,312**（待 CBO #392） |
 | UPDATE QPS | ≥10,000 | **42,427** ✅ |
 | DELETE QPS | ≥5,000 | **62,352** ✅ |
 | SQL Corpus | ≥98% | **100%** ✅ |
 | TPC-H SF=0.1 | 22/22 | **22/22** 🟡 (~10.9s) |
+| Sysbench oltp_read_only | — | **17,068 QPS** ✅ |
+| Sysbench oltp_write_only | — | **37,075 QPS** ✅ |
+| Sysbench oltp_read_write | — | **19,430 QPS** ✅ |
 | 覆盖率 | ≥85% | 84.18%（旧数据） |
 | Clippy | 零警告 | ✅ |
 | Format | 零差异 | ✅ |
 
-### 24 项已完成任务
+### 29 项已完成任务
 
-优化器桥接 / 查询缓存 / 连接池 / Group Commit / INSERT...SELECT / 窗口函数 6 个 / CTE 执行 / INFORMATION_SCHEMA / EXPLAIN ANALYZE / SSL/TLS / 慢查询日志 / CI Gate / SHOW VARIABLES / 运维手册 / ADR / API 版本化 / 迁移指南 / 教学模式 / 在线 DDL / mysqldump 导出 / 性能调优指南 / PP-06 内存治理 / PROOF-026 Write Skew / SQL Corpus 100%
+优化器桥接 / 查询缓存 / 连接池 / Group Commit / INSERT...SELECT / 窗口函数 6 个 / CTE 执行 / INFORMATION_SCHEMA / EXPLAIN ANALYZE / SSL/TLS / 慢查询日志 / CI Gate / SHOW VARIABLES / 运维手册 / ADR / API 版本化 / 迁移指南 / 教学模式 / 在线 DDL / mysqldump 导出 / 性能调优指南 / PP-06 内存治理 / PROOF-026 Write Skew / SQL Corpus 100% / COM_MULTI / Prepared Statement 绑定 / BEGIN/COMMIT/ROLLBACK 引擎集成 / Sysbench OLTP 3 场景 / Sysbench 设置指南
 
 ### 未完成
 
-CBO 代价模型 / Sysbench OLTP / COM_MULTI / Prepared Statement 绑定 / 事务压力测试 / Optimizer 测试扩展 / Planner 测试扩展 / A-HYG 覆盖率/安全/文档链 / TPC-H SF=1 CI Gate
+CBO 代价模型 (#392) / 事务压力测试 (#379) / Optimizer 测试扩展 (#380) / Planner 测试扩展 (#381) / TPC-H SF=1 CI Gate (#382) / A-HYG 覆盖率和安全门禁
 
 ---
 
@@ -43,15 +46,15 @@ git checkout -b feat/opencode-v3-cbo
 
 ### P0 任务 (必须完成)
 
-#### 1. CBO 代价模型集成 (5-7d)
+#### 1. CBO 代价模型集成 (#392, 5-7d)
 
 目标: `SimpleCostModel` 接入 planner，实现基于代价的索引选择和 Join 重排序。
 
 ```bash
 # 文件
-crates/optimizer/src/cost.rs    — SimpleCostModel (已实现)
-crates/planner/src/planner.rs   — 需接入代价模型
-crates/planner/src/lib.rs       — 需暴露优化接口
+crates/optimizer/src/cost.rs    — SimpleCostModel + CboOptimizer
+crates/planner/src/planner.rs   — DefaultPlanner (已持有 cost_model)
+crates/planner/src/physical_plan.rs — 所有 PhysicalPlan 节点类型
 
 # 验证
 cargo test -p sqlrustgo-planner
@@ -61,48 +64,10 @@ cargo test -p sqlrustgo-optimizer
 **验收标准**:
 - `EXPLAIN SELECT * FROM t WHERE id = 1` 选择索引扫描而非全表扫描
 - TPC-H Q1 执行时间减少 ≥50%
+- Point SELECT QPS ≥18,000
 - optimizer 测试全部通过
 
-#### 2. Sysbench OLTP 适配 (#376, 3d)
-
-```bash
-# 分支
-git checkout -b feat/opencode-sysbench
-
-# 文件
-crates/mysql-server/src/lib.rs   — 协议层
-scripts/gate/check_sysbench.sh    — 门禁 (已创建)
-tests/e2e/                        — 集成测试
-```
-
-**验收标准**:
-- oltp_read_only QPS 可测量
-- oltp_write_only (INSERT/UPDATE/DELETE) 通过
-- oltp_read_write 通过
-- 无 "No transaction in progress" 错误
-
-#### 3. COM_MULTI 多语句执行 (#377, 2d)
-
-```bash
-# 文件
-crates/mysql-server/src/lib.rs
-
-# 需要
-- 定义 0x11 常量
-- split_sql_statements() 已存在 (line 1404)
-- 多结果集协议 (SERVER_MORE_RESULTS_EXISTS 已定义)
-```
-
-**验收标准**: sysbench prepare 阶段通过
-
-#### 4. Prepared Statement 参数绑定修复 (#378, 1d)
-
-```bash
-# 文件
-crates/mysql-server/src/lib.rs (replace_placeholders, line ~1735)
-```
-
-**验收标准**: COM_STMT_EXECUTE 带参数能正确替换占位符
+**详细任务文件**: `.agents/opencode-cbo-task.md`
 
 ### 批量操作
 
@@ -205,15 +170,16 @@ git checkout develop/v3.0.0
 
 ## 五、Issue #376-#382 关闭条件
 
-| Issue | 标题 | 关闭条件 | 负责人 |
-|-------|------|---------|--------|
-| #376 | Sysbench OLTP 适配 | 3 场景全部通过 + QPS 可测量 | opencode |
-| #377 | COM_MULTI | sysbench prepare 通过 | opencode |
-| #378 | Prepared Statement 绑定 | 参数化查询正确 | opencode |
-| #379 | 事务状态机压力测试 | 100 并发无泄漏 | claude |
-| #380 | Optimizer 测试扩展 | 覆盖率 ≥70% | claude |
-| #381 | Planner 测试扩展 | 覆盖率 ≥80% | claude |
-| #382 | TPC-H SF=1 CI Gate | check_tpch.sh --sf1 可运行 | — |
+| Issue | 标题 | 关闭条件 | 负责人 | 状态 |
+|-------|------|---------|--------|------|
+| #376 | Sysbench OLTP 适配 | 3 场景全部通过 + QPS 可测量 | opencode | ✅ 已关闭 |
+| #377 | COM_MULTI | sysbench prepare 通过 | opencode | ✅ 已关闭 |
+| #378 | Prepared Statement 绑定 | 参数化查询正确 | opencode | ✅ 已关闭 |
+| #379 | 事务状态机压力测试 | 100 并发无泄漏 | claude | 🔴 待办 |
+| #380 | Optimizer 测试扩展 | 覆盖率 ≥70% | claude | 🔴 待办 |
+| #381 | Planner 测试扩展 | 覆盖率 ≥80% | claude | 🔴 待办 |
+| #382 | TPC-H SF=1 CI Gate | check_tpch.sh --sf1 可运行 | — | 🔴 待办 |
+| #392 | CBO 代价模型集成 | 索引选择 + TPC-H Q1 -50% | opencode | 🔴 待办 |
 
 ---
 

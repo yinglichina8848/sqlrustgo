@@ -47,7 +47,7 @@ color: #333
 
 ### AI辅助开发工具
 
-- **AI-IDE**：光标、TRAE IDE、克劳德代码
+- **AI-IDE**：Cursor、TRAE IDE、Claude Code
 - **AI编程助手**：GitHub Copilot、TabNine
 - **AI聊天机器人**：ChatGPT、Claude、Gemini
 - **AI代码审查**：SonarQube AI、DeepCode

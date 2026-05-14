@@ -1,6 +1,6 @@
+#![allow(deprecated)]
 use sqlrustgo::ExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
-use sqlrustgo_types::Value;
 use std::sync::{Arc, RwLock};
 
 fn create_engine() -> ExecutionEngine<MemoryStorage> {

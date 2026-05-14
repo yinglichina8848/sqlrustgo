@@ -14,6 +14,7 @@
 //! | BLOB     | `Vec<u8>` | Binary data |
 
 use serde::{Deserialize, Serialize};
+use sqlrustgo_gis::Geometry;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -32,6 +33,8 @@ pub enum Value {
     Text(String),
     /// Binary large object
     Blob(Vec<u8>),
+    /// Geometry value (GIS)
+    Geometry(Geometry),
 }
 
 impl Hash for Value {
@@ -49,6 +52,7 @@ impl Hash for Value {
             }
             Value::Text(s) => s.hash(state),
             Value::Blob(b) => b.hash(state),
+            Value::Geometry(g) => g.to_string().hash(state),
         }
     }
 }
@@ -62,6 +66,7 @@ impl PartialEq for Value {
             (Value::Float(a), Value::Float(b)) => a == b,
             (Value::Text(a), Value::Text(b)) => a == b,
             (Value::Blob(a), Value::Blob(b)) => a == b,
+            (Value::Geometry(a), Value::Geometry(b)) => a == b,
             _ => false,
         }
     }
@@ -87,6 +92,7 @@ impl Ord for Value {
             (Value::Float(a), Value::Float(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
             (Value::Text(a), Value::Text(b)) => a.cmp(b),
             (Value::Blob(a), Value::Blob(b)) => a.cmp(b),
+            (Value::Geometry(_), Value::Geometry(_)) => Ordering::Equal,
             _ => Ordering::Equal,
         }
     }
@@ -120,6 +126,7 @@ impl Value {
             Value::Float(f) => f.to_string(),
             Value::Text(s) => s.clone(),
             Value::Blob(b) => format!("X'{}'", hex::encode(b)),
+            Value::Geometry(g) => g.to_string(),
         }
     }
 
@@ -132,6 +139,7 @@ impl Value {
             Value::Float(_) => "FLOAT",
             Value::Text(_) => "TEXT",
             Value::Blob(_) => "BLOB",
+            Value::Geometry(_) => "GEOMETRY",
         }
     }
 
@@ -160,6 +168,35 @@ impl Value {
             Value::Float(_) => 8,
             Value::Text(s) => s.len(),
             Value::Blob(b) => b.len(),
+            Value::Geometry(g) => {
+                use std::mem::size_of;
+                size_of::<Geometry>()
+                    + match g {
+                        Geometry::Point(_) => 16,
+                        Geometry::LineString(ls) => ls.points.len() * 16,
+                        Geometry::Polygon(poly) => {
+                            let exterior_size = poly.exterior.points.len() * 16;
+                            let holes_size: usize =
+                                poly.holes.iter().map(|h| h.points.len() * 16).sum();
+                            exterior_size + holes_size
+                        }
+                        Geometry::MultiPoint(mp) => mp.points.len() * 16,
+                        Geometry::MultiLineString(ml) => {
+                            ml.lines.iter().map(|l| l.points.len() * 16).sum()
+                        }
+                        Geometry::MultiPolygon(mp) => mp
+                            .polygons
+                            .iter()
+                            .map(|p| {
+                                let exterior_size = p.exterior.points.len() * 16;
+                                let holes_size: usize =
+                                    p.holes.iter().map(|h| h.points.len() * 16).sum();
+                                exterior_size + holes_size
+                            })
+                            .sum(),
+                        Geometry::GeometryCollection(gc) => gc.geometries.len() * 64,
+                    }
+            }
         }
     }
 }

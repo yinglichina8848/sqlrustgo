@@ -959,73 +959,87 @@ impl StoredProcExecutor {
                 };
 
                 let num_columns = table_info.as_ref().map(|i| i.columns.len()).unwrap_or(0);
+                let has_hidden_rowid = table_info
+                    .as_ref()
+                    .map(|i| i.has_hidden_rowid)
+                    .unwrap_or(false);
                 let mut new_rows: Vec<Vec<Value>> = Vec::new();
-                let insert_count;
+                let mut insert_count = 0;
 
-                if let Some(ref select) = insert.select {
-                    let storage = self.storage.read().unwrap();
-                    let records = storage
-                        .scan(&select.first_table())
-                        .map_err(|e| format!("Failed to scan table: {}", e))?;
+                if let Some(ref select_box) = insert.select {
+                    if let sqlrustgo_parser::Statement::Select(ref select) = select_box.as_ref() {
+                        let storage = self.storage.read().unwrap();
+                        let records = storage
+                            .scan(&select.first_table())
+                            .map_err(|e| format!("Failed to scan table: {}", e))?;
 
-                    let selected_rows: Vec<Vec<Value>> =
-                        if let Some(ref where_expr) = select.where_clause {
-                            records
-                                .into_iter()
-                                .filter(|_row| {
-                                    let where_val = self.expression_to_value(where_expr, ctx);
-                                    if let Value::Boolean(b) = where_val {
-                                        b
-                                    } else {
-                                        where_val != Value::Null
+                        let selected_rows: Vec<Vec<Value>> =
+                            if let Some(ref where_expr) = select.where_clause {
+                                records
+                                    .into_iter()
+                                    .filter(|_row| {
+                                        let where_val = self.expression_to_value(where_expr, ctx);
+                                        if let Value::Boolean(b) = where_val {
+                                            b
+                                        } else {
+                                            where_val != Value::Null
+                                        }
+                                    })
+                                    .collect()
+                            } else {
+                                records
+                            };
+
+                        for row in selected_rows {
+                            let mut new_row: Vec<Value> = vec![Value::Null; num_columns];
+                            if insert_columns.is_empty() {
+                                for (col_idx, val) in row.iter().enumerate() {
+                                    if col_idx < num_columns {
+                                        new_row[col_idx] = val.clone();
                                     }
-                                })
-                                .collect()
-                        } else {
-                            records
-                        };
-
-                    for row in selected_rows {
-                        let mut new_row: Vec<Value> = vec![Value::Null; num_columns];
-                        if insert_columns.is_empty() {
-                            for (col_idx, val) in row.iter().enumerate() {
-                                if col_idx < num_columns {
-                                    new_row[col_idx] = val.clone();
                                 }
-                            }
-                        } else {
-                            for (col_idx, col_name) in insert_columns.iter().enumerate() {
-                                if col_idx < row.len() {
-                                    if let Some(ref info) = table_info {
-                                        if let Some(target_idx) = info
-                                            .columns
-                                            .iter()
-                                            .position(|c| c.name.eq_ignore_ascii_case(col_name))
-                                        {
-                                            new_row[target_idx] = row[col_idx].clone();
+                            } else {
+                                for (col_idx, col_name) in insert_columns.iter().enumerate() {
+                                    if col_idx < row.len() {
+                                        if let Some(ref info) = table_info {
+                                            if let Some(target_idx) = info
+                                                .columns
+                                                .iter()
+                                                .position(|c| c.name.eq_ignore_ascii_case(col_name))
+                                            {
+                                                new_row[target_idx] = row[col_idx].clone();
+                                            }
                                         }
                                     }
                                 }
                             }
+                            if let Some(ref info) = table_info {
+                                if !info.foreign_keys.is_empty() {
+                                    self.validate_foreign_keys(
+                                        table_name,
+                                        &new_row,
+                                        &insert_columns,
+                                    )?;
+                                }
+                                if info.columns.iter().any(|c| c.primary_key) {
+                                    self.validate_primary_key(
+                                        table_name,
+                                        &new_row,
+                                        &insert_columns,
+                                    )?;
+                                }
+                                if !info.unique_constraints.is_empty() {
+                                    self.validate_unique_constraints(
+                                        table_name,
+                                        &new_row,
+                                        &insert_columns,
+                                    )?;
+                                }
+                            }
+                            new_rows.push(new_row);
                         }
-                        if let Some(ref info) = table_info {
-                            if !info.foreign_keys.is_empty() {
-                                self.validate_foreign_keys(table_name, &new_row, &insert_columns)?;
-                            }
-                            if info.columns.iter().any(|c| c.primary_key) {
-                                self.validate_primary_key(table_name, &new_row, &insert_columns)?;
-                            }
-                            if !info.unique_constraints.is_empty() {
-                                self.validate_unique_constraints(
-                                    table_name,
-                                    &new_row,
-                                    &insert_columns,
-                                )?;
-                            }
-                        }
-                        new_rows.push(new_row);
+                        insert_count = new_rows.len();
                     }
-                    insert_count = new_rows.len();
                 } else {
                     for row in &insert.values {
                         let mut new_row: Vec<Value> = vec![Value::Null; num_columns];
@@ -1077,7 +1091,15 @@ impl StoredProcExecutor {
 
                 {
                     let mut storage = self.storage.write().unwrap();
-                    for new_row in new_rows {
+                    for mut new_row in new_rows {
+                        // Add hidden rowid if table has hidden rowid support
+                        if has_hidden_rowid {
+                            if let Ok(Some(rowid)) =
+                                storage.get_and_increment_next_rowid(table_name)
+                            {
+                                new_row.insert(0, Value::Integer(rowid as i64));
+                            }
+                        }
                         storage
                             .insert(table_name, vec![new_row])
                             .map_err(|e| format!("Failed to insert: {}", e))?;
@@ -1148,6 +1170,7 @@ impl StoredProcExecutor {
                             data_type: data_type.clone(),
                             nullable: *nullable,
                             primary_key: false,
+                            auto_increment: false,
                         };
                         storage
                             .add_column(table_name, column)
@@ -1419,6 +1442,10 @@ impl StoredProcExecutor {
                     _ => Value::Null,
                 }
             }
+            sqlrustgo_parser::Expression::MatchAgainst(_, _, _) => {
+                // FTS not supported in stored procedures - return NULL
+                Value::Null
+            }
         }
     }
 
@@ -1492,6 +1519,34 @@ impl StoredProcExecutor {
                     combined.dedup();
                     Ok(combined)
                 }
+            }
+            sqlrustgo_parser::Statement::Intersect(intersect_stmt) => {
+                let left_records = self.execute_cte_subquery(&intersect_stmt.left, ctx)?;
+                let right_records = self.execute_cte_subquery(&intersect_stmt.right, ctx)?;
+                let right_set: std::collections::HashSet<_> = right_records.iter().collect();
+                let result: Vec<_> = if intersect_stmt.intersect_all {
+                    left_records.into_iter().filter(|r| right_set.contains(r)).collect()
+                } else {
+                    let mut left_unique: Vec<_> = left_records;
+                    left_unique.sort();
+                    left_unique.dedup();
+                    left_unique.into_iter().filter(|r| right_set.contains(r)).collect()
+                };
+                Ok(result)
+            }
+            sqlrustgo_parser::Statement::Except(except_stmt) => {
+                let left_records = self.execute_cte_subquery(&except_stmt.left, ctx)?;
+                let right_records = self.execute_cte_subquery(&except_stmt.right, ctx)?;
+                let right_set: std::collections::HashSet<_> = right_records.iter().collect();
+                let result: Vec<_> = if except_stmt.except_all {
+                    left_records.into_iter().filter(|r| !right_set.contains(r)).collect()
+                } else {
+                    let mut left_unique: Vec<_> = left_records;
+                    left_unique.sort();
+                    left_unique.dedup();
+                    left_unique.into_iter().filter(|r| !right_set.contains(r)).collect()
+                };
+                Ok(result)
             }
             _ => Err(format!(
                 "Unsupported statement type in CTE: {:?}",
@@ -1835,9 +1890,12 @@ impl StoredProcExecutor {
                     if i >= t_bytes.len() {
                         return true;
                     }
-                    // Try to backtrack
+                    // Try to backtrack: pop saved state, advance i by 1
                     if let Some((prev_i, prev_j)) = stack.pop() {
-                        i = prev_i;
+                        if prev_i < t_bytes.len() {
+                            stack.push((prev_i + 1, prev_j)); // re-push for next try
+                        }
+                        i = prev_i + 1;
                         j = prev_j + 1;
                         if j < p_bytes.len() && p_bytes[j] == b'%' {
                             j += 1;
@@ -1847,7 +1905,7 @@ impl StoredProcExecutor {
                         }
                         continue;
                     }
-                    return i >= t_bytes.len();
+                    return false;
                 }
                 if i >= t_bytes.len() {
                     // Only % can match empty string at end of pattern
@@ -1859,7 +1917,7 @@ impl StoredProcExecutor {
 
                 match p_bytes[j] {
                     b'%' => {
-                        // Try matching 0 chars, and save state to try more
+                        // Save state so backtracking can try matching more chars
                         stack.push((i, j));
                         j += 1;
                         if j >= p_bytes.len() {
@@ -1878,9 +1936,12 @@ impl StoredProcExecutor {
                             i += 1;
                             j += 1;
                         } else {
-                            // Try backtracking
+                            // Try backtracking: pop saved state, advance i by 1
                             if let Some((prev_i, prev_j)) = stack.pop() {
-                                i = prev_i;
+                                if prev_i < t_bytes.len() {
+                                    stack.push((prev_i + 1, prev_j));
+                                }
+                                i = prev_i + 1;
                                 j = prev_j + 1;
                                 if j < p_bytes.len() && p_bytes[j] == b'%' {
                                     j += 1;
@@ -1977,11 +2038,8 @@ impl StoredProcExecutor {
             return Ok(Value::Float(float));
         }
 
-        // Handle variables (starting with @)
-        if let Some(var_name) = expr.strip_prefix('@') {
-            if let Some(val) = ctx.get_var(var_name) {
-                return Ok(val.clone());
-            }
+        if ctx.has_var(expr) {
+            return Ok(self.expand_variable(expr, ctx));
         }
 
         // Handle simple arithmetic: var + value, var - value, etc.
@@ -2053,6 +2111,7 @@ impl StoredProcExecutor {
                 .map(|&x| x as char)
                 .collect::<String>()
                 .replace('\'', "''"),
+            Value::Geometry(g) => g.to_string(),
         }
     }
 
@@ -2164,6 +2223,7 @@ impl StoredProcExecutor {
 }
 
 #[cfg(test)]
+#[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
     use sqlrustgo_catalog::Catalog;
@@ -2228,7 +2288,7 @@ mod tests {
     #[test]
     fn test_evaluate_condition() {
         let catalog = Arc::new(Catalog::new("test"));
-        let executor = StoredProcExecutor::new_for_test(catalog);
+        let _executor = StoredProcExecutor::new_for_test(catalog);
         let mut ctx = ProcedureContext::new();
         ctx.set_var("x", Value::Integer(10));
 
@@ -3189,5 +3249,187 @@ mod tests {
         ctx.set_var("x", Value::Null);
         let sql = "@x";
         assert_eq!(executor.expand_variables_in_sql(sql, &ctx), "NULL");
+    }
+
+    // ── like_match tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_like_match_exact() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("hello".into()), &Value::Text("hello".into())));
+    }
+
+    #[test]
+    fn test_like_match_percent_prefix() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("hello".into()), &Value::Text("h%".into())));
+    }
+
+    #[test]
+    fn test_like_match_percent_suffix() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("hello".into()), &Value::Text("%o".into())));
+    }
+
+    #[test]
+    fn test_like_match_percent_middle() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("hello".into()), &Value::Text("%ell%".into())));
+    }
+
+    #[test]
+    fn test_like_match_underscore() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("hello".into()), &Value::Text("h_llo".into())));
+    }
+
+    #[test]
+    fn test_like_match_underscore_too_long() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.like_match(&Value::Text("hello".into()), &Value::Text("h____o".into())));
+    }
+
+    #[test]
+    fn test_like_match_non_text() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.like_match(&Value::Integer(42), &Value::Text("42".into())));
+    }
+
+    #[test]
+    fn test_like_match_case_insensitive() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("HELLO".into()), &Value::Text("hello".into())));
+    }
+
+    #[test]
+    fn test_like_match_no_match() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.like_match(&Value::Text("hello".into()), &Value::Text("world".into())));
+    }
+
+    #[test]
+    fn test_like_match_multi_percent() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(
+            &Value::Text("a quick brown fox".into()),
+            &Value::Text("%quick%brown%".into()),
+        ));
+    }
+
+    #[test]
+    fn test_like_match_only_percent() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("anything".into()), &Value::Text("%".into())));
+    }
+
+    #[test]
+    fn test_like_match_backtrack() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        // Pattern "a%b" must backtrack through "aXbYb" to match at "aXb"
+        assert!(executor.like_match(&Value::Text("aXbYb".into()), &Value::Text("a%b".into())));
+    }
+
+    #[test]
+    fn test_like_match_empty_text() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.like_match(&Value::Text("".into()), &Value::Text("".into())));
+        assert!(executor.like_match(&Value::Text("".into()), &Value::Text("%".into())));
+        assert!(!executor.like_match(&Value::Text("".into()), &Value::Text("_".into())));
+    }
+
+    // ── between_match tests ──────────────────────────────────────
+
+    #[test]
+    fn test_between_match_in_range() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.between_match(
+            &Value::Integer(5),
+            &Value::Integer(1),
+            &Value::Integer(10)
+        ));
+    }
+
+    #[test]
+    fn test_between_match_below_range() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.between_match(
+            &Value::Integer(0),
+            &Value::Integer(1),
+            &Value::Integer(10)
+        ));
+    }
+
+    #[test]
+    fn test_between_match_above_range() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.between_match(
+            &Value::Integer(15),
+            &Value::Integer(1),
+            &Value::Integer(10)
+        ));
+    }
+
+    #[test]
+    fn test_between_match_boundary() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.between_match(
+            &Value::Integer(1),
+            &Value::Integer(1),
+            &Value::Integer(10)
+        ));
+        assert!(executor.between_match(
+            &Value::Integer(10),
+            &Value::Integer(1),
+            &Value::Integer(10)
+        ));
+    }
+
+    #[test]
+    fn test_between_match_float() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.between_match(&Value::Float(3.5), &Value::Float(1.0), &Value::Float(5.0)));
+        assert!(!executor.between_match(
+            &Value::Float(7.5),
+            &Value::Float(1.0),
+            &Value::Float(5.0)
+        ));
+    }
+
+    // ── regexp_match tests ───────────────────────────────────────
+
+    #[test]
+    fn test_regexp_match_basic() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.regexp_match(
+            &Value::Text("hello world".into()),
+            &Value::Text("hello".into())
+        ));
+    }
+
+    #[test]
+    fn test_regexp_match_no_match() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.regexp_match(&Value::Text("hello".into()), &Value::Text("xyz".into())));
+    }
+
+    #[test]
+    fn test_regexp_match_non_text() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(!executor.regexp_match(&Value::Integer(42), &Value::Text("42".into())));
+    }
+
+    #[test]
+    fn test_regexp_match_case_insensitive() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.regexp_match(&Value::Text("HELLO".into()), &Value::Text("hello".into())));
+    }
+
+    #[test]
+    fn test_regexp_match_partial() {
+        let executor = StoredProcExecutor::new_for_test(Arc::new(Catalog::new("test")));
+        assert!(executor.regexp_match(
+            &Value::Text("the quick brown fox".into()),
+            &Value::Text("brown".into())
+        ));
     }
 }

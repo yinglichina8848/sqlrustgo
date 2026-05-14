@@ -6,6 +6,7 @@
 
 use rustyline::history::FileHistory;
 use rustyline::Editor;
+use sqlrustgo::execution_engine::EngineConfig;
 use sqlrustgo::{MemoryExecutionEngine, MemoryStorage};
 use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_parser::parser::{
@@ -40,7 +41,8 @@ fn main() {
         let sql = args[1..].join(" ");
 
         // Initialize execution engine
-        let mut engine = MemoryExecutionEngine::with_memory();
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = MemoryExecutionEngine::new_with_config(storage, EngineConfig::default());
 
         // Initialize session manager for CLI
         let session_manager = Arc::new(SessionManager::new());
@@ -64,8 +66,9 @@ fn main() {
     println!("Type '.help' for available commands, '.exit' to quit\n");
 
     // Initialize execution engine
-    let mut engine = MemoryExecutionEngine::with_memory();
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+    let mut engine =
+        MemoryExecutionEngine::new_with_config(storage.clone(), EngineConfig::default());
 
     // Initialize session manager and create CLI session
     let session_manager = Arc::new(SessionManager::new());
@@ -335,6 +338,7 @@ fn execute_create_table(
             data_type: col.data_type.clone(),
             nullable: col.nullable,
             primary_key: false,
+            auto_increment: col.auto_increment,
         })
         .collect();
 
@@ -345,6 +349,8 @@ fn execute_create_table(
         unique_constraints: vec![],
         check_constraints: vec![],
         partition_info: None,
+        has_hidden_rowid: false,
+        next_rowid: 0,
     };
 
     storage

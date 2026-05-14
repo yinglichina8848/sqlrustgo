@@ -749,6 +749,38 @@ impl StorageEngine for ColumnarStorage {
             })
     }
 
+    fn get_row_count(&self, table: &str) -> crate::engine::SqlResult<u64> {
+        match self.tables.get(table) {
+            Some(store) => Ok(store.row_count() as u64),
+            None => Err(crate::engine::SqlError::ExecutionError(format!(
+                "Table not found: {}",
+                table
+            ))),
+        }
+    }
+
+    fn get_page_count(&self, table: &str) -> crate::engine::SqlResult<u64> {
+        const PAGE_SIZE: u64 = 4096;
+        match self.tables.get(table) {
+            Some(store) if store.row_count() > 0 => {
+                let avg_row_size: u64 = store
+                    .column_count() as u64
+                    * 8;
+                let total_bytes = avg_row_size * store.row_count() as u64;
+                Ok(total_bytes.div_ceil(PAGE_SIZE).max(1))
+            }
+            Some(_) => Ok(0),
+            None => Err(crate::engine::SqlError::ExecutionError(format!(
+                "Table not found: {}",
+                table
+            ))),
+        }
+    }
+
+    fn get_index_page_count(&self, _table: &str, _column_index: usize) -> crate::engine::SqlResult<u64> {
+        Ok(1)
+    }
+
     fn has_table(&self, table: &str) -> bool {
         self.tables.contains_key(table)
     }

@@ -2,9 +2,9 @@
 
 > **版本**: v3.0.0
 > **日期**: 2026-05-06（源同步版）
-> **状态**: Development 阶段已完成，已进入 Alpha
+> **状态**: Development 阶段已完成，已进入 Alpha (CBO 进行中)
 > **实际开发周期**: 2026-05-05 ~ 2026-05-06（2 天，非计划 12 周）
-> **当前分支**: `develop/v3.0.0` @ `10ffc0e3`
+> **当前分支**: `develop/v3.0.0` @ `ebdf0487`
 
 ---
 
@@ -12,11 +12,14 @@
 
 | 指标 | 目标 | **当前** | 状态 |
 |------|------|--------|------|
-| Point SELECT QPS | ≥20,000 | **7,312**（待 CBO 优化） | 🟡 |
+| Point SELECT QPS | ≥20,000 | **7,312**（待 CBO #392） | 🟡 |
 | UPDATE QPS | ≥10,000 | **42,427** | ✅ |
 | DELETE QPS | ≥5,000 | **62,352** | ✅ |
 | SQL Corpus | ≥98% | **100%** | ✅ |
 | TPC-H SF=0.1 | 22/22 | **22/22** ~10.9s | 🟡 |
+| Sysbench oltp_read_only | — | **17,068 QPS** | ✅ |
+| Sysbench oltp_write_only | — | **37,075 QPS** | ✅ |
+| Sysbench oltp_read_write | — | **19,430 QPS** | ✅ |
 
 ---
 
@@ -48,6 +51,11 @@
 | **内存** | PP-06 内存治理 (512MB 限额) | ✅ | |
 | **形式化证明** | PROOF-026 Write Skew/SSI | ✅ | TLA+ 模型 + 7 测试 |
 | **SQL 测试** | SQL Corpus 100% (485/485) | ✅ | |
+| **协议** | COM_MULTI (0x11) 多语句执行 | ✅ | opencode |
+| **协议** | Prepared Statement 参数绑定修复 | ✅ | opencode |
+| **协议** | BEGIN/COMMIT/ROLLBACK 引擎集成 | ✅ | opencode |
+| **Sysbench** | oltp_read_only / write_only / read_write | ✅ | 17k / 37k / 19k QPS |
+| **Sysbench** | Sysbench 设置指南 (docs) | ✅ | opencode |
 
 ---
 
@@ -55,16 +63,14 @@
 
 | 优先级 | 任务 | 难度 | 负责人 | Issue |
 |--------|------|------|--------|-------|
-| **P0** | CBO 代价模型集成 (SimpleCostModel + 索引选择) | 🔴 5-7d | opencode | — |
-| **P0** | Sysbench OLTP 完整适配 | 🟡 3d | opencode | #376 |
-| **P0** | COM_MULTI 多语句执行 | 🟡 2d | opencode | #377 |
-| **P0** | Prepared Statement 参数绑定修复 | 🟢 1d | opencode | #378 |
+| **P0** | CBO 代价模型集成 (SimpleCostModel + 索引选择) | 🔴 5-7d | opencode | #392 |
 | **P0** | 事务状态机压力测试 | 🟡 2d | claude | #379 |
 | **P1** | TPC-H SF=1 CI Gate | 🟡 1d | — | #382 |
 | **P1** | Optimizer 测试扩展 | 🟢 2d | claude | #380 |
 | **P1** | Planner 逻辑测试扩展 | 🟢 2d | claude | #381 |
 | **P2** | 连接池并发压力测试 | 🟡 2d | — | — |
 | **P2** | 覆盖率 ≥85% | 🟡 3d | — | — |
+| **P3** | Cargo.toml 版本号 2.x → 3.0.0 验证 | 🟢 0.5d | deepseek | — |
 
 ---
 
@@ -72,13 +78,113 @@
 
 | Agent | 工作目录 | 负责任务 |
 |-------|---------|---------|
-| **opencode** | `~/workspace/dev/openheart/sqlrustgo` | #376 #377 #378 + CBO 代价模型 |
+| **opencode** | `~/workspace/dev/openheart/sqlrustgo` | #392 CBO 代价模型集成 |
 | **claude** | `~/workspace/dev/yinglichina163/sqlrustgo` | #379 #380 #381 |
-| **deepseek** | `~/workspace/dev/openheart/sqlrustgo` | 文档同步 + A-HYG 门禁 + 临时修复 |
+| **deepseek** | `~/workspace/dev/openheart/sqlrustgo` | 文档同步 + A-HYG 门禁 + 版本号 |
 
 ---
 
 ## 五、当前分支
 
-`develop/v3.0.0` @ `10ffc0e3`
-Open PR: #387 (Phase 1 complete → main)
+`develop/v3.0.0` @ `ebdf0487`
+
+已合并 PR:
+- #388 COM_MULTI + Prepared Statement + Transaction Fixes
+- #390 Prepared Statement 参数绑定修复 + 编译修复
+- #391 TPC-H SF=1 CI Gate (`--sf1`/`--sf0.1` 选项)
+
+---
+
+## 六、v3.1.0 延续任务（来自 v3.0.0 未完成项）
+
+> 基于 gate_lifecycle_tracking.md §7.3 建立
+
+以下任务在 v3.0.0 未完成或未达到 Beta Gate 要求，必须在 v3.1.0 中完成。
+
+### 6.1 P0 任务（阻塞 v3.1.0 Beta Gate）
+
+| 原 Issue | 任务 | v3.0.0 状态 | v3.1.0 目标 | 验收条件 |
+|----------|------|------------|-------------|----------|
+| #451 | SQL Operations 语法支持 | 20% (11/55) | ≥80% (44/55) | `test_sql_corpus_operations` 通过率 ≥80%，涉及 BACKUP, SAVEPOINT, SET TRANSACTION ISOLATION LEVEL, LIMIT/OFFSET, TRUNCATE, REPLACE, SHOW, EXPLAIN ANALYZE, TEMPORARY TABLE, ALTER TABLE INPLACE, BATCH INSERT |
+| #392 | CBO 代价模型集成 | 未开始 | SimpleCostModel 接入 planner | EXPLAIN 能选择索引扫描而非全表；多表 JOIN 按代价排序 |
+| — | TPC-H SF=1 无 OOM | SF=1 曾 OOM | 22/22 无 OOM，p99 < 5s | `check_tpch.sh sf=1` 22/22 全部通过 |
+| #379 | 事务状态机压力测试 | 未开始 | crash_recovery_test 全部 PASS | B-S2 PASS，100 并发 BEGIN/COMMIT/ROLLBACK 无状态泄漏 |
+
+### 6.2 P1 任务（阻塞 v3.1.0 RC Gate）
+
+| 原 Issue | 任务 | v3.0.0 状态 | v3.1.0 目标 | 验收条件 |
+|----------|------|------------|-------------|----------|
+| #380 | Optimizer 测试扩展 | 未开始 | 覆盖率 ≥75% | `cargo llvm-cov -p sqlrustgo-optimizer` ≥ 75% |
+| #381 | Planner 测试扩展 | 未开始 | 覆盖率 ≥80% | `cargo llvm-cov -p sqlrustgo-planner` ≥ 80% |
+| — | 连接池/缓存/Group Commit 正确性 | 部分完成 | 并发压力测试通过 | 连接池泄漏检测、缓存 DML 失效、WAL 崩溃恢复全部 PASS |
+| #382 | TPC-H SF=1 CI Gate | 已完成（PR #391） | — | ✅ 已完成 |
+
+### 6.3 GA 门禁遗留问题修复（来自 GA_GATE_AUDIT.md）
+
+> 基于 GA_GATE_AUDIT.md §四建立
+
+#### P0 — 阻塞 v3.1.0 GA
+
+| 遗留编号 | 任务 | 验收条件 |
+|----------|------|----------|
+| GA-GAP-02 | 实现 G7/G8/G9 QPS 实际测量 | `cargo bench -- point_select` 输出 ≥10,000 ops/s |
+| GA-GAP-03 | 统一 SQL Corpus 阈值为 ≥98% | `test_sql_corpus_all` ≥98%，当前 94.1% |
+
+#### P1 — 阻塞 v3.1.0 RC
+
+| 遗留编号 | 任务 | 验收条件 |
+|----------|------|----------|
+| GA-GAP-01 | 修复 R-05 semver 漏洞或申请豁免 | `cargo audit` 输出不包含 R-05，或 Architect 批准豁免 |
+| GA-GAP-08 | 创建缺失的 3 个文档 | INSTALL.md、DEPLOYMENT_GUIDE.md、QUICK_START.md 存在且内容完整 |
+| GA-GAP-04 | 将 B-S1~B-S5 稳定性测试纳入 GA Gate | check_ga_v300.sh 包含 B-S1~B-S5 检查 |
+
+#### P2 — 建议完成
+
+| 遗留编号 | 任务 | 验收条件 |
+|----------|------|----------|
+| GA-GAP-05 | 实现 MySQL Protocol Test | `docker run --rm mysql:5.7 mysql -h <host> -e "SELECT 1"` 成功 |
+| GA-GAP-06 | 修复 run_integration.sh 退出码验证 | `bash scripts/test/run_integration.sh --quick` 退出码为 0 |
+| GA-GAP-07 | 扩展 formal proofs 检查到 .dfy/.tla | check_ga_v300.sh GA-11 计数 ≥10 个文件（所有格式） |
+
+#### P3 — 规范对齐
+
+| 遗留编号 | 任务 | 验收条件 |
+|----------|------|----------|
+| GA-GAP-09 | 将 GA-8 添加到 gate_spec_v300.md 或从脚本移除 | gate_spec_v300.md 与 check_ga_v300.sh GA-8 定义一致 |
+
+### 6.4 v3.1.0 门禁目标
+
+| 门禁 | 指标 | v3.0.0 实际 | v3.1.0 目标 |
+|------|------|------------|-------------|
+| B2 | 测试通过率 | 94.1% (test_sql_corpus_all) | ≥90% (全量) |
+| B5 | 覆盖率 | — | ≥75% |
+| B9 | SQL Corpus | 94.1% (all) / 20% (operations) | ≥85% |
+| B-S2 | crash_recovery_test | — | 全部 PASS |
+| B-S10 | test_sql_corpus_operations | 20% | ≥80% |
+
+### 6.5 任务追踪机制
+
+```
+v3.0.0: Issue #451 (SQL operations 20%) → OPEN
+         ↓
+v3.1.0 DEVELOPMENT_PLAN.md §6.1 建立延续映射
+         ↓
+v3.1.0 开发期间持续追踪
+         ↓
+修复完成 → PR 合并 → Issue #451 closedByPullRequest
+         ↓
+验证 test_sql_corpus_operations ≥ 80%
+```
+
+### 6.6 GA 门禁遗留问题追踪
+
+```
+GA_GATE_AUDIT.md GA-GAP-XX（OPEN）
+    ↓
+v3.1.0 DEVELOPMENT_PLAN.md §6.3 建立延续映射
+    ↓
+创建 Issue（milestone: v3.1.0-ga）
+    ↓
+修复完成 → 验证门禁 PASS → GA_GATE_AUDIT.md 状态改为 CLOSED
+```
+

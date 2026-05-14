@@ -12,11 +12,18 @@ sqlrustgo-planner.workspace = true
 sqlrustgo-storage.workspace = true
 sqlrustgo-catalog.workspace = true
 sqlrustgo-parser.workspace = true
+sqlrustgo-transaction.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 log.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
 sqlrustgo = { path = "../.." }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "vec_benchmark"
+harness = false

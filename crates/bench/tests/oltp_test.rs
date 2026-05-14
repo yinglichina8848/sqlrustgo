@@ -2,13 +2,14 @@
 //!
 //! Tests for Sysbench-style OLTP workloads against MemoryExecutionEngine.
 
+use sqlrustgo::execution_engine::EngineConfig;
 use sqlrustgo::MemoryExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use std::sync::{Arc, RwLock};
 
 fn setup_engine() -> MemoryExecutionEngine {
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-    MemoryExecutionEngine::new(storage)
+    MemoryExecutionEngine::new_with_config(storage, EngineConfig::default())
 }
 
 fn setup_sbtest(engine: &mut MemoryExecutionEngine) {

@@ -1,14 +1,15 @@
 {
-  "date": "2026-05-06T00:00:00Z",
+  "date": "2026-05-14T03:42:13Z",
+  "version": "v2.9.0",
   "benchmarks": {
-    "aggregation": 1643824,
-    "order_by": 81988,
-    "delete": 63568,
-    "join": 57388,
-    "update": 43224,
-    "insert": 33377,
-    "simple_select": 24516,
-    "concurrent_select_8t": 11995,
-    "complex_where": 1226
+    "simple_select": 2811259.09,
+    "insert": 459295.85,
+    "update": 550271.94,
+    "delete": 653842.25,
+    "join": 154105.95,
+    "aggregation": 8783803.37,
+    "order_by": 295730.33,
+    "concurrent_select_8t": 1141791.56,
+    "complex_where": 4041.66
   }
 }

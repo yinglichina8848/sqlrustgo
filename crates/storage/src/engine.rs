@@ -206,6 +206,7 @@ fn compare_values(col_val: &Value, compare_with: &str, op: &str) -> SqlResult<bo
                 Ok(*b == cmp_bool)
             }
             Value::Blob(_) => Ok(false),
+            Value::Geometry(_) => Ok(false),
         },
         "neq" => Ok(!compare_values(col_val, compare_with, "eq")?),
         "gt" | "gte" | "lt" | "lte" => {
@@ -257,6 +258,7 @@ fn is_zero_or_empty(val: &Value) -> bool {
         Value::Boolean(b) => !*b,
         Value::Null => true,
         Value::Blob(_) => false,
+        Value::Geometry(_) => false,
     }
 }
 
@@ -537,6 +539,12 @@ pub struct TableInfo {
     pub check_constraints: Vec<CheckConstraint>,
     #[serde(skip)]
     pub partition_info: Option<PartitionInfo>,
+    /// Whether this table uses a hidden rowid for tables without explicit PK
+    #[serde(default)]
+    pub has_hidden_rowid: bool,
+    /// Next auto-incrementing rowid value for tables with hidden rowid
+    #[serde(default)]
+    pub next_rowid: u64,
 }
 
 /// Column definition for table schema
@@ -548,6 +556,8 @@ pub struct ColumnDefinition {
     pub nullable: bool,
     #[serde(default)]
     pub primary_key: bool,
+    #[serde(default)]
+    pub auto_increment: bool,
 }
 
 impl ColumnDefinition {
@@ -557,6 +567,7 @@ impl ColumnDefinition {
             data_type: data_type.to_string(),
             nullable: false,
             primary_key: false,
+            auto_increment: false,
         }
     }
 }
@@ -608,6 +619,10 @@ pub trait StorageEngine: Send + Sync {
 
     /// Create an index on a table
     fn create_index(&mut self, table: &str, column: &str, column_index: usize) -> SqlResult<()>;
+
+    /// Add a unique constraint to table metadata
+    fn add_unique_constraint(&mut self, table: &str, constraint: UniqueConstraint)
+        -> SqlResult<()>;
 
     /// Drop an index from a table
     fn drop_index(&mut self, table: &str, column: &str) -> SqlResult<()>;
@@ -675,6 +690,23 @@ pub trait StorageEngine: Send + Sync {
 
     /// Get the number of index pages for an index on a table
     fn get_index_page_count(&self, table: &str, column_index: usize) -> SqlResult<u64>;
+
+    /// Get next auto-increment value and increment counter
+    /// Returns the next auto-increment value for the table
+    fn get_next_auto_increment(&mut self, _table: &str) -> SqlResult<i64> {
+        // Default implementation: auto-increment not supported
+        Err(SqlError::ExecutionError(
+            "Auto-increment not supported by this storage engine".to_string(),
+        ))
+    }
+
+    /// Get next hidden rowid value and increment counter
+    /// Returns the next rowid for a table with hidden rowid support
+    /// Returns None if the table doesn't have hidden rowid enabled
+    fn get_and_increment_next_rowid(&mut self, _table: &str) -> SqlResult<Option<u64>> {
+        // Default implementation: hidden rowid not supported
+        Ok(None)
+    }
 }
 
 /// In-memory storage implementation for testing and caching
@@ -689,6 +721,8 @@ pub struct MemoryStorage {
     indexes: HashMap<String, (usize, HashMap<i64, Vec<usize>>)>,
     /// Cache for parsed predicates: (table_name, predicate_str) -> (columns, parsed_predicate)
     predicate_cache: HashMap<String, (Vec<String>, Predicate)>,
+    /// Auto-increment counters: table_name -> next auto-increment value
+    auto_increment_counters: HashMap<String, i64>,
 }
 
 impl MemoryStorage {
@@ -700,19 +734,49 @@ impl MemoryStorage {
             views: HashSet::new(),
             indexes: HashMap::new(),
             predicate_cache: HashMap::new(),
+            auto_increment_counters: HashMap::new(),
         }
     }
 
     /// Find row indices by index lookup
     pub fn find_by_index(&self, table: &str, column_index: usize, key: i64) -> Option<Vec<usize>> {
-        let index_key = table.to_string();
-        self.indexes.get(&index_key).and_then(|(idx, data)| {
-            if *idx == column_index {
-                data.get(&key).cloned()
-            } else {
-                None
+        let table_prefix = format!("{}:", table);
+        for (index_key, (col_idx, data)) in &self.indexes {
+            if index_key.starts_with(&table_prefix) && *col_idx == column_index {
+                return data.get(&key).cloned();
             }
-        })
+        }
+        None
+    }
+
+    /// Search using index - returns row IDs matching the key (by column name)
+    pub fn search_index(&self, table: &str, column: &str, key: i64) -> Vec<u32> {
+        let index_key = format!("{}:{}", table, column);
+        self.indexes
+            .get(&index_key)
+            .map(|(_, data)| data.get(&key).cloned().unwrap_or_default())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|v| v as u32)
+            .collect()
+    }
+
+    /// Range query using index (by column name)
+    pub fn range_index(&self, table: &str, column: &str, start: i64, end: i64) -> Vec<u32> {
+        let index_key = format!("{}:{}", table, column);
+        if let Some((_, data)) = self.indexes.get(&index_key) {
+            let mut results = Vec::new();
+            for (key, row_ids) in data {
+                if *key >= start && *key <= end {
+                    for row_id in row_ids {
+                        results.push(*row_id as u32);
+                    }
+                }
+            }
+            results
+        } else {
+            Vec::new()
+        }
     }
 
     /// Get or parse predicate, using cache if available (returns owned Predicate)
@@ -761,8 +825,9 @@ impl StorageEngine for MemoryStorage {
             let actual_row_idx = table_records.len() + row_idx;
 
             // Update all indexes for this table
+            let table_prefix = format!("{}:", table);
             for (index_key, (col_idx, index_data)) in self.indexes.iter_mut() {
-                if index_key == table {
+                if index_key.starts_with(&table_prefix) {
                     if let Some(Value::Integer(key)) = record.get(*col_idx) {
                         index_data.entry(*key).or_default().push(actual_row_idx);
                     }
@@ -831,10 +896,19 @@ impl StorageEngine for MemoryStorage {
         self.table_infos.insert(info.name.clone(), info.clone());
         self.tables.entry(info.name.clone()).or_default();
 
+        // Initialize auto-increment counters for tables with auto_increment columns
+        for col in &info.columns {
+            if col.auto_increment {
+                self.auto_increment_counters.insert(info.name.clone(), 1);
+                break;
+            }
+        }
+
         // Auto-create index for primary key column
         for (col_idx, col) in info.columns.iter().enumerate() {
             if col.primary_key {
-                // Use table name as index key, build index from existing data
+                // Use table:column as index key, build index from existing data
+                let index_key = format!("{}:{}", info.name, col.name);
                 if let Some(records) = self.tables.get(&info.name) {
                     let mut index_data: HashMap<i64, Vec<usize>> = HashMap::new();
                     for (row_idx, row) in records.iter().enumerate() {
@@ -842,8 +916,7 @@ impl StorageEngine for MemoryStorage {
                             index_data.entry(*key).or_default().push(row_idx);
                         }
                     }
-                    self.indexes
-                        .insert(info.name.clone(), (col_idx, index_data));
+                    self.indexes.insert(index_key, (col_idx, index_data));
                 }
                 break; // Only one primary key index per table for now
             }
@@ -855,6 +928,7 @@ impl StorageEngine for MemoryStorage {
     fn drop_table(&mut self, table: &str) -> SqlResult<()> {
         self.tables.remove(table);
         self.table_infos.remove(table);
+        self.auto_increment_counters.remove(table);
         Ok(())
     }
 
@@ -967,12 +1041,12 @@ impl StorageEngine for MemoryStorage {
         self.table_infos.keys().cloned().collect()
     }
 
-    fn create_index(&mut self, table: &str, _column: &str, column_index: usize) -> SqlResult<()> {
+    fn create_index(&mut self, table: &str, column: &str, column_index: usize) -> SqlResult<()> {
         let Some(records) = self.tables.get(table) else {
             return Ok(());
         };
 
-        let index_key = table.to_string();
+        let index_key = format!("{}:{}", table, column);
         let mut index_data: HashMap<i64, Vec<usize>> = HashMap::new();
 
         for (row_idx, row) in records.iter().enumerate() {
@@ -983,6 +1057,22 @@ impl StorageEngine for MemoryStorage {
 
         self.indexes.insert(index_key, (column_index, index_data));
         Ok(())
+    }
+
+    fn add_unique_constraint(
+        &mut self,
+        table: &str,
+        constraint: UniqueConstraint,
+    ) -> SqlResult<()> {
+        if let Some(info) = self.table_infos.get_mut(table) {
+            info.unique_constraints.push(constraint);
+            Ok(())
+        } else {
+            Err(SqlError::ExecutionError(format!(
+                "Cannot add unique constraint: table {} not found",
+                table
+            )))
+        }
     }
 
     fn drop_index(&mut self, _table: &str, _column: &str) -> SqlResult<()> {
@@ -1092,6 +1182,16 @@ impl StorageEngine for MemoryStorage {
         }
         Ok(count)
     }
+
+    fn get_next_auto_increment(&mut self, table: &str) -> SqlResult<i64> {
+        let counter = self
+            .auto_increment_counters
+            .entry(table.to_string())
+            .or_insert(1);
+        let value = *counter;
+        *counter += 1;
+        Ok(value)
+    }
 }
 
 #[cfg(test)]
@@ -1126,6 +1226,8 @@ mod tests {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&info).unwrap();
         let tables = storage.list_tables();
@@ -1170,6 +1272,8 @@ mod tests {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
 
         storage.create_table(&info).unwrap();
@@ -1190,11 +1294,14 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: true,
+                ..Default::default()
             }],
             foreign_keys: vec![],
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
 
         storage.create_table(&info).unwrap();
@@ -1251,6 +1358,8 @@ mod tests {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         let info2 = TableInfo {
             name: "orders".to_string(),
@@ -1259,6 +1368,8 @@ mod tests {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&info1).unwrap();
         storage.create_table(&info2).unwrap();
@@ -1281,6 +1392,8 @@ mod tests {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
         };
         storage.create_table(&info).unwrap();
         assert!(storage.has_table("users"));

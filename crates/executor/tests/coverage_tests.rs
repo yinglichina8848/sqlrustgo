@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use sqlrustgo::ExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use sqlrustgo_types::Value;
@@ -340,4 +341,70 @@ fn test_left_join() {
         .execute("SELECT employees.name, departments.dept_name FROM employees LEFT JOIN departments ON employees.dept_id = departments.id")
         .unwrap();
     assert_eq!(result.rows.len(), 3);
+}
+
+#[test]
+fn test_distinct() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Alice')")
+        .unwrap();
+
+    let result = engine.execute("SELECT DISTINCT name FROM users").unwrap();
+    assert_eq!(result.rows.len(), 2);
+}
+
+#[test]
+fn test_limit_with_offset() {
+    let mut engine = create_engine();
+    engine.execute("CREATE TABLE numbers (n INTEGER)").unwrap();
+    engine
+        .execute("INSERT INTO numbers VALUES (1), (2), (3), (4), (5)")
+        .unwrap();
+
+    let result = engine
+        .execute("SELECT * FROM numbers LIMIT 2 OFFSET 2")
+        .unwrap();
+    assert_eq!(result.rows.len(), 2);
+}
+
+#[test]
+fn test_update_set() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')")
+        .unwrap();
+
+    let result = engine
+        .execute("UPDATE users SET name = 'Charlie' WHERE id = 1")
+        .unwrap();
+    assert_eq!(result.affected_rows, 1);
+
+    let select_result = engine
+        .execute("SELECT name FROM users WHERE id = 1")
+        .unwrap();
+    assert_eq!(select_result.rows[0][0], Value::Text("Charlie".to_string()));
+}
+
+#[test]
+fn test_delete_where() {
+    let mut engine = create_engine();
+    engine
+        .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')")
+        .unwrap();
+
+    let result = engine.execute("DELETE FROM users WHERE id = 2").unwrap();
+    assert_eq!(result.affected_rows, 1);
+
+    let select_result = engine.execute("SELECT COUNT(*) FROM users").unwrap();
+    assert_eq!(select_result.rows[0][0], Value::Integer(2));
 }

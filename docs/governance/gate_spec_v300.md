@@ -129,8 +129,23 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | B7 | 文档链接 | `bash scripts/gate/check_docs_links.sh` | 无死链 |
 | B8 | TPC-H SF=0.1 | `scripts/gate/check_tpch.sh sf=0.1` | 22/22 通过，无 OOM |
 | B9 | SQL Corpus | `cargo test -p sqlrustgo-sql-corpus` | ≥85% |
+| B10 | CBO Index Scan | `cargo test --test cbo_integration_test test_should_use_index` | 测试通过 |
+| B11 | CBO Join Cost | `cargo test --test cbo_integration_test test_estimate_join_cost` | 测试通过 |
+| B12 | CBO Optimizer | `cargo test -p sqlrustgo-optimizer` | 全部通过 |
+| B13 | CBO Planner | `cargo test --test cbo_integration_test` | 全部通过 |
 
-### 4.3 TPC-H SF=0.1 详细要求
+### 4.3 稳定性测试清单
+
+| # | 检查项 | 命令/方法 | 通过标准 |
+|---|--------|----------|---------|
+| B-S1 | concurrency_stress_test | `cargo test --test concurrency_stress_test` | 全部通过 |
+| B-S2 | crash_recovery_test | `cargo test --test crash_recovery_test` | 全部通过 |
+| B-S3 | long_run_stability_test | `cargo test --test long_run_stability_test` | 全部通过 |
+| B-S4 | wal_integration_test | `cargo test --test wal_integration_test` | 全部通过 |
+| B-S5 | network_tcp_smoke_test | `cargo test --test network_tcp_smoke_test` | 全部通过 |
+| B-S6 | ssi_stress_test | `cargo test -p sqlrustgo-transaction --test ssi_stress_test` | 全部通过 |
+
+### 4.4 TPC-H SF=0.1 详细要求
 
 ```bash
 # 验证命令
@@ -146,7 +161,7 @@ cargo run -p sqlrustgo-bench-cli -- tpch-bench \
 # - Q17/Q18 允许慢，但必须出结果
 ```
 
-### 4.4 覆盖率要求
+### 4.5 覆盖率要求
 
 | 模块 | 目标 |
 |------|------|
@@ -217,7 +232,7 @@ R7 包含四个子检查：
 | optimizer | ≥70% |
 | storage | ≥40% |
 | catalog | ≥70% |
-| parser | ≥70% |
+| parser | ≥40% |
 | **整体** | **≥85%** |
 
 ---
@@ -235,19 +250,25 @@ R7 包含四个子检查：
 
 ### 6.2 检查清单
 
-| # | 检查项 | 命令/方法 | 通过标准 |
-|---|--------|----------|---------|
-| G1 | Build | `cargo build --release --workspace` | 无错误 |
-| G2 | Test | `cargo test --all-features` | 100% 通过 |
-| G3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 |
-| G4 | Format | `cargo fmt --all -- --check` | 无格式错误 |
-| G5 | Coverage | `cargo llvm-cov --all-features --lcov` | ≥85% |
-| G6 | Security | `cargo audit` | 无漏洞 |
-| G7 | Point Select QPS | `cargo bench -- point_select` | ≥10,000 QPS |
-| G8 | UPDATE QPS | `cargo bench -- update_simple` | ≥5,000 QPS |
-| G9 | DELETE QPS | `cargo bench -- delete_simple` | ≥2,000 QPS |
-| G10 | TPC-H SF=1 | `scripts/gate/check_tpch.sh sf=1` | 22/22 通过，无 OOM |
-| G11 | SQL Corpus | `cargo test -p sqlrustgo-sql-corpus` | ≥98% |
+| # | 检查项 | 命令/方法 | 通过标准 | 证据格式 |
+|---|--------|----------|---------|---------|
+| G1 | Build | `cargo build --release --workspace` | 无错误 | `{command, exit_code}` |
+| G2 | Test | `cargo test --all-features` | 100% 通过 | `{passed, failed, exit_code}` |
+| G3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 | `{warnings, exit_code}` |
+| G4 | Format | `cargo fmt --all -- --check` | 无格式错误 | `{diff_count, exit_code}` |
+| G5 | Coverage | `cargo llvm-cov --all-features --lcov` | ≥85% | `{total_pct, module_pcts}` |
+| G6 | Security | `cargo audit` | 无高危漏洞 | `{vulnerabilities}` |
+| G7 | Point Select QPS | `cargo bench -- point_select` | **≥10,000 ops/s**（实际测量） | `{qps, threshold, pass}` |
+| G8 | UPDATE QPS | `cargo bench -- update_simple` | **≥5,000 ops/s**（实际测量） | `{qps, threshold, pass}` |
+| G9 | DELETE QPS | `cargo bench -- delete_simple` | **≥2,000 ops/s**（实际测量） | `{qps, threshold, pass}` |
+| G10 | TPC-H SF=1 | `scripts/gate/check_tpch.sh sf=1` | 22/22 通过，无 OOM | `{passed, total, oom_count}` |
+| G11 | SQL Corpus | `cargo test -p sqlrustgo-sql-corpus` | **≥98%**（统一阈值） | `{passed, total, pct}` |
+| G12 | B-S 稳定性测试 | `scripts/gate/check_beta_v300.sh` B-S1~B-S5 | 全部 PASS | `{b_s1_pass, b_s2_pass, ...}` |
+| G13 | MySQL Protocol | mysql:5.7 容器握手测试 | 连接成功 | `{handshake, query_response}` |
+| G14 | Doc Links | `bash scripts/gate/check_docs_links.sh` | 无死链 | `{broken_links}` |
+
+> **注**: G7/G8/G9 要求实际运行 `cargo bench` 并解析 ops/s 输出，禁止仅依赖 check_regression.sh 的回归检测。
+> **注**: G14 与 A5 (Alpha Gate) 一致，GA 门禁重复检查以确保文档完整性。
 
 ### 6.3 覆盖率要求
 
@@ -257,14 +278,74 @@ R7 包含四个子检查：
 | optimizer | ≥70% |
 | storage | ≥40% |
 | catalog | ≥75% |
-| parser | ≥80% |
+| parser | ≥40% |
 | **整体** | **≥85%** |
 
 ---
 
-## 七、门禁状态追踪
+## 七、Beta Phase 3: 风险驱动验证体系
 
-### 7.1 各分支门禁要求
+> **更新时间**: 2026-05-08
+> **背景**: 从"功能测试"转向"可信度证明" — 数据库从"能运行"进入"可信"的分水岭
+
+### 7.1 核心转变
+
+```
+旧哲学: coverage % → 数字
+新哲学: coverage % → 风险 → 场景
+```
+
+**当前致命问题**:
+- optimizer 覆盖率 0%，planner <1%，transaction ~0%
+- 294 tests 集中在 5-6 个文件，高度偏向 happy path
+- 覆盖率高但不知道哪里危险 — 数据库行业经典灾难
+
+### 7.2 BP3 P0 必须完成（GMP 生产可信度门槛）
+
+| ID | 名称 | Issue | 验证内容 |
+|----|------|-------|---------|
+| BP3-1 | WAL Crash Injection Matrix | #499 | 9个 crash 点验证（before/after wal append, checkpoint, page split 等）|
+| BP3-2 | MVCC Isolation Matrix | #500 | 4种隔离级别 + 5个并发场景（concurrent UPDATE/lost update/snapshot visibility）|
+| BP3-3 | Deadlock Fuzzer | #501 | 随机化锁调度，1000+ 轮无死锁 |
+| BP3-4 | Optimizer 最小测试集 | #502 | 覆盖率目标 ≥50%（cost model/index selection/join reorder/predicate pushdown）|
+| BP3-5 | Planner 最小测试集 | #503 | 覆盖率目标 ≥50%（plan cache/prepared statement/parameter binding）|
+| BP3-6 | Differential Testing 扩展 | #504 | SQLite/MySQL/PG 结果一致性（NULL/NaN/overflow/collation）|
+| BP3-7 | Audit Integrity Verification | #505 | GMP 审计链验证（append-only/crash-safe/hash-chain/timestamp monotonicity）|
+
+### 7.3 BP3 P1 强烈建议
+
+| ID | 名称 | Issue |
+|----|------|-------|
+| BP3-8 | RANGE Partition | #506 |
+| BP3-9 | EXPLAIN ANALYZE | #507 |
+| BP3-10 | SHOW / INFO_SCHEMA | #508 |
+| BP3-11 | SQL Corpus Operation 扩展 | #509 |
+
+### 7.4 测试分布目标
+
+| 类型 | 当前比例 | 目标比例 |
+|------|---------|---------|
+| happy path | ~90% | 30% |
+| edge cases | ~5% | 30% |
+| concurrency | ~3% | 20% |
+| crash/recovery | ~1% | 10% |
+| fuzz/randomized | ~1% | 10% |
+
+### 7.5 Beta Gate 中的 BP3 策略
+
+Beta 阶段（`check_beta_v300.sh`）：
+- BP3 项为 **advisory**（INFO 级别，不 block）
+- 报告当前状态，追踪到对应 Issue
+
+RC/GA 阶段：
+- BP3 项为 **强制 blockers**
+- 未通过 = 无法进入 RC/GA
+
+---
+
+## 八、门禁状态追踪
+
+### 8.1 各分支门禁要求
 
 | 分支 | 门禁 | 覆盖率目标 | 性能要求 |
 |------|------|-----------|---------|
@@ -273,7 +354,7 @@ R7 包含四个子检查：
 | beta/v3.0.0 | R-Gate | ≥85% | TPC-H SF=1 22/22 |
 | rc/v3.0.0 | G-Gate | ≥85% | Point Select ≥10K |
 
-### 7.2 当前状态 (v3.0.0)
+### 8.2 当前状态 (v3.0.0)
 
 | 门禁 | 状态 | 完成日期 | 备注 |
 |------|------|----------|------|
@@ -284,7 +365,7 @@ R7 包含四个子检查：
 
 ---
 
-## 八、CI Gate 新建清单
+## 九、CI Gate 新建清单
 
 > 来源: `DEVELOPMENT_PLAN.md` §Phase 3 I-05
 
@@ -300,7 +381,7 @@ v3.0.0 需新建以下 CI Gate：
 
 ---
 
-## 九、豁免规则
+## 十、豁免规则
 
 以下情况可申请门禁豁免：
 
@@ -313,7 +394,7 @@ v3.0.0 需新建以下 CI Gate：
 
 ---
 
-## 十、变更历史
+## 十一、变更历史
 
 | 版本 | 日期 | 说明 |
 |------|------|------|

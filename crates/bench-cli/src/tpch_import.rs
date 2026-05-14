@@ -400,6 +400,7 @@ pub fn run(args: &TpchImportArgs) -> Result<(), String> {
                 data_type: c.data_type.clone(),
                 nullable: true,
                 primary_key: schema.primary_key.as_ref() == Some(&c.name),
+                auto_increment: false,
             })
             .collect();
 
@@ -410,6 +411,8 @@ pub fn run(args: &TpchImportArgs) -> Result<(), String> {
             unique_constraints: vec![],
             check_constraints: vec![],
             partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 0,
         };
 
         storage

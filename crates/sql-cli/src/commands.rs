@@ -194,6 +194,8 @@ fn format_value(value: &sqlrustgo_types::Value) -> String {
         sqlrustgo_types::Value::Text(s) => s.clone(),
         sqlrustgo_types::Value::Boolean(b) => b.to_string(),
         sqlrustgo_types::Value::Blob(b) => format!("[BLOB: {} bytes]", b.len()),
+        #[allow(unreachable_patterns)]
+        sqlrustgo_types::Value::Geometry(_) => "[GEOMETRY]".to_string(),
     }
 }
 
@@ -240,6 +242,7 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             }],
             ..Default::default()
         };
@@ -265,12 +268,14 @@ mod tests {
                     data_type: "INTEGER".to_string(),
                     nullable: false,
                     primary_key: false,
+                    auto_increment: false,
                 },
                 ColumnDefinition {
                     name: "name".to_string(),
                     data_type: "TEXT".to_string(),
                     nullable: true,
                     primary_key: false,
+                    auto_increment: false,
                 },
             ],
             ..Default::default()
@@ -313,6 +318,7 @@ mod tests {
                 data_type: "INTEGER".to_string(),
                 nullable: false,
                 primary_key: false,
+                auto_increment: false,
             }],
             ..Default::default()
         };

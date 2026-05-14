@@ -68,6 +68,10 @@ pub enum CatalogError {
     /// Execution error (e.g., from auth operations)
     #[error("Execution error: {0}")]
     ExecutionError(String),
+
+    /// Invalid operation (e.g., enable hidden rowid on table with PK)
+    #[error("Invalid operation: {0}")]
+    InvalidOperation(String),
 }
 
 /// Result type for catalog operations

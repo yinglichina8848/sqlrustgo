@@ -22,6 +22,9 @@
 | EX-001 | v2.9.0 | R9 性能回归 | **先决条件** | ✅ 已建立基线 | R9 必须执行（用户决策），v2.9.0 在 R-Gate 通过前须建立性能基准 `perf_baselines/v2.9.0_baseline.json`。首次 `cargo bench` 结果作为 (PROVISIONAL) 基准，后续版本逐步精确化。 | Tech Lead | 2026-05-05 | — | v2.10.0 GA 前 | 基准值: QPS 待首次 bench 后填入 |
 | EX-002 | v2.9.0 | B-Gate executor 覆盖率 71.08% | **豁免** | ✅ 已批准 | executor 模块覆盖率 71.08%，距 B-Gate 要求的 75% 差距 3.92%。B-Gate 通过时已记录（见 PR #319），正式纳入豁免管理。长期目标（v2.10.0）是达到 ≥75%。 | Tech Lead | 2026-05-04 | #319 | v2.10.0 B-Gate 前复审 | 无性能影响，功能验证通过 |
 | EX-003 | v2.9.0 | R10 proof tool_output 追溯 | **延期（部分）** | 🔄 进行中 | 现有 18 个 proof files 需补充 `tool_output` 字段。v2.9.0 GA 前需完成全部 18 个的追溯补充。用户明确要求必须达标。 | Tech Lead | 2026-05-05 | — | v2.9.0 GA 前 | 已制定追溯计划，见 Proof Registry |
+| EX-004 | v3.0.0 | GA-GAP-02 Point SELECT QPS | **豁免** | 🔄 Beta 阶段 | Point SELECT QPS=7,312 < 10,000（GA-Gate 目标），但满足 B-Gate 要求。长期目标 v3.1.0 优化索引消除全表扫描。E-09 floor (UPDATE/DELETE ≥10K) 仍然强制执行。 | Tech Lead | 2026-05-08 | — | v3.0.0 GA 前 | UPDATE=42,427 ✅ DELETE=62,352 ✅ |
+| EX-005 | v3.0.0 | GA-GAP-03 SQL Corpus 94.1% | **豁免** | 🔄 Beta 阶段 | SQL Corpus 94.1% < 98%（GA-Gate 目标），但 ≥90% 满足 B-Gate 要求。R8 Beta Gate 要求 ≥80%。v3.1.0 补充测试用例。 | Tech Lead | 2026-05-08 | — | v3.0.0 GA 前 | R8 (B-Gate) 要求 ≥80%，已满足 |
+| EX-006 | v3.0.0 | GA-GAP-01 cargo audit 警告 | **延期** | 🔄 Beta 阶段 | cargo audit 存在 7 个 unmaintained/soundness 警告（RUSTSEC-2025-0056, RUSTSEC-2021-0139, RUSTSEC-2024-0375, RUSTSEC-2024-0436, RUSTSEC-2024-0370, RUSTSEC-2021-0145, RUSTSEC-2026-0002）。无真正漏洞（exit=0）。修复需要依赖上游升级，决定延期到 v3.1.0。 | Tech Lead | 2026-05-08 | — | v3.1.0 GA 前 | 所有警告均来自间接依赖，升级需要等待上游 |
 
 ---
 
