@@ -365,7 +365,9 @@ fn test_limit_with_offset() {
         .execute("INSERT INTO numbers VALUES (1), (2), (3), (4), (5)")
         .unwrap();
 
-    let result = engine.execute("SELECT * FROM numbers LIMIT 2 OFFSET 2").unwrap();
+    let result = engine
+        .execute("SELECT * FROM numbers LIMIT 2 OFFSET 2")
+        .unwrap();
     assert_eq!(result.rows.len(), 2);
 }
 
@@ -379,10 +381,14 @@ fn test_update_set() {
         .execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob')")
         .unwrap();
 
-    let result = engine.execute("UPDATE users SET name = 'Charlie' WHERE id = 1").unwrap();
+    let result = engine
+        .execute("UPDATE users SET name = 'Charlie' WHERE id = 1")
+        .unwrap();
     assert_eq!(result.affected_rows, 1);
 
-    let select_result = engine.execute("SELECT name FROM users WHERE id = 1").unwrap();
+    let select_result = engine
+        .execute("SELECT name FROM users WHERE id = 1")
+        .unwrap();
     assert_eq!(select_result.rows[0][0], Value::Text("Charlie".to_string()));
 }
 
