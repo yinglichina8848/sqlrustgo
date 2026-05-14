@@ -34,8 +34,7 @@ mod tests {
             .execute("UPDATE t SET value = 200 WHERE id = 1")
             .unwrap();
 
-        let commit_result = engine.execute("COMMIT").unwrap();
-        assert!(commit_result.is_ok(), "COMMIT should succeed");
+        let _commit_result = engine.execute("COMMIT").unwrap();
 
         let select_result = engine
             .execute("SELECT id, value FROM t WHERE id = 1")

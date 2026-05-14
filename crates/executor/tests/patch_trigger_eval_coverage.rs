@@ -72,6 +72,7 @@ fn value_to_string(v: &Value) -> String {
             }
         }
         Value::Blob(b) => format!("[BLOB {} bytes]", b.len()),
+        Value::Geometry(g) => format!("{:?}", g),
     }
 }
 
