@@ -238,13 +238,20 @@ impl RTreeNode {
     pub fn update_mbr(&mut self) {
         if let RTreeNode::Internal { children, mbr } = self {
             *mbr = children.iter().map(|c| c.mbr()).fold(
-                MBR::new(f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY),
-                |acc, child_mbr| MBR::new(
-                    acc.min_x.min(child_mbr.min_x),
-                    acc.max_x.max(child_mbr.max_x),
-                    acc.min_y.min(child_mbr.min_y),
-                    acc.max_y.max(child_mbr.max_y),
+                MBR::new(
+                    f64::INFINITY,
+                    f64::NEG_INFINITY,
+                    f64::INFINITY,
+                    f64::NEG_INFINITY,
                 ),
+                |acc, child_mbr| {
+                    MBR::new(
+                        acc.min_x.min(child_mbr.min_x),
+                        acc.max_x.max(child_mbr.max_x),
+                        acc.min_y.min(child_mbr.min_y),
+                        acc.max_y.max(child_mbr.max_y),
+                    )
+                },
             );
         }
     }
@@ -354,7 +361,9 @@ impl RTree {
     /// Create a new R-Tree with default parameters
     pub fn new() -> Self {
         RTree {
-            root: RTreeNode::Leaf { entries: Vec::new() },
+            root: RTreeNode::Leaf {
+                entries: Vec::new(),
+            },
             max_entries: 4,
             min_entries: 2,
             next_geometry_id: 1,
@@ -365,7 +374,9 @@ impl RTree {
     pub fn with_params(max_entries: usize, min_entries: usize) -> Self {
         let min_entries = min_entries.min(max_entries / 2);
         RTree {
-            root: RTreeNode::Leaf { entries: Vec::new() },
+            root: RTreeNode::Leaf {
+                entries: Vec::new(),
+            },
             max_entries,
             min_entries,
             next_geometry_id: 1,
@@ -591,7 +602,9 @@ impl RTree {
         let max_entries = self.max_entries;
 
         if entries.is_empty() {
-            self.root = RTreeNode::Leaf { entries: Vec::new() };
+            self.root = RTreeNode::Leaf {
+                entries: Vec::new(),
+            };
         } else if entries.len() <= max_entries {
             self.root = RTreeNode::Leaf { entries };
         } else {
@@ -774,14 +787,14 @@ mod tests {
     }
 
     fn create_polygon(exterior: Vec<(f64, f64)>) -> Geometry {
-        let points: Vec<Point> = exterior
-            .iter()
-            .map(|(x, y)| Point::new(*x, *y))
-            .collect();
+        let points: Vec<Point> = exterior.iter().map(|(x, y)| Point::new(*x, *y)).collect();
         let mut ring = points.clone();
         ring.push(points[0]);
         let ls = LineString::new(ring).unwrap();
-        Geometry::Polygon(Polygon { exterior: ls, holes: vec![] })
+        Geometry::Polygon(Polygon {
+            exterior: ls,
+            holes: vec![],
+        })
     }
 
     #[test]
@@ -920,7 +933,8 @@ mod tests {
         let results = tree.search_intersects(&search_poly);
         assert_eq!(results.len(), 2);
 
-        let search_poly = create_polygon(vec![(50.0, 50.0), (60.0, 50.0), (60.0, 60.0), (50.0, 60.0)]);
+        let search_poly =
+            create_polygon(vec![(50.0, 50.0), (60.0, 50.0), (60.0, 60.0), (50.0, 60.0)]);
         let results = tree.search_intersects(&search_poly);
         assert_eq!(results.len(), 0);
     }

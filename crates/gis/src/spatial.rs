@@ -9,8 +9,8 @@
 //!
 //! Uses MBR-based pre-filtering with R-Tree for efficient spatial queries.
 
-use crate::geometry::{Geometry, LineString, MultiPoint, MultiPolygon, Point, Polygon};
-use crate::rtree::{MBR, MBRTrait};
+use crate::geometry::{Geometry, LineString, Point, Polygon};
+use crate::rtree::{MBRTrait, MBR};
 
 /// Edge represented as two points for polygon operations
 #[derive(Debug, Clone, Copy)]
@@ -173,8 +173,10 @@ pub fn point_on_segment(point: &Point, seg_start: &Point, seg_end: &Point) -> bo
     let min_y = y1.min(y2);
     let max_y = y1.max(y2);
 
-    px >= min_x - f64::EPSILON && px <= max_x + f64::EPSILON &&
-    py >= min_y - f64::EPSILON && py <= max_y + f64::EPSILON
+    px >= min_x - f64::EPSILON
+        && px <= max_x + f64::EPSILON
+        && py >= min_y - f64::EPSILON
+        && py <= max_y + f64::EPSILON
 }
 
 /// Minimum bounding rectangle intersection test
@@ -230,9 +232,7 @@ pub fn st_contains(container: &Geometry, contained: &Geometry) -> bool {
     // Precise geometric check
     match (container, contained) {
         // Point contains Point
-        (Geometry::Point(c), Geometry::Point(p)) => {
-            c.x == p.x && c.y == p.y
-        }
+        (Geometry::Point(c), Geometry::Point(p)) => c.x == p.x && c.y == p.y,
 
         // Point contains MultiPoint
         (Geometry::Point(c), Geometry::MultiPoint(mp)) => {
@@ -240,24 +240,29 @@ pub fn st_contains(container: &Geometry, contained: &Geometry) -> bool {
         }
 
         // Polygon contains Point
-        (Geometry::Polygon(poly), Geometry::Point(pt)) => {
-            point_in_polygon_inclusive(pt, poly)
-        }
+        (Geometry::Polygon(poly), Geometry::Point(pt)) => point_in_polygon_inclusive(pt, poly),
 
         // Polygon contains MultiPoint
-        (Geometry::Polygon(poly), Geometry::MultiPoint(mp)) => {
-            mp.points.iter().all(|pt| point_in_polygon_inclusive(pt, poly))
-        }
+        (Geometry::Polygon(poly), Geometry::MultiPoint(mp)) => mp
+            .points
+            .iter()
+            .all(|pt| point_in_polygon_inclusive(pt, poly)),
 
         // Polygon contains LineString
-        (Geometry::Polygon(poly), Geometry::LineString(ls)) => {
-            ls.points.iter().all(|pt| point_in_polygon_inclusive(pt, poly))
-        }
+        (Geometry::Polygon(poly), Geometry::LineString(ls)) => ls
+            .points
+            .iter()
+            .all(|pt| point_in_polygon_inclusive(pt, poly)),
 
         // Polygon contains Polygon
         (Geometry::Polygon(outer), Geometry::Polygon(inner)) => {
             // All vertices of inner must be in outer
-            if !inner.exterior.points.iter().all(|pt| point_in_polygon_inclusive(pt, outer)) {
+            if !inner
+                .exterior
+                .points
+                .iter()
+                .all(|pt| point_in_polygon_inclusive(pt, outer))
+            {
                 return false;
             }
             // Inner must not contain any hole of outer (holes are empty space in outer)
@@ -267,49 +272,55 @@ pub fn st_contains(container: &Geometry, contained: &Geometry) -> bool {
         }
 
         // Polygon contains MultiPolygon
-        (Geometry::Polygon(_outer), Geometry::MultiPolygon(mp)) => {
-            mp.polygons.iter().all(|poly| st_contains(container, &Geometry::Polygon(poly.clone())))
-        }
+        (Geometry::Polygon(_outer), Geometry::MultiPolygon(mp)) => mp
+            .polygons
+            .iter()
+            .all(|poly| st_contains(container, &Geometry::Polygon(poly.clone()))),
 
         // MultiPolygon contains Polygon
-        (Geometry::MultiPolygon(mp), Geometry::Polygon(_inner)) => {
-            mp.polygons.iter().any(|poly| st_contains(&Geometry::Polygon(poly.clone()), contained))
-        }
+        (Geometry::MultiPolygon(mp), Geometry::Polygon(_inner)) => mp
+            .polygons
+            .iter()
+            .any(|poly| st_contains(&Geometry::Polygon(poly.clone()), contained)),
 
         // MultiPolygon contains Point
-        (Geometry::MultiPolygon(mp), Geometry::Point(_pt)) => {
-            mp.polygons.iter().any(|poly| st_contains(&Geometry::Polygon(poly.clone()), contained))
-        }
+        (Geometry::MultiPolygon(mp), Geometry::Point(_pt)) => mp
+            .polygons
+            .iter()
+            .any(|poly| st_contains(&Geometry::Polygon(poly.clone()), contained)),
 
         // MultiPolygon contains MultiPoint
         (Geometry::MultiPolygon(mp), Geometry::MultiPoint(mpoints)) => {
             mpoints.points.iter().all(|pt| {
-                mp.polygons.iter().any(|poly| st_contains(&Geometry::Polygon(poly.clone()), &Geometry::Point(*pt)))
+                mp.polygons.iter().any(|poly| {
+                    st_contains(&Geometry::Polygon(poly.clone()), &Geometry::Point(*pt))
+                })
             })
         }
 
         // MultiPolygon contains LineString
-        (Geometry::MultiPolygon(mp), Geometry::LineString(ls)) => {
-            ls.points.iter().all(|pt| {
-                mp.polygons.iter().any(|poly| st_contains(&Geometry::Polygon(poly.clone()), &Geometry::Point(*pt)))
-            })
-        }
+        (Geometry::MultiPolygon(mp), Geometry::LineString(ls)) => ls.points.iter().all(|pt| {
+            mp.polygons
+                .iter()
+                .any(|poly| st_contains(&Geometry::Polygon(poly.clone()), &Geometry::Point(*pt)))
+        }),
 
         // MultiPolygon contains MultiPolygon
-        (Geometry::MultiPolygon(_mp), Geometry::MultiPolygon(inner)) => {
-            inner.polygons.iter().all(|poly| st_contains(container, &Geometry::Polygon(poly.clone())))
-        }
+        (Geometry::MultiPolygon(_mp), Geometry::MultiPolygon(inner)) => inner
+            .polygons
+            .iter()
+            .all(|poly| st_contains(container, &Geometry::Polygon(poly.clone()))),
 
         // LineString contains Point (on the line)
         (Geometry::LineString(ls), Geometry::Point(pt)) => {
-            ls.points.iter().any(|p| p.x == pt.x && p.y == pt.y) ||
-            is_point_on_linestring(pt, ls)
+            ls.points.iter().any(|p| p.x == pt.x && p.y == pt.y) || is_point_on_linestring(pt, ls)
         }
 
         // LineString contains MultiPoint
-        (Geometry::LineString(_ls), Geometry::MultiPoint(mp)) => {
-            mp.points.iter().all(|pt| st_contains(container, &Geometry::Point(*pt)))
-        }
+        (Geometry::LineString(_ls), Geometry::MultiPoint(mp)) => mp
+            .points
+            .iter()
+            .all(|pt| st_contains(container, &Geometry::Point(*pt))),
 
         // Default: check using MBR containment (already verified above)
         _ => true,
@@ -336,36 +347,28 @@ pub fn st_intersects(a: &Geometry, b: &Geometry) -> bool {
     // If MBRs intersect, geometries might intersect
     match (a, b) {
         // Point-Point intersection
-        (Geometry::Point(p1), Geometry::Point(p2)) => {
-            p1.x == p2.x && p1.y == p2.y
-        }
+        (Geometry::Point(p1), Geometry::Point(p2)) => p1.x == p2.x && p1.y == p2.y,
 
         // Point-LineString intersection
-        (Geometry::Point(pt), Geometry::LineString(ls)) |
-        (Geometry::LineString(ls), Geometry::Point(pt)) => {
-            is_point_on_linestring(pt, ls)
-        }
+        (Geometry::Point(pt), Geometry::LineString(ls))
+        | (Geometry::LineString(ls), Geometry::Point(pt)) => is_point_on_linestring(pt, ls),
 
         // Point-Polygon intersection
-        (Geometry::Point(pt), Geometry::Polygon(poly)) |
-        (Geometry::Polygon(poly), Geometry::Point(pt)) => {
-            point_in_polygon(pt, poly)
-        }
+        (Geometry::Point(pt), Geometry::Polygon(poly))
+        | (Geometry::Polygon(poly), Geometry::Point(pt)) => point_in_polygon(pt, poly),
 
         // Point-MultiPoint intersection
-        (Geometry::Point(pt), Geometry::MultiPoint(mp)) |
-        (Geometry::MultiPoint(mp), Geometry::Point(pt)) => {
+        (Geometry::Point(pt), Geometry::MultiPoint(mp))
+        | (Geometry::MultiPoint(mp), Geometry::Point(pt)) => {
             mp.points.iter().any(|p| p.x == pt.x && p.y == pt.y)
         }
 
         // LineString-LineString intersection
-        (Geometry::LineString(ls1), Geometry::LineString(ls2)) => {
-            linestrings_intersect(ls1, ls2)
-        }
+        (Geometry::LineString(ls1), Geometry::LineString(ls2)) => linestrings_intersect(ls1, ls2),
 
         // LineString-Polygon intersection
-        (Geometry::LineString(ls), Geometry::Polygon(poly)) |
-        (Geometry::Polygon(poly), Geometry::LineString(ls)) => {
+        (Geometry::LineString(ls), Geometry::Polygon(poly))
+        | (Geometry::Polygon(poly), Geometry::LineString(ls)) => {
             // Any vertex in polygon or any edge crossing polygon boundary
             for pt in &ls.points {
                 if point_in_polygon(pt, poly) {
@@ -384,9 +387,7 @@ pub fn st_intersects(a: &Geometry, b: &Geometry) -> bool {
         }
 
         // Polygon-Polygon intersection
-        (Geometry::Polygon(p1), Geometry::Polygon(p2)) => {
-            polygons_intersect(p1, p2)
-        }
+        (Geometry::Polygon(p1), Geometry::Polygon(p2)) => polygons_intersect(p1, p2),
 
         // Default: MBR intersection is sufficient
         _ => true,
@@ -418,15 +419,24 @@ fn segments_intersect(p1: &Point, p2: &Point, p3: &Point, p4: &Point) -> bool {
     let d3 = direction(p1, p2, p3);
     let d4 = direction(p1, p2, p4);
 
-    if ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0)) &&
-       ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0)) {
+    if ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0))
+        && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0))
+    {
         return true;
     }
 
-    if d1 == 0.0 && on_segment(p3, p4, p1) { return true; }
-    if d2 == 0.0 && on_segment(p3, p4, p2) { return true; }
-    if d3 == 0.0 && on_segment(p1, p2, p3) { return true; }
-    if d4 == 0.0 && on_segment(p1, p2, p4) { return true; }
+    if d1 == 0.0 && on_segment(p3, p4, p1) {
+        return true;
+    }
+    if d2 == 0.0 && on_segment(p3, p4, p2) {
+        return true;
+    }
+    if d3 == 0.0 && on_segment(p1, p2, p3) {
+        return true;
+    }
+    if d4 == 0.0 && on_segment(p1, p2, p4) {
+        return true;
+    }
 
     false
 }
@@ -438,8 +448,7 @@ fn direction(p1: &Point, p2: &Point, p3: &Point) -> f64 {
 
 /// Check if point q lies on segment pr
 fn on_segment(p: &Point, q: &Point, r: &Point) -> bool {
-    q.x <= p.x.max(r.x) && q.x >= p.x.min(r.x) &&
-    q.y <= p.y.max(r.y) && q.y >= p.y.min(r.y)
+    q.x <= p.x.max(r.x) && q.x >= p.x.min(r.x) && q.y <= p.y.max(r.y) && q.y >= p.y.min(r.y)
 }
 
 /// Check if two linestrings intersect
@@ -509,31 +518,37 @@ pub fn st_equals(a: &Geometry, b: &Geometry) -> bool {
     }
 
     match (a, b) {
-        (Geometry::Point(p1), Geometry::Point(p2)) => {
-            points_equal(p1, p2)
-        }
+        (Geometry::Point(p1), Geometry::Point(p2)) => points_equal(p1, p2),
 
-        (Geometry::LineString(ls1), Geometry::LineString(ls2)) => {
-            linestrings_equal(ls1, ls2)
-        }
+        (Geometry::LineString(ls1), Geometry::LineString(ls2)) => linestrings_equal(ls1, ls2),
 
-        (Geometry::Polygon(poly1), Geometry::Polygon(poly2)) => {
-            polygons_equal(poly1, poly2)
-        }
+        (Geometry::Polygon(poly1), Geometry::Polygon(poly2)) => polygons_equal(poly1, poly2),
 
         (Geometry::MultiPoint(mp1), Geometry::MultiPoint(mp2)) => {
-            mp1.points.len() == mp2.points.len() &&
-            mp1.points.iter().zip(mp2.points.iter()).all(|(p1, p2)| points_equal(p1, p2))
+            mp1.points.len() == mp2.points.len()
+                && mp1
+                    .points
+                    .iter()
+                    .zip(mp2.points.iter())
+                    .all(|(p1, p2)| points_equal(p1, p2))
         }
 
         (Geometry::MultiLineString(mls1), Geometry::MultiLineString(mls2)) => {
-            mls1.lines.len() == mls2.lines.len() &&
-            mls1.lines.iter().zip(mls2.lines.iter()).all(|(ls1, ls2)| linestrings_equal(ls1, ls2))
+            mls1.lines.len() == mls2.lines.len()
+                && mls1
+                    .lines
+                    .iter()
+                    .zip(mls2.lines.iter())
+                    .all(|(ls1, ls2)| linestrings_equal(ls1, ls2))
         }
 
         (Geometry::MultiPolygon(mp1), Geometry::MultiPolygon(mp2)) => {
-            mp1.polygons.len() == mp2.polygons.len() &&
-            mp1.polygons.iter().zip(mp2.polygons.iter()).all(|(p1, p2)| polygons_equal(p1, p2))
+            mp1.polygons.len() == mp2.polygons.len()
+                && mp1
+                    .polygons
+                    .iter()
+                    .zip(mp2.polygons.iter())
+                    .all(|(p1, p2)| polygons_equal(p1, p2))
         }
 
         _ => false,
@@ -550,14 +565,21 @@ fn linestrings_equal(ls1: &LineString, ls2: &LineString) -> bool {
     if ls1.points.len() != ls2.points.len() {
         return false;
     }
-    ls1.points.iter().zip(ls2.points.iter()).all(|(p1, p2)| points_equal(p1, p2))
+    ls1.points
+        .iter()
+        .zip(ls2.points.iter())
+        .all(|(p1, p2)| points_equal(p1, p2))
 }
 
 /// Check if two polygons are equal
 fn polygons_equal(p1: &Polygon, p2: &Polygon) -> bool {
-    linestrings_equal(&p1.exterior, &p2.exterior) &&
-    p1.holes.len() == p2.holes.len() &&
-    p1.holes.iter().zip(p2.holes.iter()).all(|(h1, h2)| linestrings_equal(h1, h2))
+    linestrings_equal(&p1.exterior, &p2.exterior)
+        && p1.holes.len() == p2.holes.len()
+        && p1
+            .holes
+            .iter()
+            .zip(p2.holes.iter())
+            .all(|(h1, h2)| linestrings_equal(h1, h2))
 }
 
 // ============================================================================
@@ -574,28 +596,22 @@ pub fn st_distance(a: &Geometry, b: &Geometry) -> f64 {
             ((p.x - q.x).powi(2) + (p.y - q.y).powi(2)).sqrt()
         }
 
-        (Geometry::Point(pt), Geometry::LineString(ls)) |
-        (Geometry::LineString(ls), Geometry::Point(pt)) => {
-            point_to_linestring_distance(pt, ls)
-        }
+        (Geometry::Point(pt), Geometry::LineString(ls))
+        | (Geometry::LineString(ls), Geometry::Point(pt)) => point_to_linestring_distance(pt, ls),
 
-        (Geometry::Point(pt), Geometry::Polygon(poly)) |
-        (Geometry::Polygon(poly), Geometry::Point(pt)) => {
-            point_to_polygon_distance(pt, poly)
-        }
+        (Geometry::Point(pt), Geometry::Polygon(poly))
+        | (Geometry::Polygon(poly), Geometry::Point(pt)) => point_to_polygon_distance(pt, poly),
 
         (Geometry::LineString(ls1), Geometry::LineString(ls2)) => {
             linestring_to_linestring_distance(ls1, ls2)
         }
 
-        (Geometry::LineString(ls), Geometry::Polygon(poly)) |
-        (Geometry::Polygon(poly), Geometry::LineString(ls)) => {
+        (Geometry::LineString(ls), Geometry::Polygon(poly))
+        | (Geometry::Polygon(poly), Geometry::LineString(ls)) => {
             linestring_to_polygon_distance(ls, poly)
         }
 
-        (Geometry::Polygon(p1), Geometry::Polygon(p2)) => {
-            polygon_to_polygon_distance(p1, p2)
-        }
+        (Geometry::Polygon(p1), Geometry::Polygon(p2)) => polygon_to_polygon_distance(p1, p2),
 
         _ => {
             // Fallback to MBR distance for complex geometries
@@ -821,16 +837,19 @@ mod tests {
 
     // Helper to create a simple square polygon
     fn square_polygon(min_x: f64, max_x: f64, min_y: f64, max_y: f64) -> Geometry {
-        Geometry::Polygon(Polygon::from_points(
-            vec![
-                Point::new(min_x, min_y),
-                Point::new(max_x, min_y),
-                Point::new(max_x, max_y),
-                Point::new(min_x, max_y),
-                Point::new(min_x, min_y),
-            ],
-            vec![],
-        ).unwrap())
+        Geometry::Polygon(
+            Polygon::from_points(
+                vec![
+                    Point::new(min_x, min_y),
+                    Point::new(max_x, min_y),
+                    Point::new(max_x, max_y),
+                    Point::new(min_x, max_y),
+                    Point::new(min_x, min_y),
+                ],
+                vec![],
+            )
+            .unwrap(),
+        )
     }
 
     // Helper to create a point
@@ -849,7 +868,8 @@ mod tests {
                 Point::new(0.0, 0.0),
             ],
             vec![],
-        ).unwrap();
+        )
+        .unwrap();
 
         // Inside
         assert!(point_in_polygon(&Point::new(5.0, 5.0), &poly));
@@ -876,7 +896,8 @@ mod tests {
                 Point::new(0.0, 0.0),
             ],
             vec![],
-        ).unwrap();
+        )
+        .unwrap();
 
         // Inside L-shape (bottom bar and left bar)
         assert!(point_in_polygon(&Point::new(2.0, 2.0), &poly)); // in bottom bar
@@ -980,25 +1001,20 @@ mod tests {
                 Point::new(2.0, 2.0),
                 Point::new(5.0, 5.0),
                 Point::new(8.0, 8.0),
-            ]).unwrap()
+            ])
+            .unwrap(),
         );
         assert!(st_intersects(&square, &line_inside));
 
         // Line crossing boundary
         let line_crossing = Geometry::LineString(
-            LineString::new(vec![
-                Point::new(-5.0, 5.0),
-                Point::new(5.0, 5.0),
-            ]).unwrap()
+            LineString::new(vec![Point::new(-5.0, 5.0), Point::new(5.0, 5.0)]).unwrap(),
         );
         assert!(st_intersects(&square, &line_crossing));
 
         // Line completely outside
         let line_outside = Geometry::LineString(
-            LineString::new(vec![
-                Point::new(15.0, 15.0),
-                Point::new(20.0, 20.0),
-            ]).unwrap()
+            LineString::new(vec![Point::new(15.0, 15.0), Point::new(20.0, 20.0)]).unwrap(),
         );
         assert!(!st_intersects(&square, &line_outside));
     }
@@ -1092,7 +1108,8 @@ mod tests {
                 Point::new(0.0, 0.0),
             ],
             vec![],
-        ).unwrap();
+        )
+        .unwrap();
 
         let edges: Vec<_> = poly.edges().collect();
         assert_eq!(edges.len(), 4);
@@ -1141,7 +1158,8 @@ mod tests {
             Point::new(0.0, 0.0),
             Point::new(5.0, 5.0),
             Point::new(10.0, 0.0),
-        ]).unwrap();
+        ])
+        .unwrap();
 
         let edges = linestring_edges(&ls);
         assert_eq!(edges.len(), 2);
@@ -1161,7 +1179,8 @@ mod tests {
                 Point::new(2.0, 2.0),
                 Point::new(5.0, 5.0),
                 Point::new(8.0, 8.0),
-            ]).unwrap()
+            ])
+            .unwrap(),
         );
 
         // All points inside
@@ -1172,7 +1191,8 @@ mod tests {
             MultiPoint::new(vec![
                 Point::new(2.0, 2.0),
                 Point::new(15.0, 15.0), // Outside
-            ]).unwrap()
+            ])
+            .unwrap(),
         );
 
         assert!(!st_contains(&square, &multipoint_partial));
@@ -1184,10 +1204,7 @@ mod tests {
 
         // Line completely inside
         let line_inside = Geometry::LineString(
-            LineString::new(vec![
-                Point::new(2.0, 2.0),
-                Point::new(8.0, 8.0),
-            ]).unwrap()
+            LineString::new(vec![Point::new(2.0, 2.0), Point::new(8.0, 8.0)]).unwrap(),
         );
         assert!(st_contains(&square, &line_inside));
 
@@ -1196,7 +1213,8 @@ mod tests {
             LineString::new(vec![
                 Point::new(2.0, 2.0),
                 Point::new(15.0, 15.0), // Outside
-            ]).unwrap()
+            ])
+            .unwrap(),
         );
         assert!(!st_contains(&square, &line_outside));
     }
@@ -1239,28 +1257,33 @@ mod tests {
 
     #[test]
     fn test_multipolygon_contains() {
-        let mp = Geometry::MultiPolygon(MultiPolygon::new(vec![
-            Polygon::from_points(
-                vec![
-                    Point::new(0.0, 0.0),
-                    Point::new(10.0, 0.0),
-                    Point::new(10.0, 10.0),
-                    Point::new(0.0, 10.0),
-                    Point::new(0.0, 0.0),
-                ],
-                vec![],
-            ).unwrap(),
-            Polygon::from_points(
-                vec![
-                    Point::new(20.0, 20.0),
-                    Point::new(30.0, 20.0),
-                    Point::new(30.0, 30.0),
-                    Point::new(20.0, 30.0),
-                    Point::new(20.0, 20.0),
-                ],
-                vec![],
-            ).unwrap(),
-        ]).unwrap());
+        let mp = Geometry::MultiPolygon(
+            MultiPolygon::new(vec![
+                Polygon::from_points(
+                    vec![
+                        Point::new(0.0, 0.0),
+                        Point::new(10.0, 0.0),
+                        Point::new(10.0, 10.0),
+                        Point::new(0.0, 10.0),
+                        Point::new(0.0, 0.0),
+                    ],
+                    vec![],
+                )
+                .unwrap(),
+                Polygon::from_points(
+                    vec![
+                        Point::new(20.0, 20.0),
+                        Point::new(30.0, 20.0),
+                        Point::new(30.0, 30.0),
+                        Point::new(20.0, 30.0),
+                        Point::new(20.0, 20.0),
+                    ],
+                    vec![],
+                )
+                .unwrap(),
+            ])
+            .unwrap(),
+        );
 
         // Point inside first polygon
         assert!(st_contains(&mp, &point(5.0, 5.0)));
@@ -1290,9 +1313,7 @@ mod tests {
             Point::new(4.0, 4.0),
         ];
 
-        let poly_with_hole = Geometry::Polygon(
-            Polygon::from_points(exterior, vec![hole]).unwrap()
-        );
+        let poly_with_hole = Geometry::Polygon(Polygon::from_points(exterior, vec![hole]).unwrap());
 
         // Point in the "doughnut" area (inside outer, outside hole)
         assert!(st_contains(&poly_with_hole, &point(2.0, 2.0)));
