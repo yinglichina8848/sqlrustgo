@@ -14,6 +14,12 @@ use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
 use sqlrustgo_executor::ExecutorResult;
+use sqlrustgo_observability::tables::{
+    lock_wait_graph::LockWaitEdge, lock_wait_graph::LockWaitGraph,
+    recovery_history::RecoveryHistory, recovery_history::RecoveryHistoryEntry,
+    transaction_history::TransactionHistory, transaction_history::TransactionHistoryEntry,
+    transaction_history::TransactionStatus, wal_stats::WalStatsCollector,
+};
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, CallStatement,
     CheckOption, CheckStatement, CreateIndexStatement, CreateProcedureStatement,
@@ -36,12 +42,6 @@ use sqlrustgo_transaction::{
     IsolationLevel as TmIsolationLevel, LockMode, LockTarget, TransactionManager, TxId,
 };
 use sqlrustgo_types::Value as SqlValue;
-use sqlrustgo_observability::tables::{
-    lock_wait_graph::LockWaitGraph, lock_wait_graph::LockWaitEdge,
-    recovery_history::RecoveryHistory, recovery_history::RecoveryHistoryEntry,
-    transaction_history::TransactionHistory, transaction_history::TransactionHistoryEntry,
-    transaction_history::TransactionStatus, wal_stats::WalStatsCollector,
-};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -59,10 +59,7 @@ impl ObservabilityState {
         Self {
             transaction_history: RwLock::new(TransactionHistory::new(10000)),
             lock_wait_graph: RwLock::new(LockWaitGraph::new()),
-            recovery_history: RwLock::new(RecoveryHistory::new(
-                std::env::temp_dir(),
-                10000,
-            )),
+            recovery_history: RwLock::new(RecoveryHistory::new(std::env::temp_dir(), 10000)),
             wal_stats: RwLock::new(WalStatsCollector::new()),
         }
     }
@@ -3655,10 +3652,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
     }
 
-    fn execute_show_transaction_history(
-        &self,
-        limit: Option<usize>,
-    ) -> SqlResult<ExecutorResult> {
+    fn execute_show_transaction_history(&self, limit: Option<usize>) -> SqlResult<ExecutorResult> {
         let history = OBSERVABILITY.transaction_history.read().unwrap();
         let entries = history.query(limit);
         let rows: Vec<Vec<Value>> = entries
