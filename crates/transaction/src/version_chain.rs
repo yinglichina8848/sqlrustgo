@@ -360,4 +360,59 @@ mod tests {
         assert_eq!(stats.total_deleted, 1);
         assert_eq!(stats.max_versions_per_key, 2);
     }
+
+    #[test]
+    fn test_version_chain_len_and_is_empty() {
+        let mut chain = VersionChainMap::new();
+        assert!(chain.is_empty());
+        assert_eq!(chain.len(), 0);
+
+        chain.append(
+            b"key1".to_vec(),
+            RowVersion::new(TxId::new(1), b"v1".to_vec()),
+        );
+        chain.commit_versions(TxId::new(1), 10);
+
+        assert!(!chain.is_empty());
+        assert_eq!(chain.len(), 1);
+    }
+
+    #[test]
+    fn test_version_chain_get_chain() {
+        let mut chain = VersionChainMap::new();
+        chain.append(
+            b"key1".to_vec(),
+            RowVersion::new(TxId::new(1), b"v1".to_vec()),
+        );
+        chain.commit_versions(TxId::new(1), 10);
+        chain.append(
+            b"key1".to_vec(),
+            RowVersion::new(TxId::new(2), b"v2".to_vec()),
+        );
+        chain.commit_versions(TxId::new(2), 20);
+
+        let chain_versions = chain.get_chain(b"key1").unwrap();
+        assert_eq!(chain_versions.len(), 2);
+
+        let nonexistent = chain.get_chain(b"nonexistent");
+        assert!(nonexistent.is_none());
+    }
+
+    #[test]
+    fn test_version_chain_multiple_keys() {
+        let mut chain = VersionChainMap::new();
+        chain.append(
+            b"key1".to_vec(),
+            RowVersion::new(TxId::new(1), b"v1".to_vec()),
+        );
+        chain.commit_versions(TxId::new(1), 10);
+        chain.append(
+            b"key2".to_vec(),
+            RowVersion::new(TxId::new(2), b"v2".to_vec()),
+        );
+        chain.commit_versions(TxId::new(2), 20);
+
+        assert_eq!(chain.len(), 2);
+        assert_eq!(chain.stats().num_keys, 2);
+    }
 }
