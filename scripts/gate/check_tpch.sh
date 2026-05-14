@@ -92,10 +92,13 @@ if ! cargo build -p sqlrustgo-bench-cli --quiet 2>&1; then
     exit 1
 fi
 
-# Check for bench binary
+# Check for bench binary (try release first, fall back to debug)
 BENCH_BIN="$PROJECT_ROOT/target/release/sqlrustgo-bench-cli"
 if [ ! -f "$BENCH_BIN" ]; then
-    echo "❌ bench CLI not found at $BENCH_BIN"
+    BENCH_BIN="$PROJECT_ROOT/target/debug/sqlrustgo-bench-cli"
+fi
+if [ ! -f "$BENCH_BIN" ]; then
+    echo "❌ bench CLI not found at $PROJECT_ROOT/target/{release,debug}/sqlrustgo-bench-cli"
     exit 1
 fi
 echo "[✓] bench CLI built"
