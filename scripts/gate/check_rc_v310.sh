@@ -173,6 +173,18 @@ check_test "R-S4: gis_spatial_test" "cargo test --test gis_spatial_test 2>&1" "R
 # ========== R-S5: Event Scheduler ==========
 check_test "R-S5: event_scheduler_test" "cargo test --test event_scheduler_test 2>&1" "R-S5"
 
+# ========== R-S6: Concurrency Stress ==========
+check_test "R-S6: concurrency_stress" "cargo test --test concurrency_stress_test 2>&1" "R-S6"
+
+# ========== R-S7: Crash Recovery ==========
+check_test "R-S7: crash_recovery" "cargo test --test crash_recovery_test 2>&1" "R-S7"
+
+# ========== R-S8: SSI Stress ==========
+check_test "R-S8: ssi_stress" "cargo test -p sqlrustgo-transaction --test ssi_stress_test 2>&1" "R-S8"
+
+# ========== R-S9: Merge Execution ==========
+check_test "R-S9: merge_execution" "cargo test --test merge_execution_test 2>&1" "R-S9"
+
 # ========== R-QA: QA Enhancement Suite ==========
 check "R-QA: QA Enhancement Suite" "GATE_STAGE=rc bash scripts/gate/check_qa_enhancement.sh" "R-QA"
 
