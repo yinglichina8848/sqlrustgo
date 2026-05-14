@@ -49,8 +49,10 @@ check "R1: cargo build --release --workspace" "cargo build --release --workspace
 echo -n "[rc-v3.1.0] R2: Full test suite ... "
 TOTAL=$((TOTAL+1))
 TEST_OUTPUT=$(cargo test --all-features --lib 2>&1 || true)
-PASSED=$(echo "$TEST_OUTPUT" | grep -c "test result: ok\." || echo "0")
-FAILED=$(echo "$TEST_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+PASSED=$(echo "$TEST_OUTPUT" | grep -c "test result: ok\." || true)
+FAILED=$(echo "$TEST_OUTPUT" | grep -c "test result: FAILED" || true)
+PASSED=${PASSED:-0}
+FAILED=${FAILED:-0}
 TOTAL_TESTS=$((PASSED + FAILED))
 if [ "$TOTAL_TESTS" -gt 0 ]; then
     PASS_RATE=$((PASSED * 100 / TOTAL_TESTS))

@@ -141,8 +141,12 @@ async fn test_transaction_state_stress_100_concurrent() {
             let key = format!("key_{}", i);
             {
                 let mut m = mgr.write().unwrap();
-                m.record_read(tx_id, key.clone().into_bytes())
-                    .expect("record_read should succeed");
+                m.record_read(
+                    tx_id,
+                    key.clone().into_bytes(),
+                    sqlrustgo::IsolationLevel::SnapshotIsolation,
+                )
+                .expect("record_read should succeed");
                 m.record_write(tx_id, key.clone().into_bytes())
                     .expect("record_write should succeed");
             }

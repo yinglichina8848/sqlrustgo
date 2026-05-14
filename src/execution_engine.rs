@@ -1956,30 +1956,68 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .unwrap()
             .invalidate_table(&table_name);
 
-        Ok(ExecutorResult::new(vec![], insert.values.len()))
+        let updated_count = records_to_skip.len();
+        let affected_rows = (insert.values.len() - updated_count) + (updated_count * 2);
+
+        Ok(ExecutorResult::new(vec![], affected_rows))
     }
 
     /// Check if a new record matches an existing row based on primary key or unique constraints
+    /// Returns true if the new record matches the existing record on ALL columns of:
+    /// - The primary key, OR
+    /// - Any unique constraint
     fn record_matches_unique_key(
         &self,
         existing: &[Value],
         new: &[Value],
         table_info: &TableInfo,
     ) -> bool {
-        // Find primary key column(s)
+        // Check primary key columns - all must match
+        let mut pk_cols_match = true;
         for (col_idx, col) in table_info.columns.iter().enumerate() {
             if col.primary_key {
-                // Compare by primary key column index
-                if col_idx < existing.len() && col_idx < new.len() {
-                    if existing[col_idx] != new[col_idx] {
-                        return false;
-                    }
-                } else {
-                    return false;
+                if col_idx >= existing.len() || col_idx >= new.len() {
+                    pk_cols_match = false;
+                    break;
+                }
+                if existing[col_idx] != new[col_idx] {
+                    pk_cols_match = false;
+                    break;
                 }
             }
         }
-        true
+
+        if pk_cols_match {
+            return true;
+        }
+
+        // Check unique constraints - all columns in any unique constraint must match
+        for constraint in &table_info.unique_constraints {
+            let mut all_cols_match = true;
+            for col_name in &constraint.columns {
+                // Find column index by name
+                let col_idx = table_info.columns.iter().position(|c| c.name == *col_name);
+
+                if let Some(idx) = col_idx {
+                    if idx >= existing.len() || idx >= new.len() {
+                        all_cols_match = false;
+                        break;
+                    }
+                    if existing[idx] != new[idx] {
+                        all_cols_match = false;
+                        break;
+                    }
+                } else {
+                    all_cols_match = false;
+                    break;
+                }
+            }
+            if all_cols_match {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn execute_update(&self, update: &UpdateStatement) -> SqlResult<ExecutorResult> {
@@ -2885,6 +2923,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     fn execute_create_index(&self, idx: &CreateIndexStatement) -> SqlResult<ExecutorResult> {
+        use sqlrustgo_storage::engine::UniqueConstraint;
+
         let mut storage = self.storage.write().unwrap();
         let table_name = &idx.table;
         let col_name = idx
@@ -2898,6 +2938,15 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .position(|c| c.name == *col_name)
             .ok_or_else(|| SqlError::ExecutionError("Column not found".to_string()))?;
         storage.create_index(table_name, col_name, col_idx)?;
+
+        if idx.unique {
+            let constraint = UniqueConstraint {
+                name: Some(idx.name.clone()),
+                columns: vec![col_name.clone()],
+            };
+            storage.add_unique_constraint(table_name, constraint)?;
+        }
+
         Ok(ExecutorResult::empty())
     }
 
