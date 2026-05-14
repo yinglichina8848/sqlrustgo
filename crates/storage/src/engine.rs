@@ -819,26 +819,40 @@ impl StorageEngine for MemoryStorage {
     }
 
     fn insert(&mut self, table: &str, records: Vec<Record>) -> SqlResult<()> {
-        // Update indexes for each inserted record
-        for (row_idx, record) in records.iter().enumerate() {
-            let table_records = self.tables.entry(table.to_string()).or_default();
-            let actual_row_idx = table_records.len() + row_idx;
+        if records.is_empty() {
+            return Ok(());
+        }
 
-            // Update all indexes for this table
-            let table_prefix = format!("{}:", table);
-            for (index_key, (col_idx, index_data)) in self.indexes.iter_mut() {
+        let start_row_idx = self.tables.get(table).map(|r| r.len()).unwrap_or(0);
+
+        // Collect index entries per index first - O(records × indexes)
+        let table_prefix = format!("{}:", table);
+        let mut index_entries: Vec<(String, i64, usize)> = Vec::new();
+
+        for (row_idx, record) in records.iter().enumerate() {
+            let actual_row_idx = start_row_idx + row_idx;
+            for (index_key, (col_idx, _)) in self.indexes.iter() {
                 if index_key.starts_with(&table_prefix) {
                     if let Some(Value::Integer(key)) = record.get(*col_idx) {
-                        index_data.entry(*key).or_default().push(actual_row_idx);
+                        index_entries.push((index_key.clone(), *key, actual_row_idx));
                     }
                 }
             }
         }
 
+        // Now insert records into table
         self.tables
             .entry(table.to_string())
             .or_default()
             .extend(records);
+
+        // Batch update indexes - O(entries) with single lookup per index
+        for (index_key, key, row_idx) in index_entries {
+            if let Some((_, index_data)) = self.indexes.get_mut(&index_key) {
+                index_data.entry(key).or_default().push(row_idx);
+            }
+        }
+
         Ok(())
     }
 

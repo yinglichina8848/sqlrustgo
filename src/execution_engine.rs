@@ -63,6 +63,7 @@ pub struct ExecutionEngine<S: StorageEngine> {
     current_user: Option<UserIdentity>,
     query_cache: Arc<RwLock<QueryCache>>,
     cache_config: QueryCacheConfig,
+    prepared_inserts: HashMap<String, InsertStatement>,
 }
 
 /// Execution statistics for CBO
@@ -158,6 +159,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: config.cache_config,
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -180,6 +182,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -202,6 +205,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -220,6 +224,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -665,6 +670,72 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
         self.execute_statement(statement)
+    }
+
+    /// Execute a batch INSERT directly with records (bypasses SQL parsing)
+    /// This provides maximum performance for bulk inserts
+    pub fn execute_batch_insert(
+        &mut self,
+        table: &str,
+        records: Vec<Vec<Value>>,
+    ) -> SqlResult<ExecutorResult> {
+        let count = records.len();
+        if count == 0 {
+            return Ok(ExecutorResult::new(vec![], 0));
+        }
+
+        let mut storage = self.storage.write().unwrap();
+        storage.insert(table, records)?;
+        drop(storage);
+
+        self.query_cache.write().unwrap().invalidate_table(table);
+
+        Ok(ExecutorResult::new(vec![], count))
+    }
+
+    /// Parse and prepare an INSERT statement with parameter placeholders
+    /// Returns the number of parameters expected
+    pub fn prepare_insert(&mut self, sql: &str) -> SqlResult<usize> {
+        let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+        if let Statement::Insert(ref insert) = statement {
+            let param_count = insert
+                .values
+                .iter()
+                .flat_map(|row| row.iter())
+                .filter(|e| matches!(e, sqlrustgo_parser::Expression::Parameter(_)))
+                .count();
+            Ok(param_count)
+        } else {
+            Err("Not an INSERT statement".into())
+        }
+    }
+
+    /// Execute a prepared INSERT with parameter values
+    pub fn execute_prepared_insert(
+        &mut self,
+        sql: &str,
+        params: Vec<Value>,
+    ) -> SqlResult<ExecutorResult> {
+        if !self.prepared_inserts.contains_key(sql) {
+            let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+            if let Statement::Insert(insert) = statement {
+                self.prepared_inserts.insert(sql.to_string(), insert);
+            } else {
+                return Err("Not an INSERT statement".into());
+            }
+        }
+        let mut insert = self.prepared_inserts.get(sql).unwrap().clone();
+        for row in &mut insert.values {
+            for expr in row.iter_mut() {
+                if let sqlrustgo_parser::Expression::Parameter(idx) = expr {
+                    if *idx < params.len() {
+                        let val = &params[*idx];
+                        *expr = sqlrustgo_parser::Expression::Literal(value_to_literal_string(val));
+                    }
+                }
+            }
+        }
+        self.execute_insert(&insert)
     }
 
     fn get_cache_key(&self, sql: &str) -> CacheKey {
@@ -1802,13 +1873,27 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         };
 
         let mut first_auto_inc: Option<u64> = None;
-        if !insert.values.is_empty() {
+        if !insert.values.is_empty() && !auto_increment_cols.is_empty() {
+            let num_rows = insert.values.len();
+            let auto_count = auto_increment_cols.len();
+
+            let start_auto = {
+                let mut storage = self.storage.write().unwrap();
+                let mut next_val = storage.get_next_auto_increment(&table_name)?;
+                let start = next_val;
+                for _ in 0..(num_rows * auto_count) {
+                    storage.get_next_auto_increment(&table_name)?;
+                }
+                first_auto_inc = Some(start as u64);
+                start
+            };
+
+            let mut next_auto = start_auto;
             for row_exprs in &insert.values {
                 let mut record = Vec::with_capacity(table_info.columns.len());
 
                 for col_idx in 0..table_info.columns.len() {
                     if specified_cols.contains(&col_idx) {
-                        // User specified this column - find its value
                         let col_name = &table_info.columns[col_idx].name;
                         let value_idx = insert
                             .columns
@@ -1822,32 +1907,39 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                             record.push(Value::Null);
                         }
                     } else {
-                        // Column not specified - check if AUTO_INCREMENT
-                        if auto_increment_cols.contains(&col_idx) {
-                            // This should not happen with standard INSERT, but handle it
-                            record.push(Value::Null);
-                        } else {
-                            record.push(Value::Null);
-                        }
+                        record.push(Value::Null);
                     }
                 }
 
-                // Generate AUTO_INCREMENT values where needed
-                {
-                    let mut storage = self.storage.write().unwrap();
-                    for col_idx in &auto_increment_cols {
-                        if !specified_cols.contains(col_idx)
-                            || *col_idx >= record.len()
-                            || matches!(record[*col_idx], Value::Null)
-                        {
-                            let auto_val = storage.get_next_auto_increment(&table_name)?;
-                            if first_auto_inc.is_none() {
-                                first_auto_inc = Some(auto_val as u64);
-                            }
-                            if *col_idx < record.len() {
-                                record[*col_idx] = Value::Integer(auto_val);
-                            }
+                for col_idx in &auto_increment_cols {
+                    if *col_idx < record.len() && matches!(record[*col_idx], Value::Null) {
+                        record[*col_idx] = Value::Integer(next_auto);
+                        next_auto += 1;
+                    }
+                }
+
+                all_records.push(record);
+            }
+        } else if !insert.values.is_empty() {
+            for row_exprs in &insert.values {
+                let mut record = Vec::with_capacity(table_info.columns.len());
+
+                for col_idx in 0..table_info.columns.len() {
+                    if specified_cols.contains(&col_idx) {
+                        let col_name = &table_info.columns[col_idx].name;
+                        let value_idx = insert
+                            .columns
+                            .iter()
+                            .position(|c| c == col_name)
+                            .unwrap_or(col_idx);
+                        if let Some(expr) = row_exprs.get(value_idx) {
+                            let val = expression_to_value(expr);
+                            record.push(val);
+                        } else {
+                            record.push(Value::Null);
                         }
+                    } else {
+                        record.push(Value::Null);
                     }
                 }
 
@@ -3816,6 +3908,7 @@ impl ExecutionEngine<MemoryStorage> {
             current_user: None,
             cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -3834,6 +3927,7 @@ impl ExecutionEngine<MemoryStorage> {
             current_user: None,
             cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -3852,6 +3946,7 @@ impl ExecutionEngine<MemoryStorage> {
             current_user: None,
             cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            prepared_inserts: HashMap::new(),
         }
     }
 }
@@ -3936,6 +4031,14 @@ fn expression_to_string(expr: &sqlrustgo_parser::Expression) -> String {
 
 /// Convert a parser Expression to a Value (simple literal evaluation)
 fn expression_to_value(expr: &sqlrustgo_parser::Expression) -> Value {
+    expression_to_value_with_params(expr, None)
+}
+
+/// Convert a parser Expression to a Value with parameter support
+fn expression_to_value_with_params(
+    expr: &sqlrustgo_parser::Expression,
+    params: Option<&[Value]>,
+) -> Value {
     match expr {
         sqlrustgo_parser::Expression::Literal(s) => {
             let s = s.trim();
@@ -3956,6 +4059,13 @@ fn expression_to_value(expr: &sqlrustgo_parser::Expression) -> Value {
             }
         }
         sqlrustgo_parser::Expression::Identifier(name) => Value::Text(name.clone()),
+        sqlrustgo_parser::Expression::Parameter(idx) => {
+            if let Some(p) = params {
+                p.get(*idx).cloned().unwrap_or(Value::Null)
+            } else {
+                Value::Null
+            }
+        }
         _ => Value::Null,
     }
 }
@@ -3973,6 +4083,25 @@ fn expression_to_value_from_string(s: &str) -> Value {
         Value::Text(s[1..s.len() - 1].to_string())
     } else {
         Value::Text(s.to_string())
+    }
+}
+
+/// Convert a Value to a literal string for Expression::Literal
+fn value_to_literal_string(val: &Value) -> String {
+    match val {
+        Value::Null => "NULL".to_string(),
+        Value::Boolean(b) => {
+            if *b {
+                "TRUE".to_string()
+            } else {
+                "FALSE".to_string()
+            }
+        }
+        Value::Integer(n) => n.to_string(),
+        Value::Float(f) => f.to_string(),
+        Value::Text(s) => format!("'{}'", s),
+        Value::Blob(b) => format!("x'{}'", hex::encode(b)),
+        Value::Geometry(_) => "NULL".to_string(),
     }
 }
 

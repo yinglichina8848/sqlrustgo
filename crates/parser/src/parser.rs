@@ -741,6 +741,7 @@ pub enum Expression {
     ), // INSERT(str, pos, len, newstr)
     Extract(String, Box<Expression>), // EXTRACT(YEAR FROM date)
     MatchAgainst(Vec<String>, Box<Expression>, FtsMode), // MATCH(col1, col2) AGAINST(expr) [IN BOOLEAN MODE | WITH QUERY EXPANSION]
+    Parameter(usize),                                    // Prepared statement parameter: ?
 }
 
 impl Expression {
@@ -4277,6 +4278,10 @@ impl Parser {
                 let expr = Expression::Literal("DEFAULT".to_string());
                 self.next();
                 Ok(expr)
+            }
+            Some(Token::QuestionMark) => {
+                self.next();
+                Ok(Expression::Parameter(0))
             }
             Some(Token::Minus) => {
                 self.next();

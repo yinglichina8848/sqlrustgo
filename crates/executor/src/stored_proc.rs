@@ -1446,6 +1446,10 @@ impl StoredProcExecutor {
                 // FTS not supported in stored procedures - return NULL
                 Value::Null
             }
+            sqlrustgo_parser::Expression::Parameter(_) => {
+                // Parameters not supported in stored procedures - return NULL
+                Value::Null
+            }
         }
     }
 

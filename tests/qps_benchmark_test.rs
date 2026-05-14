@@ -18,7 +18,9 @@ const CONCURRENT_THREADS: usize = 8;
 
 fn create_engine() -> MemoryExecutionEngine {
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
-    MemoryExecutionEngine::new_with_config(storage, EngineConfig::default())
+    let mut config = EngineConfig::default();
+    config.cache_config.benchmark_mode = true;
+    MemoryExecutionEngine::new_with_config(storage, config)
 }
 
 fn setup_tables(engine: &mut MemoryExecutionEngine) {
@@ -425,6 +427,105 @@ fn test_qps_order_by() {
     println!(
         "ORDER BY QPS: {} queries in {:?} ({:.2} qps)",
         query_count, elapsed, qps
+    );
+
+    cleanup_tables(&mut engine);
+}
+
+/// Benchmark: Multi-row INSERT QPS
+#[test]
+#[ignore]
+fn test_qps_insert_multi_row() {
+    let mut engine = create_engine();
+    setup_tables(&mut engine);
+
+    let start = Instant::now();
+
+    // Single multi-row INSERT
+    let mut values = String::new();
+    for i in 0..BENCHMARK_ITERATIONS {
+        if i > 0 {
+            values.push_str(", ");
+        }
+        values.push_str(&format!("({}, 'bench_{}', {})", 10000 + i, i, 30));
+    }
+    let query = format!("INSERT INTO users VALUES {}", values);
+    let _ = engine.execute(&query);
+
+    let elapsed = start.elapsed();
+    let qps = BENCHMARK_ITERATIONS as f64 / elapsed.as_secs_f64();
+
+    println!(
+        "Multi-row INSERT QPS: {} rows in {:?} ({:.2} qps)",
+        BENCHMARK_ITERATIONS, elapsed, qps
+    );
+
+    cleanup_tables(&mut engine);
+}
+
+/// Benchmark: Batch INSERT QPS (no parsing overhead)
+#[test]
+#[ignore]
+fn test_qps_insert_batch() {
+    use sqlrustgo::Value;
+
+    let mut engine = create_engine();
+    setup_tables(&mut engine);
+
+    let start = Instant::now();
+
+    for i in 0..BENCHMARK_ITERATIONS {
+        let _ = engine.execute_batch_insert(
+            "users",
+            vec![vec![
+                Value::Integer(10000 + i as i64),
+                Value::Text(format!("bench_{}", i)),
+                Value::Integer(30),
+            ]],
+        );
+    }
+
+    let elapsed = start.elapsed();
+    let qps = BENCHMARK_ITERATIONS as f64 / elapsed.as_secs_f64();
+
+    println!(
+        "Batch INSERT QPS: {} rows in {:?} ({:.2} qps)",
+        BENCHMARK_ITERATIONS, elapsed, qps
+    );
+
+    cleanup_tables(&mut engine);
+}
+
+/// Benchmark: Prepared INSERT QPS (parse once, execute many)
+#[test]
+#[ignore]
+fn test_qps_insert_prepared() {
+    use sqlrustgo::Value;
+
+    let mut engine = create_engine();
+    setup_tables(&mut engine);
+
+    let sql = "INSERT INTO users VALUES (?, ?, ?)";
+
+    let start = Instant::now();
+
+    for i in 0..BENCHMARK_ITERATIONS {
+        let _ = engine.execute_prepared_insert(
+            sql,
+            vec![
+                Value::Integer(10000 + i as i64),
+                Value::Text(format!("bench_{}", i)),
+                Value::Integer(30),
+            ],
+        );
+    }
+
+    let elapsed = start.elapsed();
+    let qps = BENCHMARK_ITERATIONS as f64 / elapsed.as_secs_f64();
+
+    println!(
+        "Prepared INSERT QPS: {} rows in {:?} ({:.2} qps)",
+        BENCHMARK_ITERATIONS, elapsed, qps
     );
 
     cleanup_tables(&mut engine);
