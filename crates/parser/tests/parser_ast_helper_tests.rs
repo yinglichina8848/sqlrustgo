@@ -47,6 +47,7 @@ fn test_select_statement_first_table_from_from_clause() {
             tables: vec![FromTable {
                 name: "users".to_string(),
                 alias: None,
+                subquery: None,
             }],
             join_clauses: vec![],
         }),
@@ -121,6 +122,7 @@ fn test_select_statement_all_table_names_with_join() {
             tables: vec![FromTable {
                 name: "users".to_string(),
                 alias: None,
+                subquery: None,
             }],
             join_clauses: vec![],
         }),
