@@ -1,7 +1,3 @@
-use sqlrustgo_planner::Expr;
-use sqlrustgo_planner::{AggregateFunction, JoinType, LogicalPlan, Operator, Schema};
-use sqlrustgo_types::Value;
-
 #[cfg(test)]
 mod logical_plan_tests {
     use super::*;
