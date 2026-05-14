@@ -12,11 +12,17 @@ impl OTEngine {
         }
     }
 
-    pub fn check_dependencies(&self, cgtid: &ClientGtid, vector_clock: &VectorClock) -> SyncResult<()> {
+    pub fn check_dependencies(
+        &self,
+        cgtid: &ClientGtid,
+        vector_clock: &VectorClock,
+    ) -> SyncResult<()> {
         for (node_id, counter) in vector_clock.entries() {
             if *counter > 0 {
                 let dep_key = (node_id.clone(), *counter);
-                if !self.dependency_tracker.contains(&dep_key) && dep_key != (cgtid.client_id.clone(), cgtid.txn_seq) {
+                if !self.dependency_tracker.contains(&dep_key)
+                    && dep_key != (cgtid.client_id.clone(), cgtid.txn_seq)
+                {
                     return Err(SyncError::CausalityViolation(format!(
                         "{}:{} depends on uncommitted {}:{}",
                         cgtid.client_id, cgtid.txn_seq, node_id, counter
@@ -28,7 +34,8 @@ impl OTEngine {
     }
 
     pub fn record_commit(&mut self, cgtid: &ClientGtid) {
-        self.dependency_tracker.insert((cgtid.client_id.clone(), cgtid.txn_seq));
+        self.dependency_tracker
+            .insert((cgtid.client_id.clone(), cgtid.txn_seq));
     }
 
     pub fn transform_operations(
@@ -149,6 +156,8 @@ mod tests {
 
         engine.record_commit(&cgtid);
 
-        assert!(engine.dependency_tracker.contains(&("iphone-23".to_string(), 1)));
+        assert!(engine
+            .dependency_tracker
+            .contains(&("iphone-23".to_string(), 1)));
     }
 }

@@ -1,8 +1,6 @@
-use crate::{
-    ClientRegistry, OTEngine, SyncError, SyncRequest, SyncResponse, SyncResult,
-};
-use std::sync::{Arc, Mutex};
+use crate::{ClientRegistry, OTEngine, SyncError, SyncRequest, SyncResponse, SyncResult};
 use async_trait::async_trait;
+use std::sync::{Arc, Mutex};
 
 #[async_trait]
 pub trait SyncEndpoint: Send + Sync {
@@ -47,7 +45,8 @@ impl DefaultSyncEndpoint {
             }
         }
 
-        self.ot_engine.check_dependencies(&cgtid, &cgtid.vector_clock)?;
+        self.ot_engine
+            .check_dependencies(&cgtid, &cgtid.vector_clock)?;
 
         let client_transaction = crate::client_registry::ClientTransaction {
             cgtid: cgtid.clone(),
@@ -81,7 +80,10 @@ impl DefaultSyncEndpoint {
         Ok(SyncResponse::commit(cgtid, gtid, commit_ts))
     }
 
-    async fn execute_operations(&self, _operations: &[crate::Operation]) -> SyncResult<Option<Vec<u8>>> {
+    async fn execute_operations(
+        &self,
+        _operations: &[crate::Operation],
+    ) -> SyncResult<Option<Vec<u8>>> {
         Ok(Some(vec![]))
     }
 }
@@ -89,11 +91,15 @@ impl DefaultSyncEndpoint {
 #[async_trait]
 impl SyncEndpoint for DefaultSyncEndpoint {
     async fn sync(&self, _request: SyncRequest) -> SyncResult<SyncResponse> {
-        Err(SyncError::ProtocolError("Use sync_with_registry instead".into()))
+        Err(SyncError::ProtocolError(
+            "Use sync_with_registry instead".into(),
+        ))
     }
 
     async fn batch_sync(&self, _requests: Vec<SyncRequest>) -> SyncResult<Vec<SyncResponse>> {
-        Err(SyncError::ProtocolError("Use batch_sync_with_registry instead".into()))
+        Err(SyncError::ProtocolError(
+            "Use batch_sync_with_registry instead".into(),
+        ))
     }
 }
 
@@ -102,7 +108,10 @@ impl DefaultSyncEndpoint {
         self.handle_sync(request).await
     }
 
-    pub async fn batch_sync_with_registry(&mut self, requests: Vec<SyncRequest>) -> SyncResult<Vec<SyncResponse>> {
+    pub async fn batch_sync_with_registry(
+        &mut self,
+        requests: Vec<SyncRequest>,
+    ) -> SyncResult<Vec<SyncResponse>> {
         let mut responses = Vec::new();
         for request in requests {
             let response = self.handle_sync(request).await?;

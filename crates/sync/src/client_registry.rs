@@ -26,13 +26,25 @@ pub struct ClientTransaction {
 
 pub trait ClientRegistry: Send + Sync {
     fn begin_transaction(&mut self, tx: &ClientTransaction) -> SyncResult<()>;
-    fn update_transaction(&mut self, cgtid: &ClientGtid, status: TransactionStatus, response_blob: Option<Vec<u8>>, server_ts: i64) -> SyncResult<()>;
+    fn update_transaction(
+        &mut self,
+        cgtid: &ClientGtid,
+        status: TransactionStatus,
+        response_blob: Option<Vec<u8>>,
+        server_ts: i64,
+    ) -> SyncResult<()>;
     fn get_transaction(&self, cgtid: &ClientGtid) -> SyncResult<Option<ClientTransaction>>;
     fn get_client_transactions(&self, client_id: &str) -> SyncResult<Vec<ClientTransaction>>;
     fn get_last_committed_seq(&self, client_id: &str) -> SyncResult<Option<u64>>;
     fn is_committed(&self, cgtid: &ClientGtid) -> SyncResult<bool>;
     fn is_in_progress(&self, cgtid: &ClientGtid) -> SyncResult<bool>;
-    fn mark_committed(&mut self, cgtid: &ClientGtid, gtid: &str, response_blob: Option<Vec<u8>>, server_ts: i64) -> SyncResult<()>;
+    fn mark_committed(
+        &mut self,
+        cgtid: &ClientGtid,
+        gtid: &str,
+        response_blob: Option<Vec<u8>>,
+        server_ts: i64,
+    ) -> SyncResult<()>;
     fn mark_rolled_back(&mut self, cgtid: &ClientGtid, server_ts: i64) -> SyncResult<()>;
 }
 
@@ -63,7 +75,13 @@ impl ClientRegistry for InMemoryClientRegistry {
         Ok(())
     }
 
-    fn update_transaction(&mut self, cgtid: &ClientGtid, status: TransactionStatus, response_blob: Option<Vec<u8>>, server_ts: i64) -> SyncResult<()> {
+    fn update_transaction(
+        &mut self,
+        cgtid: &ClientGtid,
+        status: TransactionStatus,
+        response_blob: Option<Vec<u8>>,
+        server_ts: i64,
+    ) -> SyncResult<()> {
         let key = Self::make_key(cgtid);
         if let Some(tx) = self.transactions.get_mut(&key) {
             tx.status = status;
@@ -71,7 +89,10 @@ impl ClientRegistry for InMemoryClientRegistry {
             tx.server_ts = Some(server_ts);
             Ok(())
         } else {
-            Err(SyncError::RegistryError(format!("Transaction not found: {}", key)))
+            Err(SyncError::RegistryError(format!(
+                "Transaction not found: {}",
+                key
+            )))
         }
     }
 
@@ -81,7 +102,8 @@ impl ClientRegistry for InMemoryClientRegistry {
     }
 
     fn get_client_transactions(&self, client_id: &str) -> SyncResult<Vec<ClientTransaction>> {
-        Ok(self.transactions
+        Ok(self
+            .transactions
             .values()
             .filter(|tx| tx.cgtid.client_id == client_id)
             .cloned()
@@ -91,8 +113,10 @@ impl ClientRegistry for InMemoryClientRegistry {
     fn get_last_committed_seq(&self, client_id: &str) -> SyncResult<Option<u64>> {
         let mut max_seq = None;
         for tx in self.transactions.values() {
-            if tx.cgtid.client_id == client_id && tx.status == TransactionStatus::Committed
-                && (max_seq.is_none() || tx.cgtid.txn_seq > max_seq.unwrap()) {
+            if tx.cgtid.client_id == client_id
+                && tx.status == TransactionStatus::Committed
+                && (max_seq.is_none() || tx.cgtid.txn_seq > max_seq.unwrap())
+            {
                 max_seq = Some(tx.cgtid.txn_seq);
             }
         }
@@ -101,7 +125,8 @@ impl ClientRegistry for InMemoryClientRegistry {
 
     fn is_committed(&self, cgtid: &ClientGtid) -> SyncResult<bool> {
         let key = Self::make_key(cgtid);
-        Ok(self.transactions
+        Ok(self
+            .transactions
             .get(&key)
             .map(|tx| tx.status == TransactionStatus::Committed)
             .unwrap_or(false))
@@ -109,14 +134,26 @@ impl ClientRegistry for InMemoryClientRegistry {
 
     fn is_in_progress(&self, cgtid: &ClientGtid) -> SyncResult<bool> {
         let key = Self::make_key(cgtid);
-        Ok(self.transactions
+        Ok(self
+            .transactions
             .get(&key)
             .map(|tx| tx.status == TransactionStatus::Processing)
             .unwrap_or(false))
     }
 
-    fn mark_committed(&mut self, cgtid: &ClientGtid, _gtid: &str, response_blob: Option<Vec<u8>>, server_ts: i64) -> SyncResult<()> {
-        self.update_transaction(cgtid, TransactionStatus::Committed, response_blob, server_ts)
+    fn mark_committed(
+        &mut self,
+        cgtid: &ClientGtid,
+        _gtid: &str,
+        response_blob: Option<Vec<u8>>,
+        server_ts: i64,
+    ) -> SyncResult<()> {
+        self.update_transaction(
+            cgtid,
+            TransactionStatus::Committed,
+            response_blob,
+            server_ts,
+        )
     }
 
     fn mark_rolled_back(&mut self, cgtid: &ClientGtid, server_ts: i64) -> SyncResult<()> {
@@ -169,7 +206,9 @@ mod tests {
         let tx = make_test_transaction("iphone-23", 1);
 
         registry.begin_transaction(&tx).unwrap();
-        registry.mark_committed(&tx.cgtid, "server-1:100", None, 1000).unwrap();
+        registry
+            .mark_committed(&tx.cgtid, "server-1:100", None, 1000)
+            .unwrap();
 
         assert!(registry.is_committed(&tx.cgtid).unwrap());
     }
@@ -181,9 +220,14 @@ mod tests {
         for seq in [1, 2, 3] {
             let tx = make_test_transaction("iphone-23", seq);
             registry.begin_transaction(&tx).unwrap();
-            registry.mark_committed(&tx.cgtid, "server-1:100", None, 1000).unwrap();
+            registry
+                .mark_committed(&tx.cgtid, "server-1:100", None, 1000)
+                .unwrap();
         }
 
-        assert_eq!(registry.get_last_committed_seq("iphone-23").unwrap(), Some(3));
+        assert_eq!(
+            registry.get_last_committed_seq("iphone-23").unwrap(),
+            Some(3)
+        );
     }
 }
