@@ -34,7 +34,7 @@ fn value_to_string(v: &Value) -> String {
         }
         Value::Text(s) => s.clone(),
         Value::Blob(b) => format!("{:?}", b),
-        &Value::Geometry(ref g) => format!("{:?}", g),
+        Value::Geometry(_) => "GEOMETRY".to_string(),
     }
 }
 
