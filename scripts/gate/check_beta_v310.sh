@@ -165,6 +165,7 @@ check_test "B-S6: ssi_stress" "cargo test -p sqlrustgo-transaction --test ssi_st
 check_test "B-S7: audit_trail" "cargo test -p sqlrustgo-server --test wal_crash_recovery_test"
 check_test "B-S8: explain_analyze" "cargo test --test explain_analyze_test"
 check_test "B-S9: window_functions" "cargo test --test window_function_test"
+check_test "B-S10: merge_execution" "cargo test --test merge_execution_test"
 
 echo ""
 echo "=== Beta Gate: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="
