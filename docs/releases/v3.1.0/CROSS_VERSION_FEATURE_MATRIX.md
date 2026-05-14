@@ -150,7 +150,7 @@
 | B-S4 | wal_integration | ❌ | 未找到 `wal_integration_test.rs` |
 | B-S5 | network_tcp | ❌ | 未找到 `network_tcp_smoke_test.rs` |
 | B-S6 | ssi_stress | ✅ | `/crates/transaction/tests/ssi_stress_test.rs` |
-| B-S7 | audit_trail | ❌ | 未找到 `wal_crash_recovery_test.rs` |
+| B-S7 | audit_trail | ✅ | `/crates/server/tests/wal_crash_recovery_test.rs` |
 | B-S8 | explain_analyze | ✅ | `/tests/explain_analyze_test.rs` |
 | B-S9 | window_functions | ✅ | `/tests/window_function_test.rs` |
 
@@ -220,7 +220,7 @@ crates/executor/src/* (INSERT...SELECT)
 | # | Action | Owner | Target |
 |---|--------|-------|--------|
 | 1 | 实现 MERGE 执行器 `crates/executor/src/merge.rs` | TBD | v3.1.0 GA |
-| 2 | 创建 B-S1 ~ B-S5, B-S7 测试文件或更新 Gate 脚本 | TBD | v3.1.0 GA |
+| 2 | 修复 B-S7 测试路径 (wal_crash_recovery_test) | ✅ 已修复 | - |
 | 3 | 完成 CBO 代价模型接入 Planner | TBD | v3.1.0 GA |
 | 4 | 为 Clustered Index 创建完整测试套件 | TBD | v3.1.0 GA |
 

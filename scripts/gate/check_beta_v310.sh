@@ -152,7 +152,7 @@ check_test "B-S3: long_run_stability" "cargo test --test long_run_stability_test
 check_test "B-S4: wal_integration" "cargo test --test wal_integration_test"
 check_test "B-S5: network_tcp" "cargo test --test network_tcp_smoke_test"
 check_test "B-S6: ssi_stress" "cargo test -p sqlrustgo-transaction --test ssi_stress_test"
-check_test "B-S7: audit_trail" "cargo test --test wal_crash_recovery_test"
+check_test "B-S7: audit_trail" "cargo test -p sqlrustgo-server --test wal_crash_recovery_test"
 check_test "B-S8: explain_analyze" "cargo test --test explain_analyze_test"
 check_test "B-S9: window_functions" "cargo test --test window_function_test"
 
