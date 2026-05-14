@@ -399,6 +399,7 @@ impl ExplainExecutor {
             Value::Boolean(b) => b.to_string(),
             Value::Null => "NULL".to_string(),
             Value::Blob(b) => format!("blob[{} bytes]", b.len()),
+            Value::Geometry(g) => format!("{}", g),
         }
     }
 }

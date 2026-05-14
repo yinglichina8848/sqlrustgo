@@ -16,6 +16,7 @@
 //! | Data Area (>= 4032 bytes)                                    |
 //! +----------------+----------------+----------------+----------------+
 
+use sqlrustgo_gis::to_wkb;
 use sqlrustgo_types::Value;
 use std::io::{Read, Write};
 
@@ -318,6 +319,14 @@ pub fn value_to_bytes(value: &Value) -> Vec<u8> {
             let len = (blob.len() as u32).to_le_bytes();
             bytes.extend_from_slice(&len);
             bytes.extend_from_slice(blob);
+            bytes
+        }
+        Value::Geometry(g) => {
+            let mut bytes = vec![0x07];
+            let wkb = to_wkb(g);
+            let len = (wkb.len() as u32).to_le_bytes();
+            bytes.extend_from_slice(&len);
+            bytes.extend_from_slice(&wkb);
             bytes
         }
     }

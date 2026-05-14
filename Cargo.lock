@@ -5091,6 +5091,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlrustgo-gis"
+version = "3.0.0"
+dependencies = [
+ "hex",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "sqlrustgo-gmp"
 version = "3.0.0"
 dependencies = [
@@ -5351,6 +5361,7 @@ dependencies = [
  "sha2 0.10.9",
  "snap",
  "sqlrustgo-common",
+ "sqlrustgo-gis",
  "sqlrustgo-observability",
  "sqlrustgo-types",
  "tempfile",
@@ -5435,6 +5446,7 @@ dependencies = [
  "hex",
  "log",
  "serde",
+ "sqlrustgo-gis",
  "thiserror 2.0.18",
 ]
 

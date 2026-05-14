@@ -1,13 +1,15 @@
 [package]
-name = "sqlrustgo-types"
+name = "sqlrustgo-gis"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+description = "GIS geometry type system for SQLRustGo"
 
 [dependencies]
-serde.workspace = true
+serde = { version = "1.0", features = ["derive"] }
 thiserror.workspace = true
-log.workspace = true
 hex.workspace = true
-sqlrustgo-gis = { path = "../gis" }
+
+[dev-dependencies]
+tempfile.workspace = true

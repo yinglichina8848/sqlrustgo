@@ -130,6 +130,12 @@ fn encode_value(buf: &mut Vec<u8>, val: &Value) -> io::Result<()> {
             buf.write_all(&(b.len() as u32).to_le_bytes())?;
             buf.write_all(b)?;
         }
+        Value::Geometry(g) => {
+            buf.push(6);
+            let wkb = sqlrustgo_gis::to_wkb(g);
+            buf.write_all(&(wkb.len() as u32).to_le_bytes())?;
+            buf.write_all(&wkb)?;
+        }
     }
     Ok(())
 }

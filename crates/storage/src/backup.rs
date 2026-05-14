@@ -88,6 +88,7 @@ impl BackupExporter {
             }
             Value::Boolean(b) => b.to_string(),
             Value::Blob(b) => format!("[BLOB: {} bytes]", b.len()),
+            Value::Geometry(g) => g.to_string(),
         }
     }
 
@@ -143,6 +144,7 @@ impl BackupExporter {
             Value::Text(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
             Value::Boolean(b) => b.to_string(),
             Value::Blob(b) => format!("\"[BLOB: {} bytes]\"", b.len()),
+            Value::Geometry(g) => format!("\"{}\"", g),
         }
     }
 
@@ -186,6 +188,7 @@ impl BackupExporter {
                 }
             }
             Value::Blob(b) => format!("X'{}'", use_hex::encode(b)),
+            Value::Geometry(g) => format!("'{}'", g),
         }
     }
 }

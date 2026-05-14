@@ -107,6 +107,7 @@ impl SecondaryIndexKey {
                 Value::Float(_) => 3,
                 Value::Text(_) => 4,
                 Value::Blob(_) => 5,
+                Value::Geometry(_) => 6,
             }
         }
 
