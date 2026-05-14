@@ -14,6 +14,12 @@ use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
 use sqlrustgo_executor::ExecutorResult;
+use sqlrustgo_observability::tables::{
+    lock_wait_graph::LockWaitEdge, lock_wait_graph::LockWaitGraph,
+    recovery_history::RecoveryHistory, recovery_history::RecoveryHistoryEntry,
+    transaction_history::TransactionHistory, transaction_history::TransactionHistoryEntry,
+    transaction_history::TransactionStatus, wal_stats::WalStatsCollector,
+};
 use sqlrustgo_parser::parser::{
     AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, CallStatement,
     CheckOption, CheckStatement, CreateIndexStatement, CreateProcedureStatement,
@@ -37,7 +43,37 @@ use sqlrustgo_transaction::{
 };
 use sqlrustgo_types::Value as SqlValue;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+pub struct ObservabilityState {
+    pub transaction_history: RwLock<TransactionHistory>,
+    pub lock_wait_graph: RwLock<LockWaitGraph>,
+    pub recovery_history: RwLock<RecoveryHistory>,
+    pub wal_stats: RwLock<WalStatsCollector>,
+}
+
+impl ObservabilityState {
+    fn new() -> Self {
+        Self {
+            transaction_history: RwLock::new(TransactionHistory::new(10000)),
+            lock_wait_graph: RwLock::new(LockWaitGraph::new()),
+            recovery_history: RwLock::new(RecoveryHistory::new(std::env::temp_dir(), 10000)),
+            wal_stats: RwLock::new(WalStatsCollector::new()),
+        }
+    }
+}
+
+impl Default for ObservabilityState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+lazy_static::lazy_static! {
+    pub static ref OBSERVABILITY: ObservabilityState = ObservabilityState::new();
+}
 
 /// Execution engine for SQL statements
 pub struct ExecutionEngine<S: StorageEngine> {
@@ -3565,6 +3601,14 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             ShowStatement::TableStatus { database: _ } => self.execute_show_table_status(),
             ShowStatement::Processlist => self.execute_show_processlist(),
             ShowStatement::Events => self.execute_show_events(),
+            ShowStatement::TransactionHistory { limit } => {
+                self.execute_show_transaction_history(limit.map(|v| v as usize))
+            }
+            ShowStatement::LockWaits => self.execute_show_lock_waits(),
+            ShowStatement::RecoveryHistory { limit } => {
+                self.execute_show_recovery_history(limit.map(|v| v as usize))
+            }
+            ShowStatement::WalStats => self.execute_show_wal_stats(),
         }
     }
 
@@ -3609,6 +3653,79 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         } else {
             Ok(ExecutorResult::new(vec![], 0))
         }
+    }
+
+    fn execute_show_transaction_history(&self, limit: Option<usize>) -> SqlResult<ExecutorResult> {
+        let history = OBSERVABILITY.transaction_history.read().unwrap();
+        let entries = history.query(limit);
+        let rows: Vec<Vec<Value>> = entries
+            .iter()
+            .map(|entry| {
+                vec![
+                    Value::Integer(entry.tx_id as i64),
+                    Value::Text(entry.tx_uuid.clone()),
+                    Value::Integer(entry.start_time as i64),
+                    Value::Integer(entry.commit_time.unwrap_or(0) as i64),
+                    Value::Integer(entry.abort_time.unwrap_or(0) as i64),
+                    Value::Text(entry.isolation_level.clone()),
+                    Value::Text(format!("{:?}", entry.status)),
+                ]
+            })
+            .collect();
+        Ok(ExecutorResult::new(rows.clone(), rows.len()))
+    }
+
+    fn execute_show_lock_waits(&self) -> SqlResult<ExecutorResult> {
+        let graph = OBSERVABILITY.lock_wait_graph.read().unwrap();
+        let waits = graph.get_active_waits();
+        let rows: Vec<Vec<Value>> = waits
+            .iter()
+            .map(|edge| {
+                vec![
+                    Value::Integer(edge.waiter_tx_id as i64),
+                    Value::Integer(edge.holder_tx_id as i64),
+                    Value::Text(edge.lock_key.clone()),
+                    Value::Text(edge.lock_mode.clone()),
+                    Value::Integer(edge.wait_start_time as i64),
+                ]
+            })
+            .collect();
+        Ok(ExecutorResult::new(rows.clone(), rows.len()))
+    }
+
+    fn execute_show_recovery_history(&self, limit: Option<usize>) -> SqlResult<ExecutorResult> {
+        let history = OBSERVABILITY.recovery_history.read().unwrap();
+        let entries = history.query(limit);
+        let rows: Vec<Vec<Value>> = entries
+            .iter()
+            .map(|entry| {
+                vec![
+                    Value::Integer(entry.recovery_id as i64),
+                    Value::Integer(entry.crash_timestamp as i64),
+                    Value::Integer(entry.recovery_timestamp as i64),
+                    Value::Integer(entry.lsn_recovered as i64),
+                    Value::Integer(entry.transactions_replayed as i64),
+                    Value::Text(format!("{:?}", entry.status)),
+                    Value::Text(entry.error_message.clone().unwrap_or_default()),
+                ]
+            })
+            .collect();
+        Ok(ExecutorResult::new(rows.clone(), rows.len()))
+    }
+
+    fn execute_show_wal_stats(&self) -> SqlResult<ExecutorResult> {
+        let stats = OBSERVABILITY.wal_stats.read().unwrap();
+        let stats_data = stats.get_stats();
+        let rows = vec![vec![
+            Value::Integer(stats_data.total_writes as i64),
+            Value::Integer(stats_data.total_bytes as i64),
+            Value::Integer(stats_data.flush_count as i64),
+            Value::Integer(stats_data.replay_count as i64),
+            Value::Integer(stats_data.replay_time_ms as i64),
+            Value::Integer(stats_data.last_flush_lsn as i64),
+            Value::Integer(stats_data.current_lsn as i64),
+        ]];
+        Ok(ExecutorResult::new(rows.clone(), rows.len()))
     }
 
     fn execute_show_tables(&self) -> SqlResult<ExecutorResult> {
