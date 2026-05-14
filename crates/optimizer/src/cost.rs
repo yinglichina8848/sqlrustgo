@@ -470,9 +470,61 @@ impl SimpleCostModel {
 }
 
 impl CostModel for SimpleCostModel {
-    fn estimate_cost(&self, _plan: &dyn std::any::Any) -> f64 {
-        // Fallback: use default scan cost
-        self.seq_scan_cost(1000, 10).total()
+    fn estimate_cost(&self, plan: &dyn std::any::Any) -> f64 {
+        if let Some(unified_plan) = plan.downcast_ref::<super::unified_plan::UnifiedPlan>() {
+            self.estimate_cost_for_plan(unified_plan)
+        } else {
+            self.seq_scan_cost(1000, 10).total()
+        }
+    }
+}
+
+impl SimpleCostModel {
+    fn estimate_cost_for_plan(&self, plan: &super::unified_plan::UnifiedPlan) -> f64 {
+        use super::unified_plan::UnifiedPlan;
+        match plan {
+            UnifiedPlan::TableScan { .. } => {
+                let rows = plan.estimate_cardinality();
+                let pages = (rows as f64 / 100.0).ceil() as u64;
+                self.seq_scan_cost(rows, pages).total()
+            }
+            UnifiedPlan::IndexScan { .. } => {
+                let rows = plan.estimate_cardinality();
+                self.index_scan_cost(3, 5, rows / 10, (rows as f64 / 100.0).ceil() as u64)
+                    .total()
+            }
+            UnifiedPlan::Filter { input, .. } => {
+                let input_cost = self.estimate_cost_for_plan(input);
+                (input_cost * 1.1).max(1.0)
+            }
+            UnifiedPlan::Projection { input, .. } => self.estimate_cost_for_plan(input),
+            UnifiedPlan::Join { left, right, join_type, .. } => {
+                let left_rows = left.estimate_cardinality();
+                let right_rows = right.estimate_cardinality();
+                let method = match join_type {
+                    super::rules::JoinType::Inner => "hash_join",
+                    _ => "nested_loop",
+                };
+                self.join_cost(left_rows, right_rows, method)
+            }
+            UnifiedPlan::Aggregate { input, group_by, .. } => {
+                let rows = input.estimate_cardinality();
+                self.agg_cost(rows, group_by.len() as u32)
+            }
+            UnifiedPlan::Sort { input, .. } => {
+                let rows = input.estimate_cardinality();
+                self.sort_cost(rows, 100)
+            }
+            UnifiedPlan::Limit { limit, input } => {
+                let input_cost = self.estimate_cost_for_plan(input);
+                input_cost.min(*limit as f64 * 0.5)
+            }
+            UnifiedPlan::EmptyRelation => 0.0,
+            _ => {
+                let rows = plan.estimate_cardinality();
+                self.seq_scan_cost(rows, (rows as f64 / 100.0).ceil() as u64).total()
+            }
+        }
     }
 }
 
@@ -564,10 +616,14 @@ impl Default for CboOptimizer {
 }
 
 impl CostModel for CboOptimizer {
-    fn estimate_cost(&self, _plan: &dyn std::any::Any) -> f64 {
-        self.cost_model
-            .seq_scan_cost(self.default_row_count, self.default_page_count)
-            .total()
+    fn estimate_cost(&self, plan: &dyn std::any::Any) -> f64 {
+        if let Some(unified_plan) = plan.downcast_ref::<super::unified_plan::UnifiedPlan>() {
+            self.cost_model.estimate_cost_for_plan(unified_plan)
+        } else {
+            self.cost_model
+                .seq_scan_cost(self.default_row_count, self.default_page_count)
+                .total()
+        }
     }
 }
 
@@ -781,5 +837,157 @@ mod tests {
         assert!(model.join_cost(100, 200, "hash_join") > 0.0);
         assert!(model.sort_cost(1000, 100) > 0.0);
         assert!(model.seq_scan_cost_f64(100, 10) > 0.0);
+    }
+
+    #[test]
+    fn test_cbo_estimate_cost_with_unified_plan_table_scan() {
+        use super::unified_plan::UnifiedPlan;
+        let model = SimpleCostModel::new();
+        let plan = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0, "Table scan should have non-zero cost");
+    }
+
+    #[test]
+    fn test_cbo_estimate_cost_with_unified_plan_index_scan() {
+        use super::unified_plan::UnifiedPlan;
+        use super::rules::JoinType;
+        let model = SimpleCostModel::new();
+        let plan = UnifiedPlan::IndexScan {
+            table_name: "users".to_string(),
+            index_name: "idx_id".to_string(),
+            predicate: None,
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0, "Index scan should have non-zero cost");
+    }
+
+    #[test]
+    fn test_cbo_estimate_cost_with_unified_plan_filter() {
+        use super::unified_plan::UnifiedPlan;
+        use super::rules::Expr;
+        let model = SimpleCostModel::new();
+        let inner = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Filter {
+            predicate: Expr::Literal("true".to_string()),
+            input: Box::new(inner),
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_cbo_estimate_cost_with_unified_plan_join() {
+        use super::unified_plan::UnifiedPlan;
+        use super::rules::JoinType;
+        let model = SimpleCostModel::new();
+        let left = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let right = UnifiedPlan::TableScan {
+            table_name: "orders".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Join {
+            left: Box::new(left),
+            right: Box::new(right),
+            join_type: JoinType::Inner,
+            condition: None,
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0, "Join should have non-zero cost");
+    }
+
+    #[test]
+    fn test_cbo_estimate_cost_with_unified_plan_aggregate() {
+        use super::unified_plan::UnifiedPlan;
+        use super::rules::Expr;
+        let model = SimpleCostModel::new();
+        let input = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Aggregate {
+            group_by: vec![Expr::Column("dept".to_string())],
+            aggregates: vec![],
+            input: Box::new(input),
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0, "Aggregate should have non-zero cost");
+    }
+
+    #[test]
+    fn test_cbo_estimate_cost_with_unified_plan_sort() {
+        use super::unified_plan::UnifiedPlan;
+        use super::rules::Expr;
+        let model = SimpleCostModel::new();
+        let input = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Sort {
+            expr: vec![Expr::Column("name".to_string())],
+            input: Box::new(input),
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0, "Sort should have non-zero cost");
+    }
+
+    #[test]
+    fn test_cbo_estimate_cost_with_unified_plan_limit() {
+        use super::unified_plan::UnifiedPlan;
+        let model = SimpleCostModel::new();
+        let input = UnifiedPlan::TableScan {
+            table_name: "users".to_string(),
+            projection: None,
+        };
+        let plan = UnifiedPlan::Limit {
+            limit: 10,
+            input: Box::new(input),
+        };
+        let cost = model.estimate_cost(&plan);
+        assert!(cost > 0.0, "Limit should have non-zero cost");
+    }
+
+    #[test]
+    fn test_cbo_estimate_cost_fallback() {
+        let model = SimpleCostModel::new();
+        let cost = model.estimate_cost(&42i32);
+        assert!(cost > 0.0);
+    }
+
+    #[test]
+    fn test_cbo_optimizer_with_unified_plan() {
+        use super::unified_plan::UnifiedPlan;
+        use super::rules::JoinType;
+        let cbo = CboOptimizer::new();
+        let plan = UnifiedPlan::Join {
+            left: Box::new(UnifiedPlan::TableScan {
+                table_name: "users".to_string(),
+                projection: None,
+            }),
+            right: Box::new(UnifiedPlan::TableScan {
+                table_name: "orders".to_string(),
+                projection: None,
+            }),
+            join_type: JoinType::Inner,
+            condition: None,
+        };
+        let cost = cbo.estimate_cost(&plan);
+        assert!(cost > 0.0, "CBO should estimate join cost correctly");
+    }
+
+    #[test]
+    fn test_cbo_optimizer_fallback() {
+        let cbo = CboOptimizer::new();
+        let cost = cbo.estimate_cost(&42i32);
+        assert!(cost > 0.0);
     }
 }
