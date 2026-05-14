@@ -107,7 +107,7 @@ fi
 # A9: SQL Operations >= 60%
 TOTAL=$((TOTAL+1))
 echo -n "[alpha-v3.1.0] A9: SQL Operations >=60% ... "
-CORPUS=$(cargo test -p sqlrustgo-sql-corpus 2>&1 || true)
+CORPUS=$(cargo test -p sqlrustgo-sql-corpus test_sql_corpus_all -- --nocapture 2>&1 || true)
 pct=$(echo "$CORPUS" | grep -oE '[0-9]+\.[0-9]+%' | tail -1 | tr -d '%' || echo "0")
 if [ -n "$pct" ] && [ "$pct" != "0" ]; then
     result=$(echo "$pct >= 60" | bc -l 2>/dev/null || echo "0")
