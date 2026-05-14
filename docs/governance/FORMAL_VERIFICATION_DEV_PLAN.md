@@ -75,7 +75,7 @@ formulog --version
 # - 确保可验证
 
 # T2.2: 运行 Dafny 验证
-bash scripts/verify/dafny-verify.sh docs/proof/PROOF-011-type-safety.dfy
+bash scripts/verify/dafny-verify.sh ../proof/PROOF-011-type-safety.dfy
 
 # T2.3: 修复验证错误 (如有)
 # - 修改 .dfy 文件
@@ -146,13 +146,13 @@ cargo test -p sqlrustgo-transaction
 **目标**: 将形式化验证集成到 CI
 
 **交付物**:
-- 更新的 `scripts/gate/check_proof.sh`
+- 更新的 `../../scripts/gate/check_proof.sh`
 - Gitea Actions workflow
 
 **任务清单**:
 
 ```bash
-# T6.1: 更新 scripts/gate/check_proof.sh
+# T6.1: 更新 ../../scripts/gate/check_proof.sh
 # 添加:
 # - 运行 dafny verify
 # - 运行 tla-check
@@ -163,7 +163,7 @@ cargo test -p sqlrustgo-transaction
 # .github/workflows/formal-verification.yml
 
 # T6.3: 测试 Gate R10
-bash scripts/gate/check_proof.sh
+bash ../../scripts/gate/check_proof.sh
 ```
 
 ### 2.7 Phase 7: 最终 Gate Pass (Week 4)
@@ -248,7 +248,7 @@ formal_verification tool 运行
 ---
 
 > **References**:
-> - [E2E Workflow](docs/governance/FORMAL_VERIFICATION_E2E.md)
+> - [E2E Workflow](./FORMAL_VERIFICATION_E2E.md)
 > - [G-02 Proof Registry](http://192.168.0.252:3000/openclaw/sqlrustgo/issues/128)
-> - [Proof Files](docs/proof/)
-> - [Gate Scripts](scripts/gate/check_proof.sh)
+> - [Proof Files](../proof/)
+> - [Gate Scripts](../../scripts/gate/check_proof.sh)

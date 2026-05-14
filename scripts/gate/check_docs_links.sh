@@ -20,6 +20,9 @@ EXCLUDE_PATTERNS=(
     "docs/releases/v2.8.0/"
     "docs/releases/v2.9.0/"
     "docs/releases/v3.0.0/"
+    "docs/issues/"
+    "CURRENT_VERSION.md"
+    "docs/governance/DOCUMENT_COMPLETENESS_CHECK.md"
 )
 
 should_exclude() {
