@@ -17,6 +17,7 @@ pub mod audit;
 pub mod deadlock;
 pub mod dtc;
 pub mod gid;
+pub mod idempotency;
 pub mod lock;
 pub mod lock_manager;
 pub mod manager;
@@ -34,5 +35,6 @@ pub use lock_manager::DistributedLockManager;
 pub use mvcc::{Snapshot, Transaction, TxId, INVALID_TX_ID};
 pub use ssi::{SerializationGraph, SireadLock, SsiDetector, SsiDetectorSync, SsiError};
 pub use transaction_manager::{
-    ActiveTransaction, IsolationLevel, TransactionManager, TransactionState,
+    ActiveTransaction, IdempotencyOrSsiError, IdempotentBeginResult, IsolationLevel,
+    TransactionManager, TransactionState,
 };

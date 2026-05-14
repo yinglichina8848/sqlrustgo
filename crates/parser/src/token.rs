@@ -207,6 +207,10 @@ pub enum Token {
     Comment,
     Collector,
 
+    // Idempotency keywords
+    Idempotent,
+    Idempotency,
+
     // Data Types
     Integer,
     Text,
@@ -400,6 +404,8 @@ impl fmt::Display for Token {
             Token::Do => write!(f, "DO"),
             Token::Comment => write!(f, "COMMENT"),
             Token::Collector => write!(f, "COLLECTOR"),
+            Token::Idempotent => write!(f, "IDEMPOTENT"),
+            Token::Idempotency => write!(f, "IDEMPOTENCY"),
             Token::Unbounded => write!(f, "UNBOUNDED"),
             Token::Preceding => write!(f, "PRECEDING"),
             Token::Following => write!(f, "FOLLOWING"),
@@ -533,6 +539,8 @@ pub fn is_keyword(s: &str) -> bool {
             | "SHOW"
             | "DESCRIBE"
             | "AUTO_INCREMENT"
+            | "IDEMPOTENT"
+            | "IDEMPOTENCY"
     )
 }
 
@@ -698,6 +706,8 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "ASC" => Some(Token::Asc),
         "DESC" => Some(Token::Desc),
         "LIKE" => Some(Token::Like),
+        "IDEMPOTENT" => Some(Token::Idempotent),
+        "IDEMPOTENCY" => Some(Token::Idempotency),
         _ => None,
     }
 }
