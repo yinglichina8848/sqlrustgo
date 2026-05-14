@@ -74,7 +74,23 @@ check "G4: cargo fmt --check" "cargo fmt --all -- --check" "G4"
 echo -n "[ga-v3.1.0] G5: Coverage ≥90% ... "
 TOTAL=$((TOTAL+1))
 if command -v cargo-llvm-cov &>/dev/null; then
-    COVERAGE=$(cargo llvm-cov --all-features --ignore-run-fail --lcov --output-path /tmp/lcov-v310-ga.info 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%' || echo "0")
+    # Step 1: Run tests with coverage data collection
+    TIMEOUT=600
+    if command -v timeout &>/dev/null; then
+        timeout "$TIMEOUT" cargo llvm-cov test --workspace --all-features --no-fail-fast >/dev/null 2>&1 || true
+    else
+        cargo llvm-cov test --workspace --all-features --no-fail-fast >/dev/null 2>&1 || true
+    fi
+    # Step 2: Export coverage report to lcov format
+    cargo llvm-cov report --lcov --output-path /tmp/lcov-v310-ga.info 2>/dev/null || true
+    # Step 3: Extract coverage from lcov (LF=total lines, LH=covered lines)
+    TOTAL_LINES=$(grep "^LF:" /tmp/lcov-v310-ga.info 2>/dev/null | cut -d: -f2 | awk '{sum+=$1} END {print sum}' || echo "0")
+    COVERED_LINES=$(grep "^LH:" /tmp/lcov-v310-ga.info 2>/dev/null | cut -d: -f2 | awk '{sum+=$1} END {print sum}' || echo "0")
+    if [ "$TOTAL_LINES" -gt 0 ]; then
+        COVERAGE=$(echo "scale=2; $COVERED_LINES * 100 / $TOTAL_LINES" | bc)
+    else
+        COVERAGE="0"
+    fi
     if (( $(echo "$COVERAGE >= 90" | bc -l) )); then
         echo "PASS (${COVERAGE}%)"; PASS=$((PASS+1))
     else
