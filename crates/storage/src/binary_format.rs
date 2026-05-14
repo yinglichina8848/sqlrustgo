@@ -3,6 +3,7 @@
 //! This module provides binary serialization/deserialization interfaces
 //! for future distributed storage (v2.0).
 
+use sqlrustgo_gis::to_wkb;
 use sqlrustgo_types::Value;
 
 /// BinaryFormat trait - defines interface for binary serialization
@@ -162,6 +163,12 @@ impl BinaryFormat for Value {
                 let len = b.len() as u64;
                 result.extend_from_slice(&helpers::write_u64(len));
                 result.extend_from_slice(b);
+                result
+            }
+            Value::Geometry(g) => {
+                let mut result = vec![6u8]; // type indicator for Geometry
+                let wkb = to_wkb(g);
+                result.extend_from_slice(&wkb);
                 result
             }
         }

@@ -357,6 +357,7 @@ impl TriggerExecutor {
                 }
             }
             Value::Blob(b) => format!("X'{}'", String::from_utf8_lossy(b)),
+            Value::Geometry(g) => format!("'{}'", g),
         }
     }
 

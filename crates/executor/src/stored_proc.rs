@@ -2083,6 +2083,7 @@ impl StoredProcExecutor {
                 .map(|&x| x as char)
                 .collect::<String>()
                 .replace('\'', "''"),
+            Value::Geometry(g) => g.to_string(),
         }
     }
 

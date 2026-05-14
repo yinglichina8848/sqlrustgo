@@ -348,6 +348,14 @@ impl<'a> InformationSchema<'a> {
             DataType::Array => (None, None, None),
             DataType::Enum => (None, None, None),
             DataType::RowId => (None, Some(64), Some(0)),
+            DataType::Geometry
+            | DataType::Point
+            | DataType::LineString
+            | DataType::Polygon
+            | DataType::MultiPoint
+            | DataType::MultiLineString
+            | DataType::MultiPolygon
+            | DataType::GeometryCollection => (None, None, None),
         }
     }
 

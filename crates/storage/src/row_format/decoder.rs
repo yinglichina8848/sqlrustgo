@@ -104,6 +104,7 @@ fn value_encoding_size(val: &Value) -> usize {
         Value::Float(_) => 9,
         Value::Text(s) => 1 + 4 + s.len(),
         Value::Blob(b) => 1 + 4 + b.len(),
+        Value::Geometry(g) => 1 + 4 + sqlrustgo_gis::to_wkb(g).len(),
     }
 }
 
@@ -137,6 +138,18 @@ pub fn decode_fixed_value(buf: &[u8], offset: usize) -> std::io::Result<(usize, 
             let len = read_u32(buf, offset + 1)? as usize;
             let data = read_bytes(buf, offset + 5, len)?;
             Ok((offset + 5 + len, Value::Blob(data)))
+        }
+        6 => {
+            let len = read_u32(buf, offset + 1)? as usize;
+            let data = read_bytes(buf, offset + 5, len)?;
+            use sqlrustgo_gis::parse_wkb;
+            match parse_wkb(&data) {
+                Ok(geom) => Ok((offset + 5 + len, Value::Geometry(geom))),
+                Err(e) => Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("invalid Geometry WKB: {}", e),
+                )),
+            }
         }
         _ => Err(Error::new(
             ErrorKind::InvalidData,
