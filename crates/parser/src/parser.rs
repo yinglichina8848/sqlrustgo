@@ -1804,6 +1804,17 @@ impl Parser {
             }));
         }
 
+        // INTERSECT and EXCEPT are not yet fully implemented
+        if matches!(self.current(), Some(Token::Intersect)) {
+            self.next();
+            return Err("INTERSECT is not fully implemented".to_string());
+        }
+
+        if matches!(self.current(), Some(Token::Except)) {
+            self.next();
+            return Err("EXCEPT is not fully implemented".to_string());
+        }
+
         Ok(Statement::Select(first_select))
     }
 
