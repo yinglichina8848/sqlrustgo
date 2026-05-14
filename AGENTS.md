@@ -1,19 +1,151 @@
 # AGENTS.md - SQLRustGo Agent Guide
 
-> Compact instructions for AI agents. Based on lessons learned from past sessions.
+> **版本**: 2.0
+> **更新日期**: 2026-05-14
+> **维护人**: hermes-z6g4
 
-## Communication Principle
+> **强制执行声明**: 本文档是 AI 执行 SQLRustGo 相关任务的强制规则。AI 必须遵循本文档的所有规定，以及 docs/governance/ 下的 SSOT 文档。
+
+---
+
+## 一、执行保证机制
+
+### 1.1 规则层级（从高到低）
+
+```
+1. AGENTS.md（最高优先级）
+   ↓
+2. docs/governance/GOVERNANCE_INDEX.md（导航索引）
+   ↓
+3. docs/governance/GATE_SPEC_MASTER.md（门禁规范 SSOT）
+   ↓
+4. docs/governance/DEVELOPMENT_PLAN_TEMPLATE.md（开发计划模版）
+   ↓
+5. docs/governance/TEST_PLAN_TEMPLATE.md（测试计划模版）
+   ↓
+6. docs/governance/GATE_CHECKLIST_TEMPLATE.md（门禁清单模版）
+   ↓
+7. scripts/gate/check_{phase}_v{VERSION}.sh（门禁脚本）
+```
+
+### 1.2 任务分类与强制规则
+
+| 任务类型 | 必须遵循 | 执行前必读 |
+|----------|----------|------------|
+| 版本开发计划 | DEVELOPMENT_PLAN_TEMPLATE.md | GOVERNANCE_INDEX.md |
+| 测试计划 | TEST_PLAN_TEMPLATE.md | GOVERNANCE_INDEX.md |
+| 门禁检查 | GATE_CHECKLIST_TEMPLATE.md | GATE_SPEC_MASTER.md |
+| 问题修复 | 本文档 + 相关模版 | GOVERNANCE_INDEX.md |
+
+---
+
+## 二、Communication Principle
 
 **必须使用中文沟通。始终使用中文回应用户，除非用户明确要求使用其他语言。**
 
-## Branch Strategy
+---
+
+## 三、Governance 任务执行规则
+
+### 3.1 任务识别规则
+
+```
+当用户要求执行以下任务时，AI 必须使用对应的模版：
+```
+
+| 用户要求关键词 | 识别为 | 必须使用的模版 |
+|----------------|--------|----------------|
+| "开发计划"、"版本计划"、"版本开发" | 版本开发计划 | DEVELOPMENT_PLAN_TEMPLATE.md |
+| "测试计划"、"测试用例"、"测试策略" | 测试计划 | TEST_PLAN_TEMPLATE.md |
+| "门禁检查"、"Gate"、"门禁报告" | 门禁检查 | GATE_CHECKLIST_TEMPLATE.md |
+| "Alpha Gate"、"Beta Gate"、"RC Gate"、"GA Gate" | 门禁检查 | GATE_SPEC_MASTER.md + GATE_CHECKLIST_TEMPLATE.md |
+| "执行门禁"、"跑门禁" | 执行门禁 | 执行 scripts/gate/check_{phase}_v{VERSION}.sh |
+
+### 3.2 强制模版使用
+
+```
+❌ 禁止: 自由格式创建开发计划/测试计划/门禁清单
+✅ 必须: 基于对应模版创建
+✅ 必须: 包含模版要求的所有章节
+✅ 必须: 使用模版指定的文件路径
+```
+
+### 3.3 门禁检查执行规则
+
+```
+步骤 1: 识别门禁阶段
+    ↓
+步骤 2: 执行 scripts/gate/check_{phase}_v{VERSION}.sh
+    ↓
+步骤 3: 记录所有检查结果（PASS/FAIL/SKIP）
+    ↓
+步骤 4: FAIL 项 → 创建 Issue → 修复 PR → 验证
+    ↓
+步骤 5: 生成 GATE_CHECKLIST_TEMPLATE.md 格式的报告
+    ↓
+步骤 6: 发布 Issue 记录门禁状态
+```
+
+### 3.4 版本开发计划执行规则
+
+```
+步骤 1: 阅读 GOVERNANCE_INDEX.md
+    ↓
+步骤 2: 使用 DEVELOPMENT_PLAN_TEMPLATE.md 创建计划
+    ↓
+步骤 3: 创建 docs/releases/v{VERSION}/DEVELOPMENT_PLAN.md
+    ↓
+步骤 4: 包含所有 9 个必需章节
+    ↓
+步骤 5: Issue 引用必须有效
+    ↓
+步骤 6: 版本延续任务映射到上版本未完成任务
+```
+
+---
+
+## 四、Issue 追踪强制规则
+
+### 4.1 Issue 创建触发条件
+
+```
+门禁 FAIL → 必须创建 Issue
+    ↓
+Issue 标题格式: [{GATE_ITEM}] {简短描述}
+    ↓
+Issue 必须包含:
+  - 门禁来源 (脚本路径、检查项编号)
+  - 检查命令
+  - 失败输出摘要
+  - 根因分析
+  - 影响范围
+  - 验收条件
+```
+
+### 4.2 Issue 关闭强制验证
+
+```
+禁止: 没有 PR 证据就关闭 Issue
+    ↓
+关闭前必须验证:
+  1. gh issue view {id} --json closedByPullRequestsReferences (结果非空)
+  2. gh pr view {pr_number} --json state,mergedAt (state=MERGED)
+  3. 相关测试在 CI 通过
+  4. 门禁重新检查 PASS
+```
+
+---
+
+## 五、Branch Strategy
 
 - **Main development branch**: `develop/v3.1.0` (Beta)
 - **DO NOT modify `main` branch directly**
 - Create feature branches from `develop/v3.1.0`
 - Use git worktrees for isolated feature work: `git worktree add .worktrees/<name> -b feature/<name>`
 
-## Essential Commands
+---
+
+## 六、Essential Commands
 
 ```bash
 # Build (use --all-features to enable all feature flags)
@@ -47,7 +179,9 @@ cargo run --bin sqlrustgo
 cargo test --doc
 ```
 
-## Gate/Validation Scripts
+---
+
+## 七、Gate/Validation Scripts
 
 ```bash
 # Doc links check (fast)
@@ -66,7 +200,9 @@ bash scripts/gate/check_security.sh
 bash scripts/gate/check_l0_smoke.sh
 ```
 
-## Architecture
+---
+
+## 八、Architecture
 
 ```
 ┌─────────────────────────────────────┐
@@ -89,7 +225,9 @@ bash scripts/gate/check_l0_smoke.sh
 └─────────────────────────────────────┘
 ```
 
-## Crates (Workspace Members)
+---
+
+## 九、Crates (Workspace Members)
 
 Key crates in `crates/`:
 - `parser`, `planner`, `optimizer`, `executor` - Query processing
@@ -100,80 +238,20 @@ Key crates in `crates/`:
 - `catalog`, `types` - Schema and type system
 - `server` - Database server entry point
 
-## Important Constraints
+---
+
+## 十、重要约束
 
 1. **Clippy must pass**: `cargo clippy --all-features -- -D warnings` (zero warnings allowed)
 2. **Format must pass**: `cargo fmt --check --all`
-3. **Doc links must be valid**: Run `check_docs_links.sh` before committing doc changes
+3. **Doc links must be valid**: Run `check_docs_links.sh` after modifying markdown
 4. **Test memory limit**: 8GB per test (configured in Cargo.toml)
 5. **Rust edition**: 2021 with Tokio async runtime
 6. **Workspace packages**: Use `-p <package>` flag for single crate operations
 
-## Common Pitfalls
-
-| Issue | Prevention |
-|-------|------------|
-| Broken doc links | Run `scripts/gate/check_docs_links.sh` after modifying markdown |
-| Missing workspace deps | Use `-p <package>` flag for single crate operations |
-| Slow builds | Use `cargo check --all-features` for fast compilation checks |
-| Missing features | Use `--all-features` flag for all cargo commands |
-| Wrong branch | Branch is `develop/v3.0.0`, not `develop/v2.9.0` |
-
-## Existing Instruction Files
-
-- `.claude/CLAUDE.md` - Claude Code specific guidance (includes GitNexus)
-- `ARCHITECTURE_RULES.md` - Architecture decisions
-- `BRANCH_GOVERNANCE.md` - Branch and release workflow
-- `docs/governance/ISSUE_CLOSING_VERIFICATION.md` - Issue closing verification
-
-## Issue 关闭规则
-
-**禁止手动关闭没有 PR 合并的 Issue。**
-
-关闭 Issue 前必须验证：
-```bash
-gh issue view <id> --json closedByPullRequestsReferences
-# 结果非空 → 可以关闭
-# 结果为空 → 禁止手动关闭
-```
-
-## Git Remote
-
-**Primary remote: Gitea** — `http://192.168.0.252:3000/openclaw/sqlrustgo.git`
-
-| Remote | Purpose |
-|--------|---------|
-| origin | Gitea (primary) |
-| github | GitHub mirror (read-only) |
-| gitee | Gitee mirror (read-only) |
-| gitcode | GitCode mirror (read-only) |
-
-## Testing Notes
-
-- Integration tests in `tests/` directory
-- E2E tests in `tests/e2e/`
-- Crate-specific tests in each crate's `tests/` or `src/`
-- Use `--test <test_name>` to run specific test files
-- Test memory limit: 8GB (configured in `Cargo.toml`)
-
-## Version
-
-Current: **v3.1.0 Beta** (Compact Row Format)
-- Version file: `VERSION`
-- Current branch: `develop/v3.1.0`
-- Previous stable: v3.0.0 (GA)
-
-**v3.1.0 Gate Scripts**:
-```bash
-bash scripts/gate/check_alpha_v310.sh   # Alpha gate
-bash scripts/gate/check_beta_v310.sh    # Beta gate
-bash scripts/gate/check_rc_v310.sh      # RC gate
-bash scripts/gate/check_ga_v310.sh      # GA gate
-```
-
 ---
 
-## LLM-Wiki 与 GBrain 知识管理
+## 十一、GMP 文档体系
 
 ### 外部知识库
 
@@ -194,17 +272,9 @@ bash scripts/gate/check_ga_v310.sh      # GA gate
 docs/wiki/                   # QMD Wiki（结构化流程文档）
 ```
 
-### 知识沉淀流程
-
-每次完成复杂任务后：
-1. 首次解决某类问题 → 创建 GBrain Pattern
-2. 学到项目规则 → 更新 Hermes Memory
-3. 流程改进 → 更新 ADR
-4. 对外接口变更 → 更新 GitHub Wiki
-
 ---
 
-## Harness Engineering 体系
+## 十二、Harness Engineering 体系
 
 ### Gate 脚本 (`scripts/gate/`)
 
@@ -235,16 +305,9 @@ v3.1.0 门禁脚本：
 | B8 TPC-H SF=1 | TPC-H 基准可运行 |
 | B9 Proof | 证明文件存在 |
 
-### CI/CD 基础设施
-
-- **Runner**: Nomad + Gitea Actions
-- **Runner 标签**: `hp-z6g4`, `z440`
-- **SSH 用户**: `openclaw`（不是 `admin`）
-- **验证命令**: `ssh openclaw@192.168.0.252 "nomad node status"`
-
 ---
 
-## 多平台协作架构
+## 十三、多平台协作架构
 
 ### 三平台角色
 
@@ -267,29 +330,45 @@ v3.1.0 门禁脚本：
 - `develop/v3.1.0`: 禁止直接推送，必须通过 PR
 - 使用 `force_merge=true` 绕过保护合并（需 API）
 
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+---
 
+## 十四、Governance 执行检查清单
+
+AI 在执行 governance 相关任务前，必须检查：
+
+```
+□ 是否识别到 governance 相关任务？
+□ 是否阅读了 GOVERNANCE_INDEX.md？
+□ 是否使用了正确的模版？
+□ 模版章节是否完整？
+□ 文件路径是否正确？
+□ Issue 追踪是否遵循规则？
+□ 门禁检查结果是否记录？
+```
+
+---
+
+## 十五、GitNexus Code Intelligence
+
+<!-- gitnexus:start -->
 This project is indexed by GitNexus as **sqlrustgo** (64373 symbols, 95746 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
-## Always Do
-
+### Always Do
 - **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
 - **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
 - When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
 - When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
 
-## Never Do
-
+### Never Do
 - NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
 - NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
 - NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
 - NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
 
-## Resources
+### Resources
 
 | Resource | Use for |
 |----------|---------|
@@ -297,16 +376,8 @@ This project is indexed by GitNexus as **sqlrustgo** (64373 symbols, 95746 relat
 | `gitnexus://repo/sqlrustgo/clusters` | All functional areas |
 | `gitnexus://repo/sqlrustgo/processes` | All execution flows |
 | `gitnexus://repo/sqlrustgo/process/{name}` | Step-by-step execution trace |
-
-## CLI
-
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-
 <!-- gitnexus:end -->
+
+---
+
+*本文档由 hermes-z6g4 维护。版本 2.0 新增 Governance 执行规则。*

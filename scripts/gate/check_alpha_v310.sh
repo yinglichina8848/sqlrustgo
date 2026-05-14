@@ -35,8 +35,8 @@ fi
 TOTAL=$((TOTAL+1))
 echo -n "[alpha-v3.1.0] A2: L1 core crates test ... "
 TEST_OUTPUT=$(cargo test -p sqlrustgo-types -p sqlrustgo-parser -p sqlrustgo-planner -p sqlrustgo-optimizer -p sqlrustgo-executor -p sqlrustgo-storage -p sqlrustgo-transaction -p sqlrustgo-catalog --lib -- --test-threads=8 2>&1 || true)
-passed=$(echo "$TEST_OUTPUT" | grep -c "test result: ok\." || echo "0")
-failed=$(echo "$TEST_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+passed=$(echo "$TEST_OUTPUT" | grep -c "test result: ok\." 2>/dev/null | tr -d '[:space:]' || echo "0")
+failed=$(echo "$TEST_OUTPUT" | grep -c "test result: FAILED" 2>/dev/null | tr -d '[:space:]' || echo "0")
 total=$((passed + failed))
 if [ "$total" -gt 0 ]; then
     rate=$((passed * 100 / total))
