@@ -4374,6 +4374,24 @@ impl<S: StorageEngine> ExecutionEngine<S> {
                 let subquery_values = self.execute_subquery(subquery, row, table_info);
                 subquery_values.is_empty()
             }
+            Expression::Like(left, pattern, _escape) => {
+                let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+                let pattern_val =
+                    evaluate_expression(pattern, row, table_info).unwrap_or(Value::Null);
+                match (left_val, pattern_val) {
+                    (Value::Text(text), Value::Text(pat)) => like_pattern(&text, &pat),
+                    _ => false,
+                }
+            }
+            Expression::NotLike(left, pattern, _escape) => {
+                let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+                let pattern_val =
+                    evaluate_expression(pattern, row, table_info).unwrap_or(Value::Null);
+                match (left_val, pattern_val) {
+                    (Value::Text(text), Value::Text(pat)) => !like_pattern(&text, &pat),
+                    _ => true,
+                }
+            }
             // Legacy IS NULL (col IS NULL) - now uses new Expression::IsNull
             Expression::BinaryOp(left, op, right)
                 if op.to_uppercase() == "IS"
@@ -4559,6 +4577,22 @@ fn eval_predicate_standalone(expr: &Expression, row: &[Value], table_info: &Tabl
             let right_val = evaluate_expression(right, row, table_info).unwrap_or(Value::Null);
             sql_compare(op, &left_val, &right_val)
         }
+        Expression::Like(left, pattern, _escape) => {
+            let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+            let pattern_val = evaluate_expression(pattern, row, table_info).unwrap_or(Value::Null);
+            match (left_val, pattern_val) {
+                (Value::Text(text), Value::Text(pat)) => like_pattern(&text, &pat),
+                _ => false,
+            }
+        }
+        Expression::NotLike(left, pattern, _escape) => {
+            let left_val = evaluate_expression(left, row, table_info).unwrap_or(Value::Null);
+            let pattern_val = evaluate_expression(pattern, row, table_info).unwrap_or(Value::Null);
+            match (left_val, pattern_val) {
+                (Value::Text(text), Value::Text(pat)) => !like_pattern(&text, &pat),
+                _ => true,
+            }
+        }
         _ => {
             matches!(evaluate_expression(expr, row, table_info), Ok(val) if matches!(val, Value::Boolean(true)))
         }
@@ -4582,6 +4616,69 @@ fn sql_compare(op: &str, left: &Value, right: &Value) -> bool {
         "<=" => compare_values(left, right) <= 0,
         _ => false,
     }
+}
+
+/// LIKE pattern matching - supports % and _ wildcards
+/// Returns true if text matches the pattern
+fn like_pattern(text: &str, pattern: &str) -> bool {
+    // Simple LIKE implementation - supports % and _ wildcards
+    if pattern.is_empty() {
+        return text.is_empty();
+    }
+    if pattern == "%" {
+        return true;
+    }
+
+    if let Some(remaining) = pattern.strip_prefix('%') {
+        if let Some(core) = remaining.strip_suffix('%') {
+            return text.starts_with(core);
+        }
+        return text.ends_with(remaining) || like_pattern(&text[1..], remaining);
+    }
+
+    if let Some(remaining) = pattern.strip_suffix('%') {
+        return text.starts_with(remaining)
+            || like_pattern(&text[..text.len().saturating_sub(1)], remaining);
+    }
+
+    if !pattern.contains('%') && !pattern.contains('_') {
+        return text == pattern;
+    }
+
+    let mut text_chars = text.chars().peekable();
+    let mut pattern_chars = pattern.chars().peekable();
+
+    while text_chars.peek().is_some() || pattern_chars.peek().is_some() {
+        match (pattern_chars.peek(), text_chars.peek()) {
+            (Some('%'), _) => {
+                pattern_chars.next();
+                // Try matching at current position or skip one char
+                if pattern_chars.peek().is_none() {
+                    return true;
+                }
+                // Try skipping one character from text
+                if text_chars.peek().is_some() {
+                    let text_copy: String = text_chars.clone().collect();
+                    if like_pattern(
+                        &text_copy[1..],
+                        &pattern[pattern.len() - pattern_chars.clone().count()..],
+                    ) {
+                        return true;
+                    }
+                }
+            }
+            (Some('_'), Some(_)) => {
+                pattern_chars.next();
+                text_chars.next();
+            }
+            (Some(p), Some(t)) if p == t => {
+                pattern_chars.next();
+                text_chars.next();
+            }
+            _ => return false,
+        }
+    }
+    pattern_chars.peek().is_none()
 }
 
 /// Evaluate an expression with outer table context for correlated subqueries
