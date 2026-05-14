@@ -773,8 +773,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     fn execute_select(&mut self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
-        let storage = self.storage.read().unwrap();
-
         if select.table.is_empty() {
             return Ok(ExecutorResult::new(vec![], 0));
         }
@@ -786,6 +784,21 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         {
             return self.execute_information_schema_select(select);
         }
+
+        if select.table == "__subquery" {
+            if let Some(ref from) = select.from {
+                if let Some(from_table) = from.tables.first() {
+                    if let Some(ref subquery) = from_table.subquery {
+                        return self.execute_statement(*(*subquery).clone());
+                    }
+                }
+            }
+            return Err(SqlError::ExecutionError(
+                "Subquery not found in from clause".to_string(),
+            ));
+        }
+
+        let storage = self.storage.read().unwrap();
 
         // Step 1: FROM/JOIN - get initial rows and schema
         let (mut rows, table_info) = if select.join_clause.is_some() {

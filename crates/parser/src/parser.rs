@@ -388,6 +388,7 @@ pub struct JoinClause {
 pub struct FromTable {
     pub name: String,
     pub alias: Option<String>,
+    pub subquery: Option<Box<Statement>>,
 }
 
 /// FROM clause — holds all tables from a comma-separated list, plus explicit JOINs
@@ -2864,18 +2865,19 @@ impl Parser {
                             tables.push(FromTable {
                                 name: table_name.clone(),
                                 alias,
+                                subquery: None,
                             });
                             if primary_table.is_empty() {
                                 primary_table = table_name;
                             }
                         }
                         Some(Token::LParen) => {
-                            // Handle subquery: FROM (SELECT ...)
-                            let _subquery_stmt = Box::new(self.parse_select()?);
+                            let subquery_stmt = Box::new(self.parse_select()?);
                             self.expect(Token::RParen)?;
                             tables.push(FromTable {
                                 name: "__subquery".to_string(),
                                 alias: None,
+                                subquery: Some(subquery_stmt),
                             });
                             if primary_table.is_empty() {
                                 primary_table = "__subquery".to_string();
@@ -3647,15 +3649,16 @@ impl Parser {
                         tables.push(FromTable {
                             name: table_name,
                             alias,
+                            subquery: None,
                         });
                     }
                     Some(Token::LParen) => {
-                        // Handle subquery in FROM: FROM (SELECT ...)
-                        let _subquery_stmt = Box::new(self.parse_select()?);
+                        let subquery_stmt = Box::new(self.parse_select()?);
                         self.expect(Token::RParen)?;
                         tables.push(FromTable {
                             name: "__subquery".to_string(),
                             alias: None,
+                            subquery: Some(subquery_stmt),
                         });
                     }
                     Some(Token::Comma) => {
