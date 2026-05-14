@@ -33,7 +33,8 @@ use sqlrustgo_parser::{
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
 use sqlrustgo_transaction::lock::LockGrantMode;
 use sqlrustgo_transaction::{
-    IsolationLevel as TmIsolationLevel, LockMode, LockTarget, TransactionManager, TxId,
+    IdempotentBeginResult, IsolationLevel as TmIsolationLevel, LockMode, LockTarget,
+    TransactionManager, TxId,
 };
 use sqlrustgo_types::Value as SqlValue;
 use std::collections::HashMap;
@@ -3117,6 +3118,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     .unwrap_or(self.default_isolation);
                 self.begin_transaction(iso)
             }
+            TransactionStatement::BeginIdempotent { key } => {
+                let iso = self.default_isolation;
+                self.begin_transaction_idempotent(key, iso)
+            }
             TransactionStatement::Savepoint { name: _ } => Ok(ExecutorResult::empty()),
             TransactionStatement::RollbackToSavepoint { name: _ } => Ok(ExecutorResult::empty()),
             TransactionStatement::ReleaseSavepoint { name: _ } => Ok(ExecutorResult::empty()),
@@ -3162,6 +3167,43 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         })?;
         self.current_tx_id = None;
         Ok(ExecutorResult::empty())
+    }
+
+    pub fn begin_transaction_idempotent(
+        &mut self,
+        key: &str,
+        isolation: TmIsolationLevel,
+    ) -> SqlResult<ExecutorResult> {
+        if self.current_tx_id.is_some() {
+            return Err(SqlError::ExecutionError(
+                "Transaction already in progress".to_string(),
+            ));
+        }
+
+        let transaction_statement = TransactionStatement::Begin {
+            work: false,
+            isolation_level: None,
+        };
+
+        let result = self
+            .transaction_manager
+            .begin_transaction_idempotent(key, &transaction_statement, isolation)
+            .map_err(|e| {
+                SqlError::ExecutionError(format!("Failed to begin idempotent transaction: {:?}", e))
+            })?;
+
+        match result {
+            IdempotentBeginResult::IdempotentSuccess { key } => {
+                Ok(ExecutorResult::new(vec![vec![Value::Text(key)]], 0))
+            }
+            IdempotentBeginResult::NewTransaction { tx_id } => {
+                self.current_tx_id = Some(tx_id);
+                Ok(ExecutorResult::new(
+                    vec![vec![Value::Integer(tx_id.as_u64() as i64)]],
+                    1,
+                ))
+            }
+        }
     }
 
     fn execute_grant(&mut self, grant: &GrantStatement) -> SqlResult<ExecutorResult> {
@@ -5356,5 +5398,42 @@ mod tests {
         let result = engine.execute("DESC users").unwrap();
         assert_eq!(result.rows.len(), 3);
         assert_eq!(result.rows[0][0], Value::Text("id".to_string()));
+    }
+
+    #[test]
+    fn test_begin_idempotent_new_transaction() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        let result = engine.execute("BEGIN IDEMPOTENT 'test-key-1'").unwrap();
+        assert_eq!(result.affected_rows, 1);
+        assert_eq!(result.rows.len(), 1);
+        assert!(matches!(result.rows[0][0], Value::Integer(_)));
+    }
+
+    #[test]
+    fn test_begin_idempotent_replay_after_commit() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        let result1 = engine.execute("BEGIN IDEMPOTENT 'test-key-2'").unwrap();
+        assert_eq!(result1.affected_rows, 1);
+
+        engine.execute("COMMIT").unwrap();
+
+        let result2 = engine.execute("BEGIN IDEMPOTENT 'test-key-2'").unwrap();
+        assert_eq!(result2.affected_rows, 0);
+        assert_eq!(result2.rows.len(), 1);
+        assert_eq!(result2.rows[0][0], Value::Text("test-key-2".to_string()));
+    }
+
+    #[test]
+    fn test_begin_idempotent_with_keyword() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        let result = engine.execute("BEGIN IDEMPOTENT KEY 'test-key-3'").unwrap();
+        assert_eq!(result.affected_rows, 1);
+        assert_eq!(result.rows.len(), 1);
     }
 }
