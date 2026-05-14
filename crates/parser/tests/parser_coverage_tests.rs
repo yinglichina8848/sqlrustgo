@@ -312,7 +312,11 @@ fn test_parse_intersect() {
     let sql = "SELECT id FROM users INTERSECT SELECT id FROM premium";
     let result = parse(sql);
     // INTERSECT is not fully implemented
-    assert!(result.is_err(), "INTERSECT should return error: {:?}", result);
+    assert!(
+        result.is_err(),
+        "INTERSECT should return error: {:?}",
+        result
+    );
 }
 
 // ============ Subquery Tests ============
