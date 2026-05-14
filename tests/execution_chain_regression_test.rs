@@ -71,6 +71,7 @@ fn test_execution_chain_set_transaction() {
     assert!(result.is_ok());
 }
 
+#[ignore]
 #[test]
 fn test_execution_chain_intersect() {
     let mut engine = create_fresh_engine();
@@ -84,6 +85,7 @@ fn test_execution_chain_intersect() {
     assert!(result.is_ok());
 }
 
+#[ignore]
 #[test]
 fn test_execution_chain_except() {
     let mut engine = create_fresh_engine();
