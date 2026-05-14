@@ -4,7 +4,9 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 
-fn create_engine_with_storage(storage: Arc<RwLock<MemoryStorage>>) -> ExecutionEngine<MemoryStorage> {
+fn create_engine_with_storage(
+    storage: Arc<RwLock<MemoryStorage>>,
+) -> ExecutionEngine<MemoryStorage> {
     ExecutionEngine::new(storage)
 }
 
@@ -34,7 +36,9 @@ fn test_for_update_equality_acquires_next_key_lock() {
     let tx1_handle = thread::spawn(move || {
         let mut engine = create_engine_with_storage(storage_tx1);
         engine.execute("BEGIN").unwrap();
-        assert!(engine.execute("SELECT * FROM t WHERE id = 5 FOR UPDATE").is_ok());
+        assert!(engine
+            .execute("SELECT * FROM t WHERE id = 5 FOR UPDATE")
+            .is_ok());
         thread::sleep(Duration::from_millis(100));
         engine.execute("COMMIT").unwrap();
     });
@@ -69,7 +73,9 @@ fn test_for_update_range_acquires_gap_lock() {
     let tx1_handle = thread::spawn(move || {
         let mut engine = create_engine_with_storage(storage_tx1);
         engine.execute("BEGIN").unwrap();
-        assert!(engine.execute("SELECT * FROM t WHERE id > 5 FOR UPDATE").is_ok());
+        assert!(engine
+            .execute("SELECT * FROM t WHERE id > 5 FOR UPDATE")
+            .is_ok());
         thread::sleep(Duration::from_millis(100));
         engine.execute("COMMIT").unwrap();
     });
@@ -104,7 +110,9 @@ fn test_for_update_less_than_acquires_gap_lock() {
     let tx1_handle = thread::spawn(move || {
         let mut engine = create_engine_with_storage(storage_tx1);
         engine.execute("BEGIN").unwrap();
-        assert!(engine.execute("SELECT * FROM t WHERE id < 10 FOR UPDATE").is_ok());
+        assert!(engine
+            .execute("SELECT * FROM t WHERE id < 10 FOR UPDATE")
+            .is_ok());
         thread::sleep(Duration::from_millis(100));
         engine.execute("COMMIT").unwrap();
     });
@@ -139,7 +147,9 @@ fn test_serializable_isolation_gap_locking() {
     let tx1_handle = thread::spawn(move || {
         let mut engine = create_engine_with_storage(storage_tx1);
         engine.execute("BEGIN SERIALIZABLE").unwrap();
-        assert!(engine.execute("SELECT * FROM t WHERE id > 5 FOR UPDATE").is_ok());
+        assert!(engine
+            .execute("SELECT * FROM t WHERE id > 5 FOR UPDATE")
+            .is_ok());
         thread::sleep(Duration::from_millis(100));
         engine.execute("COMMIT").unwrap();
     });
