@@ -162,7 +162,7 @@ check "R11: check_docs_links.sh --all" "bash scripts/gate/check_docs_links.sh --
 check_test "R-S1: integration tests" "bash scripts/test/run_integration.sh --quick" "R-S1"
 
 # ========== R-S2: Sysbench ==========
-check "R-S2: check_sysbench.sh" "bash scripts/gate/check_sysbench.sh" "R-S2"
+check "R-S2: check_sysbench.sh" "bash scripts/gate/check_sysbench.sh rc" "R-S2"
 
 # ========== R-S3: Fulltext Search ==========
 check_test "R-S3: fts_tests" "cargo test -p sqlrustgo-executor --test fts_tests 2>&1" "R-S3"
