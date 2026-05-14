@@ -436,7 +436,7 @@ fn current_timestamp() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_secs()
+        .as_millis() as u64
 }
 
 /// WAL reader
@@ -617,10 +617,7 @@ impl WalManager {
             key: None,
             data: None,
             lsn: writer.current_lsn(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
         };
 
         writer.append(&entry)
@@ -643,10 +640,7 @@ impl WalManager {
             key: Some(key),
             data: Some(data),
             lsn: writer.current_lsn(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
         };
 
         writer.append(&entry)
@@ -669,10 +663,7 @@ impl WalManager {
             key: Some(key),
             data: Some(data),
             lsn: writer.current_lsn(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
         };
 
         writer.append(&entry)
@@ -689,10 +680,7 @@ impl WalManager {
             key: Some(key),
             data: None,
             lsn: writer.current_lsn(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
         };
 
         writer.append(&entry)
@@ -709,10 +697,7 @@ impl WalManager {
             key: None,
             data: None,
             lsn: writer.current_lsn(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
         };
 
         writer.append(&entry)
@@ -1845,10 +1830,13 @@ mod tests {
         let _ = manager.log_insert(1, 1, vec![1], vec![10]).unwrap();
         let _ = manager.log_commit(1).unwrap();
 
+        // Ensure different millisecond timestamp
+        std::thread::sleep(std::time::Duration::from_millis(2));
+
         let ts1 = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_millis() as u64;
 
         let _ = manager.log_begin(2).unwrap();
         let _ = manager.log_insert(2, 1, vec![2], vec![20]).unwrap();
@@ -1857,7 +1845,7 @@ mod tests {
         let ts2 = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_millis() as u64;
 
         // Recover to ts1 - should only get first transaction
         let recovered = manager.recover_to_timestamp(ts1).unwrap();
@@ -1888,7 +1876,7 @@ mod tests {
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_millis() as u64;
 
         // Recover only table 1
         let recovered = manager.recover_table_to_timestamp(1, ts).unwrap();
