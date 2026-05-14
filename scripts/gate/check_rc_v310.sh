@@ -165,7 +165,7 @@ check_test "R-S1: integration tests" "bash scripts/test/run_integration.sh --qui
 check "R-S2: check_sysbench.sh" "bash scripts/gate/check_sysbench.sh" "R-S2"
 
 # ========== R-S3: Fulltext Search ==========
-check_test "R-S3: fulltext_search_test" "cargo test --test fulltext_search_test 2>&1" "R-S3"
+check_test "R-S3: fts_tests" "cargo test -p sqlrustgo-executor --test fts_tests 2>&1" "R-S3"
 
 # ========== R-S4: GIS Spatial ==========
 check_test "R-S4: gis_spatial_test" "cargo test --test gis_spatial_test 2>&1" "R-S4"
