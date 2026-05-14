@@ -31,7 +31,10 @@ use sqlrustgo_parser::{
     DeleteStatement, Expression, Statement, TransactionStatement, UpdateStatement,
 };
 use sqlrustgo_storage::{ColumnDefinition, MemoryStorage, StorageEngine, TableInfo};
-use sqlrustgo_transaction::{IsolationLevel as TmIsolationLevel, TransactionManager, TxId};
+use sqlrustgo_transaction::lock::LockGrantMode;
+use sqlrustgo_transaction::{
+    IsolationLevel as TmIsolationLevel, LockMode, LockTarget, TransactionManager, TxId,
+};
 use sqlrustgo_types::Value as SqlValue;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -513,7 +516,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     /// This avoids re-parsing on every execute for prepared statements
     pub fn execute_statement(&mut self, statement: Statement) -> SqlResult<ExecutorResult> {
         match statement {
-            Statement::Select(ref select) => self.execute_select(select),
+            Statement::Select(ref select) => {
+                if select.for_update {
+                    self.execute_select_for_update(select)
+                } else {
+                    self.execute_select(select)
+                }
+            }
             Statement::Insert(ref insert) => self.execute_insert(insert),
             Statement::Update(ref update) => self.execute_update(update),
             Statement::Delete(ref delete) => self.execute_delete(delete),
@@ -647,7 +656,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
     }
 
-    fn execute_select(&self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
+    fn execute_select(&mut self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
         let storage = self.storage.read().unwrap();
 
         if select.table.is_empty() {
@@ -828,6 +837,164 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         let row_count = limited_rows.len();
         Ok(ExecutorResult::new(limited_rows, row_count))
+    }
+
+    /// Execute SELECT with FOR UPDATE locking
+    /// Acquires row locks based on the WHERE clause:
+    /// - Equality (=): Next-Key lock on the key
+    /// - Range (>, <, >=, <=): Gap lock covering the range
+    fn execute_select_for_update(&mut self, select: &SelectStatement) -> SqlResult<ExecutorResult> {
+        // Get current transaction ID
+        let tx_id = match self.current_tx_id {
+            Some(id) => id,
+            None => {
+                return Err(SqlError::ExecutionError(
+                    "SELECT FOR UPDATE requires an active transaction".to_string(),
+                ));
+            }
+        };
+
+        // Determine lock target from WHERE clause
+        if let Some(ref where_expr) = select.where_clause {
+            // Try to extract lock target from WHERE clause
+            if let Some(target) = self.extract_lock_target_from_where(where_expr, &select.table)? {
+                // Acquire the lock
+                match self.transaction_manager.acquire_lock_with_target(
+                    tx_id,
+                    target.clone(),
+                    LockMode::Exclusive,
+                ) {
+                    Ok(LockGrantMode::Granted) => {
+                        // Lock acquired, proceed with SELECT
+                    }
+                    Ok(LockGrantMode::Waiting) => {
+                        return Err(SqlError::ExecutionError(
+                            "SELECT FOR UPDATE blocked by concurrent transaction (deadlock or timeout)"
+                                .to_string(),
+                        ));
+                    }
+                    Err(e) => {
+                        return Err(SqlError::ExecutionError(format!(
+                            "Failed to acquire FOR UPDATE lock: {}",
+                            e
+                        )));
+                    }
+                }
+            }
+        }
+
+        // Execute the regular SELECT (lock already acquired)
+        self.execute_select(select)
+    }
+
+    /// Extract LockTarget from WHERE clause for FOR UPDATE locking
+    /// Works with the parser's Expression type where operators are strings
+    fn extract_lock_target_from_where(
+        &self,
+        where_expr: &Expression,
+        _table_name: &str,
+    ) -> SqlResult<Option<LockTarget>> {
+        if let Expression::BinaryOp(left, op, right) = where_expr {
+            let op_upper = op.to_uppercase();
+            match op_upper.as_str() {
+                // Equality: WHERE id = 5 → Next-Key lock on key
+                "=" => {
+                    if let (Some(_col), Some(val)) =
+                        (self.extract_column(left), self.extract_literal(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        return Ok(Some(LockTarget::NextKey(key)));
+                    }
+                    if let (Some(val), Some(_col)) =
+                        (self.extract_literal(left), self.extract_column(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        return Ok(Some(LockTarget::NextKey(key)));
+                    }
+                }
+                // Range: WHERE id > 5 → Gap lock from key to +∞
+                ">" => {
+                    if let (Some(_col), Some(val)) =
+                        (self.extract_column(left), self.extract_literal(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        let start = Some(key);
+                        return Ok(Some(LockTarget::Gap { start, end: None }));
+                    }
+                }
+                // Range: WHERE id < 5 → Gap lock from -∞ to key
+                "<" => {
+                    if let (Some(val), Some(_col)) =
+                        (self.extract_literal(left), self.extract_column(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        let end = Some(key);
+                        return Ok(Some(LockTarget::Gap { start: None, end }));
+                    }
+                }
+                // Range: WHERE id >= 5 → Gap lock from key to +∞ (inclusive)
+                ">=" => {
+                    if let (Some(_col), Some(val)) =
+                        (self.extract_column(left), self.extract_literal(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        let start = Some(key);
+                        return Ok(Some(LockTarget::Gap { start, end: None }));
+                    }
+                }
+                // Range: WHERE id <= 5 → Gap lock from -∞ to key (inclusive)
+                "<=" => {
+                    if let (Some(val), Some(_col)) =
+                        (self.extract_literal(left), self.extract_column(right))
+                    {
+                        let key = self.literal_to_lock_key(&val)?;
+                        let end = Some(key);
+                        return Ok(Some(LockTarget::Gap { start: None, end }));
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Unable to extract lock target - return None (no specific locking)
+        Ok(None)
+    }
+
+    /// Extract column name from expression (parser's Identifier variant)
+    fn extract_column(&self, expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::Identifier(name) => Some(name.clone()),
+            _ => None,
+        }
+    }
+
+    /// Extract literal value string from expression (parser's Literal variant)
+    fn extract_literal(&self, expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::Literal(val) => Some(val.clone()),
+            _ => None,
+        }
+    }
+
+    /// Convert a parser literal string to a lock key (bytes)
+    fn literal_to_lock_key(&self, literal: &str) -> SqlResult<Vec<u8>> {
+        // Try to parse as integer first
+        if let Ok(n) = literal.parse::<i64>() {
+            return Ok(n.to_le_bytes().to_vec());
+        }
+        // Try to parse as float
+        if let Ok(f) = literal.parse::<f64>() {
+            return Ok(f.to_le_bytes().to_vec());
+        }
+        // Try to parse as boolean
+        match literal.to_uppercase().as_str() {
+            "TRUE" | "FALSE" | "1" | "0" => {
+                let b = literal.to_uppercase() == "TRUE" || literal == "1";
+                return Ok((b as u8).to_le_bytes().to_vec());
+            }
+            _ => {}
+        }
+        // Treat as text
+        Ok(literal.as_bytes().to_vec())
     }
 
     fn execute_information_schema_select(
@@ -1572,7 +1739,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
     }
 
-    fn execute_insert(&self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
+    fn execute_insert(&mut self, insert: &InsertStatement) -> SqlResult<ExecutorResult> {
         let table_name = insert.table.clone();
 
         // Get table info first (need it for triggers and FK validation)
@@ -3241,7 +3408,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         ))
     }
 
-    fn execute_explain(&self, explain: &ExplainStatement) -> SqlResult<ExecutorResult> {
+    fn execute_explain(&mut self, explain: &ExplainStatement) -> SqlResult<ExecutorResult> {
         let plan_desc = format!("{:?}", explain.statement);
         let mut rows = vec![
             vec![Value::Text("Query Plan".to_string())],
