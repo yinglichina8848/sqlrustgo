@@ -5122,7 +5122,8 @@ impl Parser {
                     Some(Token::Identifier(name)) => name,
                     _ => return Err("Expected table name".to_string()),
                 };
-                let pattern = if matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LIKE")
+                let pattern = if matches!(self.current(), Some(Token::Like))
+                    || matches!(self.current(), Some(Token::Identifier(ref ident)) if ident.to_uppercase() == "LIKE")
                 {
                     self.next();
                     match self.next() {

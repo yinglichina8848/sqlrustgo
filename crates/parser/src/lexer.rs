@@ -384,6 +384,7 @@ impl<'a> Lexer<'a> {
                     "WINDOW" => Token::Window,
                     "PARTITION" => Token::Partition,
                     "RANGE" => Token::Range,
+                    "LIKE" => Token::Like,
                     "LIST" => Token::List,
                     "FULLTEXT" => Token::Fulltext,
                     "IDEMPOTENCY" => Token::Idempotency,
