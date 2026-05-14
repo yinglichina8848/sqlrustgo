@@ -1446,6 +1446,25 @@ impl StorageEngine for FileStorage {
         Ok(())
     }
 
+    fn add_unique_constraint(
+        &mut self,
+        table: &str,
+        constraint: UniqueConstraint,
+    ) -> SqlResult<()> {
+        let table_data = {
+            if let Some(data) = self.tables.get_mut(table) {
+                data.info.unique_constraints.push(constraint);
+                Some(data.clone())
+            } else {
+                None
+            }
+        };
+        if let Some(td) = table_data {
+            self.save_table(table, &td)?;
+        }
+        Ok(())
+    }
+
     fn drop_index(&mut self, table: &str, column: &str) -> SqlResult<()> {
         let key = (table.to_string(), column.to_string());
 
