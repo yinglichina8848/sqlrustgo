@@ -14,6 +14,8 @@ use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
 use sqlrustgo_executor::ExecutorResult;
+use sqlrustgo_observability::observer::{Observable, ObservableEvent};
+use sqlrustgo_observability::tables::OBSERVABILITY;
 use sqlrustgo_observability::tables::{
     lock_wait_graph::LockWaitEdge, lock_wait_graph::LockWaitGraph,
     recovery_history::RecoveryHistory, recovery_history::RecoveryHistoryEntry,
@@ -47,32 +49,39 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub struct ObservabilityState {
-    pub transaction_history: RwLock<TransactionHistory>,
-    pub lock_wait_graph: RwLock<LockWaitGraph>,
-    pub recovery_history: RwLock<RecoveryHistory>,
-    pub wal_stats: RwLock<WalStatsCollector>,
-}
+pub struct ObservabilityRecorder;
 
-impl ObservabilityState {
-    fn new() -> Self {
-        Self {
-            transaction_history: RwLock::new(TransactionHistory::new(10000)),
-            lock_wait_graph: RwLock::new(LockWaitGraph::new()),
-            recovery_history: RwLock::new(RecoveryHistory::new(std::env::temp_dir(), 10000)),
-            wal_stats: RwLock::new(WalStatsCollector::new()),
+impl Observable for ObservabilityRecorder {
+    fn record(&self, event: ObservableEvent) {
+        match event {
+            ObservableEvent::BeginTransaction {
+                tx_id,
+                isolation: _,
+            } => {
+                if let Ok(mut history) = OBSERVABILITY.transaction_history.write() {
+                    let entry = TransactionHistoryEntry::new(tx_id, "SI".to_string());
+                    history.append(entry);
+                }
+            }
+            ObservableEvent::CommitTransaction {
+                tx_id,
+                timestamp: _,
+            } => {
+                if let Ok(mut history) = OBSERVABILITY.transaction_history.write() {
+                    history.update_status(tx_id, TransactionStatus::Committed);
+                }
+            }
+            ObservableEvent::AbortTransaction {
+                tx_id,
+                timestamp: _,
+            } => {
+                if let Ok(mut history) = OBSERVABILITY.transaction_history.write() {
+                    history.update_status(tx_id, TransactionStatus::Aborted);
+                }
+            }
+            _ => {}
         }
     }
-}
-
-impl Default for ObservabilityState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-lazy_static::lazy_static! {
-    pub static ref OBSERVABILITY: ObservabilityState = ObservabilityState::new();
 }
 
 /// Execution engine for SQL statements

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::lock::{LockGrantMode, LockManager, LockMode, LockTarget};
 use crate::mvcc::{Snapshot, TxId};
 use crate::ssi::{SsiDetectorSync, SsiError};
+use sqlrustgo_observability::tables::OBSERVABILITY;
 
 /// Transaction isolation level
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -100,6 +101,15 @@ impl TransactionManager {
 
         let active_tx = ActiveTransaction::new(tx_id, snapshot);
         self.active_transactions.insert(tx_id, active_tx);
+
+        if let Ok(mut history) = OBSERVABILITY.transaction_history.write() {
+            let entry =
+                sqlrustgo_observability::tables::transaction_history::TransactionHistoryEntry::new(
+                    tx_id.as_u64(),
+                    format!("{:?}", isolation),
+                );
+            history.append(entry);
+        }
 
         Ok(tx_id)
     }
@@ -216,6 +226,13 @@ impl TransactionManager {
         self.lock_manager.release_all_locks_full(tx_id).ok();
         self.active_transactions.remove(&tx_id);
 
+        if let Ok(mut history) = OBSERVABILITY.transaction_history.write() {
+            history.update_status(
+                tx_id.as_u64(),
+                sqlrustgo_observability::tables::transaction_history::TransactionStatus::Committed,
+            );
+        }
+
         Ok(())
     }
 
@@ -228,13 +245,16 @@ impl TransactionManager {
         self.lock_manager.release_all_locks_full(tx_id).ok();
         self.active_transactions.remove(&tx_id);
 
+        if let Ok(mut history) = OBSERVABILITY.transaction_history.write() {
+            history.update_status(
+                tx_id.as_u64(),
+                sqlrustgo_observability::tables::transaction_history::TransactionStatus::Aborted,
+            );
+        }
+
         Ok(())
     }
 
-    /// Abort (rollback) a transaction
-    ///
-    /// # Arguments
-    /// * `tx_id` - Transaction ID to abort
     pub fn abort(&mut self, tx_id: TxId) -> Result<(), SsiError> {
         if let Some(active_tx) = self.active_transactions.get_mut(&tx_id) {
             active_tx.state = TransactionState::Aborted;
@@ -243,6 +263,13 @@ impl TransactionManager {
         self.ssi_detector.release(tx_id);
         self.lock_manager.release_all_locks_full(tx_id).ok();
         self.active_transactions.remove(&tx_id);
+
+        if let Ok(mut history) = OBSERVABILITY.transaction_history.write() {
+            history.update_status(
+                tx_id.as_u64(),
+                sqlrustgo_observability::tables::transaction_history::TransactionStatus::Aborted,
+            );
+        }
 
         Ok(())
     }
