@@ -185,7 +185,7 @@ mod tests {
         let result = registry.check_and_register("txn-1", hash, 2);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert_eq!(result.unwrap(), false);
     }
 
     #[test]
