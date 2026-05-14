@@ -13,6 +13,7 @@
 //!
 //! Supports Snapshot Isolation, Repeatable Read, and Serializable isolation levels.
 
+pub mod audit;
 pub mod deadlock;
 pub mod dtc;
 pub mod gid;
