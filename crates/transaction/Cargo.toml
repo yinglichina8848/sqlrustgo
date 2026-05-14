@@ -12,6 +12,7 @@ serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
 tokio.workspace = true
+hex.workspace = true
 uuid = { version = "1.0", features = ["v4", "serde"] }
 sha2 = "0.10"
 ed25519-dalek = "2.1"

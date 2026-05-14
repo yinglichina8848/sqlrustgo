@@ -5,4 +5,4 @@ mod wal;
 mod tests;
 
 pub use registry::{IdempotencyError, IdempotencyRegistry, IdempotencyState, IdempotencyRecord};
-pub use wal::IdempotencyWalAdapter;
+pub use wal::{IdempotencyWalAdapter, WalEntry};
