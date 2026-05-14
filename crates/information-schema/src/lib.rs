@@ -706,6 +706,32 @@ impl<'a> InformationSchema<'a> {
         Vec::new()
     }
 
+    pub fn get_transaction_history(
+        &self,
+        limit: Option<usize>,
+    ) -> Vec<performance_schema::TransactionHistoryRow> {
+        performance_schema::PerformanceSchema::get_transaction_history_rows(limit)
+    }
+
+    pub fn get_lock_waits(&self) -> Vec<performance_schema::LockWaitRow> {
+        performance_schema::PerformanceSchema::get_lock_wait_rows()
+    }
+
+    pub fn get_recovery_history(
+        &self,
+        limit: Option<usize>,
+    ) -> Vec<performance_schema::RecoveryHistoryRow> {
+        performance_schema::PerformanceSchema::get_recovery_history_rows(limit)
+    }
+
+    pub fn get_wal_stats(&self) -> performance_schema::WalStatsRow {
+        performance_schema::PerformanceSchema::get_wal_stats()
+    }
+
+    pub fn detect_deadlocks(&self) -> Vec<Vec<u64>> {
+        performance_schema::PerformanceSchema::detect_deadlocks()
+    }
+
     fn fk_action_to_string(action: &Option<sqlrustgo_catalog::ForeignKeyAction>) -> String {
         match action {
             Some(sqlrustgo_catalog::ForeignKeyAction::Cascade) => "CASCADE".to_string(),
@@ -716,6 +742,8 @@ impl<'a> InformationSchema<'a> {
         }
     }
 }
+
+pub mod performance_schema;
 
 #[cfg(test)]
 mod tests {

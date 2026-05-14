@@ -2676,9 +2676,11 @@ dependencies = [
 name = "information-schema"
 version = "0.1.0"
 dependencies = [
+ "lazy_static",
  "serde",
  "sqlrustgo",
  "sqlrustgo-catalog",
+ "sqlrustgo-observability",
  "sqlrustgo-storage",
  "thiserror 1.0.69",
 ]
@@ -5171,6 +5173,7 @@ name = "sqlrustgo-observability"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "lazy_static",
  "serde",
  "sqlrustgo-types",
  "uuid",

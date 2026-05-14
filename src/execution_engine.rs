@@ -14,6 +14,7 @@ use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
 use sqlrustgo_executor::ExecutorResult;
+use sqlrustgo_observability::observability_state::{OBSERVABILITY, ObservabilityState};
 use sqlrustgo_observability::tables::{
     lock_wait_graph::LockWaitEdge, lock_wait_graph::LockWaitGraph,
     recovery_history::RecoveryHistory, recovery_history::RecoveryHistoryEntry,
@@ -46,34 +47,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-pub struct ObservabilityState {
-    pub transaction_history: RwLock<TransactionHistory>,
-    pub lock_wait_graph: RwLock<LockWaitGraph>,
-    pub recovery_history: RwLock<RecoveryHistory>,
-    pub wal_stats: RwLock<WalStatsCollector>,
-}
-
-impl ObservabilityState {
-    fn new() -> Self {
-        Self {
-            transaction_history: RwLock::new(TransactionHistory::new(10000)),
-            lock_wait_graph: RwLock::new(LockWaitGraph::new()),
-            recovery_history: RwLock::new(RecoveryHistory::new(std::env::temp_dir(), 10000)),
-            wal_stats: RwLock::new(WalStatsCollector::new()),
-        }
-    }
-}
-
-impl Default for ObservabilityState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-lazy_static::lazy_static! {
-    pub static ref OBSERVABILITY: ObservabilityState = ObservabilityState::new();
-}
 
 /// Execution engine for SQL statements
 pub struct ExecutionEngine<S: StorageEngine> {
