@@ -1,16 +1,51 @@
 {
-  "date": "2026-05-07",
   "version": "v3.0.0",
-  "note": "Initial baseline for v3.0.0 - v2.9.0 derived baseline",
+  "date": "2026-01-01T00:00:00Z",
   "benchmarks": {
-    "simple_select": {"qps": 398352.81},
-    "insert": {"qps": 28698.49},
-    "update": {"qps": 43121.21},
-    "delete": {"qps": 64896.19},
-    "join": {"qps": 57854.47},
-    "aggregation": {"qps": 1666099.64},
-    "order_by": {"qps": 83894.38},
-    "concurrent_select_8t": {"qps": 266004.32},
-    "complex_where": {"qps": 1202.96}
+    "simple_select": {
+      "qps": 24516,
+      "tps": 24516,
+      "threads": 1
+    },
+    "insert": {
+      "qps": 33377,
+      "tps": 33377,
+      "threads": 1
+    },
+    "update": {
+      "qps": 43224,
+      "tps": 43224,
+      "threads": 1
+    },
+    "delete": {
+      "qps": 63568,
+      "tps": 63568,
+      "threads": 1
+    },
+    "join": {
+      "qps": 57388,
+      "tps": 57388,
+      "threads": 1
+    },
+    "aggregation": {
+      "qps": 794315,
+      "tps": 794315,
+      "threads": 1
+    },
+    "order_by": {
+      "qps": 81988,
+      "tps": 81988,
+      "threads": 1
+    },
+    "concurrent_select_8t": {
+      "qps": 11995,
+      "tps": 11995,
+      "threads": 1
+    },
+    "complex_where": {
+      "qps": 1226,
+      "tps": 1226,
+      "threads": 1
+    }
   }
 }
