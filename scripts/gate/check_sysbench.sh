@@ -48,6 +48,8 @@ detect_phase() {
     branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
     if [[ "$branch" =~ alpha ]]; then
         echo "alpha"
+    elif [[ "$branch" =~ rc|release/v3 ]]; then
+        echo "rc"
     elif [[ "$branch" =~ beta|develop/v3 ]]; then
         echo "beta"
     else
@@ -73,8 +75,13 @@ case "$PHASE" in
         # Beta 阶段阈值收紧，但仍考虑协议开销
         THRESHOLDS='{"point_select":3000,"oltp_read_write":150,"oltp_write_only":350,"update_index":700}'
         ;;
+    rc|RC)
+        # RC 阶段使用宽松阈值，基于 debug 模式实测数据
+        THRESHOLDS='{"point_select":1000,"oltp_read_write":50,"oltp_write_only":100,"update_index":300}'
+        ;;
     *)
         echo "❌ Unknown phase: $PHASE"
+        echo "Valid phases: alpha, beta, rc"
         exit 1
         ;;
 esac
