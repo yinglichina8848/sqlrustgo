@@ -22,3 +22,33 @@ pub use parser::{
     UpdateStatement, VacuumMode, VacuumStatement, WithClause, WithSelect,
 };
 pub use transaction::TransactionStatement;
+
+#[cfg(test)]
+mod coverage_tests_v2 {
+    include!("tests_preprocessed/coverage_increase_v2.rs");
+}
+
+#[cfg(test)]
+mod coverage_tests_v3 {
+    include!("tests_preprocessed/coverage_increase_v3.rs");
+}
+
+#[cfg(test)]
+mod coverage_tests_v4 {
+    include!("tests_preprocessed/coverage_increase_v4.rs");
+}
+
+#[cfg(test)]
+mod coverage_tests_v5 {
+    include!("tests_preprocessed/coverage_increase_v5.rs");
+}
+
+#[cfg(test)]
+mod coverage_tests_v6 {
+    include!("tests_preprocessed/coverage_increase_v6.rs");
+}
+
+#[cfg(test)]
+mod coverage_tests_v7 {
+    include!("tests_preprocessed/coverage_increase_v7.rs");
+}

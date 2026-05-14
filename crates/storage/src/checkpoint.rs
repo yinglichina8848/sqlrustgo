@@ -2,6 +2,7 @@
 //!
 //! Provides periodic checkpoint generation and management for WAL.
 
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
@@ -9,7 +10,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
 /// Checkpoint metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckpointMetadata {
     /// Checkpoint LSN
     pub lsn: u64,

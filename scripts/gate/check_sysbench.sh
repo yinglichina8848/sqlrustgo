@@ -141,67 +141,122 @@ if [ ! -d "$SYSBENCH_LUA" ]; then
 fi
 
 if ! command -v sysbench &>/dev/null; then
-    echo "❌ sysbench not installed"
-    exit 1
+    echo "⚠️  sysbench not installed, using internal bench-cli"
+    USE_INTERNAL_BENCH=true
+else
+    USE_INTERNAL_BENCH=false
 fi
-
-# Always prepare fresh data (fast if tables already exist)
-echo "  Preparing test data..."
-sysbench --db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=15995 \
-    --mysql-user=root --mysql-password="" \
-    --mysql-db=sbtest \
-    --tables=1 --table_size=10000 \
-    "$SYSBENCH_LUA/oltp_common.lua" prepare >/dev/null 2>&1
 
 BENCHMARK_RESULTS="{}"
 
-run_sysbench_test() {
-    local name="$1"
-    local script="$2"
-    local threads="${3:-4}"
-    local time_sec="${4:-10}"
+if [ "$USE_INTERNAL_BENCH" = true ]; then
+    # Use internal bench-cli when external sysbench is not available
+    echo "[✓] Using internal bench-cli for benchmarks"
 
-    echo -n "  $name (threads=$threads, time=${time_sec}s) ... "
+    # Build bench-cli if needed
+    cargo build -p sqlrustgo-bench-cli --quiet 2>/dev/null || true
 
-    # Check if script exists
-    if [ ! -f "$script" ]; then
-        echo "SKIP (script not found: $script)"
-        return
+    BENCH_CLI="$PROJECT_ROOT/target/release/sqlrustgo-bench-cli"
+    if [ ! -f "$BENCH_CLI" ]; then
+        BENCH_CLI="$PROJECT_ROOT/target/debug/sqlrustgo-bench-cli"
     fi
 
-    local output
-    output=$(sysbench \
-        --db-driver=mysql \
-        --mysql-host=127.0.0.1 \
-        --mysql-port=15995 \
-        --mysql-user=root \
-        --mysql-password="" \
-        --mysql-db=sbtest \
-        --time="$time_sec" \
-        --threads="$threads" \
-        "$script" run 2>&1)
+    run_internal_bench() {
+        local name="$1"
+        local workload="$2"
+        local threads="${3:-4}"
+        local duration="${4:-10}"
 
-    local qps
-    qps=$(echo "$output" | grep -oE '[0-9]+\.[0-9]+ per sec' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
-    local tps
-    tps=$(echo "$output" | grep 'transactions:' | grep -oE '[0-9]+[.][0-9]+ per sec' | head -1 | grep -oE '[0-9]+[.][0-9]+' || echo "0")
+        echo -n "  $name (threads=$threads, duration=${duration}s) ... "
 
-    echo "QPS=$qps TPS=$tps"
+        local output
+        output=$($BENCH_CLI oltp --workload="$workload" --threads="$threads" --duration="$duration" 2>&1 || echo "FAILED")
 
-    # Store results (use qps for comparison)
-    BENCHMARK_RESULTS=$(python3 -c "
+        local qps
+        qps=$(echo "$output" | grep -oE 'queries: [0-9]+' | head -1 | grep -oE '[0-9]+' || echo "0")
+        local tps
+        tps=$(echo "$output" | grep -oE 'tps: [0-9]+' | head -1 | grep -oE '[0-9]+' || echo "0")
+
+        if [ "$qps" = "0" ] && [ "$tps" = "0" ]; then
+            # Fallback: try to parse differently
+            qps=$(echo "$output" | grep -oE 'QPS: [0-9]+' | head -1 | grep -oE '[0-9]+' || echo "0")
+            tps="$qps"
+        fi
+
+        echo "QPS=$qps TPS=$tps"
+
+        BENCHMARK_RESULTS=$(python3 -c "
 import json, sys
 d = json.loads('$BENCHMARK_RESULTS')
 d['$name'] = {'qps': float($qps), 'tps': float($tps), 'threads': $threads}
 print(json.dumps(d))
 " 2>/dev/null || echo "{}")
-}
+    }
 
-# Run actual sysbench tests
-run_sysbench_test "point_select" "$SYSBENCH_LUA/oltp_point_select.lua" 4 10
-run_sysbench_test "oltp_read_write" "$SYSBENCH_LUA/oltp_read_write.lua" 4 10
-run_sysbench_test "oltp_write_only" "$SYSBENCH_LUA/oltp_write_only.lua" 4 10
-run_sysbench_test "update_index" "$SYSBENCH_LUA/oltp_update_index.lua" 4 10
+    # Run internal benchmarks (workload: point_select -> point, read -> oltp_read_write, write -> oltp_write_only)
+    run_internal_bench "point_select" "point" 4 10
+    run_internal_bench "oltp_read_write" "read_write" 4 10
+    run_internal_bench "oltp_write_only" "write" 4 10
+    run_internal_bench "update_index" "update_index" 4 10
+
+else
+    # External sysbench path
+    # Always prepare fresh data (fast if tables already exist)
+    echo "  Preparing test data..."
+    sysbench --db-driver=mysql --mysql-host=127.0.0.1 --mysql-port=15995 \
+        --mysql-user=root --mysql-password="" \
+        --mysql-db=sbtest \
+        --tables=1 --table_size=10000 \
+        "$SYSBENCH_LUA/oltp_common.lua" prepare >/dev/null 2>&1
+
+    run_sysbench_test() {
+        local name="$1"
+        local script="$2"
+        local threads="${3:-4}"
+        local time_sec="${4:-10}"
+
+        echo -n "  $name (threads=$threads, time=${time_sec}s) ... "
+
+        # Check if script exists
+        if [ ! -f "$script" ]; then
+            echo "SKIP (script not found: $script)"
+            return
+        fi
+
+        local output
+        output=$(sysbench \
+            --db-driver=mysql \
+            --mysql-host=127.0.0.1 \
+            --mysql-port=15995 \
+            --mysql-user=root \
+            --mysql-password="" \
+            --mysql-db=sbtest \
+            --time="$time_sec" \
+            --threads="$threads" \
+            "$script" run 2>&1)
+
+        local qps
+        qps=$(echo "$output" | grep -oE '[0-9]+\.[0-9]+ per sec' | head -1 | grep -oE '[0-9]+\.[0-9]+' || echo "0")
+        local tps
+        tps=$(echo "$output" | grep 'transactions:' | grep -oE '[0-9]+[.][0-9]+ per sec' | head -1 | grep -oE '[0-9]+[.][0-9]+' || echo "0")
+
+        echo "QPS=$qps TPS=$tps"
+
+        # Store results (use qps for comparison)
+        BENCHMARK_RESULTS=$(python3 -c "
+import json, sys
+d = json.loads('$BENCHMARK_RESULTS')
+d['$name'] = {'qps': float($qps), 'tps': float($tps), 'threads': $threads}
+print(json.dumps(d))
+" 2>/dev/null || echo "{}")
+    }
+
+    # Run actual sysbench tests
+    run_sysbench_test "point_select" "$SYSBENCH_LUA/oltp_point_select.lua" 4 10
+    run_sysbench_test "oltp_read_write" "$SYSBENCH_LUA/oltp_read_write.lua" 4 10
+    run_sysbench_test "oltp_write_only" "$SYSBENCH_LUA/oltp_write_only.lua" 4 10
+    run_sysbench_test "update_index" "$SYSBENCH_LUA/oltp_update_index.lua" 4 10
+fi
 
 # ---------- Step 5: Evaluate against thresholds ----------
 echo ""

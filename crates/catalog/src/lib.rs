@@ -19,6 +19,7 @@ pub mod data_type;
 pub mod error;
 pub mod event;
 pub mod index;
+pub mod migration;
 pub mod rebuild;
 pub mod schema;
 pub mod stored_proc;
@@ -31,6 +32,10 @@ pub use column::ColumnDefinition;
 pub use data_type::DataType;
 pub use error::{CatalogError, CatalogResult};
 pub use event::{Event, EventSchedule};
+pub use migration::{
+    DdlRecovery, DdlRollback, MigrationEntry, MigrationLog, MigrationStatus, MigrationType,
+    RollbackResult,
+};
 pub use stored_proc::{
     HandlerCondition, ParamMode, StoredProcParam, StoredProcStatement, StoredProcedure,
 };

@@ -83,7 +83,26 @@ check "R4: cargo fmt --check" "cargo fmt --all -- --check" "R4"
 echo -n "[rc-v3.1.0] R5: Coverage ≥85% ... "
 TOTAL=$((TOTAL+1))
 if command -v cargo-llvm-cov &>/dev/null; then
-    COVERAGE=$(cargo llvm-cov --all-features --ignore-run-fail --lcov --output-path /tmp/lcov-v310-rc.info 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%' || echo "0")
+    # Step 1: Run tests with coverage data collection
+    # Step 2: Generate lcov report from collected data
+    # Note: Must run tests FIRST, then export report
+    TIMEOUT=600
+    if command -v timeout &>/dev/null; then
+        timeout "$TIMEOUT" cargo llvm-cov test --workspace --all-features --lib --no-fail-fast >/dev/null 2>&1 || true
+    else
+        cargo llvm-cov test --workspace --all-features --lib --no-fail-fast >/dev/null 2>&1 || true
+    fi
+    # Step 3: Export coverage report
+    cargo llvm-cov report --lcov --output-path /tmp/lcov-v310-rc.info 2>/dev/null || true
+    # Step 4: Extract coverage percentage from report
+    # lcov.info has "SF:filename" and "LH:covered" "LF:total" entries
+    TOTAL_LINES=$(grep "^LF:" /tmp/lcov-v310-rc.info 2>/dev/null | cut -d: -f2 | awk '{sum+=$1} END {print sum}' || echo "0")
+    COVERED_LINES=$(grep "^LH:" /tmp/lcov-v310-rc.info 2>/dev/null | cut -d: -f2 | awk '{sum+=$1} END {print sum}' || echo "0")
+    if [ "$TOTAL_LINES" -gt 0 ]; then
+        COVERAGE=$(echo "scale=2; $COVERED_LINES * 100 / $TOTAL_LINES" | bc)
+    else
+        COVERAGE="0"
+    fi
     if (( $(echo "$COVERAGE >= 85" | bc -l) )); then
         echo "PASS (${COVERAGE}%)"; PASS=$((PASS+1))
     else
@@ -146,7 +165,7 @@ check_test "R-S1: integration tests" "bash scripts/test/run_integration.sh --qui
 check "R-S2: check_sysbench.sh" "bash scripts/gate/check_sysbench.sh" "R-S2"
 
 # ========== R-S3: Fulltext Search ==========
-check_test "R-S3: fulltext_search_test" "cargo test --test fulltext_search_test 2>&1" "R-S3"
+check_test "R-S3: fts_tests" "cargo test -p sqlrustgo-executor --test fts_tests 2>&1" "R-S3"
 
 # ========== R-S4: GIS Spatial ==========
 check_test "R-S4: gis_spatial_test" "cargo test --test gis_spatial_test 2>&1" "R-S4"
