@@ -41,7 +41,9 @@ cd "$PROJECT_ROOT"
 detect_version() {
     local branch
     branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
-    if [[ "$branch" =~ "develop/v3" ]] || [[ "$branch" =~ "v3.0" ]]; then
+    if [[ "$branch" =~ "develop/v3.1" ]] || [[ "$branch" =~ "v3.1" ]]; then
+        echo "v3.1.0"
+    elif [[ "$branch" =~ "develop/v3" ]] || [[ "$branch" =~ "v3.0" ]]; then
         echo "v3.0.0"
     elif [[ "$branch" =~ "develop/v2.9" ]] || [[ "$branch" =~ "v2.9" ]]; then
         echo "v2.9.0"
@@ -119,6 +121,10 @@ if [ "$SKIP_RUN" = false ]; then
     COMPLEX_WHERE=$(cargo test --release --test qps_benchmark_test test_qps_complex_where -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${COMPLEX_WHERE:-N/A} qps"
 
+    echo "[10/10] Running benchmark: insert_prepared..."
+    INSERT_PREPARED=$(cargo test --release --test qps_benchmark_test test_qps_insert_prepared -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    echo "     -> ${INSERT_PREPARED:-N/A} qps"
+
     # Write current results
     cat > "$RESULT_FILE" << JSONEOF
 {
@@ -133,7 +139,8 @@ if [ "$SKIP_RUN" = false ]; then
     "aggregation": ${AGG:-0},
     "order_by": ${ORDER_BY:-0},
     "concurrent_select_8t": ${CONC_SELECT:-0},
-    "complex_where": ${COMPLEX_WHERE:-0}
+    "complex_where": ${COMPLEX_WHERE:-0},
+    "insert_prepared": ${INSERT_PREPARED:-0}
   }
 }
 JSONEOF
@@ -235,7 +242,7 @@ compare_benchmark() {
 }
 
 # Extract baseline values and compare
-for bench in simple_select insert update delete join aggregation order_by concurrent_select_8t complex_where; do
+for bench in simple_select insert update delete join aggregation order_by concurrent_select_8t complex_where insert_prepared; do
     baseline_val=$(python3 -c "import json; d=json.load(open('$BASELINE_FILE')); print(d['benchmarks']['$bench']['qps'])" 2>/dev/null || echo "null")
     current_val=$(python3 -c "import json; d=json.load(open('$RESULT_FILE')); print(d['benchmarks']['$bench'])" 2>/dev/null || echo "0")
     compare_benchmark "$bench" "$baseline_val" "$current_val"
