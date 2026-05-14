@@ -39,7 +39,6 @@ fn setup_table_b(engine: &mut ExecutionEngine<MemoryStorage>) {
 // =============================================================================
 
 #[test]
-#[ignore]
 fn test_intersect_basic() {
     let mut engine = create_engine();
     setup_table_a(&mut engine);
@@ -54,7 +53,6 @@ fn test_intersect_basic() {
 }
 
 #[test]
-#[ignore]
 fn test_intersect_multiple_columns() {
     let mut engine = create_engine();
     engine
@@ -80,7 +78,6 @@ fn test_intersect_multiple_columns() {
 }
 
 #[test]
-#[ignore]
 fn test_intersect_with_nulls() {
     let mut engine = create_engine();
     engine
@@ -108,7 +105,6 @@ fn test_intersect_with_nulls() {
 }
 
 #[test]
-#[ignore]
 fn test_intersect_all() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t_a (v INTEGER)").unwrap();
@@ -131,7 +127,6 @@ fn test_intersect_all() {
 // =============================================================================
 
 #[test]
-#[ignore]
 fn test_except_basic() {
     let mut engine = create_engine();
     setup_table_a(&mut engine);
@@ -146,7 +141,6 @@ fn test_except_basic() {
 }
 
 #[test]
-#[ignore]
 fn test_except_multiple_columns() {
     let mut engine = create_engine();
     engine
@@ -171,7 +165,6 @@ fn test_except_multiple_columns() {
 }
 
 #[test]
-#[ignore]
 fn test_except_all() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t_c (v INTEGER)").unwrap();
@@ -193,7 +186,6 @@ fn test_except_all() {
 // =============================================================================
 
 #[test]
-#[ignore]
 fn test_minus_basic() {
     let mut engine = create_engine();
     setup_table_a(&mut engine);
@@ -208,7 +200,6 @@ fn test_minus_basic() {
 }
 
 #[test]
-#[ignore]
 fn test_minus_semantics() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t_left (v INTEGER)").unwrap();
@@ -233,7 +224,6 @@ fn test_minus_semantics() {
 // =============================================================================
 
 #[test]
-#[ignore]
 fn test_set_operations_precedence() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t_x (v INTEGER)").unwrap();
@@ -255,7 +245,6 @@ fn test_set_operations_precedence() {
 }
 
 #[test]
-#[ignore]
 fn test_intersect_except_combined() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE set_a (v INTEGER)").unwrap();
@@ -283,7 +272,6 @@ fn test_intersect_except_combined() {
 }
 
 #[test]
-#[ignore]
 fn test_set_ops_with_subqueries() {
     let mut engine = create_engine();
     setup_table_a(&mut engine);

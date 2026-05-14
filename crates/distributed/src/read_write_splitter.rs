@@ -125,6 +125,8 @@ impl ReadWriteSplitter {
             sqlrustgo_parser::Statement::Explain(_) => QueryClass::Read,
             sqlrustgo_parser::Statement::Call(_) => QueryClass::Read,
             sqlrustgo_parser::Statement::Union(_) => QueryClass::Read,
+            sqlrustgo_parser::Statement::Intersect(_) => QueryClass::Read,
+            sqlrustgo_parser::Statement::Except(_) => QueryClass::Read,
             sqlrustgo_parser::Statement::WithSelect(_) => QueryClass::Read,
             // Write queries
             sqlrustgo_parser::Statement::Insert(_) => QueryClass::Write,

@@ -498,7 +498,12 @@ impl SimpleCostModel {
                 (input_cost * 1.1).max(1.0)
             }
             UnifiedPlan::Projection { input, .. } => self.estimate_cost_for_plan(input),
-            UnifiedPlan::Join { left, right, join_type, .. } => {
+            UnifiedPlan::Join {
+                left,
+                right,
+                join_type,
+                ..
+            } => {
                 let left_rows = left.estimate_cardinality();
                 let right_rows = right.estimate_cardinality();
                 let method = match join_type {
@@ -507,7 +512,9 @@ impl SimpleCostModel {
                 };
                 self.join_cost(left_rows, right_rows, method)
             }
-            UnifiedPlan::Aggregate { input, group_by, .. } => {
+            UnifiedPlan::Aggregate {
+                input, group_by, ..
+            } => {
                 let rows = input.estimate_cardinality();
                 self.agg_cost(rows, group_by.len() as u32)
             }
@@ -522,7 +529,8 @@ impl SimpleCostModel {
             UnifiedPlan::EmptyRelation => 0.0,
             _ => {
                 let rows = plan.estimate_cardinality();
-                self.seq_scan_cost(rows, (rows as f64 / 100.0).ceil() as u64).total()
+                self.seq_scan_cost(rows, (rows as f64 / 100.0).ceil() as u64)
+                    .total()
             }
         }
     }
@@ -853,8 +861,8 @@ mod tests {
 
     #[test]
     fn test_cbo_estimate_cost_with_unified_plan_index_scan() {
-        use super::unified_plan::UnifiedPlan;
         use super::rules::JoinType;
+        use super::unified_plan::UnifiedPlan;
         let model = SimpleCostModel::new();
         let plan = UnifiedPlan::IndexScan {
             table_name: "users".to_string(),
@@ -867,8 +875,8 @@ mod tests {
 
     #[test]
     fn test_cbo_estimate_cost_with_unified_plan_filter() {
-        use super::unified_plan::UnifiedPlan;
         use super::rules::Expr;
+        use super::unified_plan::UnifiedPlan;
         let model = SimpleCostModel::new();
         let inner = UnifiedPlan::TableScan {
             table_name: "users".to_string(),
@@ -884,8 +892,8 @@ mod tests {
 
     #[test]
     fn test_cbo_estimate_cost_with_unified_plan_join() {
-        use super::unified_plan::UnifiedPlan;
         use super::rules::JoinType;
+        use super::unified_plan::UnifiedPlan;
         let model = SimpleCostModel::new();
         let left = UnifiedPlan::TableScan {
             table_name: "users".to_string(),
@@ -907,8 +915,8 @@ mod tests {
 
     #[test]
     fn test_cbo_estimate_cost_with_unified_plan_aggregate() {
-        use super::unified_plan::UnifiedPlan;
         use super::rules::Expr;
+        use super::unified_plan::UnifiedPlan;
         let model = SimpleCostModel::new();
         let input = UnifiedPlan::TableScan {
             table_name: "users".to_string(),
@@ -925,8 +933,8 @@ mod tests {
 
     #[test]
     fn test_cbo_estimate_cost_with_unified_plan_sort() {
-        use super::unified_plan::UnifiedPlan;
         use super::rules::Expr;
+        use super::unified_plan::UnifiedPlan;
         let model = SimpleCostModel::new();
         let input = UnifiedPlan::TableScan {
             table_name: "users".to_string(),
@@ -965,8 +973,8 @@ mod tests {
 
     #[test]
     fn test_cbo_optimizer_with_unified_plan() {
-        use super::unified_plan::UnifiedPlan;
         use super::rules::JoinType;
+        use super::unified_plan::UnifiedPlan;
         let cbo = CboOptimizer::new();
         let plan = UnifiedPlan::Join {
             left: Box::new(UnifiedPlan::TableScan {
