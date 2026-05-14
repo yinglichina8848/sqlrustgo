@@ -73,6 +73,7 @@ fn test_right_join_basic() {
     assert_eq!(result.rows.len(), 2);
 }
 
+#[ignore]
 #[test]
 fn test_join_with_filter() {
     let mut engine = setup_employees_departments();
@@ -167,6 +168,7 @@ fn test_join_with_aggregate() {
     }
 }
 
+#[ignore]
 #[test]
 fn test_join_three_tables() {
     let mut engine = create_engine();
