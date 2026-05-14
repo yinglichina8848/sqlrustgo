@@ -42,8 +42,12 @@ fn test_ntile_with_partition() {
     engine
         .execute("ALTER TABLE class ADD COLUMN department TEXT")
         .unwrap();
-    engine.execute("UPDATE class SET department = 'Science' WHERE id <= 3").unwrap();
-    engine.execute("UPDATE class SET department = 'Arts' WHERE id > 3").unwrap();
+    engine
+        .execute("UPDATE class SET department = 'Science' WHERE id <= 3")
+        .unwrap();
+    engine
+        .execute("UPDATE class SET department = 'Arts' WHERE id > 3")
+        .unwrap();
 
     let result = engine
         .execute(
@@ -76,9 +80,15 @@ fn test_ntile_with_null_score() {
     engine
         .execute("CREATE TABLE test_nulls (id INTEGER, val INTEGER)")
         .unwrap();
-    engine.execute("INSERT INTO test_nulls VALUES (1, 10)").unwrap();
-    engine.execute("INSERT INTO test_nulls VALUES (2, NULL)").unwrap();
-    engine.execute("INSERT INTO test_nulls VALUES (3, 20)").unwrap();
+    engine
+        .execute("INSERT INTO test_nulls VALUES (1, 10)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO test_nulls VALUES (2, NULL)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO test_nulls VALUES (3, 20)")
+        .unwrap();
 
     let result = engine
         .execute("SELECT NTILE(2) OVER (ORDER BY val) FROM test_nulls")
@@ -130,9 +140,15 @@ fn test_lead_with_null_offset() {
     engine
         .execute("CREATE TABLE same_values (id INTEGER, val INTEGER)")
         .unwrap();
-    engine.execute("INSERT INTO same_values VALUES (1, 10)").unwrap();
-    engine.execute("INSERT INTO same_values VALUES (2, 10)").unwrap();
-    engine.execute("INSERT INTO same_values VALUES (3, 10)").unwrap();
+    engine
+        .execute("INSERT INTO same_values VALUES (1, 10)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO same_values VALUES (2, 10)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO same_values VALUES (3, 10)")
+        .unwrap();
 
     let result = engine
         .execute("SELECT LEAD(val) OVER (ORDER BY id) FROM same_values")
@@ -179,9 +195,7 @@ fn test_lag_with_large_offset() {
     setup_student_data(&mut engine);
 
     let result = engine
-        .execute(
-            "SELECT name, LAG(name, 10) OVER (ORDER BY score) as prev_student FROM class",
-        )
+        .execute("SELECT name, LAG(name, 10) OVER (ORDER BY score) as prev_student FROM class")
         .unwrap();
 
     assert_eq!(result.rows.len(), 5);
@@ -215,9 +229,15 @@ fn test_first_value_with_partition() {
     engine
         .execute("CREATE TABLE sales (id INTEGER, region TEXT, q1 INTEGER, q2 INTEGER)")
         .unwrap();
-    engine.execute("INSERT INTO sales VALUES (1, 'North', 100, 200)").unwrap();
-    engine.execute("INSERT INTO sales VALUES (2, 'North', 150, 180)").unwrap();
-    engine.execute("INSERT INTO sales VALUES (3, 'South', 300, 250)").unwrap();
+    engine
+        .execute("INSERT INTO sales VALUES (1, 'North', 100, 200)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO sales VALUES (2, 'North', 150, 180)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO sales VALUES (3, 'South', 300, 250)")
+        .unwrap();
 
     let result = engine
         .execute(
@@ -235,9 +255,7 @@ fn test_last_value_with_order_by() {
     setup_student_data(&mut engine);
 
     let result = engine
-        .execute(
-            "SELECT name, LAST_VALUE(name) OVER (ORDER BY score) as last_student FROM class",
-        )
+        .execute("SELECT name, LAST_VALUE(name) OVER (ORDER BY score) as last_student FROM class")
         .unwrap();
 
     assert_eq!(result.rows.len(), 5);
@@ -267,9 +285,7 @@ fn test_nth_value_second_row() {
     setup_student_data(&mut engine);
 
     let result = engine
-        .execute(
-            "SELECT name, NTH_VALUE(score, 2) OVER (ORDER BY id) as second_score FROM class",
-        )
+        .execute("SELECT name, NTH_VALUE(score, 2) OVER (ORDER BY id) as second_score FROM class")
         .unwrap();
 
     assert_eq!(result.rows.len(), 5);
@@ -282,9 +298,7 @@ fn test_nth_value_out_of_range() {
     setup_student_data(&mut engine);
 
     let result = engine
-        .execute(
-            "SELECT NTH_VALUE(score, 10) OVER (ORDER BY id) FROM class",
-        )
+        .execute("SELECT NTH_VALUE(score, 10) OVER (ORDER BY id) FROM class")
         .unwrap();
 
     assert_eq!(result.rows.len(), 5);
@@ -298,10 +312,18 @@ fn test_nth_value_with_partition() {
     engine
         .execute("CREATE TABLE ranked (id INTEGER, grp TEXT, val INTEGER)")
         .unwrap();
-    engine.execute("INSERT INTO ranked VALUES (1, 'A', 10)").unwrap();
-    engine.execute("INSERT INTO ranked VALUES (2, 'A', 20)").unwrap();
-    engine.execute("INSERT INTO ranked VALUES (3, 'B', 30)").unwrap();
-    engine.execute("INSERT INTO ranked VALUES (4, 'B', 40)").unwrap();
+    engine
+        .execute("INSERT INTO ranked VALUES (1, 'A', 10)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO ranked VALUES (2, 'A', 20)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO ranked VALUES (3, 'B', 30)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO ranked VALUES (4, 'B', 40)")
+        .unwrap();
 
     let result = engine
         .execute(
@@ -337,8 +359,9 @@ fn test_all_window_functions_combined() {
     let mut engine = create_engine();
     setup_student_data(&mut engine);
 
-    let result = engine.execute(
-        "SELECT name, \
+    let result = engine
+        .execute(
+            "SELECT name, \
          NTILE(4) OVER (ORDER BY score) as quartile, \
          LEAD(name, 1) OVER (ORDER BY score) as next_student, \
          LAG(name, 1, 'N/A') OVER (ORDER BY score) as prev_student, \
@@ -346,7 +369,8 @@ fn test_all_window_functions_combined() {
          LAST_VALUE(score) OVER (ORDER BY score) as max_score, \
          NTH_VALUE(score, 2) OVER (ORDER BY score) as second_score \
          FROM class",
-    ).unwrap();
+        )
+        .unwrap();
 
     assert_eq!(result.rows.len(), 5);
 }

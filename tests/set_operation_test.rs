@@ -13,16 +13,24 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 }
 
 fn setup_table_a(engine: &mut ExecutionEngine<MemoryStorage>) {
-    engine.execute("CREATE TABLE t1 (a INTEGER, b TEXT)").unwrap();
+    engine
+        .execute("CREATE TABLE t1 (a INTEGER, b TEXT)")
+        .unwrap();
     engine.execute("INSERT INTO t1 VALUES (1, 'one')").unwrap();
     engine.execute("INSERT INTO t1 VALUES (2, 'two')").unwrap();
-    engine.execute("INSERT INTO t1 VALUES (3, 'three')").unwrap();
+    engine
+        .execute("INSERT INTO t1 VALUES (3, 'three')")
+        .unwrap();
 }
 
 fn setup_table_b(engine: &mut ExecutionEngine<MemoryStorage>) {
-    engine.execute("CREATE TABLE t2 (c INTEGER, d TEXT)").unwrap();
+    engine
+        .execute("CREATE TABLE t2 (c INTEGER, d TEXT)")
+        .unwrap();
     engine.execute("INSERT INTO t2 VALUES (2, 'two')").unwrap();
-    engine.execute("INSERT INTO t2 VALUES (3, 'three')").unwrap();
+    engine
+        .execute("INSERT INTO t2 VALUES (3, 'three')")
+        .unwrap();
     engine.execute("INSERT INTO t2 VALUES (4, 'four')").unwrap();
 }
 
@@ -38,41 +46,65 @@ fn test_intersect_basic() {
     setup_table_b(&mut engine);
 
     let result = engine.execute("SELECT a FROM t1 INTERSECT SELECT c FROM t2");
-    assert!(result.is_ok(), "INTERSECT should parse and execute: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "INTERSECT should parse and execute: {:?}",
+        result
+    );
 }
 
 #[test]
 #[ignore]
 fn test_intersect_multiple_columns() {
     let mut engine = create_engine();
-    engine.execute("CREATE TABLE t3 (x INTEGER, y TEXT)").unwrap();
+    engine
+        .execute("CREATE TABLE t3 (x INTEGER, y TEXT)")
+        .unwrap();
     engine.execute("INSERT INTO t3 VALUES (1, 'a')").unwrap();
     engine.execute("INSERT INTO t3 VALUES (2, 'b')").unwrap();
     engine.execute("INSERT INTO t3 VALUES (3, 'c')").unwrap();
 
-    engine.execute("CREATE TABLE t4 (p INTEGER, q TEXT)").unwrap();
+    engine
+        .execute("CREATE TABLE t4 (p INTEGER, q TEXT)")
+        .unwrap();
     engine.execute("INSERT INTO t4 VALUES (1, 'a')").unwrap();
     engine.execute("INSERT INTO t4 VALUES (2, 'b')").unwrap();
     engine.execute("INSERT INTO t4 VALUES (4, 'd')").unwrap();
 
     let result = engine.execute("SELECT x, y FROM t3 INTERSECT SELECT p, q FROM t4");
-    assert!(result.is_ok(), "Multi-column INTERSECT should work: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Multi-column INTERSECT should work: {:?}",
+        result
+    );
 }
 
 #[test]
 #[ignore]
 fn test_intersect_with_nulls() {
     let mut engine = create_engine();
-    engine.execute("CREATE TABLE t_nulls1 (id INTEGER)").unwrap();
+    engine
+        .execute("CREATE TABLE t_nulls1 (id INTEGER)")
+        .unwrap();
     engine.execute("INSERT INTO t_nulls1 VALUES (1)").unwrap();
-    engine.execute("INSERT INTO t_nulls1 VALUES (NULL)").unwrap();
+    engine
+        .execute("INSERT INTO t_nulls1 VALUES (NULL)")
+        .unwrap();
 
-    engine.execute("CREATE TABLE t_nulls2 (id INTEGER)").unwrap();
-    engine.execute("INSERT INTO t_nulls2 VALUES (NULL)").unwrap();
+    engine
+        .execute("CREATE TABLE t_nulls2 (id INTEGER)")
+        .unwrap();
+    engine
+        .execute("INSERT INTO t_nulls2 VALUES (NULL)")
+        .unwrap();
     engine.execute("INSERT INTO t_nulls2 VALUES (2)").unwrap();
 
     let result = engine.execute("SELECT id FROM t_nulls1 INTERSECT SELECT id FROM t_nulls2");
-    assert!(result.is_ok(), "INTERSECT with NULLs should work: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "INTERSECT with NULLs should work: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -106,24 +138,36 @@ fn test_except_basic() {
     setup_table_b(&mut engine);
 
     let result = engine.execute("SELECT a FROM t1 EXCEPT SELECT c FROM t2");
-    assert!(result.is_ok(), "EXCEPT should parse and execute: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "EXCEPT should parse and execute: {:?}",
+        result
+    );
 }
 
 #[test]
 #[ignore]
 fn test_except_multiple_columns() {
     let mut engine = create_engine();
-    engine.execute("CREATE TABLE t5 (x INTEGER, y TEXT)").unwrap();
+    engine
+        .execute("CREATE TABLE t5 (x INTEGER, y TEXT)")
+        .unwrap();
     engine.execute("INSERT INTO t5 VALUES (1, 'a')").unwrap();
     engine.execute("INSERT INTO t5 VALUES (2, 'b')").unwrap();
     engine.execute("INSERT INTO t5 VALUES (3, 'c')").unwrap();
 
-    engine.execute("CREATE TABLE t6 (p INTEGER, q TEXT)").unwrap();
+    engine
+        .execute("CREATE TABLE t6 (p INTEGER, q TEXT)")
+        .unwrap();
     engine.execute("INSERT INTO t6 VALUES (1, 'a')").unwrap();
     engine.execute("INSERT INTO t6 VALUES (2, 'b')").unwrap();
 
     let result = engine.execute("SELECT x, y FROM t5 EXCEPT SELECT p, q FROM t6");
-    assert!(result.is_ok(), "Multi-column EXCEPT should work: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Multi-column EXCEPT should work: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -156,7 +200,11 @@ fn test_minus_basic() {
     setup_table_b(&mut engine);
 
     let result = engine.execute("SELECT a FROM t1 MINUS SELECT c FROM t2");
-    assert!(result.is_ok(), "MINUS should parse and execute: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "MINUS should parse and execute: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -173,7 +221,11 @@ fn test_minus_semantics() {
     engine.execute("INSERT INTO t_right VALUES (40)").unwrap();
 
     let result = engine.execute("SELECT v FROM t_left MINUS SELECT v FROM t_right");
-    assert!(result.is_ok(), "MINUS should return rows 10 and 30: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "MINUS should return rows 10 and 30: {:?}",
+        result
+    );
 }
 
 // =============================================================================
@@ -195,7 +247,11 @@ fn test_set_operations_precedence() {
     engine.execute("INSERT INTO t_y VALUES (4)").unwrap();
 
     let result = engine.execute("SELECT v FROM t_x INTERSECT SELECT v FROM t_y");
-    assert!(result.is_ok(), "Set operation precedence should work: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Set operation precedence should work: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -217,8 +273,13 @@ fn test_intersect_except_combined() {
     engine.execute("INSERT INTO set_c VALUES (4)").unwrap();
     engine.execute("INSERT INTO set_c VALUES (5)").unwrap();
 
-    let result = engine.execute("SELECT v FROM set_a INTERSECT SELECT v FROM set_b EXCEPT SELECT v FROM set_c");
-    assert!(result.is_ok(), "Combined set operations should work: {:?}", result);
+    let result = engine
+        .execute("SELECT v FROM set_a INTERSECT SELECT v FROM set_b EXCEPT SELECT v FROM set_c");
+    assert!(
+        result.is_ok(),
+        "Combined set operations should work: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -231,5 +292,9 @@ fn test_set_ops_with_subqueries() {
     let result = engine.execute(
         "SELECT a FROM (SELECT a FROM t1 UNION SELECT c FROM t2) AS combined INTERSECT SELECT c FROM t2"
     );
-    assert!(result.is_ok(), "Set operations with subqueries should work: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Set operations with subqueries should work: {:?}",
+        result
+    );
 }
