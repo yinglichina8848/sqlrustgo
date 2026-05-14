@@ -248,6 +248,7 @@ pub enum Token {
     Semicolon,
     Colon,
     SingleQuote,
+    QuestionMark, // Prepared statement parameter: ?
 
     // Wildcard
     Star, // * for SELECT *
@@ -480,6 +481,7 @@ impl fmt::Display for Token {
             Token::Semicolon => write!(f, ";"),
             Token::Colon => write!(f, ":"),
             Token::SingleQuote => write!(f, "'"),
+            Token::QuestionMark => write!(f, "?"),
             Token::Star => write!(f, "*"),
             Token::Eof => write!(f, "EOF"),
         }
