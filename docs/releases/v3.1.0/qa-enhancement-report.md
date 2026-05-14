@@ -13,8 +13,8 @@
 
 ## Gate Results
 
-- **PASS**: 6
-- **SKIP**: 0
+- **PASS**: 4
+- **SKIP**: 2
 - **FAIL**: 0
 
 ## New Gate Scripts
@@ -75,4 +75,4 @@ Report: docs/releases/v3.1.0/mutation_testing_report.md
 
 ## Date
 
-2026-05-14T16:50:59Z
+2026-05-14T17:31:49Z
