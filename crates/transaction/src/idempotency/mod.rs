@@ -4,5 +4,5 @@ mod wal;
 #[cfg(test)]
 mod tests;
 
-pub use registry::{IdempotencyError, IdempotencyRegistry, IdempotencyState, IdempotencyRecord};
+pub use registry::{IdempotencyError, IdempotencyRecord, IdempotencyRegistry, IdempotencyState};
 pub use wal::{IdempotencyWalAdapter, WalEntry};
