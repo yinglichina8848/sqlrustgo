@@ -248,4 +248,34 @@ Issue #877 需要开发完整实现 + 测试 + 门禁集成。
 
 ---
 
+## 七、RC/GA Gate 扩展完成 (PR #945)
+
+### 添加内容
+
+**RC Gate (R-S6~R-S9)**:
+
+| 检查项 | 测试 | PR |
+|--------|------|-----|
+| R-S6 | concurrency_stress_test | #945 |
+| R-S7 | crash_recovery_test | #945 |
+| R-S8 | ssi_stress_test | #945 |
+| R-S9 | merge_execution_test | #945 |
+
+**GA Gate (G14 自动化)**:
+
+| 检查项 | 测试 | PR |
+|--------|------|-----|
+| G-S1 | long_run_stability_test | #945 |
+| G-S2 | wal_integration_test | #945 |
+
+### 门禁体系完整视图
+
+| Gate | 压力/稳定性测试 |
+|------|----------------|
+| Beta (B-S1~B-S6) | concurrency_stress, crash_recovery, long_run_stability, wal_integration, network_tcp, ssi_stress |
+| RC (R-S6~R-S9) | concurrency_stress, crash_recovery, ssi_stress, merge_execution |
+| GA (G-S1~G-S2) | long_run_stability, wal_integration |
+
+---
+
 *更新时间: 2026-05-15*
