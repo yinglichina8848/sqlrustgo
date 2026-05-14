@@ -1154,18 +1154,18 @@ impl Parser {
         };
         if self.current() == Some(&Token::Idempotent) {
             self.next();
-            let key = if self.current() == Some(&Token::Idempotency) {
+            let key: String = if self.current() == Some(&Token::Idempotency) {
                 self.next();
                 self.expect(Token::Key)?;
                 match self.next() {
-                    Some(Token::StringLiteral(s)) => s,
-                    Some(Token::Identifier(s)) => s,
+                    Some(Token::StringLiteral(s)) => s.clone(),
+                    Some(Token::Identifier(s)) => s.clone(),
                     _ => return Err("Expected idempotency key string".to_string()),
                 }
             } else {
                 match self.current() {
-                    Some(Token::StringLiteral(s)) => s,
-                    Some(Token::Identifier(s)) => s,
+                    Some(Token::StringLiteral(s)) => s.clone(),
+                    Some(Token::Identifier(s)) => s.clone(),
                     _ => return Err("Expected idempotency key".to_string()),
                 }
             };
