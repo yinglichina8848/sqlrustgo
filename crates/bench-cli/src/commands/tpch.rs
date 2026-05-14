@@ -1,7 +1,7 @@
 use crate::cli::TpchArgs;
+use crate::commands::tpch_data::generate_tpch_data;
 use crate::metrics::LatencyCollector;
 use crate::reporter::{BenchmarkResult, QueryResult};
-use crate::commands::tpch_data::generate_tpch_data;
 use sqlrustgo::ExecutionEngine;
 use sqlrustgo_storage::MemoryStorage;
 use std::sync::{Arc, RwLock};
