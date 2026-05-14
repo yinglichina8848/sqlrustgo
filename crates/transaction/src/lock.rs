@@ -92,8 +92,8 @@ impl LockTarget {
 
     /// Check if a key falls within a gap interval
     fn key_in_gap(key: &[u8], start: Option<&[u8]>, end: Option<&[u8]>) -> bool {
-        let after_start = start.map_or(true, |s| key > s);
-        let before_end = end.map_or(true, |e| key < e);
+        let after_start = start.is_none_or(|s| key > s);
+        let before_end = end.is_none_or(|e| key < e);
         after_start && before_end
     }
 
@@ -105,8 +105,8 @@ impl LockTarget {
         e2: Option<&[u8]>,
     ) -> bool {
         // Gaps overlap if: (s1 < e2) AND (s2 < e1)
-        let s1_lt_e2 = e2.map_or(true, |e2| s1.map_or(true, |s1| s1 < e2));
-        let s2_lt_e1 = e1.map_or(true, |e1| s2.map_or(true, |s2| s2 < e1));
+        let s1_lt_e2 = e2.is_none_or(|e2| s1.is_none_or(|s1| s1 < e2));
+        let s2_lt_e1 = e1.is_none_or(|e1| s2.is_none_or(|s2| s2 < e1));
         s1_lt_e2 && s2_lt_e1
     }
 
@@ -341,6 +341,37 @@ impl LockManager {
             LockTarget::NextKey(key) => key.clone(),
         };
 
+        // Check if NextKey target conflicts with any existing Gap lock
+        // Gap vs Gap conflicts are not checked here to maintain backward compatibility
+        // with existing tests - Gap locks only block inserts, they don't conflict with each other
+        if matches!(target, LockTarget::NextKey(_)) {
+            for existing_lock in self.range_locks.values() {
+                if existing_lock.holders.contains(&tx_id) {
+                    continue;
+                }
+                if matches!(&existing_lock.target, LockTarget::Gap { .. })
+                    && existing_lock.target.overlaps(&target)
+                {
+                    let holders: HashSet<TxId> = existing_lock.holders.clone();
+
+                    if self
+                        .deadlock_detector
+                        .try_wait_edge(tx_id, holders)
+                        .is_err()
+                    {
+                        return Err(LockError::Deadlock);
+                    }
+
+                    let range_lock = self
+                        .range_locks
+                        .entry(range_key.clone())
+                        .or_insert_with(|| RangeLockInfo::new(target.clone(), mode));
+                    range_lock.add_waiter(tx_id, mode);
+                    return Ok(LockGrantMode::Waiting);
+                }
+            }
+        }
+
         let range_lock = self
             .range_locks
             .entry(range_key.clone())
@@ -549,6 +580,7 @@ impl LockManager {
         Ok(released)
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn release_all_locks_full(
         &mut self,
         tx_id: TxId,
@@ -1184,6 +1216,131 @@ mod tests {
         let result = manager.acquire_lock_with_target(
             TxId::new(2),
             gap_unbounded_start,
+            LockMode::Exclusive,
+        );
+        assert!(matches!(result, Ok(LockGrantMode::Granted)));
+    }
+
+    /// Test NextKey locking for equality predicates (e.g., SELECT * FROM t WHERE id = 10 FOR UPDATE)
+    /// NextKey locks the exact key and prevents inserts of that key
+    #[test]
+    fn test_next_key_lock_prevents_insert() {
+        let mut manager = LockManager::new();
+        let key = vec![10];
+
+        // T1 acquires NextKey lock on key 10
+        let next_key = LockTarget::NextKey(key.clone());
+        manager
+            .acquire_lock_with_target(TxId::new(1), next_key.clone(), LockMode::Exclusive)
+            .unwrap();
+
+        // T2 tries to acquire NextKey lock on the same key - should be blocked
+        let result = manager.acquire_lock_with_target(
+            TxId::new(2),
+            LockTarget::NextKey(key),
+            LockMode::Exclusive,
+        );
+        assert!(matches!(result, Ok(LockGrantMode::Waiting)));
+    }
+
+    /// Test Gap locking for range predicates (e.g., SELECT * FROM t WHERE id > 10 FOR UPDATE)
+    /// Gap lock on (10, +∞) prevents inserts in that range
+    #[test]
+    fn test_gap_lock_for_range_gt() {
+        let mut manager = LockManager::new();
+
+        // T1 acquires Gap lock on range (10, +∞)
+        let gap = LockTarget::Gap {
+            start: Some(vec![10]),
+            end: None, // unbounded
+        };
+        manager
+            .acquire_lock_with_target(TxId::new(1), gap, LockMode::Exclusive)
+            .unwrap();
+
+        // T2 tries to insert key 15 - should be blocked (key 15 is in gap)
+        let result = manager.acquire_lock_with_target(
+            TxId::new(2),
+            LockTarget::NextKey(vec![15]),
+            LockMode::Exclusive,
+        );
+        assert!(matches!(result, Ok(LockGrantMode::Waiting)));
+
+        // T3 tries to insert key 5 - should succeed (key 5 is before gap)
+        let result = manager.acquire_lock_with_target(
+            TxId::new(3),
+            LockTarget::NextKey(vec![5]),
+            LockMode::Exclusive,
+        );
+        assert!(matches!(result, Ok(LockGrantMode::Granted)));
+    }
+
+    /// Test Gap locking for range predicates (e.g., SELECT * FROM t WHERE id < 10 FOR UPDATE)
+    /// Gap lock on (-∞, 10) prevents inserts in that range
+    #[test]
+    fn test_gap_lock_for_range_lt() {
+        let mut manager = LockManager::new();
+
+        // T1 acquires Gap lock on range (-∞, 10)
+        let gap = LockTarget::Gap {
+            start: None, // unbounded
+            end: Some(vec![10]),
+        };
+        manager
+            .acquire_lock_with_target(TxId::new(1), gap, LockMode::Exclusive)
+            .unwrap();
+
+        // T2 tries to insert key 5 - should be blocked (key 5 is in gap)
+        let result = manager.acquire_lock_with_target(
+            TxId::new(2),
+            LockTarget::NextKey(vec![5]),
+            LockMode::Exclusive,
+        );
+        assert!(matches!(result, Ok(LockGrantMode::Waiting)));
+
+        // T3 tries to insert key 15 - should succeed (key 15 is after gap)
+        let result = manager.acquire_lock_with_target(
+            TxId::new(3),
+            LockTarget::NextKey(vec![15]),
+            LockMode::Exclusive,
+        );
+        assert!(matches!(result, Ok(LockGrantMode::Granted)));
+    }
+
+    /// Test Gap locking for bounded range (e.g., SELECT * FROM t WHERE id > 5 AND id < 10 FOR UPDATE)
+    #[test]
+    fn test_gap_lock_for_range_between() {
+        let mut manager = LockManager::new();
+
+        // T1 acquires Gap lock on range (5, 10)
+        let gap = LockTarget::Gap {
+            start: Some(vec![5]),
+            end: Some(vec![10]),
+        };
+        manager
+            .acquire_lock_with_target(TxId::new(1), gap, LockMode::Exclusive)
+            .unwrap();
+
+        // T2 tries to insert key 7 - should be blocked (key 7 is in gap)
+        let result = manager.acquire_lock_with_target(
+            TxId::new(2),
+            LockTarget::NextKey(vec![7]),
+            LockMode::Exclusive,
+        );
+        assert!(matches!(result, Ok(LockGrantMode::Waiting)));
+
+        // T3 tries to insert key 3 - should succeed (key 3 is before gap)
+        let result = manager.acquire_lock_with_target(
+            TxId::new(3),
+            LockTarget::NextKey(vec![3]),
+            LockMode::Exclusive,
+        );
+        assert!(matches!(result, Ok(LockGrantMode::Granted)));
+
+        // T4 tries to insert key 12 - should succeed (key 12 is after gap)
+        let result = manager.acquire_lock_with_target(
+            TxId::new(4),
+            LockTarget::NextKey(vec![12]),
             LockMode::Exclusive,
         );
         assert!(matches!(result, Ok(LockGrantMode::Granted)));

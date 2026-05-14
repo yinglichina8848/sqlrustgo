@@ -459,12 +459,12 @@ pub struct SelectColumn {
 pub struct InsertStatement {
     pub table: String,
     pub columns: Vec<String>,
-    pub values: Vec<Vec<Expression>>,         // For INSERT VALUES
-    pub select: Option<Box<Statement>>,      // For INSERT SELECT (includes UNION)
-    pub is_replace: bool,                     // For REPLACE INTO (MySQL compatibility)
+    pub values: Vec<Vec<Expression>>,   // For INSERT VALUES
+    pub select: Option<Box<Statement>>, // For INSERT SELECT (includes UNION)
+    pub is_replace: bool,               // For REPLACE INTO (MySQL compatibility)
     pub on_duplicate_key_update: Option<Vec<(String, Expression)>>, // For ON DUPLICATE KEY UPDATE
     pub on_conflict: Option<OnConflictClause>, // For ON CONFLICT (PostgreSQL)
-    pub with_clause: Option<WithClause>,      // For WITH ... INSERT
+    pub with_clause: Option<WithClause>, // For WITH ... INSERT
 }
 
 /// ON CONFLICT clause for PostgreSQL UPSERT syntax

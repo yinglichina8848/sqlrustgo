@@ -4,6 +4,8 @@ use crate::executor::{ExecutorResult, VolcanoExecutor};
 use crate::scan::{IndexScanable, ScanExecutor, ScanStats};
 use sqlrustgo_planner::{Expr, Operator, Schema};
 use sqlrustgo_storage::{predicate::Predicate, StorageEngine};
+use sqlrustgo_transaction::lock_manager::LockManager;
+use sqlrustgo_transaction::{LockGrantMode, LockMode, LockTarget, TxId};
 use sqlrustgo_types::{SqlResult, Value};
 use std::any::Any;
 use std::sync::Arc;
@@ -18,6 +20,10 @@ pub struct IndexScanVolcanoExecutor<S: StorageEngine> {
     rows: Vec<Vec<Value>>,
     position: usize,
     schema: Schema,
+    for_update: bool,
+    lock_manager: Option<Arc<LockManager>>,
+    tx_id: Option<TxId>,
+    acquired_locks: Vec<LockTarget>,
 }
 
 impl<S: StorageEngine> IndexScanVolcanoExecutor<S> {
@@ -36,7 +42,62 @@ impl<S: StorageEngine> IndexScanVolcanoExecutor<S> {
             rows: Vec::new(),
             position: 0,
             schema,
+            for_update: false,
+            lock_manager: None,
+            tx_id: None,
+            acquired_locks: Vec::new(),
         }
+    }
+
+    pub fn with_for_update(
+        mut self,
+        for_update: bool,
+        lock_manager: Option<Arc<LockManager>>,
+        tx_id: Option<TxId>,
+    ) -> Self {
+        self.for_update = for_update;
+        self.lock_manager = lock_manager;
+        self.tx_id = tx_id;
+        self
+    }
+
+    fn acquire_gap_lock(&mut self, start: i64, end: i64) -> SqlResult<()> {
+        if let (Some(lock_mgr), Some(tx)) = (&self.lock_manager, &self.tx_id) {
+            let gap_target = LockTarget::Gap {
+                start: Some(start.to_le_bytes().to_vec()),
+                end: Some(end.to_le_bytes().to_vec()),
+            };
+            match lock_mgr.acquire_lock_with_target(*tx, gap_target.clone(), LockMode::Exclusive) {
+                Ok(LockGrantMode::Granted) => {
+                    self.acquired_locks.push(gap_target);
+                }
+                Ok(LockGrantMode::Waiting) => {
+                    return Err("Lock acquisition requires waiting - deadlock or timeout".into());
+                }
+                Err(e) => {
+                    return Err(format!("Failed to acquire gap lock: {}", e).into());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn acquire_next_key_lock(&mut self, key: i64) -> SqlResult<()> {
+        if let (Some(lock_mgr), Some(tx)) = (&self.lock_manager, &self.tx_id) {
+            let next_key_target = LockTarget::NextKey(key.to_le_bytes().to_vec());
+            match lock_mgr.acquire_lock_with_target(*tx, next_key_target.clone(), LockMode::Exclusive) {
+                Ok(LockGrantMode::Granted) => {
+                    self.acquired_locks.push(next_key_target);
+                }
+                Ok(LockGrantMode::Waiting) => {
+                    return Err("Lock acquisition requires waiting - deadlock or timeout".into());
+                }
+                Err(e) => {
+                    return Err(format!("Failed to acquire next-key lock: {}", e).into());
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -50,10 +111,14 @@ impl<S: StorageEngine + 'static> VolcanoExecutor for IndexScanVolcanoExecutor<S>
             } => {
                 let col: String = extract_column_value(left, right)?.0;
                 self.column = col.clone();
+                let val = extract_column_value(left, right)?.1;
+                if self.for_update {
+                    self.acquire_next_key_lock(val)?;
+                }
                 self.storage.search_index(
                     &self.table_name,
                     &col,
-                    extract_column_value(left, right)?.1,
+                    val,
                 )
             }
             Expr::BinaryExpr {
@@ -64,7 +129,9 @@ impl<S: StorageEngine + 'static> VolcanoExecutor for IndexScanVolcanoExecutor<S>
                 let col: String = extract_column_value(left, right)?.0;
                 self.column = col.clone();
                 let val: i64 = extract_column_value(left, right)?.1;
-                // id > value means range (value+1, +infinity)
+                if self.for_update {
+                    self.acquire_gap_lock(val + 1, i64::MAX)?;
+                }
                 self.storage
                     .range_index(&self.table_name, &col, val + 1, i64::MAX)
             }
@@ -76,7 +143,9 @@ impl<S: StorageEngine + 'static> VolcanoExecutor for IndexScanVolcanoExecutor<S>
                 let col: String = extract_column_value(left, right)?.0;
                 self.column = col.clone();
                 let val: i64 = extract_column_value(left, right)?.1;
-                // id < value means range (-infinity, value-1)
+                if self.for_update {
+                    self.acquire_gap_lock(i64::MIN, val - 1)?;
+                }
                 self.storage
                     .range_index(&self.table_name, &col, i64::MIN, val - 1)
             }
@@ -88,7 +157,9 @@ impl<S: StorageEngine + 'static> VolcanoExecutor for IndexScanVolcanoExecutor<S>
                 let col: String = extract_column_value(left, right)?.0;
                 self.column = col.clone();
                 let val: i64 = extract_column_value(left, right)?.1;
-                // id >= value means range [value, +infinity)
+                if self.for_update {
+                    self.acquire_gap_lock(val, i64::MAX)?;
+                }
                 self.storage
                     .range_index(&self.table_name, &col, val, i64::MAX)
             }
@@ -100,7 +171,9 @@ impl<S: StorageEngine + 'static> VolcanoExecutor for IndexScanVolcanoExecutor<S>
                 let col: String = extract_column_value(left, right)?.0;
                 self.column = col.clone();
                 let val: i64 = extract_column_value(left, right)?.1;
-                // id <= value means range (-infinity, value]
+                if self.for_update {
+                    self.acquire_gap_lock(i64::MIN, val)?;
+                }
                 self.storage
                     .range_index(&self.table_name, &col, i64::MIN, val)
             }
@@ -128,6 +201,17 @@ impl<S: StorageEngine + 'static> VolcanoExecutor for IndexScanVolcanoExecutor<S>
     }
 
     fn close(&mut self) -> SqlResult<()> {
+        if let (Some(lock_mgr), Some(tx)) = (&self.lock_manager, &self.tx_id) {
+            for lock_target in &self.acquired_locks {
+                let range_key = match lock_target {
+                    LockTarget::Gap { start, .. } => start.clone().unwrap_or_else(Vec::new),
+                    LockTarget::NextKey(key) => key.clone(),
+                    LockTarget::Record(key) => key.clone(),
+                };
+                let _ = lock_mgr.release_range_lock(*tx, &range_key);
+            }
+            self.acquired_locks.clear();
+        }
         self.rows.clear();
         self.position = 0;
         Ok(())

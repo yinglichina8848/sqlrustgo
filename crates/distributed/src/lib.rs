@@ -33,6 +33,7 @@ pub mod shard_manager;
 pub mod shard_router;
 pub mod two_phase_commit;
 pub mod xa_coordinator;
+pub mod xa_mvcc_bridge;
 
 pub use consensus::{Operation, ShardReplicaManager};
 pub use cross_shard_query::{CrossShardQueryExecutor, QueryRouter};
@@ -72,4 +73,5 @@ pub use shard_router::{
 pub use two_phase_commit::{
     DistributedTransaction, Participant, TransactionState, TwoPhaseCommit, Vote,
 };
-pub use xa_coordinator::{XaCoordinator, XaError, XaState, XaTransaction, Xid};
+pub use xa_coordinator::{XaCoordinator, XaError, XaRecoverRow, XaState, XaTransaction, Xid};
+pub use xa_mvcc_bridge::{XaBridge, XaMvccBridge};

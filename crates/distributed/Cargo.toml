@@ -25,6 +25,7 @@ http = "1.0"
 tower = "0.5"
 rand = "0.8"
 sqlrustgo-parser = { path = "../parser" }
+sqlrustgo-transaction = { path = "../transaction" }
 
 [dev-dependencies]
 tempfile = "3.0"
