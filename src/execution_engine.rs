@@ -14,7 +14,7 @@ use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
 use sqlrustgo_executor::ExecutorResult;
-use sqlrustgo_observability::observability_state::{OBSERVABILITY, ObservabilityState};
+use sqlrustgo_observability::observability_state::{ObservabilityState, OBSERVABILITY};
 use sqlrustgo_observability::tables::{
     lock_wait_graph::LockWaitEdge, lock_wait_graph::LockWaitGraph,
     recovery_history::RecoveryHistory, recovery_history::RecoveryHistoryEntry,
