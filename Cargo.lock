@@ -5359,6 +5359,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlrustgo-sync"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "prost",
+ "prost-build",
+ "serde",
+ "serde_json",
+ "sqlrustgo-storage",
+ "sqlrustgo-transaction",
+ "sqlrustgo-types",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-test",
+ "tonic",
+ "tonic-build",
+ "tracing",
+]
+
+[[package]]
 name = "sqlrustgo-telemetry"
 version = "3.0.0"
 dependencies = [
