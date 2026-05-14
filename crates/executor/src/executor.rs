@@ -75,6 +75,8 @@ pub struct ExecutorResult {
     pub rows: Vec<Vec<Value>>,
     /// Number of affected rows (for INSERT/UPDATE/DELETE)
     pub affected_rows: usize,
+    /// Last insert ID (for INSERT with auto_increment)
+    pub last_insert_id: Option<u64>,
 }
 
 impl ExecutorResult {
@@ -83,7 +85,14 @@ impl ExecutorResult {
         Self {
             rows,
             affected_rows,
+            last_insert_id: None,
         }
+    }
+
+    /// Create a new executor result with last_insert_id
+    pub fn with_last_insert_id(mut self, last_insert_id: Option<u64>) -> Self {
+        self.last_insert_id = last_insert_id;
+        self
     }
 
     /// Create an empty result
@@ -91,6 +100,7 @@ impl ExecutorResult {
         Self {
             rows: vec![],
             affected_rows: 0,
+            last_insert_id: None,
         }
     }
 }
