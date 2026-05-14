@@ -28,8 +28,13 @@ check_test() {
     local output
     output=$(eval "$cmd" 2>&1) || true
     local passed failed
-    passed=$(echo "$output" | grep -c "test result: ok\." || echo "0")
-    failed=$(echo "$output" | grep -c "test result: FAILED" || echo "0")
+    passed=$(echo "$output" | grep -c "test result: ok\." || true)
+    failed=$(echo "$output" | grep -c "test result: FAILED" || true)
+    passed=${passed:-0}
+    failed=${failed:-0}
+    # Handle multi-line output from grep -c
+    passed=$(echo "$passed" | head -1)
+    failed=$(echo "$failed" | head -1)
     if [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ]; then
         echo "PASS ($passed tests)"; PASS=$((PASS+1))
     else
@@ -53,6 +58,8 @@ PASSED=$(echo "$TEST_OUTPUT" | grep -c "test result: ok\." || true)
 FAILED=$(echo "$TEST_OUTPUT" | grep -c "test result: FAILED" || true)
 PASSED=${PASSED:-0}
 FAILED=${FAILED:-0}
+PASSED=$(echo "$PASSED" | head -1)
+FAILED=$(echo "$FAILED" | head -1)
 TOTAL_TESTS=$((PASSED + FAILED))
 if [ "$TOTAL_TESTS" -gt 0 ]; then
     PASS_RATE=$((PASSED * 100 / TOTAL_TESTS))
