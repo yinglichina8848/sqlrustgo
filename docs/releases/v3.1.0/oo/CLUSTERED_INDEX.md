@@ -54,40 +54,178 @@ MySQL InnoDB 聚簇索引结构:
 
 ---
 
-## 二、当前实现状态
+## 二、实际实现状态
 
-### 2.1 现有存储实现
+### 2.1 聚簇索引模块 (crates/storage/src/clustered_index/)
 
-根据 `crates/storage/src/`：
+| 文件 | 功能 |
+|------|------|
+| `mod.rs` | 模块导出 |
+| `leaf.rs` | ClusteredLeafPage 实现 |
+| `overflow.rs` | OverflowManager 溢出页管理 |
+| `transaction.rs` | ClusteredPageTransaction WAL 事务 |
+| `wal_integration.rs` | ClusteredWalEntry, ClusteredWalManager |
+| `invariant_tests.rs` | 不变性测试 |
+| `wal_recovery_tests.rs` | WAL 恢复测试 |
+
+### 2.2 核心数据结构
 
 ```rust
-// 现有表元数据
-pub struct TableInfo {
-    pub id: TableId,
-    pub name: String,
-    pub columns: Vec<ColumnInfo>,
-    pub indices: Vec<IndexInfo>,      // 索引定义
-    pub row_id_counter: i64,
-    pub has_hidden_rowid: bool,
+// leaf.rs
+pub struct ClusteredLeafPage {
+    data: Vec<u8>,           // 页面数据
+    slot_count: u16,         // 槽数量
+    free_space_start: u16,   // 空闲空间起始位置
+    data_end: u16,           // 数据结束位置
 }
 
-pub struct ColumnInfo {
-    pub id: ColumnId,
-    pub name: String,
-    pub data_type: SqlType,
-    pub is_nullable: bool,
-    pub is_primary: bool,
-    pub is_unique: bool,
+// transaction.rs
+pub struct ClusteredPageTransaction<'a> {
+    page: &'a mut ClusteredLeafPage,
+    wal_manager: &'a ClusteredWalManager,
+    tx_id: u64,
 }
 ```
 
+### 2.3 实现状态
+
 | 特性 | 状态 | 说明 |
 |------|------|------|
-| Heap Storage | ✅ 已实现 | 无聚簇，按插入顺序存储 |
-| B+Tree 索引 | ✅ 已实现 | 仅作为索引，不存储数据 |
-| 主键索引 | ✅ 已实现 | 主键唯一索引 |
-| 聚簇索引 | ❌ 未实现 | 需要规划 |
-| 覆盖索引 | ❌ 未实现 | 需要规划 |
+| ClusteredLeafPage | ✅ 已实现 | 存储完整行数据 |
+| OverflowManager | ✅ 已实现 | 溢出页管理 |
+| ClusteredPageTransaction | ✅ 已实现 | WAL 事务支持 |
+| ClusteredWalManager | ✅ 已实现 | WAL 集成 |
+| WAL 恢复 | ✅ 已实现 | 63 测试通过 |
+| 页面分裂 | ✅ 已实现 | test_needs_split |
+
+---
+
+## 三、执行链路
+
+### 3.1 INSERT 执行链路
+
+```
+INSERT INTO t VALUES (1, "Alice", 30)
+  ↓
+Parser: 解析 INSERT
+  ↓
+Planner: 生成 logical plan
+  ↓
+Optimizer: 选择聚簇索引
+  ↓
+ClusteredPageTransaction::insert():
+  ├→ WAL log_insert()  ← 先写 WAL
+  │   └→ 失败则不修改页面
+  │
+  └→ ClusteredLeafPage::insert()
+      ├→ 编码固定列
+      ├→ 编码变长列
+      ├→ 更新槽目录
+      └→ 返回 slot_idx
+```
+
+### 3.2 DELETE 执行链路
+
+```
+DELETE FROM t WHERE id = 5
+  ↓
+ClusteredPageTransaction::delete(slot_idx):
+  ├→ 获取 cluster_key 用于 WAL
+  ├→ WAL log_delete()
+  │   └→ 失败则不修改页面
+  │
+  └→ ClusteredLeafPage::delete()
+      └→ 标记槽为已删除
+```
+
+### 3.3 页面分裂
+
+```
+当 free_space < MIN_FREE_SPACE_THRESHOLD (128 bytes):
+  ↓
+ClusteredLeafPage::needs_split() → true
+  ↓
+页面分裂:
+  ├→ 分配新页面
+  ├→ 移动后半部分数据到新页
+  ├→ 更新相邻页面指针
+  └→ 更新父节点索引
+```
+
+---
+
+## 四、WAL 集成
+
+### 4.1 ClusteredWalEntry
+
+```rust
+pub enum ClusteredWalEntry {
+    Insert {
+        cluster_key: ClusterKey,
+        fixed_columns: Vec<Value>,
+        varlen_columns: Vec<Option<Vec<u8>>>,
+        null_bitmap: Vec<bool>,
+    },
+    Delete {
+        cluster_key: ClusterKey,
+        slot_idx: u16,
+    },
+    Update {
+        old_key: ClusterKey,
+        new_key: ClusterKey,
+        // ...
+    },
+}
+```
+
+### 4.2 恢复流程
+
+```
+崩溃恢复:
+  ↓
+读取 WAL 文件
+  ↓
+按 tx_id 分组日志
+  ↓
+过滤未提交事务
+  ↓
+重放已提交事务:
+  ├→ INSERT → 重新插入
+  ├→ DELETE → 标记删除
+  └→ UPDATE → 删除旧值，插入新值
+```
+
+---
+
+## 五、测试验证
+
+### 5.1 单元测试 (63 tests)
+
+| 测试类别 | 测试数 | 状态 |
+|---------|--------|------|
+| leaf::tests | 覆盖 insert/get/delete/split | ✅ |
+| overflow::tests | 溢出链分配/释放 | ✅ |
+| transaction::tests | WAL 日志/提交 | ✅ |
+| wal_recovery_tests | 崩溃恢复场景 | ✅ |
+
+### 5.2 关键测试用例
+
+| 测试 | 说明 |
+|------|------|
+| `test_transaction_insert_logs_to_wal` | INSERT 写入 WAL |
+| `test_transaction_delete_logs_to_wal` | DELETE 写入 WAL |
+| `test_recover_primary_key_cluster` | 主键聚簇恢复 |
+| `test_recover_to_timestamp` | PITR 时间点恢复 |
+| `test_needs_split` | 页面分裂触发 |
+| `test_encode_overflow_chain_multi_page` | 溢出链编解码 |
+
+---
+
+## 六、参考
+
+- `crates/storage/src/clustered_index/` - 聚簇索引完整实现
+- `crates/storage/src/row_format/` - Compact Row 编码格式
+- `crates/storage/src/wal.rs` - WAL 基础设施
 
 ### 2.2 现有 B+Tree 实现
 
