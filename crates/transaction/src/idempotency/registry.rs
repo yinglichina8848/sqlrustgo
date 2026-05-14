@@ -30,7 +30,15 @@ impl IdempotencyRegistry {
             records: Arc::new(RwLock::new(HashMap::new())),
         }
     }
+}
 
+impl Default for IdempotencyRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl IdempotencyRegistry {
     pub fn check_and_register(
         &self,
         key: &str,
