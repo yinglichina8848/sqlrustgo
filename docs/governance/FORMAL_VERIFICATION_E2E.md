@@ -477,7 +477,7 @@ echo "✅ Formulog check PASSED"
 - [Formulog](https://github.com/ucsd-progsys/formulog)
 - [Issue #117](http://192.168.0.252:3000/openclaw/sqlrustgo/issues/117)
 - [G-02 Proof Registry](http://192.168.0.252:3000/openclaw/sqlrustgo/issues/128)
-- [R-Gate R10](docs/governance/RULES.md#R10)
+- [R-Gate R10](GATE_CI_CD.md#r10)
 
 ## 9. Appendix
 

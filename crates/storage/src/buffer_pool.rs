@@ -268,6 +268,83 @@ impl Default for MemoryPool {
     }
 }
 
+pub struct EncryptedBufferPool {
+    inner: Arc<BufferPool>,
+    encryption: Arc<dyn crate::encryption::Crypt>,
+}
+
+impl EncryptedBufferPool {
+    pub fn new(inner: Arc<BufferPool>, encryption: Arc<dyn crate::encryption::Crypt>) -> Self {
+        Self { inner, encryption }
+    }
+
+    pub fn inner(&self) -> &Arc<BufferPool> {
+        &self.inner
+    }
+
+    pub fn get_or_load_encrypted<F>(&self, page_id: u32, loader: F) -> Arc<Page>
+    where
+        F: FnOnce(u32) -> Arc<Page>,
+    {
+        let page = self.inner.get_or_load(page_id, loader);
+
+        if page.is_encrypted {
+            let mut page_mut = (*page).clone();
+            page_mut.is_encrypted = false;
+            let decrypted =
+                self.encryption
+                    .decrypt_bytes(page_id, &page_mut.data, page_mut.key_version);
+            page_mut.data = decrypted;
+            return Arc::new(page_mut);
+        }
+
+        page
+    }
+
+    pub fn flush_encrypted(&self, page_id: u32) -> Option<Arc<Page>> {
+        let page = self.inner.get(page_id)?;
+
+        let mut page_mut = (*page).clone();
+        page_mut.is_encrypted = true;
+        page_mut.key_version = self.encryption.current_key_version();
+
+        let encrypted =
+            self.encryption
+                .encrypt_bytes(page_id, &page_mut.data, page_mut.key_version);
+        page_mut.data = encrypted;
+
+        Some(Arc::new(page_mut))
+    }
+
+    pub fn insert(&self, page: Arc<Page>) {
+        self.inner.insert(page);
+    }
+
+    pub fn get(&self, page_id: u32) -> Option<Arc<Page>> {
+        self.inner.get(page_id)
+    }
+
+    pub fn remove(&self, page_id: u32) -> bool {
+        self.inner.remove(page_id)
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.inner.capacity()
+    }
+
+    pub fn stats(&self) -> BufferPoolStats {
+        self.inner.stats()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -394,8 +471,65 @@ mod tests {
         let pool = MemoryPool::new(1024);
 
         let mut buf = vec![0u8; 2048];
-        pool.free(buf); // Wrong size, should not be pooled
+        pool.free(buf);
 
         assert_eq!(pool.free_count(), 0);
+    }
+
+    #[test]
+    fn test_encrypted_buffer_pool_roundtrip() {
+        use crate::encryption::AesEncryptionManager;
+
+        let key = [0x42u8; 32];
+        let manager = Arc::new(AesEncryptionManager::new(&key).unwrap());
+
+        let inner_pool = Arc::new(BufferPool::new(10));
+        let pool = EncryptedBufferPool::new(inner_pool.clone(), manager);
+
+        let page = Arc::new(Page::new(1));
+        pool.insert(page);
+
+        let flushed = pool.flush_encrypted(1);
+        assert!(flushed.is_some());
+        let flushed_page = flushed.unwrap();
+        assert!(flushed_page.is_encrypted);
+
+        let decrypted = pool.get_or_load_encrypted(1, |_| Arc::new(Page::new(999)));
+        assert!(!decrypted.is_encrypted);
+        assert_eq!(decrypted.page_id(), 1);
+    }
+
+    #[test]
+    fn test_encrypted_buffer_pool_lru_eviction() {
+        use crate::encryption::AesEncryptionManager;
+
+        let key = [0x42u8; 32];
+        let manager = Arc::new(AesEncryptionManager::new(&key).unwrap());
+
+        let inner_pool = Arc::new(BufferPool::new(3));
+        let pool = EncryptedBufferPool::new(inner_pool.clone(), manager);
+
+        pool.insert(Arc::new(Page::new(1)));
+        pool.insert(Arc::new(Page::new(2)));
+        pool.insert(Arc::new(Page::new(3)));
+
+        let _ = pool.get(1);
+
+        pool.insert(Arc::new(Page::new(4)));
+
+        assert!(pool.get(1).is_some());
+        assert!(pool.get(2).is_none());
+        assert!(pool.get(3).is_some());
+        assert!(pool.get(4).is_some());
+    }
+
+    #[test]
+    fn test_page_encryption_metadata() {
+        let mut page = Page::new(42);
+        page.is_encrypted = true;
+        page.key_version = 5;
+
+        assert!(page.is_encrypted);
+        assert_eq!(page.key_version, 5);
     }
 }

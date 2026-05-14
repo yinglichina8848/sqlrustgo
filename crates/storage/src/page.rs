@@ -53,6 +53,8 @@ pub struct Page {
     row_count: u32,
     free_space: u32,
     table_id: u64,
+    pub is_encrypted: bool,
+    pub key_version: u32,
 }
 
 impl Page {
@@ -65,6 +67,8 @@ impl Page {
             row_count: 0,
             free_space: PAGE_DATA_SIZE as u32,
             table_id: 0,
+            is_encrypted: false,
+            key_version: 0,
         }
     }
 
@@ -278,6 +282,8 @@ impl Page {
             row_count: 0,
             free_space: PAGE_DATA_SIZE as u32,
             table_id: 0,
+            is_encrypted: false,
+            key_version: 0,
         };
 
         page.read_header();

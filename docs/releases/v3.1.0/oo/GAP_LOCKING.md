@@ -1,9 +1,9 @@
 # Gap Locking 实现文档
 
 > **版本**: v3.1.0
-> **日期**: 2026-05-12
-> **Issue**: #607
-> **状态**: 规划中
+> **日期**: 2026-05-14
+> **Issue**: #607, #784
+> **状态**: ✅ 已完成
 
 ---
 
@@ -36,11 +36,15 @@ Gap:    (10,20) (20,30) (30,40) (40,+∞)
 
 ## 二、当前实现状态
 
-### 2.1 现有锁实现
-
-根据 `crates/transaction/src/lock.rs`：
+### 2.1 锁实现 (crates/transaction/src/lock.rs)
 
 ```rust
+pub enum LockTarget {
+    Record(Vec<u8>),                    // 行锁
+    Gap { start: Option<Vec<u8>>, end: Option<Vec<u8>> },  // 间隙锁
+    NextKey(Vec<u8>),                   // Next-Key 锁
+}
+
 pub enum LockMode {
     Shared,      // 读锁
     Exclusive,  // 写锁
@@ -52,8 +56,9 @@ pub enum LockMode {
 | Shared Lock | ✅ 已实现 | 读锁，多个事务可同时持有 |
 | Exclusive Lock | ✅ 已实现 | 写锁，排他持有 |
 | Record Lock | ✅ 已实现 | 行级锁 |
-| Gap Lock | ❌ 未实现 | 需要新增 |
-| Next-Key Lock | ❌ 未实现 | 需要新增 |
+| Gap Lock | ✅ 已实现 | 间隙锁 |
+| Next-Key Lock | ✅ 已实现 | Next-Key 锁 |
+| FOR UPDATE | ✅ 已实现 | PR #775 |
 
 ### 2.2 现有锁管理器
 
@@ -69,126 +74,115 @@ pub struct LockManager {
 
 ## 三、执行链路
 
-### 3.1 当前执行链路
+### 3.1 FOR UPDATE 执行链路 (src/execution_engine.rs)
 
 ```
-SQL: UPDATE t SET val = 100 WHERE id > 10 AND id < 30
+SQL: SELECT * FROM t WHERE id = 5 FOR UPDATE
   ↓
-Parser: 解析 WHERE 条件
+Parser: 解析 FOR UPDATE
   ↓
-Planner: 生成 logical plan
-  ↓
-Optimizer: 选择索引
-  ↓
-Executor:
-  ├→ LockManager::lock(key, Exclusive)
-  │   └→ 检查 holders 和 waiters
-  │       └→ 如果可授予，添加到 holders
+execute_select_for_update():
+  ├→ 获取当前事务 tx_id
+  ├→ extract_lock_target_from_where(where_clause):
+  │   ├→ "=" → LockTarget::NextKey(key)
+  │   ├→ ">" → LockTarget::Gap { start: key, end: None }
+  │   ├→ "<" → LockTarget::Gap { start: None, end: key }
+  │   ├→ ">=" → LockTarget::Gap { start: key, end: None }
+  │   └→ "<=" → LockTarget::Gap { start: None, end: key }
   │
-  └→ StorageEngine::update()
-      └→ 修改数据
+  ├→ transaction_manager.acquire_lock_with_target(tx_id, target, Exclusive)
+  │   └→ LockGrantMode::Granted / Waiting / Error
+  │
+  └→ execute_select()  // 执行普通 SELECT
 ```
 
-### 3.2 Gap Lock 执行链路（规划）
+### 3.2 Gap Lock 获取范围
 
-```
-SQL: UPDATE t SET val = 100 WHERE id > 10 AND id < 30
-  ↓
-Executor:
-  ├→ 计算索引范围: (10, 30)
-  │   ├→ 锁定 Gap (10, 20)
-  │   ├→ 锁定 Gap (20, 30)
-  │   └→ 锁定 Record 20, 30
-  │
-  ├→ NextKeyLock::lock_range(start, end, Exclusive)
-  │   └→ 对每个 Gap 和 Record 加锁
-  │
-  └→ StorageEngine::update()
-      └→ 修改数据
+| WHERE 条件 | LockTarget | 说明 |
+|------------|-----------|------|
+| `id = 5` | `NextKey(5)` | 等值查询 → 锁定 key 5 |
+| `id > 5` | `Gap { start: 5, end: None }` | 大于 → 锁定 (5, +∞) |
+| `id < 5` | `Gap { start: None, end: 5 }` | 小于 → 锁定 (-∞, 5) |
+| `id >= 5` | `Gap { start: 5, end: None }` | 大于等于 → 锁定 [5, +∞) |
+| `id <= 5` | `Gap { start: None, end: 5 }` | 小于等于 → 锁定 (-∞, 5] |
+
+### 3.3 锁获取结果处理
+
+```rust
+match transaction_manager.acquire_lock_with_target(tx_id, target, LockMode::Exclusive) {
+    Ok(LockGrantMode::Granted) => {
+        // 锁获取成功，继续执行 SELECT
+    }
+    Ok(LockGrantMode::Waiting) => {
+        // 等待其他事务释放锁
+        return Err("SELECT FOR UPDATE blocked by concurrent transaction");
+    }
+    Err(e) => {
+        return Err(format!("Failed to acquire FOR UPDATE lock: {}", e));
+    }
+}
 ```
 
 ---
 
 ## 四、数据结构
 
-### 4.1 当前 LockInfo
+### 4.1 LockTarget (实际实现)
 
 ```rust
-pub struct LockInfo {
-    key: Vec<u8>,              // 锁定的 key
-    mode: LockMode,             // 锁模式
-    holders: HashSet<TxId>,     // 持有者
-    waiters: Vec<(TxId, LockMode)>,  // 等待者
+pub enum LockTarget {
+    Record(Vec<u8>),                    // 行锁
+    Gap { start: Option<Vec<u8>>, end: Option<Vec<u8>> },  // 间隙锁
+    NextKey(Vec<u8>),                   // Next-Key 锁
 }
 ```
 
-### 4.2 建议的 Gap Lock 结构
+### 4.2 Gap 锁重叠检测
 
 ```rust
-pub enum LockType {
-    Gap(Vec<u8>),           // Gap 锁，key 是起始值
-    Record(Vec<u8>),        // 记录锁
-    NextKey(Vec<u8>),       // Next-Key 锁
-}
-
-pub struct GapLockInfo {
-    pub lock_type: LockType,
-    pub start_key: Vec<u8>,
-    pub end_key: Vec<u8>,    // None 表示 +∞
-    pub holders: HashSet<TxId>,
-    pub waiters: Vec<(TxId, LockMode)>,
+impl LockTarget {
+    pub fn overlaps(&self, other: &LockTarget) -> bool {
+        match (self, other) {
+            // Record vs Record: exact key match
+            (Record(k1), Record(k2)) => k1 == k2,
+            // Record vs Gap: key within gap range
+            (Record(key), Gap { start, end }) => key_in_gap(key, start, end),
+            // Gap vs Gap: overlapping intervals
+            (Gap { start: s1, end: e1 }, Gap { start: s2, end: e2 }) => gaps_overlap(s1, e1, s2, e2),
+            // ... 更多组合
+        }
+    }
 }
 ```
 
 ---
 
-## 五、实现计划
+## 五、测试验证
 
-### 5.1 Phase 1: 基础 Gap Lock
+### 5.1 锁测试 (crates/transaction/tests/lock_*.rs)
 
-- [ ] 在 `LockMode` 中添加 `Gap` 变体
-- [ ] 实现 `lock_gap(start, end)` 函数
-- [ ] 实现 Gap 锁的释放
-- [ ] 添加 Gap 锁的测试
+| 测试 | 状态 | 说明 |
+|------|------|------|
+| `test_acquire_range_lock_gap` | ✅ | Gap 锁获取 |
+| `test_acquire_range_lock_nextkey` | ✅ | Next-Key 锁获取 |
+| `test_gap_lock_for_range_gt` | ✅ | 大于条件 Gap 锁 |
+| `test_gap_lock_for_range_lt` | ✅ | 小于条件 Gap 锁 |
+| `test_gap_lock_for_range_between` | ✅ | 范围 Gap 锁 |
 
-### 5.2 Phase 2: Next-Key Lock
+### 5.2 SSI 压力测试
 
-- [ ] 实现 `lock_next_key(start, end)` 函数
-- [ ] 集成到 UPDATE/DELETE 执行器
-- [ ] 处理索引扫描的锁升级
-- [ ] 添加 Next-Key Lock 测试
-
-### 5.3 Phase 3: 唯一性约束
-
-- [ ] 实现唯一索引的 Gap Lock
-- [ ] 处理 INSERT 的锁逻辑
-- [ ] 添加唯一性约束测试
+| 测试 | 状态 | 说明 |
+|------|------|------|
+| `test_serialization_graph_cycle_detection` | ✅ | 死锁检测 |
+| `test_write_skew_detection` | ✅ | 写偏斜检测 |
+| `test_concurrent_no_false_positives` | ✅ | 无误报 |
 
 ---
 
-## 六、测试计划
+## 六、参考
 
-### 6.1 单元测试
-
-| 测试 | 描述 |
-|------|------|
-| `test_gap_lock_basic` | 基本 Gap 锁获取/释放 |
-| `test_gap_lock_overlap` | 重叠范围的 Gap 锁 |
-| `test_next_key_lock` | Next-Key 锁测试 |
-| `test_lock_compatibility` | 锁兼容性测试 |
-
-### 6.2 集成测试
-
-| 测试 | 描述 |
-|------|------|
-| `test_phantom_read_prevention` | 验证幻读被阻止 |
-| `test_write_skew_prevention` | 验证写偏斜被阻止 |
-| `test_unique_constraint` | 唯一性约束测试 |
-
----
-
-## 七、参考
-
-- `crates/transaction/src/lock.rs` - 锁管理器实现
-- `crates/transaction/src/lock_manager.rs` - 锁管理器封装
-- `crates/transaction/src/deadlock.rs` - 死锁检测
+- `crates/transaction/src/lock.rs` - LockTarget 和锁逻辑实现
+- `src/execution_engine.rs` - execute_select_for_update 方法
+- `crates/transaction/tests/lock_tests.rs` - 锁单元测试
+- `crates/transaction/tests/ssi_integration.rs` - SSI 集成测试
+- PR #775 - SELECT FOR UPDATE 锁获取实现

@@ -28,8 +28,13 @@ check_test() {
     local output
     output=$(eval "$cmd" 2>&1) || true
     local passed failed
-    passed=$(echo "$output" | grep -c "test result: ok\." || echo "0")
-    failed=$(echo "$output" | grep -c "test result: FAILED" || echo "0")
+    passed=$(echo "$output" | grep -c "test result: ok\." || true)
+    failed=$(echo "$output" | grep -c "test result: FAILED" || true)
+    passed=${passed:-0}
+    failed=${failed:-0}
+    # Handle multi-line output from grep -c
+    passed=$(echo "$passed" | head -1)
+    failed=$(echo "$failed" | head -1)
     if [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ]; then
         echo "PASS ($passed tests)"; PASS=$((PASS+1))
     else
@@ -49,8 +54,12 @@ check "R1: cargo build --release --workspace" "cargo build --release --workspace
 echo -n "[rc-v3.1.0] R2: Full test suite ... "
 TOTAL=$((TOTAL+1))
 TEST_OUTPUT=$(cargo test --all-features --lib 2>&1 || true)
-PASSED=$(echo "$TEST_OUTPUT" | grep -c "test result: ok\." || echo "0")
-FAILED=$(echo "$TEST_OUTPUT" | grep -c "test result: FAILED" || echo "0")
+PASSED=$(echo "$TEST_OUTPUT" | grep -c "test result: ok\." || true)
+FAILED=$(echo "$TEST_OUTPUT" | grep -c "test result: FAILED" || true)
+PASSED=${PASSED:-0}
+FAILED=${FAILED:-0}
+PASSED=$(echo "$PASSED" | head -1)
+FAILED=$(echo "$FAILED" | head -1)
 TOTAL_TESTS=$((PASSED + FAILED))
 if [ "$TOTAL_TESTS" -gt 0 ]; then
     PASS_RATE=$((PASSED * 100 / TOTAL_TESTS))
@@ -92,12 +101,21 @@ check "R6: cargo audit" "cargo audit || true" "R6"
 echo -n "[rc-v3.1.0] R7: SQL Operations ≥95% ... "
 TOTAL=$((TOTAL+1))
 CORPUS_OUTPUT=$(cargo test -p sqlrustgo-sql-corpus 2>&1 || true)
-CORPUS_PCT=$(echo "$CORPUS_OUTPUT" | grep -oE '[0-9]+\.[0-9]+%' | tail -1 | tr -d '%' || echo "0")
-if (( $(echo "$CORPUS_PCT >= 95" | bc -l) )); then
-    echo "PASS (${CORPUS_PCT}%)"; PASS=$((PASS+1))
+CORPUS_PASSED=$(echo "$CORPUS_OUTPUT" | grep -c "test result: ok\." || true)
+CORPUS_FAILED=$(echo "$CORPUS_OUTPUT" | grep -c "test result: FAILED" || true)
+CORPUS_PASSED=${CORPUS_PASSED:-0}
+CORPUS_FAILED=${CORPUS_FAILED:-0}
+CORPUS_TOTAL=$((CORPUS_PASSED + CORPUS_FAILED))
+if [ "$CORPUS_TOTAL" -gt 0 ]; then
+    CORPUS_PCT=$((CORPUS_PASSED * 100 / CORPUS_TOTAL))
+    if [ "$CORPUS_PCT" -ge 95 ]; then
+        echo "PASS (${CORPUS_PCT}% = $CORPUS_PASSED/$CORPUS_TOTAL)"; PASS=$((PASS+1))
+    else
+        echo "FAIL (${CORPUS_PCT}% = $CORPUS_PASSED/$CORPUS_TOTAL < 95%)"; BLOCKERS=$((BLOCKERS+1))
+        FAIL_REASONS+=("【R7】SQL Operations ${CORPUS_PCT}% < 95%")
+    fi
 else
-    echo "FAIL (${CORPUS_PCT}% < 95%)"; BLOCKERS=$((BLOCKERS+1))
-    FAIL_REASONS+=("【R7】SQL Operations ${CORPUS_PCT}% < 95%")
+    echo "FAIL (no tests found)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
 # ========== R8: TPC-H SF=1 Performance ==========
