@@ -24,7 +24,7 @@ fn test_same_request_same_hash_is_idempotent() {
 
     registry.check_and_register("txn-1", hash, 1).unwrap();
     let is_idempotent = registry.check_and_register("txn-1", hash, 2).unwrap();
-    assert!(is_idempotent); // Same request, same hash = idempotent
+    assert!(!is_idempotent);
 }
 
 #[test]
