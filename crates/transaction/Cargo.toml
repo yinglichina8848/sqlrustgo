@@ -10,7 +10,6 @@ sqlrustgo-common.workspace = true
 sqlrustgo-parser.workspace = true
 sqlrustgo-storage.workspace = true
 sqlrustgo-observability.workspace = true
-sqlrustgo-parser.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
