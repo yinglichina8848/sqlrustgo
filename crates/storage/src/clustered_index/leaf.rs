@@ -469,7 +469,8 @@ impl ClusteredLeafPage {
 
             // Add slot entry pointing to record START (not end)
             let slot_offset = PAGE_SIZE - ((new_slot_count + 1) as usize) * SLOT_ENTRY_SIZE;
-            new_data[slot_offset..slot_offset + 2].copy_from_slice(&(record_start as u16).to_le_bytes());
+            new_data[slot_offset..slot_offset + 2]
+                .copy_from_slice(&(record_start as u16).to_le_bytes());
 
             new_slot_count += 1;
             new_data_end += record_len as u16;
