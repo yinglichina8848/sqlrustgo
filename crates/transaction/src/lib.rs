@@ -17,6 +17,7 @@ pub mod audit;
 pub mod deadlock;
 pub mod dtc;
 pub mod gid;
+pub mod idempotency;
 pub mod lock;
 pub mod lock_manager;
 pub mod manager;
