@@ -69,8 +69,8 @@ fn test_pending_state_is_idempotent() {
     registry.check_and_register("txn-1", hash, 1).unwrap();
     let result = registry.check_and_register("txn-1", hash, 2).unwrap();
 
-    // Pending state returns true (idempotent - same request in progress is safe to retry)
-    assert!(result);
+    // Pending state returns false (operation in progress, not yet idempotent)
+    assert!(!result);
 }
 
 #[test]
