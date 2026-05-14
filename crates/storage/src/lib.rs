@@ -9,9 +9,12 @@ pub mod buffer_pool;
 // NOTE: ColumnarStorage has trait sync issues; tpch-import uses MemoryStorage + Parquet export
 
 pub mod clustered_index;
+pub mod encrypted_file;
+pub mod encryption;
 pub mod engine;
 pub mod file_storage;
 pub mod fts;
+pub mod key_manager;
 pub mod page;
 pub mod predicate;
 pub mod read_write_split;
@@ -21,7 +24,9 @@ pub mod wal;
 pub use binary_format::BinaryFormat;
 pub use binary_storage::BinaryTableStorage;
 pub use bplus_tree::BPlusTree;
-pub use buffer_pool::BufferPool;
+pub use buffer_pool::{BufferPool, EncryptedBufferPool};
+pub use encrypted_file::EncryptedFileStorage;
+pub use encryption::{AesEncryptionManager, Crypt, DecryptedPage, EncryptedPage, EncryptionError};
 pub use engine::{
     evaluate_check_constraint, ColumnDefinition, ForeignKeyAction, ForeignKeyConstraint,
     MemoryStorage, Record, StorageEngine, TableData, TableInfo, TriggerEvent, TriggerInfo,
@@ -31,6 +36,7 @@ pub use file_storage::FileStorage;
 pub use fts::{
     ChineseTokenizer, InvertedIndex, MultiLanguageTokenizer, SimpleTokenizer, Tokenizer,
 };
+pub use key_manager::{BasicKeyManager, KeyManager};
 pub use page::Page;
 
 // Re-export row_format types
