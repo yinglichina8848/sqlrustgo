@@ -131,9 +131,9 @@ oo/<category>/<FEATURE_EXECUTION.md
 - [x] `oo/AUDIT_CHAIN_INTEGRATION.md` - 审计链集成
 - [x] `oo/MERGE_EXECUTION.md` - MERGE 执行链路
 - [x] `oo/CBO_INTEGRATION.md` - CBO 集成
-- [ ] `oo/GAP_LOCKING.md` - Gap Lock 实现
-- [ ] `oo/CLUSTERED_INDEX.md` - 聚簇索引
-- [ ] `oo/STORAGE_ENCRYPTION.md` - 存储加密
+- [x] `oo/GAP_LOCKING.md` - Gap Lock 实现 (PR #775)
+- [x] `oo/CLUSTERED_INDEX.md` - 聚簇索引 (63 测试)
+- [x] `oo/STORAGE_ENCRYPTION.md` - 存储加密 (security crate)
 
 ### 6.2 v3.2.0 目标
 
