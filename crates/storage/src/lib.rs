@@ -5,6 +5,7 @@ pub mod binary_format;
 pub mod binary_storage;
 pub mod bplus_tree;
 pub mod buffer_pool;
+pub mod checkpoint;
 // pub mod columnar; // TODO: re-enable once StorageEngine trait is synced
 // NOTE: ColumnarStorage has trait sync issues; tpch-import uses MemoryStorage + Parquet export
 
@@ -18,6 +19,7 @@ pub mod key_manager;
 pub mod page;
 pub mod predicate;
 pub mod read_write_split;
+pub mod recovery;
 pub mod row_format;
 pub mod wal;
 
@@ -49,4 +51,11 @@ pub use row_format::{
 pub use clustered_index::{
     ClusteredLeafIter, ClusteredLeafPage, ClusteredPageTransaction, ClusteredWalEntry,
     ClusteredWalManager, OverflowManager,
+};
+
+// Re-export recovery types
+pub use recovery::{
+    compute_crc32, PITRRegistry, PITRSnapshot, PageChecksum, PageChecksumStore, RecoveryManifest,
+    RecoveryVerificationResult, RecoveryVerifier, WalChainEntry, WalChainState,
+    WAL_GENESIS_PREV_HASH,
 };
