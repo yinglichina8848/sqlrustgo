@@ -1,0 +1,20 @@
+{
+  "date": "2026-05-15",
+  "version": "v3.1.0",
+  "note": "Baseline for v3.1.0 - includes all QPS tests (13/13)",
+  "benchmarks": {
+    "simple_select": {"qps": 300000},
+    "insert": {"qps": 50000},
+    "update": {"qps": 50000},
+    "delete": {"qps": 60000},
+    "join": {"qps": 10000},
+    "aggregation": {"qps": 1200000},
+    "order_by": {"qps": 20000},
+    "concurrent_select_8t": {"qps": 400000},
+    "complex_where": {"qps": 1000},
+    "insert_prepared": {"qps": 450000},
+    "insert_batch": {"qps": 1000000},
+    "insert_multi_row": {"qps": 80000},
+    "concurrent_mixed": {"qps": 200000}
+  }
+}

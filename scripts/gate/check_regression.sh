@@ -121,9 +121,21 @@ if [ "$SKIP_RUN" = false ]; then
     COMPLEX_WHERE=$(cargo test --release --test qps_benchmark_test test_qps_complex_where -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${COMPLEX_WHERE:-N/A} qps"
 
-    echo "[10/10] Running benchmark: insert_prepared..."
+    echo "[10/13] Running benchmark: insert_prepared..."
     INSERT_PREPARED=$(cargo test --release --test qps_benchmark_test test_qps_insert_prepared -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
     echo "     -> ${INSERT_PREPARED:-N/A} qps"
+
+    echo "[11/13] Running benchmark: insert_batch..."
+    INSERT_BATCH=$(cargo test --release --test qps_benchmark_test test_qps_insert_batch -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    echo "     -> ${INSERT_BATCH:-N/A} qps"
+
+    echo "[12/13] Running benchmark: insert_multi_row..."
+    INSERT_MULTI_ROW=$(cargo test --release --test qps_benchmark_test test_qps_insert_multi_row -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    echo "     -> ${INSERT_MULTI_ROW:-N/A} qps"
+
+    echo "[13/13] Running benchmark: concurrent_mixed..."
+    CONCURRENT_MIXED=$(cargo test --release --test qps_benchmark_test test_qps_concurrent_mixed -- --ignored --nocapture 2>&1 | grep "QPS:" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+    echo "     -> ${CONCURRENT_MIXED:-N/A} qps"
 
     # Write current results
     cat > "$RESULT_FILE" << JSONEOF
@@ -140,7 +152,10 @@ if [ "$SKIP_RUN" = false ]; then
     "order_by": ${ORDER_BY:-0},
     "concurrent_select_8t": ${CONC_SELECT:-0},
     "complex_where": ${COMPLEX_WHERE:-0},
-    "insert_prepared": ${INSERT_PREPARED:-0}
+    "insert_prepared": ${INSERT_PREPARED:-0},
+    "insert_batch": ${INSERT_BATCH:-0},
+    "insert_multi_row": ${INSERT_MULTI_ROW:-0},
+    "concurrent_mixed": ${CONCURRENT_MIXED:-0}
   }
 }
 JSONEOF
@@ -242,7 +257,7 @@ compare_benchmark() {
 }
 
 # Extract baseline values and compare
-for bench in simple_select insert update delete join aggregation order_by concurrent_select_8t complex_where insert_prepared; do
+for bench in simple_select insert update delete join aggregation order_by concurrent_select_8t complex_where insert_prepared insert_batch insert_multi_row concurrent_mixed; do
     baseline_val=$(python3 -c "import json; d=json.load(open('$BASELINE_FILE')); print(d['benchmarks']['$bench']['qps'])" 2>/dev/null || echo "null")
     current_val=$(python3 -c "import json; d=json.load(open('$RESULT_FILE')); print(d['benchmarks']['$bench'])" 2>/dev/null || echo "0")
     compare_benchmark "$bench" "$baseline_val" "$current_val"
