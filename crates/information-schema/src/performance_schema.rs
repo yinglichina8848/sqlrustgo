@@ -84,6 +84,24 @@ impl PerformanceSchema {
             volatility: 0,
         }]
     }
+
+    pub fn get_events_statements_current() -> Vec<EventsStatementsCurrentRow> {
+        vec![]
+    }
+
+    pub fn get_events_statements_history(_limit: Option<usize>) -> Vec<EventsStatementsHistoryRow> {
+        vec![]
+    }
+
+    pub fn get_events_statements_summary_by_digest(
+        _limit: Option<usize>,
+    ) -> Vec<EventsStatementsSummaryByDigestRow> {
+        vec![]
+    }
+
+    pub fn get_global_events() -> Vec<GlobalEventsRow> {
+        vec![]
+    }
 }
 
 pub struct TransactionHistoryRow {
@@ -154,4 +172,41 @@ pub struct EventsStatementsSummaryByDigestRow {
     pub sum_rows_affected: u64,
     pub sum_rows_sent: u64,
     pub sum_rows_examined: u64,
+}
+
+pub struct EventsStatementsCurrentRow {
+    pub thread_id: u64,
+    pub event_id: u64,
+    pub event_name: String,
+    pub source: String,
+    pub timer_start: u64,
+    pub timer_end: u64,
+    pub timer_wait: u64,
+    pub lock_time: u64,
+    pub sql_text: String,
+    pub digest: String,
+    pub digest_text: String,
+}
+
+pub struct EventsStatementsHistoryRow {
+    pub thread_id: u64,
+    pub event_id: u64,
+    pub event_name: String,
+    pub source: String,
+    pub timer_start: u64,
+    pub timer_end: u64,
+    pub timer_wait: u64,
+    pub lock_time: u64,
+    pub sql_text: String,
+    pub digest: String,
+    pub digest_text: String,
+}
+
+pub struct GlobalEventsRow {
+    pub event_name: String,
+    pub count_star: u64,
+    pub sum_timer_wait: u64,
+    pub min_timer_wait: u64,
+    pub avg_timer_wait: u64,
+    pub max_timer_wait: u64,
 }
