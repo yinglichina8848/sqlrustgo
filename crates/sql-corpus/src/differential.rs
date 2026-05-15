@@ -3,10 +3,7 @@
 //! Compares SQL execution results between SQLRustGo and MySQL 5.7
 
 use serde::{Deserialize, Serialize};
-use sqlrustgo_executor::ExecutorResult;
 use sqlrustgo_types::Value;
-use std::collections::HashMap;
-use std::path::PathBuf;
 
 /// Result from a SQL engine execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,6 +105,7 @@ impl SqlEngine for SqlRustGoRunner {
 /// MySQL 5.7 Engine Runner
 /// Note: Requires MySQL 5.7 to be installed and accessible
 pub struct MySqlRunner {
+    #[allow(dead_code)]
     connection_string: String,
 }
 
@@ -120,7 +118,7 @@ impl MySqlRunner {
 }
 
 impl SqlEngine for MySqlRunner {
-    fn execute(&self, sql: &str) -> EngineResult {
+    fn execute(&self, _sql: &str) -> EngineResult {
         // MySQL execution not implemented yet
         // Would use mysql crate or subprocess call to mysql CLI
         EngineResult {

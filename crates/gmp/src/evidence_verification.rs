@@ -1,7 +1,6 @@
 use crate::audit_chain::AuditChain;
 use crate::evidence::EvidenceChain;
 use crate::immutable_record::VerificationReport;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn verify_evidence_chain(chain: &EvidenceChain) -> VerificationReport {
     let is_valid = chain.verify();
@@ -10,7 +9,7 @@ pub fn verify_evidence_chain(chain: &EvidenceChain) -> VerificationReport {
 
 pub fn verify_cross_chain(
     evidence_chain: &EvidenceChain,
-    audit_chain: &AuditChain,
+    _audit_chain: &AuditChain,
 ) -> VerificationReport {
     let evidence_valid = evidence_chain.verify();
     let mut report = VerificationReport::new(
@@ -26,7 +25,7 @@ pub fn verify_cross_chain(
     report
 }
 
-pub fn evidence_incremental_verify(chain: &EvidenceChain, last_n: usize) -> VerificationReport {
+pub fn evidence_incremental_verify(chain: &EvidenceChain, _last_n: usize) -> VerificationReport {
     let node_count = chain.len();
     let is_valid = chain.verify();
     VerificationReport::new(&chain.chain_id, is_valid, node_count)

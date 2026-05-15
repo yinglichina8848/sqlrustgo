@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::evidence::{EvidenceChain, EvidenceChainBuilder, EvidenceMetadata};
+use crate::evidence::{EvidenceChain, EvidenceMetadata};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};

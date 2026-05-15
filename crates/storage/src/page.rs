@@ -16,7 +16,6 @@
 //! | Data Area (>= 4032 bytes)                                    |
 //! +----------------+----------------+----------------+----------------+
 
-use smol_str::SmolStr;
 use sqlrustgo_gis::to_wkb;
 use sqlrustgo_types::Value;
 use std::io::{Read, Write};

@@ -250,6 +250,7 @@ fn save_metadata(
 }
 
 /// Export records to a Parquet file
+#[allow(clippy::needless_range_loop)]
 fn export_table_to_parquet(
     path: &Path,
     records: &[Vec<Value>],
@@ -289,8 +290,9 @@ fn export_table_to_parquet(
         let mut builder = StringBuilder::new();
 
         for row_idx in 0..num_rows {
-            if col_idx < records[row_idx].len() {
-                let value = &records[row_idx][col_idx];
+            let row = &records[row_idx];
+            if col_idx < row.len() {
+                let value = &row[col_idx];
                 let s = match value {
                     Value::Integer(i) => i.to_string(),
                     Value::Float(f) => f.to_string(),

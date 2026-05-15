@@ -899,6 +899,7 @@ impl SimpleExecutor {
         }
     }
 
+    #[allow(dead_code)]
     fn execute_with_select(&mut self, with_select: &WithSelect) -> Result<(), String> {
         if let Some(ref with_clause) = with_select.with_clause {
             for cte in &with_clause.ctes {
@@ -1075,12 +1076,12 @@ impl SqlCorpus {
                         }
                     }
                 }
-            } else if current_case.is_some() {
+            } else if let Some(ref mut current_case) = current_case {
                 if !trimmed.is_empty() && !trimmed.starts_with("--") {
-                    if !current_case.as_ref().unwrap().sql.is_empty() {
-                        current_case.as_mut().unwrap().sql.push('\n');
+                    if !current_case.sql.is_empty() {
+                        current_case.sql.push('\n');
                     }
-                    current_case.as_mut().unwrap().sql.push_str(trimmed);
+                    current_case.sql.push_str(trimmed);
                 }
             } else if !trimmed.is_empty() && !trimmed.starts_with("--") {
                 if !setup_sql.is_empty() {
