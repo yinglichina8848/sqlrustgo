@@ -2212,3 +2212,171 @@ fn test_parse_shift_with_multiplication() {
         result
     );
 }
+
+// ============ GMP Electronic Signature Tests ============
+
+#[test]
+fn test_parse_sign_record_basic() {
+    let sql = "SIGN RECORD FOR batches (batch_id = 'B001') REASON 'Approved for release'";
+    let result = parse(sql);
+    assert!(result.is_ok(), "Failed to parse SIGN RECORD: {:?}", result);
+    match result.unwrap() {
+        Statement::SignRecord(sign) => {
+            assert_eq!(sign.table_name, "batches");
+            assert_eq!(sign.columns.len(), 1);
+            assert_eq!(
+                sign.columns[0],
+                ("batch_id".to_string(), "B001".to_string())
+            );
+            assert_eq!(sign.reason, "Approved for release");
+        }
+        _ => panic!("Expected SignRecord statement"),
+    }
+}
+
+#[test]
+fn test_parse_sign_record_multiple_columns() {
+    let sql = "SIGN RECORD FOR production_batches (batch_id = 'B001', product_id = 'P123', quantity = 1000) REASON 'Quality check passed'";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SIGN RECORD with multiple columns: {:?}",
+        result
+    );
+    match result.unwrap() {
+        Statement::SignRecord(sign) => {
+            assert_eq!(sign.table_name, "production_batches");
+            assert_eq!(sign.columns.len(), 3);
+            assert_eq!(
+                sign.columns[0],
+                ("batch_id".to_string(), "B001".to_string())
+            );
+            assert_eq!(
+                sign.columns[1],
+                ("product_id".to_string(), "P123".to_string())
+            );
+            assert_eq!(
+                sign.columns[2],
+                ("quantity".to_string(), "1000".to_string())
+            );
+        }
+        _ => panic!("Expected SignRecord statement"),
+    }
+}
+
+#[test]
+fn test_parse_sign_record_without_columns() {
+    let sql = "SIGN RECORD FOR inventory REASON 'Stock verified'";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SIGN RECORD without columns: {:?}",
+        result
+    );
+    match result.unwrap() {
+        Statement::SignRecord(sign) => {
+            assert_eq!(sign.table_name, "inventory");
+            assert!(sign.columns.is_empty());
+            assert_eq!(sign.reason, "Stock verified");
+        }
+        _ => panic!("Expected SignRecord statement"),
+    }
+}
+
+#[test]
+fn test_parse_create_approval_policy_basic() {
+    let sql = "CREATE APPROVAL POLICY batch_release (required_signatures = 2, required_roles = ('QA_MANAGER', 'PRODUCTION_MANAGER'), sequential = TRUE)";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse CREATE APPROVAL POLICY: {:?}",
+        result
+    );
+    match result.unwrap() {
+        Statement::CreateApprovalPolicy(policy) => {
+            assert_eq!(policy.name, "batch_release");
+            assert_eq!(policy.required_signatures, 2);
+            assert_eq!(policy.required_roles.len(), 2);
+            assert_eq!(policy.required_roles[0], "QA_MANAGER");
+            assert_eq!(policy.required_roles[1], "PRODUCTION_MANAGER");
+            assert!(policy.sequential);
+        }
+        _ => panic!("Expected CreateApprovalPolicy statement"),
+    }
+}
+
+#[test]
+fn test_parse_create_approval_policy_with_optional_params() {
+    let sql = "CREATE APPROVAL POLICY simple_approval (required_signatures = 1, sequential = FALSE, timeout_hours = 48, description = 'Simple single-signer approval')";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse CREATE APPROVAL POLICY with optional params: {:?}",
+        result
+    );
+    match result.unwrap() {
+        Statement::CreateApprovalPolicy(policy) => {
+            assert_eq!(policy.name, "simple_approval");
+            assert_eq!(policy.required_signatures, 1);
+            assert!(!policy.sequential);
+            assert_eq!(policy.timeout_hours, Some(48));
+            assert_eq!(
+                policy.description,
+                Some("Simple single-signer approval".to_string())
+            );
+        }
+        _ => panic!("Expected CreateApprovalPolicy statement"),
+    }
+}
+
+#[test]
+fn test_parse_create_approval_policy_minimal() {
+    let sql = "CREATE APPROVAL POLICY minimal_policy (required_signatures = 1)";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse minimal CREATE APPROVAL POLICY: {:?}",
+        result
+    );
+    match result.unwrap() {
+        Statement::CreateApprovalPolicy(policy) => {
+            assert_eq!(policy.name, "minimal_policy");
+            assert_eq!(policy.required_signatures, 1);
+            assert!(policy.required_roles.is_empty());
+            assert!(policy.sequential);
+            assert_eq!(policy.timeout_hours, None);
+            assert_eq!(policy.description, None);
+        }
+        _ => panic!("Expected CreateApprovalPolicy statement"),
+    }
+}
+
+#[test]
+fn test_parse_sign_record_with_string_identifier() {
+    let sql = "SIGN RECORD FOR 'table_with_spaces' (id = 1) REASON 'Test reason'";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SIGN RECORD with string table name: {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_parse_sign_record_numeric_value() {
+    let sql = "SIGN RECORD FOR records (status = 1, priority = 5) REASON 'Approved'";
+    let result = parse(sql);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SIGN RECORD with numeric values: {:?}",
+        result
+    );
+    match result.unwrap() {
+        Statement::SignRecord(sign) => {
+            assert_eq!(sign.columns.len(), 2);
+            assert_eq!(sign.columns[0], ("status".to_string(), "1".to_string()));
+            assert_eq!(sign.columns[1], ("priority".to_string(), "5".to_string()));
+        }
+        _ => panic!("Expected SignRecord statement"),
+    }
+}

@@ -1776,9 +1776,11 @@ impl Parser {
 
         let table_name = match self.next() {
             Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(name)) => name,
             Some(Token::For) => {
                 let name = match self.next() {
                     Some(Token::Identifier(name)) => name,
+                    Some(Token::StringLiteral(name)) => name,
                     Some(t) => return Err(format!("Expected table name after FOR, got {:?}", t)),
                     None => return Err("Expected table name".to_string()),
                 };
@@ -1866,7 +1868,7 @@ impl Parser {
                     self.expect(Token::Equal)?;
                     match key.as_str() {
                         "REQUIRED_SIGNATURES" => {
-                            required_signatures = match self.next() {
+                            required_signatures = match self.current() {
                                 Some(Token::NumberLiteral(n)) => n.parse().unwrap_or(1),
                                 Some(Token::Identifier(n)) => n.parse().unwrap_or(1),
                                 t => {
@@ -1876,17 +1878,26 @@ impl Parser {
                                     ))
                                 }
                             };
+                            self.next();
                         }
                         "REQUIRED_ROLES" => {
                             required_roles = self.parse_string_array()?;
                         }
                         "SEQUENTIAL" => {
-                            sequential = match self.next() {
+                            sequential = match self.current() {
                                 Some(Token::True) => {
                                     self.next();
                                     true
                                 }
                                 Some(Token::False) => {
+                                    self.next();
+                                    false
+                                }
+                                Some(Token::BooleanLiteral(true)) => {
+                                    self.next();
+                                    true
+                                }
+                                Some(Token::BooleanLiteral(false)) => {
                                     self.next();
                                     false
                                 }
@@ -1904,7 +1915,7 @@ impl Parser {
                             };
                         }
                         "TIMEOUT_HOURS" => {
-                            timeout_hours = Some(match self.next() {
+                            timeout_hours = Some(match self.current() {
                                 Some(Token::NumberLiteral(n)) => n.parse().unwrap_or(72),
                                 Some(Token::Identifier(n)) => n.parse().unwrap_or(72),
                                 t => {
@@ -1914,10 +1925,11 @@ impl Parser {
                                     ))
                                 }
                             });
+                            self.next();
                         }
                         "DESCRIPTION" => {
-                            description = Some(match self.next() {
-                                Some(Token::StringLiteral(s)) => s,
+                            description = Some(match self.current() {
+                                Some(Token::StringLiteral(s)) => s.clone(),
                                 t => {
                                     return Err(format!(
                                         "Expected string for description, got {:?}",
@@ -1925,6 +1937,7 @@ impl Parser {
                                     ))
                                 }
                             });
+                            self.next();
                         }
                         _ => return Err(format!("Unknown policy option: {}", key)),
                     }
