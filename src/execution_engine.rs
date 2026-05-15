@@ -1056,6 +1056,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     /// Execute recursive CTE using iterative approach
+    #[allow(dead_code)]
     fn execute_recursive_cte(&mut self, ws: &WithSelect) -> SqlResult<ExecutorResult> {
         let with_clause = ws.with_clause.as_ref().unwrap();
         if with_clause.ctes.len() != 1 {
@@ -1236,6 +1237,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn extract_cte_columns(&self, select: &SelectStatement) -> Vec<ColumnDefinition> {
         select
             .columns
@@ -1250,6 +1252,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .collect()
     }
 
+    #[allow(dead_code)]
     fn replace_cte_reference(
         &self,
         select: &SelectStatement,

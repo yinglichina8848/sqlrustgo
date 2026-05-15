@@ -404,7 +404,10 @@ mod tests {
         assert_eq!(Value::Integer(2).cmp(&Value::Integer(1)), Ordering::Greater);
         assert_eq!(Value::Null.cmp(&Value::Integer(1)), Ordering::Greater);
         assert_eq!(Value::Integer(1).cmp(&Value::Null), Ordering::Less);
-        assert_eq!(Value::Text("a".to_string()).cmp(&Value::Text("b".to_string())), Ordering::Less);
+        assert_eq!(
+            Value::Text("a".to_string()).cmp(&Value::Text("b".to_string())),
+            Ordering::Less
+        );
     }
 
     #[test]
@@ -413,5 +416,4 @@ mod tests {
         assert!(Value::Integer(2) > Value::Integer(1));
         assert!(Value::Null > Value::Integer(1));
     }
-
-    }
+}
