@@ -62,11 +62,54 @@ mod tests {
 
         assert_eq!(instance.definition_name, "batch_release");
         assert_eq!(instance.current_state, WorkflowState::Draft);
+        assert!(instance.instance_id.starts_with("wf-"));
+        assert!(instance.created_at > 0);
+        assert!(instance.updated_at > 0);
     }
 
     #[test]
     fn test_state_transition() {
         let instance = WorkflowInstance::new("test".to_string(), HashMap::new());
         assert_eq!(instance.current_state, WorkflowState::Draft);
+    }
+
+    #[test]
+    fn test_set_context() {
+        let mut ctx = HashMap::new();
+        ctx.insert("key1".to_string(), serde_json::json!("value1"));
+
+        let mut instance = WorkflowInstance::new("test".to_string(), ctx);
+        instance.set_context("key2".to_string(), serde_json::json!("value2"));
+
+        assert_eq!(
+            instance.context.get("key1").unwrap(),
+            &serde_json::json!("value1")
+        );
+        assert_eq!(
+            instance.context.get("key2").unwrap(),
+            &serde_json::json!("value2")
+        );
+    }
+
+    #[test]
+    fn test_transition_to() {
+        let mut instance = WorkflowInstance::new("test".to_string(), HashMap::new());
+        assert_eq!(instance.current_state, WorkflowState::Draft);
+
+        instance.transition_to(WorkflowState::Review);
+        assert_eq!(instance.current_state, WorkflowState::Review);
+        assert!(instance.updated_at >= instance.created_at);
+    }
+
+    #[test]
+    fn test_instance_context_update() {
+        let mut ctx = HashMap::new();
+        ctx.insert("initial".to_string(), serde_json::json!(true));
+
+        let mut instance = WorkflowInstance::new("test".to_string(), ctx);
+        let old_updated_at = instance.updated_at;
+
+        instance.set_context("new_key".to_string(), serde_json::json!("new_value"));
+        assert!(instance.updated_at >= old_updated_at);
     }
 }

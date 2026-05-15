@@ -59,3 +59,13 @@ impl EventSchedulerService {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_event_scheduler_command_debug() {
+        format!("{:?}", EventSchedulerCommand::Stop);
+    }
+}

@@ -747,7 +747,17 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::Explain(ref explain) => self.execute_explain(explain),
             Statement::WithSelect(ref ws) => match &ws.with_clause {
                 None => self.execute_select(&ws.select),
-                Some(wc) if wc.recursive => self.execute_recursive_cte(ws),
+                Some(wc) if wc.recursive => {
+                    let catalog = if let Some(ref catalog_guard) = self.catalog {
+                        catalog_guard.read().unwrap().clone()
+                    } else {
+                        sqlrustgo_catalog::Catalog::new("cte_catalog".to_string())
+                    };
+                    let executor = StoredProcExecutor::new(Arc::new(catalog), self.storage.clone());
+                    executor
+                        .execute_with_cte(&sqlrustgo_parser::Statement::WithSelect(ws.clone()))
+                        .map_err(SqlError::ExecutionError)
+                }
                 Some(wc) => self.execute_non_recursive_cte(ws),
             },
             Statement::Check(ref check) => self.execute_check(check),

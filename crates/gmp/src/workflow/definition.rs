@@ -67,6 +67,7 @@ mod tests {
         assert_eq!(def.name, "batch_release");
         assert_eq!(def.stages.len(), 4);
         assert_eq!(def.required_signatures, 2);
+        assert_eq!(def.timeout, Some(604800));
     }
 
     #[test]
@@ -81,5 +82,44 @@ mod tests {
 
         assert!(def.is_valid_transition(&WorkflowState::Draft, &WorkflowState::Review));
         assert!(!def.is_valid_transition(&WorkflowState::Draft, &WorkflowState::Released));
+    }
+
+    #[test]
+    fn test_definition_with_invalid_stage() {
+        let def = WorkflowDefinition::new(
+            "test".to_string(),
+            vec!["draft", "invalid_stage", "released"],
+            None,
+            1,
+        );
+        assert!(def.is_err());
+        assert_eq!(def.unwrap_err(), "Invalid stage name");
+    }
+
+    #[test]
+    fn test_definition_without_timeout() {
+        let def = WorkflowDefinition::new(
+            "test".to_string(),
+            vec!["draft", "review", "released"],
+            None,
+            1,
+        )
+        .unwrap();
+
+        assert_eq!(def.timeout, None);
+    }
+
+    #[test]
+    fn test_state_machine() {
+        let def = WorkflowDefinition::new(
+            "test".to_string(),
+            vec!["draft", "review", "released"],
+            None,
+            1,
+        )
+        .unwrap();
+
+        let sm = def.state_machine();
+        assert!(sm.can_transition(&WorkflowState::Draft, &WorkflowState::Review));
     }
 }

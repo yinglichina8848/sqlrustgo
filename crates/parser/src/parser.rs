@@ -3382,32 +3382,76 @@ impl Parser {
                             expression: Some(expr),
                         });
                     } else {
+                        let lit_name = n.to_string();
+                        let lit_expr = Expression::Literal(n.to_string());
+                        let has_alias = matches!(self.current(), Some(Token::As));
+                        let alias = if has_alias {
+                            self.next();
+                            match self.current() {
+                                Some(Token::Identifier(name)) => {
+                                    let alias_name = name.clone();
+                                    self.next();
+                                    Some(alias_name)
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
                         columns.push(SelectColumn {
-                            name: n.to_string(),
-                            alias: None,
-                            expression: Some(Expression::Literal(n.to_string())),
+                            name: lit_name,
+                            alias,
+                            expression: Some(lit_expr),
                         });
-                        self.next();
+                        if !has_alias {
+                            self.next();
+                        }
                     }
                 }
                 // Handle StringLiteral in SELECT (e.g., SELECT 'hello')
                 Some(Token::StringLiteral(s)) => {
+                    let lit_str = format!("'{}'", s);
+                    let has_alias = matches!(self.current(), Some(Token::As));
+                    let alias = if has_alias {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
                     columns.push(SelectColumn {
-                        name: format!("'{}'", s),
-                        alias: None,
-                        expression: Some(Expression::Literal(format!("'{}'", s))),
+                        name: lit_str.clone(),
+                        alias,
+                        expression: Some(Expression::Literal(lit_str)),
                     });
-                    self.next();
                 }
                 // Handle BooleanLiteral in SELECT (e.g., SELECT TRUE, FALSE)
                 Some(Token::BooleanLiteral(b)) => {
                     let val = if *b { "TRUE" } else { "FALSE" };
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
                     columns.push(SelectColumn {
                         name: val.to_string(),
-                        alias: None,
+                        alias,
                         expression: Some(Expression::Literal(val.to_string())),
                     });
-                    self.next();
                 }
                 Some(Token::Identifier(_)) => {
                     let start_position = self.position;
