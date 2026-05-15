@@ -745,18 +745,37 @@ CREATE TABLE IF NOT EXISTS gmp_signature_requests (
 // ============================================================================
 
 /// Generate a simple UUID (nanoseconds-based for demo purposes)
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static UUID_COUNTER: AtomicU64 = AtomicU64::new(0);
-
 pub fn uuid_simple() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let counter = UUID_COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("{:x}-{:x}", now, counter)
+    let pid = std::process::id() as u64;
+    let thread_id = current_thread_id();
+    format!("{:x}-{:x}-{:x}", now, pid, thread_id)
+}
+
+#[cfg(target_os = "macos")]
+fn current_thread_id() -> u64 {
+    // On macOS, use pthread thread ID
+    use std::mem::MaybeUninit;
+    unsafe {
+        let tid = MaybeUninit::<u64>::uninit();
+        tid.assume_init()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn current_thread_id() -> u64 {
+    use std::thread::ThreadId;
+    let id = std::thread::current().id();
+    // Convert ThreadId to u64 by hashing
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    id.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Get current timestamp in milliseconds

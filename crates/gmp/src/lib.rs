@@ -166,12 +166,10 @@ pub use evidence_verification::{
     evidence_incremental_verify, verify_cross_chain, verify_evidence_chain,
 };
 
-pub use immutable_record::{
-    ImmutableRecord, ImmutableRecordBuilder, VerificationReport,
-};
+pub use immutable_record::{ImmutableRecord, ImmutableRecordBuilder, VerificationReport};
 
 pub use evidence_api::{
-    create_evidence, get_evidence, list_evidence, verify_evidence, create_signed_evidence,
+    create_evidence, create_signed_evidence, get_evidence, list_evidence, verify_evidence,
 };
 
 pub use sql_api::{sql, GmpExecutor};

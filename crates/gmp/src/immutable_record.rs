@@ -51,13 +51,19 @@ impl ImmutableRecord {
 
     pub fn add_vector(&mut self, node_id: &str, content: &str, embedding: &[f32]) {
         let metadata = EvidenceMetadata::new("vector");
-        let new_chain = self.chain.clone().add_vector(node_id, content, embedding, metadata);
+        let new_chain = self
+            .chain
+            .clone()
+            .add_vector(node_id, content, embedding, metadata);
         self.chain = new_chain;
     }
 
     pub fn add_graph(&mut self, node_id: &str, query: &str, results: &str) {
         let metadata = EvidenceMetadata::new("graph");
-        let new_chain = self.chain.clone().add_graph(node_id, query, results, metadata);
+        let new_chain = self
+            .chain
+            .clone()
+            .add_graph(node_id, query, results, metadata);
         self.chain = new_chain;
     }
 
@@ -117,15 +123,18 @@ impl ImmutableRecordBuilder {
     }
 
     pub fn build(self, initial_content: &str) -> ImmutableRecord {
-        let mut metadata = EvidenceMetadata::new("immutable_record")
-            .with_context("chain_id", &self.chain_id);
+        let mut metadata =
+            EvidenceMetadata::new("immutable_record").with_context("chain_id", &self.chain_id);
 
         for (key, value) in &self.metadata {
             metadata = metadata.with_context(key, value);
         }
 
-        let chain = EvidenceChain::new(self.chain_id, self.description)
-            .add_document("initial", initial_content, metadata);
+        let chain = EvidenceChain::new(self.chain_id, self.description).add_document(
+            "initial",
+            initial_content,
+            metadata,
+        );
 
         ImmutableRecord { chain }
     }
