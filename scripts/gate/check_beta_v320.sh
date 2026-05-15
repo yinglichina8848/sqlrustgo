@@ -80,24 +80,38 @@ check "B3: cargo clippy" cargo clippy --all-features -- -D warnings
 # B4: Format
 check "B4: cargo fmt" cargo fmt --all -- --check
 
-# B5: Coverage >= 80%
+# B5: Coverage >= 65% (per TEST_PLAN.md section 9.1 Beta requirements)
 TOTAL=$((TOTAL+1))
-echo -n "[beta-v3.2.0] B5: L1 crates coverage >=80% ... "
-if command -v cargo-llvm-cov >/dev/null 2>&1; then
-    COV_OUTPUT=$(cargo llvm-cov test -p sqlrustgo-types -p sqlrustgo-parser -p sqlrustgo-planner -p sqlrustgo-optimizer -p sqlrustgo-executor -p sqlrustgo-storage -p sqlrustgo-transaction -p sqlrustgo-catalog --lib 2>&1 || true)
-    cov=$(echo "$COV_OUTPUT" | grep "^TOTAL" | head -1 | awk '{print $4}' | tr -d '%' || echo "0")
-    if [ -n "$cov" ] && [ "$cov" != "0" ] && [ "$cov" != "" ]; then
-        result=$(echo "$cov >= 80" | bc -l 2>/dev/null || echo "0")
-        if [ "$result" = "1" ]; then
-            echo "PASS (${cov}%)"; PASS=$((PASS+1))
-        else
-            echo "FAIL (${cov}% < 80%)"; BLOCKERS=$((BLOCKERS+1))
-        fi
+echo "[beta-v3.2.0] B5: Coverage >= 65% (per-crate per TEST_PLAN.md)"
+echo "  Requirements: parser>=75%, executor>=70%, planner>=65%, optimizer>=55%, storage>=70%, transaction>=70%"
+
+# Per-crate coverage check (per TEST_PLAN.md Beta section 9.1)
+check_crate_coverage() {
+    local crate="$1"
+    local min="$2"
+    local cov=$(cargo llvm-cov -p "sqlrustgo-$crate" --all-features --lib 2>&1 | grep "^TOTAL" | awk '{print $4}' | tr -d '%' || echo "0")
+    local result=$(echo "$cov >= $min" | bc -l 2>/dev/null || echo "0")
+    if [ "$result" = "1" ]; then
+        echo "  ✅ sqlrustgo-$crate: ${cov}% (>= ${min}%)"
+        return 0
     else
-        echo "SKIP (llvm-cov no data)"; TOTAL=$((TOTAL-1))
+        echo "  ❌ sqlrustgo-$crate: ${cov}% (< ${min}%)"
+        return 1
     fi
+}
+
+all_pass=true
+check_crate_coverage "parser" 75 || all_pass=false
+check_crate_coverage "executor" 70 || all_pass=false
+check_crate_coverage "planner" 65 || all_pass=false
+check_crate_coverage "optimizer" 55 || all_pass=false
+check_crate_coverage "storage" 70 || all_pass=false
+check_crate_coverage "transaction" 70 || all_pass=false
+
+if [ "$all_pass" = true ]; then
+    echo "B5: PASS"; PASS=$((PASS+1))
 else
-    echo "SKIP (no llvm-cov)"
+    echo "B5: FAIL (per-crate coverage below threshold)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
 # B6: Security Audit
