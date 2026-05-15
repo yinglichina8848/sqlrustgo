@@ -52,6 +52,7 @@ pub mod audit_chain_tamper;
 pub mod audit_chain_wal;
 pub mod compliance;
 pub mod document;
+pub mod electronic_signature;
 pub mod embedding;
 pub mod persist_sqlite;
 pub mod report;
@@ -114,4 +115,11 @@ pub use semantic_embedding::{
     EmbeddingProvider, EmbeddingProviderConfig, HashConfig, OllamaConfig, OpenAIConfig,
     ProviderFactory,
 };
+
+pub use electronic_signature::{
+    ApprovalPolicy, CREATE_APPROVAL_POLICIES_TABLE, CREATE_ELECTRONIC_SIGNATURES_TABLE,
+    CREATE_SIGNATURE_REQUESTS_TABLE, ElectronicSignature, PolicyEvaluation,
+    PolicyStatus, SignatureError, SignatureRequest, sql as e_signature_sql,
+};
+
 pub use sql_api::{sql, GmpExecutor};
