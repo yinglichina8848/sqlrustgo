@@ -1,0 +1,10 @@
+[package]
+name = "sqlrustgo-spill"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1.0"
+tracing = "0.1"
+parking_lot = "0.12"
+tempfile = "3.8"

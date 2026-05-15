@@ -44,6 +44,7 @@ members = [
     "crates/observability",
     "crates/sync",
     "crates/gis",
+    "crates/spill",
 ]
 
 [workspace.package]
