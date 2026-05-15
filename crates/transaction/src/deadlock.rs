@@ -1,5 +1,7 @@
 use crate::mvcc::TxId;
-use std::collections::{HashMap, HashSet, VecDeque};
+use rustc_hash::FxHashMap;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -10,7 +12,7 @@ use std::time::Duration;
 
 #[derive(Debug, Default)]
 struct Inner {
-    waits_for: HashMap<TxId, HashSet<TxId>>,
+    waits_for: FxHashMap<TxId, HashSet<TxId>>,
 }
 
 impl Inner {
@@ -201,7 +203,7 @@ impl DeadlockDetector {
 
     #[allow(dead_code)]
     fn bfs_cycle(
-        graph: &HashMap<TxId, HashSet<TxId>>,
+        graph: &FxHashMap<TxId, HashSet<TxId>>,
         start: TxId,
         visited: &mut HashSet<TxId>,
         _path: &mut [TxId],
