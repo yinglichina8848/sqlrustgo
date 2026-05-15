@@ -70,6 +70,7 @@ pub mod provenance_lineage;
 pub mod report;
 pub mod scenarios;
 pub mod semantic_embedding;
+pub mod signature;
 pub mod sop;
 pub mod sql_api;
 pub mod vector_search;
@@ -148,6 +149,11 @@ pub use electronic_signature::{
     ElectronicSignatureProvider, PolicyEvaluation, PolicyStatus, SignatureError, SignatureRequest,
     SystemTimeProvider, TrustedTimestampProvider, CREATE_APPROVAL_POLICIES_TABLE,
     CREATE_ELECTRONIC_SIGNATURES_TABLE, CREATE_SIGNATURE_REQUESTS_TABLE,
+};
+
+pub use signature::{
+    keys::{Certificate, PrivateKey, PublicKey},
+    SignatureAlgorithm, SignatureError as DigiSignatureError, SignatureVerifier, Signer,
 };
 
 pub use hsm::{HsmConfig, HsmError, HsmProvider, HsmProviderType};

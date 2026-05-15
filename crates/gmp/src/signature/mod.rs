@@ -1,16 +1,16 @@
 //! Digital Signature Audit Chain Module
 //!
-//! Provides cryptographic digital signatures (ECDSA P-256, RSA-SHA256)
+//! Provides cryptographic digital signatures (Ed25519, ECDSA P-256)
 //! for tamper-evident audit chains.
 
 pub mod algorithms;
+pub mod chain;
 pub mod ecdsa;
+pub mod ed25519;
 pub mod error;
 pub mod keys;
 pub mod local_keys;
-pub mod rsa;
 pub mod signed_entry;
-pub mod chain;
 pub mod traits;
 
 pub use algorithms::SignatureAlgorithm;

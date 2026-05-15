@@ -10,6 +10,8 @@ pub enum SignatureError {
     VerificationFailed(String),
     #[error("Unsupported algorithm: {0}")]
     UnsupportedAlgorithm(String),
+    #[error("Invalid format: {0}")]
+    InvalidFormat(String),
 }
 
 #[derive(Error, Debug)]
