@@ -338,12 +338,7 @@ mod tests {
         executor.init().unwrap();
 
         executor
-            .import_document(
-                "Test Doc",
-                "TEST",
-                "Content for reindexing test",
-                &["test"],
-            )
+            .import_document("Test Doc", "TEST", "Content for reindexing test", &["test"])
             .unwrap();
 
         let count = executor.reindex_all().unwrap();
