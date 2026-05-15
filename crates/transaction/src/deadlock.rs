@@ -1,5 +1,5 @@
 use crate::mvcc::TxId;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -57,6 +57,25 @@ impl Inner {
             for &holder in holders {
                 if self.dfs_reachable(holder, target, visited) {
                     return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn bfs_reachable(&self, start: TxId, target: TxId) -> bool {
+        let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
+
+        queue.push_back(start);
+
+        while let Some(current) = queue.pop_front() {
+            if current == target {
+                return true;
+            }
+            if visited.insert(current) {
+                if let Some(holders) = self.waits_for.get(&current) {
+                    queue.extend(holders);
                 }
             }
         }
@@ -194,6 +213,36 @@ impl DeadlockDetector {
             }
         }
         path.pop();
+        None
+    }
+
+    fn bfs_cycle(
+        graph: &HashMap<TxId, HashSet<TxId>>,
+        start: TxId,
+        visited: &mut HashSet<TxId>,
+        path: &mut Vec<TxId>,
+    ) -> Option<Vec<TxId>> {
+        let mut queue = VecDeque::new();
+        queue.push_back((start, vec![start]));
+
+        while let Some((current, current_path)) = queue.pop_front() {
+            if path.contains(&current) {
+                let idx = path.iter().position(|x| *x == current).unwrap();
+                return Some(path[idx..].to_vec());
+            }
+            if visited.contains(&current) {
+                continue;
+            }
+            visited.insert(current);
+
+            if let Some(holders) = graph.get(&current) {
+                for &holder in holders {
+                    let mut new_path = current_path.clone();
+                    new_path.push(holder);
+                    queue.push_back((holder, new_path));
+                }
+            }
+        }
         None
     }
 }
