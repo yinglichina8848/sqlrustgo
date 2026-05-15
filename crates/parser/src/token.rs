@@ -211,6 +211,14 @@ pub enum Token {
     Idempotent,
     Idempotency,
 
+    // GMP Electronic Signature keywords
+    Sign,
+    Record,
+    Policy,
+    Approval,
+    Reason,
+    Approved,
+
     // Data Types
     Integer,
     Text,
@@ -406,6 +414,12 @@ impl fmt::Display for Token {
             Token::Collector => write!(f, "COLLECTOR"),
             Token::Idempotent => write!(f, "IDEMPOTENT"),
             Token::Idempotency => write!(f, "IDEMPOTENCY"),
+            Token::Sign => write!(f, "SIGN"),
+            Token::Record => write!(f, "RECORD"),
+            Token::Policy => write!(f, "POLICY"),
+            Token::Approval => write!(f, "APPROVAL"),
+            Token::Reason => write!(f, "REASON"),
+            Token::Approved => write!(f, "APPROVED"),
             Token::Unbounded => write!(f, "UNBOUNDED"),
             Token::Preceding => write!(f, "PRECEDING"),
             Token::Following => write!(f, "FOLLOWING"),
@@ -708,6 +722,12 @@ pub fn from_keyword(s: &str) -> Option<Token> {
         "LIKE" => Some(Token::Like),
         "IDEMPOTENT" => Some(Token::Idempotent),
         "IDEMPOTENCY" => Some(Token::Idempotency),
+        "SIGN" => Some(Token::Sign),
+        "RECORD" => Some(Token::Record),
+        "POLICY" => Some(Token::Policy),
+        "APPROVAL" => Some(Token::Approval),
+        "REASON" => Some(Token::Reason),
+        "APPROVED" => Some(Token::Approved),
         _ => None,
     }
 }

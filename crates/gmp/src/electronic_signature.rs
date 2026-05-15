@@ -91,9 +91,7 @@ impl ElectronicSignature {
     /// Verify the signature is valid
     pub fn verify(&self, _data: &[u8]) -> bool {
         // Reconstruct what was signed: data_hash || reason || timestamp
-        let mut to_verify = Vec::with_capacity(
-            self.data_hash.len() + self.reason.len() + 8,
-        );
+        let mut to_verify = Vec::with_capacity(self.data_hash.len() + self.reason.len() + 8);
         to_verify.extend_from_slice(&self.data_hash);
         to_verify.extend_from_slice(self.reason.as_bytes());
         to_verify.extend_from_slice(&self.timestamp.to_le_bytes());
@@ -283,7 +281,10 @@ pub enum SignatureError {
     /// Request has expired
     RequestExpired { request_id: String },
     /// Sequential signature order violated
-    SequentialOrderViolation { expected_step: i32, actual_step: i32 },
+    SequentialOrderViolation {
+        expected_step: i32,
+        actual_step: i32,
+    },
     /// Invalid policy configuration
     InvalidPolicy { reason: String },
     /// Storage error
@@ -311,7 +312,10 @@ impl std::fmt::Display for SignatureError {
             SignatureError::RequestExpired { request_id } => {
                 write!(f, "Signature request has expired: {}", request_id)
             }
-            SignatureError::SequentialOrderViolation { expected_step, actual_step } => {
+            SignatureError::SequentialOrderViolation {
+                expected_step,
+                actual_step,
+            } => {
                 write!(
                     f,
                     "Sequential order violated: expected step {}, got {}",
@@ -448,7 +452,11 @@ CREATE TABLE IF NOT EXISTS gmp_signature_requests (
     ) -> String {
         let roles_sql = format!(
             "[{}]",
-            required_roles.iter().map(|r| format!("'{}'", r)).collect::<Vec<_>>().join(", ")
+            required_roles
+                .iter()
+                .map(|r| format!("'{}'", r))
+                .collect::<Vec<_>>()
+                .join(", ")
         );
         format!(
             "INSERT INTO gmp_approval_policies (id, name, required_signatures, required_roles, sequential, timeout_hours, created_at, updated_at, active) \
@@ -494,11 +502,21 @@ CREATE TABLE IF NOT EXISTS gmp_signature_requests (
         policy_name: Option<&str>,
         seq_in_policy: Option<i32>,
     ) -> String {
-        let session_sql = session_id.map(|s| format!("'{}'", s)).unwrap_or_else(|| "NULL".to_string());
-        let role_sql = role.map(|r| format!("'{}'", r)).unwrap_or_else(|| "NULL".to_string());
-        let policy_id_sql = policy_id.map(|p| format!("'{}'", p)).unwrap_or_else(|| "NULL".to_string());
-        let policy_name_sql = policy_name.map(|p| format!("'{}'", p)).unwrap_or_else(|| "NULL".to_string());
-        let seq_sql = seq_in_policy.map(|s| s.to_string()).unwrap_or_else(|| "NULL".to_string());
+        let session_sql = session_id
+            .map(|s| format!("'{}'", s))
+            .unwrap_or_else(|| "NULL".to_string());
+        let role_sql = role
+            .map(|r| format!("'{}'", r))
+            .unwrap_or_else(|| "NULL".to_string());
+        let policy_id_sql = policy_id
+            .map(|p| format!("'{}'", p))
+            .unwrap_or_else(|| "NULL".to_string());
+        let policy_name_sql = policy_name
+            .map(|p| format!("'{}'", p))
+            .unwrap_or_else(|| "NULL".to_string());
+        let seq_sql = seq_in_policy
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "NULL".to_string());
 
         let data_hash_hex = hex::encode(data_hash);
         let signature_hex = hex::encode(signature);
@@ -533,7 +551,8 @@ CREATE TABLE IF NOT EXISTS gmp_signature_requests (
 
     /// Build SQL to query pending signature requests
     pub fn query_pending_requests() -> String {
-        "SELECT * FROM gmp_signature_requests WHERE status = 'PENDING' ORDER BY created_at".to_string()
+        "SELECT * FROM gmp_signature_requests WHERE status = 'PENDING' ORDER BY created_at"
+            .to_string()
     }
 
     /// Build SQL to query active approval policies
@@ -574,9 +593,7 @@ pub fn compute_data_hash(data: &[u8]) -> Vec<u8> {
 
 /// Compute signing payload: data_hash || reason || timestamp
 pub fn compute_signing_payload(data_hash: &[u8], reason: &str, timestamp: i64) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(
-        data_hash.len() + reason.len() + 8,
-    );
+    let mut payload = Vec::with_capacity(data_hash.len() + reason.len() + 8);
     payload.extend_from_slice(data_hash);
     payload.extend_from_slice(reason.as_bytes());
     payload.extend_from_slice(&timestamp.to_le_bytes());
@@ -688,7 +705,10 @@ mod tests {
     #[test]
     fn test_policy_status() {
         assert_eq!(PolicyStatus::Pending.as_str(), "PENDING");
-        assert_eq!(PolicyStatus::from_str("APPROVED"), Some(PolicyStatus::Approved));
+        assert_eq!(
+            PolicyStatus::from_str("APPROVED"),
+            Some(PolicyStatus::Approved)
+        );
         assert_eq!(PolicyStatus::from_str("INVALID"), None);
     }
 

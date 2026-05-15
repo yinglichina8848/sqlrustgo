@@ -117,9 +117,9 @@ pub use semantic_embedding::{
 };
 
 pub use electronic_signature::{
-    ApprovalPolicy, CREATE_APPROVAL_POLICIES_TABLE, CREATE_ELECTRONIC_SIGNATURES_TABLE,
-    CREATE_SIGNATURE_REQUESTS_TABLE, ElectronicSignature, PolicyEvaluation,
-    PolicyStatus, SignatureError, SignatureRequest, sql as e_signature_sql,
+    sql as e_signature_sql, ApprovalPolicy, ElectronicSignature, PolicyEvaluation, PolicyStatus,
+    SignatureError, SignatureRequest, CREATE_APPROVAL_POLICIES_TABLE,
+    CREATE_ELECTRONIC_SIGNATURES_TABLE, CREATE_SIGNATURE_REQUESTS_TABLE,
 };
 
 pub use sql_api::{sql, GmpExecutor};
