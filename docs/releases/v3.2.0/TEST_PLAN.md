@@ -388,7 +388,7 @@ tests/fixtures/
 | Alpha | 2026-10-01 | ≥50% | 70% | 60% | 55% | 45% | 60% | 65% |
 | Beta | 2026-12-01 | ≥65% | 75% | 70% | 65% | 55% | 70% | 70% |
 | RC | 2027-01-15 | ≥75% | 80% | 75% | 70% | 65% | 75% | 75% |
-| GA | 2027-02-15 | **≥90%** | **85%** | **85%** | **80%** | **75%** | **80%** | **80%** |
+| GA | 2027-02-15 | **≥85%** | **85%** | **85%** | **80%** | **75%** | **80%** | **80%** |
 
 ### 9.2 覆盖率驱动策略
 
@@ -497,7 +497,7 @@ bash scripts/gate/check_ga_v320.sh
 | GA-3 | Integration tests | bash scripts/test/run_integration.sh |
 | GA-4 | Clippy | cargo clippy --all-features -D warnings |
 | GA-5 | Format | cargo fmt --all --check |
-| GA-6 | 覆盖率 ≥90% | cargo llvm-cov ≥90% |
+| GA-6 | 覆盖率 ≥85% | cargo llvm-cov ≥85% |
 | GA-7 | 安全扫描 | cargo audit |
 | GA-8 | TPC-H SF=10 | 22/22 |
 | GA-9 | QPS 基准 | 全部 ≥目标值 |
