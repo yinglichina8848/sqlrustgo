@@ -193,21 +193,21 @@ fn test_merge_multiple_columns_update() {
 fn test_merge_complex_condition() {
     let mut engine = create_engine();
     engine
-        .execute("CREATE TABLE target (id INTEGER, version INTEGER, value TEXT)")
+        .execute("CREATE TABLE target (id INTEGER, rev INTEGER, value TEXT)")
         .unwrap();
     engine
         .execute("INSERT INTO target VALUES (1, 1, 'old')")
         .unwrap();
 
     engine
-        .execute("CREATE TABLE source (id INTEGER, version INTEGER, value TEXT)")
+        .execute("CREATE TABLE source (id INTEGER, rev INTEGER, value TEXT)")
         .unwrap();
     engine
         .execute("INSERT INTO source VALUES (1, 2, 'new')")
         .unwrap();
 
     let result = engine.execute(
-        "MERGE INTO target USING source ON target.id = source.id AND target.version < source.version WHEN MATCHED THEN UPDATE SET value = source.value"
+        "MERGE INTO target USING source ON target.id = source.id AND target.rev < source.rev WHEN MATCHED THEN UPDATE SET value = source.value"
     ).unwrap();
 
     let result = engine

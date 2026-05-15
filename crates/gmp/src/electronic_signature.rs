@@ -757,10 +757,13 @@ pub fn uuid_simple() -> String {
 }
 
 // Global counter for thread ID on macOS (avoids uninitialized memory)
+#[cfg(target_os = "macos")]
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(target_os = "macos")]
 static THREAD_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn current_thread_id() -> u64 {
     THREAD_ID_COUNTER.fetch_add(1, Ordering::Relaxed)
 }
