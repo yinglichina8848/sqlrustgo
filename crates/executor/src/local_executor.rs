@@ -3,6 +3,8 @@
 //! Implements the Executor trait for local execution using StorageEngine.
 
 #[allow(unused_imports)]
+use serde::{Deserialize, Serialize};
+#[allow(unused_imports)]
 use sqlrustgo_planner::{
     AggregateExec, AggregateFunction, Expr, FilterExec, HashJoinExec, IndexScanExec, JoinType,
     Operator, PhysicalPlan, PreparedStatementManager, ProjectionExec, SortMergeJoinExec,
@@ -19,6 +21,7 @@ use crate::{Executor, ExecutorResult};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use sqlrustgo_spill::{AdaptiveMemoryTracker, PartitionManager};
+use sqlrustgo_spill::operators::HashJoinSpillOperator;
 
 /// Memory usage tracker for query execution
 pub struct MemoryTracker {
@@ -49,6 +52,7 @@ impl MemoryTracker {
 }
 
 /// Streaming aggregation accumulator - reduces memory from O(n_rows) to O(n_groups)
+#[derive(Serialize, Deserialize)]
 struct GroupAccumulator {
     count: i64,
     sum: i64,
@@ -720,6 +724,9 @@ impl<'a> LocalExecutor<'a> {
                 GroupAccumulator,
             > = std::collections::HashMap::new();
 
+            let spill_enabled = self.memory_tracker.is_some() && self.partition_manager.is_some();
+            let mut spilled_partition_ids: Vec<usize> = Vec::new();
+
             for row in &child_result.rows {
                 let key: Vec<Value> = group_expr
                     .iter()
@@ -759,11 +766,109 @@ impl<'a> LocalExecutor<'a> {
                         accumulator.add_distinct_value(&value);
                     }
                 }
+
+                if spill_enabled {
+                    if let Some(ref t) = self.memory_tracker {
+                        if t.should_spill() && !groups.is_empty() {
+                            if let Some(ref pm) = self.partition_manager {
+                                let groups_vec: Vec<(Vec<Value>, GroupAccumulator)> = groups
+                                    .drain()
+                                    .collect();
+                                if let Ok(partition_id) = pm.write_partition(&groups_vec) {
+                                    spilled_partition_ids.push(partition_id);
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
+            if spill_enabled {
+                if let Some(ref t) = self.memory_tracker {
+                    if t.is_memory_exceeded() && !groups.is_empty() {
+                        if let Some(ref pm) = self.partition_manager {
+                            let groups_vec: Vec<(Vec<Value>, GroupAccumulator)> = groups
+                                .drain()
+                                .collect();
+                            if let Ok(partition_id) = pm.write_partition(&groups_vec) {
+                                spilled_partition_ids.push(partition_id);
+                            }
+                        }
+                    }
+                }
+            }
+
+            let mut merged_groups: std::collections::HashMap<Vec<Value>, GroupAccumulator> =
+                std::collections::HashMap::new();
+
+            if spill_enabled {
+                if let Some(ref pm) = self.partition_manager {
+                    for partition_id in &spilled_partition_ids {
+                        if let Ok(spilled) = pm.read_partition::<(Vec<Value>, GroupAccumulator)>(*partition_id) {
+                            for (key, mut spilled_acc) in spilled {
+                                if let Some(existing) = merged_groups.get_mut(&key) {
+                                    existing.count += spilled_acc.count;
+                                    existing.sum += spilled_acc.sum;
+                                    if let Some(spilled_min) = spilled_acc.min_val {
+                                        if let Some(existing_min) = existing.min_val {
+                                            if spilled_min < existing_min {
+                                                existing.min_val = Some(spilled_min);
+                                            }
+                                        } else {
+                                            existing.min_val = Some(spilled_min);
+                                        }
+                                    }
+                                    if let Some(spilled_max) = spilled_acc.max_val {
+                                        if let Some(existing_max) = existing.max_val {
+                                            if spilled_max > existing_max {
+                                                existing.max_val = Some(spilled_max);
+                                            }
+                                        } else {
+                                            existing.max_val = Some(spilled_max);
+                                        }
+                                    }
+                                    existing.distinct_values.extend(spilled_acc.distinct_values);
+                                } else {
+                                    merged_groups.insert(key, spilled_acc);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for (key, acc) in groups {
+                    if let Some(existing) = merged_groups.get_mut(&key) {
+                        existing.count += acc.count;
+                        existing.sum += acc.sum;
+                        if let Some(acc_min) = acc.min_val {
+                            if let Some(existing_min) = existing.min_val {
+                                if acc_min < existing_min {
+                                    existing.min_val = Some(acc_min);
+                                }
+                            } else {
+                                existing.min_val = Some(acc_min);
+                            }
+                        }
+                        if let Some(acc_max) = acc.max_val {
+                            if let Some(existing_max) = existing.max_val {
+                                if acc_max > existing_max {
+                                    existing.max_val = Some(acc_max);
+                                }
+                            } else {
+                                existing.max_val = Some(acc_max);
+                            }
+                        }
+                        existing.distinct_values.extend(acc.distinct_values);
+                    } else {
+                        merged_groups.insert(key, acc);
+                    }
+                }
+            }
+
+            let final_groups = if spill_enabled { merged_groups } else { groups };
+
             let mut results = vec![];
-            let mut results = vec![];
-            for (key, mut accumulator) in groups {
+            for (key, mut accumulator) in final_groups {
                 let mut row = key;
                 for agg_expr in aggregate_expr {
                     if let sqlrustgo_planner::Expr::AggregateFunction {
@@ -786,7 +891,6 @@ impl<'a> LocalExecutor<'a> {
             let row_count = results.len();
             let duration = start.elapsed();
 
-            // Record to GLOBAL_PROFILER
             GLOBAL_PROFILER.record(
                 "Aggregate",
                 "aggregate",
@@ -965,17 +1069,26 @@ impl<'a> LocalExecutor<'a> {
 
         match join_type {
             JoinType::Inner => {
-                let matched = hash_inner_join(
-                    &left_result.rows,
-                    &right_result.rows,
-                    condition,
-                    left_schema,
-                    right_schema,
-                );
+                let matched = if spill_enabled {
+                    self.hash_inner_join_with_spill(
+                        &left_result.rows,
+                        &right_result.rows,
+                        condition,
+                        left_schema,
+                        right_schema,
+                    )
+                } else {
+                    hash_inner_join(
+                        &left_result.rows,
+                        &right_result.rows,
+                        condition,
+                        left_schema,
+                        right_schema,
+                    )
+                };
                 let row_count = matched.len();
                 let duration = start.elapsed();
 
-                // Record to GLOBAL_PROFILER
                 GLOBAL_PROFILER.record(
                     "HashJoin",
                     "join",
@@ -1289,6 +1402,117 @@ fn try_build_hash_join(
     }
 
     Some((hash, probe_col_idx, is_swapped))
+}
+
+impl<'a> LocalExecutor<'a> {
+    fn hash_inner_join_with_spill(
+        &self,
+        left: &[Vec<Value>],
+        right: &[Vec<Value>],
+        condition: &sqlrustgo_planner::Expr,
+        left_schema: &sqlrustgo_planner::Schema,
+        right_schema: &sqlrustgo_planner::Schema,
+    ) -> Vec<Vec<Value>> {
+        let (left_col_name, right_col_name) = match extract_join_key_columns(condition) {
+            Some(c) => c,
+            None => return hash_inner_join(left, right, condition, left_schema, right_schema),
+        };
+
+        let left_col_idx = match find_column_index(left_schema, &left_col_name) {
+            Some(idx) => idx,
+            None => return hash_inner_join(left, right, condition, left_schema, right_schema),
+        };
+
+        let right_col_idx = match find_column_index(right_schema, &right_col_name) {
+            Some(idx) => idx,
+            None => return hash_inner_join(left, right, condition, left_schema, right_schema),
+        };
+
+        let (build, probe, build_col_idx, probe_col_idx, is_swapped) =
+            if left.len() <= right.len() {
+                (left, right, left_col_idx, right_col_idx, false)
+            } else {
+                (right, left, right_col_idx, left_col_idx, true)
+            };
+
+        let tracker = match &self.memory_tracker {
+            Some(t) => t.clone(),
+            None => return hash_inner_join(left, right, condition, left_schema, right_schema),
+        };
+
+        let partition_manager = match &self.partition_manager {
+            Some(pm) => pm,
+            None => return hash_inner_join(left, right, condition, left_schema, right_schema),
+        };
+
+        let mut join_op = match HashJoinSpillOperator::<Vec<Value>, Vec<Value>>::new(tracker) {
+            Ok(op) => op,
+            Err(_) => return hash_inner_join(left, right, condition, left_schema, right_schema),
+        };
+
+        for row in build {
+            if let Some(val) = get_row_value(row, build_col_idx) {
+                if !matches!(val, Value::Null) {
+                    let key = vec![val.clone()];
+                    if let Err(_) = join_op.add_build(key, row.to_vec()) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        let build_hash = join_op.build_hash_map();
+        let probe_buffer = join_op.get_probe_buffer().to_vec();
+
+        for row in probe {
+            if let Some(val) = get_row_value(row, probe_col_idx) {
+                if !matches!(val, Value::Null) {
+                    let key = vec![val.clone()];
+                    join_op.add_probe(key, row.to_vec());
+                }
+            }
+        }
+
+        let left_len = left_schema.fields.len();
+        let right_len = right_schema.fields.len();
+        let mut results = Vec::new();
+
+        if join_op.is_spilling() {
+            for _ in 0..join_op.num_partitions() {
+                if let Some((key, probe_row)) = join_op.next() {
+                    if let Some(matches) = build_hash.get(&key) {
+                        for &build_row in matches {
+                            let (left_row, right_row) = if is_swapped {
+                                (&probe_row[..], &build_row[..])
+                            } else {
+                                (&build_row[..], &probe_row[..])
+                            };
+                            let mut combined = left_row.to_vec();
+                            combined.extend(right_row.to_vec());
+                            results.push(combined);
+                        }
+                    }
+                }
+            }
+        } else {
+            for (key, probe_row) in &probe_buffer {
+                if let Some(matches) = build_hash.get(key) {
+                    for &build_row in matches {
+                        let (left_row, right_row) = if is_swapped {
+                            (&probe_row[..], &build_row[..])
+                        } else {
+                            (&build_row[..], &probe_row[..])
+                        };
+                        let mut combined = left_row.to_vec();
+                        combined.extend(right_row.to_vec());
+                        results.push(combined);
+                    }
+                }
+            }
+        }
+
+        results
+    }
 }
 
 fn hash_inner_join(
