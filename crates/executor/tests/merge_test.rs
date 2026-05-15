@@ -80,15 +80,11 @@ fn test_merge_delete() {
     engine
         .execute("INSERT INTO target VALUES (1, 'old'), (2, 'keep')")
         .unwrap();
-    engine
-        .execute("CREATE TABLE source (id INTEGER)")
-        .unwrap();
-    engine
-        .execute("INSERT INTO source VALUES (1)")
-        .unwrap();
+    engine.execute("CREATE TABLE source (id INTEGER)").unwrap();
+    engine.execute("INSERT INTO source VALUES (1)").unwrap();
 
     let result = engine.execute(
-        "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN DELETE"
+        "MERGE INTO target USING source ON target.id = source.id WHEN MATCHED THEN DELETE",
     );
     assert!(result.is_ok() || result.is_err());
 }
