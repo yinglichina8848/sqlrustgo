@@ -82,12 +82,20 @@ impl InvertedIndex {
     }
 
     /// Fuzzy search with maximum edit distance
+    /// Optimized with early termination when length difference exceeds max_distance
     pub fn fuzzy_search(&self, query: &str, max_distance: usize) -> Vec<u64> {
         let tokens = self.tokenizer.tokenize(query);
         let mut results: HashMap<u64, usize> = HashMap::new();
 
         for term in self.index.keys() {
             for token in &tokens {
+                // Early termination: if length difference > max_distance, Levenshtein distance must be > max_distance
+                if term.len() as isize - token.len() as isize > max_distance as isize
+                    || token.len() as isize - term.len() as isize > max_distance as isize
+                {
+                    continue;
+                }
+
                 let dist = levenshtein_distance(token, term);
                 if dist <= max_distance {
                     if let Some(doc_ids) = self.index.get(term) {
