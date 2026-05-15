@@ -3,9 +3,7 @@ use std::path::PathBuf;
 
 mod audit_chain_verify;
 
-use audit_chain_verify::{
-    run_verification, write_report, VerifyMode,
-};
+use audit_chain_verify::{run_verification, write_report, VerifyMode};
 
 #[derive(Parser, Debug)]
 #[command(name = "audit-chain-verify")]
@@ -33,7 +31,10 @@ fn main() {
         "entry" => VerifyMode::Entry,
         "incremental" => VerifyMode::Incremental,
         _ => {
-            eprintln!("Invalid mode: {}. Use quick, full, entry, or incremental.", args.mode);
+            eprintln!(
+                "Invalid mode: {}. Use quick, full, entry, or incremental.",
+                args.mode
+            );
             std::process::exit(1);
         }
     };

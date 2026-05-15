@@ -97,11 +97,7 @@ pub use compliance::{
     Violation,
 };
 
-pub use correction::{
-    CorrectionRecord, CREATE_CORRECTION_RECORDS_TABLE, TABLE_CORRECTION_RECORDS,
-};
-
-pub use correction_chain::{CorrectionChain, CorrectionChainEntry};
+pub use correction::{CorrectionRecord, CREATE_CORRECTION_RECORDS_TABLE, TABLE_CORRECTION_RECORDS};
 
 pub use provenance::{
     OperationType, ProvenanceRecord, SourceType, CREATE_PROVENANCE_RECORDS_TABLE,
@@ -141,14 +137,11 @@ pub use semantic_embedding::{
 pub use electronic_signature::{
     sql as e_signature_sql, ApprovalPolicy, ApprovalPolicyEvaluator, ElectronicSignature,
     ElectronicSignatureProvider, PolicyEvaluation, PolicyStatus, SignatureError, SignatureRequest,
-    SystemTimeProvider, TrustedTimestampProvider,
-    CREATE_APPROVAL_POLICIES_TABLE, CREATE_ELECTRONIC_SIGNATURES_TABLE,
-    CREATE_SIGNATURE_REQUESTS_TABLE,
+    SystemTimeProvider, TrustedTimestampProvider, CREATE_APPROVAL_POLICIES_TABLE,
+    CREATE_ELECTRONIC_SIGNATURES_TABLE, CREATE_SIGNATURE_REQUESTS_TABLE,
 };
 
-pub use hsm::{
-    HsmConfig, HsmError, HsmProvider, HsmProviderType,
-};
+pub use hsm::{HsmConfig, HsmError, HsmProvider, HsmProviderType};
 
 pub use hsm::software_tpm::SoftwareTpmProvider;
 

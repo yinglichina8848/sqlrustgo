@@ -2520,22 +2520,19 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         }
                     }
                 }
-                matched = Self::eval_predicate_with_multi_table(
-                    where_clause,
-                    &row_ctx,
-                    target_info,
-                );
+                matched =
+                    Self::eval_predicate_with_multi_table(where_clause, &row_ctx, target_info);
             }
 
             if matched {
                 for (ref col_name, ref set_expr) in &update.set_clauses {
-                    if let Some((col_idx, _)) = target_info
-                        .columns
-                        .iter()
-                        .enumerate()
-                        .find(|(_, c)| c.name == *col_name || col_name.ends_with(&format!(".{}", c.name)))
+                    if let Some((col_idx, _)) =
+                        target_info.columns.iter().enumerate().find(|(_, c)| {
+                            c.name == *col_name || col_name.ends_with(&format!(".{}", c.name))
+                        })
                     {
-                        let value = Self::eval_expression(set_expr, &target_rows[idx], target_info)?;
+                        let value =
+                            Self::eval_expression(set_expr, &target_rows[idx], target_info)?;
                         if col_idx < target_rows[idx].len() {
                             target_rows[idx][col_idx] = value;
                         }
@@ -2549,7 +2546,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         storage.delete(&target_table, &[])?;
         storage.insert(&target_table, target_rows)?;
 
-        self.query_cache.write().unwrap().invalidate_table(&target_table);
+        self.query_cache
+            .write()
+            .unwrap()
+            .invalidate_table(&target_table);
         Ok(ExecutorResult::new(vec![], count))
     }
 
@@ -2569,10 +2569,14 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                     "<" => l < r,
                     ">=" => l >= r,
                     "<=" => l <= r,
-                    "AND" | "and" => Self::eval_predicate_with_multi_table(left, row_ctx, _table_info)
-                        && Self::eval_predicate_with_multi_table(right, row_ctx, _table_info),
-                    "OR" | "or" => Self::eval_predicate_with_multi_table(left, row_ctx, _table_info)
-                        || Self::eval_predicate_with_multi_table(right, row_ctx, _table_info),
+                    "AND" | "and" => {
+                        Self::eval_predicate_with_multi_table(left, row_ctx, _table_info)
+                            && Self::eval_predicate_with_multi_table(right, row_ctx, _table_info)
+                    }
+                    "OR" | "or" => {
+                        Self::eval_predicate_with_multi_table(left, row_ctx, _table_info)
+                            || Self::eval_predicate_with_multi_table(right, row_ctx, _table_info)
+                    }
                     _ => false,
                 }
             }
@@ -2598,7 +2602,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         }
     }
 
-    fn eval_expression(expr: &Expression, row: &[Value], table_info: &TableInfo) -> Result<Value, String> {
+    fn eval_expression(
+        expr: &Expression,
+        row: &[Value],
+        table_info: &TableInfo,
+    ) -> Result<Value, String> {
         match expr {
             Expression::Literal(_) => Ok(expression_to_value(expr)),
             Expression::Identifier(name) => {
@@ -2610,7 +2618,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             }
             Expression::BinaryOp(left, op, right) => {
                 let left_val = Self::eval_expression(left, row, table_info).unwrap_or(Value::Null);
-                let right_val = Self::eval_expression(right, row, table_info).unwrap_or(Value::Null);
+                let right_val =
+                    Self::eval_expression(right, row, table_info).unwrap_or(Value::Null);
                 Ok(evaluate_binary_op(&left_val, &right_val, op))
             }
             _ => Ok(Value::Null),

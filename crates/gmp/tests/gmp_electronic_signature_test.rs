@@ -8,8 +8,8 @@
 //! - ApprovalPolicyEvaluator (sequential/parallel workflows)
 
 use sqlrustgo_gmp::electronic_signature::{
-    ApprovalPolicy, ApprovalPolicyEvaluator, ElectronicSignature, PolicyStatus, SignatureError,
-    SignatureRequest, compute_data_hash, compute_signing_payload, current_timestamp_ms,
+    compute_data_hash, compute_signing_payload, current_timestamp_ms, ApprovalPolicy,
+    ApprovalPolicyEvaluator, ElectronicSignature, PolicyStatus, SignatureError, SignatureRequest,
 };
 
 // ============================================================================
@@ -29,7 +29,10 @@ fn test_sign_record_sql_parsing() {
         Statement::SignRecord(sign) => {
             assert_eq!(sign.table_name, "batches");
             assert_eq!(sign.columns.len(), 1);
-            assert_eq!(sign.columns[0], ("batch_id".to_string(), "B001".to_string()));
+            assert_eq!(
+                sign.columns[0],
+                ("batch_id".to_string(), "B001".to_string())
+            );
             assert_eq!(sign.reason, "Approved for release");
         }
         _ => panic!("Expected SignRecord statement"),
@@ -43,15 +46,28 @@ fn test_sign_record_multiple_columns() {
 
     let sql = "SIGN RECORD FOR production_batches (batch_id = 'B001', product_id = 'P123', quantity = 1000) REASON 'Quality check passed'";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse SIGN RECORD with multiple columns: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SIGN RECORD with multiple columns: {:?}",
+        result
+    );
 
     match result.unwrap() {
         Statement::SignRecord(sign) => {
             assert_eq!(sign.table_name, "production_batches");
             assert_eq!(sign.columns.len(), 3);
-            assert_eq!(sign.columns[0], ("batch_id".to_string(), "B001".to_string()));
-            assert_eq!(sign.columns[1], ("product_id".to_string(), "P123".to_string()));
-            assert_eq!(sign.columns[2], ("quantity".to_string(), "1000".to_string()));
+            assert_eq!(
+                sign.columns[0],
+                ("batch_id".to_string(), "B001".to_string())
+            );
+            assert_eq!(
+                sign.columns[1],
+                ("product_id".to_string(), "P123".to_string())
+            );
+            assert_eq!(
+                sign.columns[2],
+                ("quantity".to_string(), "1000".to_string())
+            );
             assert_eq!(sign.reason, "Quality check passed");
         }
         _ => panic!("Expected SignRecord statement"),
@@ -65,7 +81,11 @@ fn test_sign_record_without_columns() {
 
     let sql = "SIGN RECORD FOR inventory REASON 'Stock verified'";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse SIGN RECORD without columns: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse SIGN RECORD without columns: {:?}",
+        result
+    );
 
     match result.unwrap() {
         Statement::SignRecord(sign) => {
@@ -84,7 +104,11 @@ fn test_create_approval_policy_basic() {
 
     let sql = "CREATE APPROVAL POLICY batch_release (required_signatures = 2, required_roles = ('QA_MANAGER', 'PRODUCTION_MANAGER'), sequential = TRUE)";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse CREATE APPROVAL POLICY: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse CREATE APPROVAL POLICY: {:?}",
+        result
+    );
 
     match result.unwrap() {
         Statement::CreateApprovalPolicy(policy) => {
@@ -106,7 +130,11 @@ fn test_create_approval_policy_with_optional_params() {
 
     let sql = "CREATE APPROVAL POLICY simple_approval (required_signatures = 1, sequential = FALSE, timeout_hours = 48, description = 'Simple approval')";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse CREATE APPROVAL POLICY with optional params: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse CREATE APPROVAL POLICY with optional params: {:?}",
+        result
+    );
 
     match result.unwrap() {
         Statement::CreateApprovalPolicy(policy) => {
@@ -127,7 +155,11 @@ fn test_create_approval_policy_minimal() {
 
     let sql = "CREATE APPROVAL POLICY minimal_policy (required_signatures = 1)";
     let result = parse(sql);
-    assert!(result.is_ok(), "Failed to parse minimal CREATE APPROVAL POLICY: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Failed to parse minimal CREATE APPROVAL POLICY: {:?}",
+        result
+    );
 
     match result.unwrap() {
         Statement::CreateApprovalPolicy(policy) => {
@@ -268,7 +300,9 @@ fn test_sequential_signature_flow() {
     assert_eq!(eval1.current_signatures, 1);
     assert_eq!(eval1.missing_roles, vec!["PRODUCTION_MANAGER"]);
 
-    let eval2 = evaluator.add_signature("user2", "PRODUCTION_MANAGER").unwrap();
+    let eval2 = evaluator
+        .add_signature("user2", "PRODUCTION_MANAGER")
+        .unwrap();
     assert_eq!(eval2.status, PolicyStatus::Approved);
     assert_eq!(eval2.current_signatures, 2);
     assert!(eval2.is_complete);
@@ -289,7 +323,9 @@ fn test_parallel_signature_flow() {
 
     assert_eq!(evaluator.current_status(), PolicyStatus::Pending);
 
-    let eval1 = evaluator.add_signature("user1", "PRODUCTION_MANAGER").unwrap();
+    let eval1 = evaluator
+        .add_signature("user1", "PRODUCTION_MANAGER")
+        .unwrap();
     assert_eq!(eval1.status, PolicyStatus::Pending);
     assert_eq!(eval1.current_signatures, 1);
 
@@ -313,7 +349,10 @@ fn test_sequential_order_violation() {
     let mut evaluator = ApprovalPolicyEvaluator::new(&policy, "req-3".to_string());
 
     let result = evaluator.add_signature("user1", "PRODUCTION_MANAGER");
-    assert!(matches!(result, Err(SignatureError::SequentialOrderViolation { .. })));
+    assert!(matches!(
+        result,
+        Err(SignatureError::SequentialOrderViolation { .. })
+    ));
 }
 
 #[test]
@@ -331,7 +370,10 @@ fn test_duplicate_signature_rejection() {
 
     evaluator.add_signature("user1", "QA_MANAGER").unwrap();
     let result = evaluator.add_signature("user1", "PRODUCTION_MANAGER");
-    assert!(matches!(result, Err(SignatureError::SignatureAlreadyExists { .. })));
+    assert!(matches!(
+        result,
+        Err(SignatureError::SignatureAlreadyExists { .. })
+    ));
 }
 
 #[test]
@@ -348,5 +390,8 @@ fn test_insufficient_permissions_rejection() {
     let mut evaluator = ApprovalPolicyEvaluator::new(&policy, "req-5".to_string());
 
     let result = evaluator.add_signature("user1", "ADMIN");
-    assert!(matches!(result, Err(SignatureError::InsufficientPermissions { .. })));
+    assert!(matches!(
+        result,
+        Err(SignatureError::InsufficientPermissions { .. })
+    ));
 }

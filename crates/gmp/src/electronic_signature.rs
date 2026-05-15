@@ -371,15 +371,15 @@ impl ApprovalPolicyEvaluator {
     }
 
     fn has_user_signed(&self, user_id: &str) -> bool {
-        self.collected_signatures.iter().any(|s| s.user_id == user_id)
+        self.collected_signatures
+            .iter()
+            .any(|s| s.user_id == user_id)
     }
 
     fn get_expected_role(&self) -> Result<&str, SignatureError> {
         let idx = (self.current_step - 1) as usize;
         if idx >= self.policy.required_roles.len() {
-            return Err(SignatureError::PolicyNotSatisfied {
-                missing: vec![],
-            });
+            return Err(SignatureError::PolicyNotSatisfied { missing: vec![] });
         }
         Ok(&self.policy.required_roles[idx])
     }
