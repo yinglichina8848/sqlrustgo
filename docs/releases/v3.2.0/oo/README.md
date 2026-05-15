@@ -1,7 +1,7 @@
 # GMP OO 文档索引
 
-> **版本**: v1.0
-> **日期**: 2026-05-15
+> **版本**: v1.1
+> **日期**: 2026-05-16
 > **维护人**: hermes-z6g4
 
 ---
@@ -11,77 +11,145 @@
 ```
 docs/releases/v3.2.0/oo/
 ├── GMP/
-│   ├── ELECTRONIC_SIGNATURE.md    # OO-2: 电子签名设计 (21 CFR Part 11)
-│   └── README.md                  # 本文件
-└── README.md                      # 索引入口
+│   ├── DIGITAL_SIGNATURE_CHAIN.md    # OO-1: 数字签名审计链
+│   ├── ELECTRONIC_SIGNATURE.md       # OO-2: 电子签名 (21 CFR Part 11)
+│   ├── IMMUTABLE_RECORD.md           # OO-3: Immutable Record / EBR
+│   ├── CORRECTION_CHAIN.md           # OO-4: Correction Chain
+│   ├── PROVENANCE_TRACKING.md        # OO-5: Provenance Tracking
+│   ├── TRUSTED_TIMESTAMP.md           # OO-6: Trusted Timestamp
+│   ├── HSM_KMS_INTEGRATION.md       # OO-6: HSM/KMS 集成
+│   ├── GMP_WORKFLOW_ENGINE.md         # OO-9: GMP Workflow Engine
+│   └── README.md                     # 本文件
+└── README.md                         # 索引入口
 ```
 
 ---
 
-## 二、已完成的 OO 文档
+## 二、OO 文档清单
 
-| 任务 ID | 文档 | 状态 | 描述 |
-|---------|------|------|------|
-| OO-2 | `ELECTRONIC_SIGNATURE.md` | ✅ 完成 | 21 CFR Part 11 电子签名系统设计 |
+| 任务 ID | 文档 | Issue | 状态 | 描述 |
+|---------|------|-------|------|------|
+| OO-1 | `DIGITAL_SIGNATURE_CHAIN.md` | #996 | ✅ 完成 | 数字签名审计链设计 |
+| OO-2 | `ELECTRONIC_SIGNATURE.md` | #997 | ✅ 完成 | 21 CFR Part 11 电子签名 |
+| OO-3 | `IMMUTABLE_RECORD.md` | #998 | ✅ 完成 | Immutable Record / EBR |
+| OO-4 | `CORRECTION_CHAIN.md` | #999 | ✅ 完成 | Correction Chain |
+| OO-5 | `PROVENANCE_TRACKING.md` | #1000 | ✅ 完成 | Provenance Tracking |
+| OO-6 | `TRUSTED_TIMESTAMP.md` | #1003 | ✅ 完成 | Trusted Timestamp |
+| OO-6 | `HSM_KMS_INTEGRATION.md` | #1001 | ✅ 完成 | HSM/KMS 集成 |
+| OO-9 | `GMP_WORKFLOW_ENGINE.md` | #1002 | ✅ 完成 | GMP Workflow Engine |
 
 ---
 
-## 三、OO-2 电子签名设计摘要
+## 三、文档摘要
 
-### 3.1 核心公式
+### OO-1: 数字签名审计链
 
-```
-电子签名 = 私钥签名 + 签署理由 + 时间戳
-```
-
-### 3.2 架构组件
+**核心公式**: `数字签名审计链 = 哈希链 + 数字签名 + 时间戳`
 
 | 组件 | 说明 |
 |------|------|
-| `ElectronicSignature` | 电子签名记录结构 |
-| `ApprovalPolicy` | 双人复核策略 |
-| `SignatureRequest` | 签名请求 |
-| `PolicyEvaluation` | 策略评估结果 |
+| HashChainProvider | 哈希链管理 |
+| SignatureProvider | 签名管理 (ED25519/ECDSA/RSA) |
+| 签名范围 | INSERT/UPDATE/DELETE |
 
-### 3.3 表结构
+**实现 PR**: #1073, #1076
 
-| 表名 | 说明 |
+### OO-2: 电子签名
+
+**核心公式**: `电子签名 = 私钥签名 + 签署理由 + 时间戳`
+
+| 组件 | 说明 |
 |------|------|
-| `gmp_electronic_signatures` | 电子签名记录 |
-| `gmp_approval_policies` | 审批策略 |
-| `gmp_signature_requests` | 签名请求 |
+| ElectronicSignatureProvider | 电子签名 |
+| ApprovalPolicyProvider | 审批策略 |
+| 21 CFR Part 11 | FDA 合规 |
 
-### 3.4 SQL 语句
+**实现 PR**: #1076
 
-```sql
--- 初始化表
--- 使用 electronic_signature::sql::INIT_TABLES
+### OO-3: Immutable Record
 
--- 创建审批策略
-SIGNATURE SQL:
-  INSERT INTO gmp_approval_policies ...
+**核心公式**: `Immutable Record = Append-Only Storage + Correction Records`
 
--- 请求签名
--- 使用 sql::create_signature_request()
+| 特性 | 说明 |
+|------|------|
+| CREATE TABLE ... ENGINE = IMMUTABLE | 不可变表 |
+| DML 拦截 | 禁止 UPDATE/DELETE |
+| 历史查询 | 完整修改历史 |
 
--- 记录签名
--- 使用 sql::record_signature()
-```
+**实现 PR**: #1029
+
+### OO-4: Correction Chain
+
+**核心公式**: `Correction Chain = Immutable History + Approval + Signature + Audit`
+
+| 修正类型 | 说明 |
+|----------|------|
+| CLARIFICATION | 说明性修正 |
+| ERROR_CORRECTION | 错误修正 |
+
+**实现 PR**: #1027
+
+### OO-5: Provenance Tracking
+
+**核心公式**: `Provenance = Data Lineage + Transformation History + Source Tracking`
+
+| 血缘类型 | 说明 |
+|----------|------|
+| DIRECT | 直接插入 |
+| DERIVED | 派生数据 |
+| IMPORTED | 导入数据 |
+
+**实现 PR**: #1024
+
+### OO-6: Trusted Timestamp
+
+**核心公式**: `Trusted Timestamp = Time Authority + Cryptographic Proof + Non-Repudiation`
+
+| 特性 | 说明 |
+|------|------|
+| RFC 3161 | 标准兼容 |
+| TSA Client | 多个 TSA 服务器 |
+| LTV | 长期签名验证 |
+
+### OO-6: HSM/KMS 集成
+
+**核心公式**: `HSM/KMS = Secure Key Storage + Cryptographic Operations + Key Rotation`
+
+| 提供者 | 类型 |
+|--------|------|
+| SoftwareProvider | 软件 (开发/测试) |
+| TpmProvider | TPM 2.0 |
+| AwsKmsProvider | AWS KMS |
+
+**实现 PR**: #1025
+
+### OO-9: GMP Workflow Engine
+
+**核心公式**: `Workflow Engine = State Machine + Event Processing + Persistence + Audit`
+
+| 特性 | 说明 |
+|------|------|
+| 状态机 | 多状态转换 |
+| 事件驱动 | 步骤触发 |
+| 持久化 | 状态保存 |
+| 审计 | 完整执行记录 |
+
+**实现 PR**: #1046
 
 ---
 
-## 四、实现状态
+## 四、实现状态总览
 
-| 阶段 | 任务 | 状态 |
-|------|------|------|
-| 1 | 数据结构定义 | ✅ |
-| 2 | 核心签名逻辑 | ✅ |
-| 3 | 审批策略引擎 | ✅ |
-| 4 | SQL 语句构建器 | ✅ |
-| 5 | SQL 语法解析 | ⏳ 待实现 |
-| 6 | 集成测试 | ⏳ 待实现 |
+| 里程碑 | OO 文档 | 功能实现 | 状态 |
+|--------|---------|---------|------|
+| M1 | OO-1 | GMP-1 数字签名 | ✅ |
+| M2 | OO-3, OO-4 | GMP-3, GMP-4 | ✅ |
+| M3 | OO-5 | GMP-5 Provenance | ✅ |
+| M4 | OO-6 | GMP-8 HSM/KMS | ✅ |
+| M5 | OO-2 | GMP-2 电子签名 | ✅ |
+| M6 | OO-9 | GMP-9 Workflow | ✅ |
 
 ---
 
-*本文档由 hermes-agent 创建*
-*版本 1.0 - 2026-05-15*
+*本文档由 hermes-agent 更新*
+*版本 1.1 - 2026-05-16*
