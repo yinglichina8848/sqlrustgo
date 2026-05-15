@@ -143,6 +143,31 @@ mod tests {
     }
 
     #[test]
+    fn test_state_from_str_all_variants() {
+        assert_eq!(WorkflowState::from_str("draft"), Some(WorkflowState::Draft));
+        assert_eq!(WorkflowState::from_str("review"), Some(WorkflowState::Review));
+        assert_eq!(WorkflowState::from_str("approval"), Some(WorkflowState::Approval));
+        assert_eq!(WorkflowState::from_str("released"), Some(WorkflowState::Released));
+        assert_eq!(WorkflowState::from_str("rejected"), Some(WorkflowState::Rejected));
+        assert_eq!(WorkflowState::from_str("invalid"), None);
+    }
+
+    #[test]
+    fn test_state_as_str() {
+        assert_eq!(WorkflowState::Draft.as_str(), "draft");
+        assert_eq!(WorkflowState::Review.as_str(), "review");
+        assert_eq!(WorkflowState::Approval.as_str(), "approval");
+        assert_eq!(WorkflowState::Released.as_str(), "released");
+        assert_eq!(WorkflowState::Rejected.as_str(), "rejected");
+    }
+
+    #[test]
+    fn test_state_display() {
+        let state = WorkflowState::Draft;
+        assert_eq!(format!("{}", state), "draft");
+    }
+
+    #[test]
     fn test_state_machine_valid_transition() {
         let sm =
             StateMachine::from_stages(vec!["draft", "review", "approval", "released"]).unwrap();
@@ -155,5 +180,45 @@ mod tests {
         let sm = StateMachine::from_stages(vec!["draft", "review", "released"]).unwrap();
         assert!(sm.is_terminal_state(&WorkflowState::Released));
         assert!(!sm.is_terminal_state(&WorkflowState::Draft));
+        assert!(!sm.is_terminal_state(&WorkflowState::Review));
+    }
+
+    #[test]
+    fn test_state_machine_from_stages_invalid() {
+        let sm = StateMachine::from_stages(vec!["draft", "invalid", "released"]);
+        assert!(sm.is_none());
+    }
+
+    #[test]
+    fn test_state_machine_transition_to_valid() {
+        let sm = StateMachine::from_stages(vec!["draft", "review", "released"]).unwrap();
+        let result = sm.transition_to(&WorkflowState::Draft, &WorkflowState::Review);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), WorkflowState::Review);
+    }
+
+    #[test]
+    fn test_state_machine_transition_to_invalid() {
+        let sm = StateMachine::from_stages(vec!["draft", "review", "released"]).unwrap();
+        let result = sm.transition_to(&WorkflowState::Draft, &WorkflowState::Released);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_valid_transitions() {
+        let sm = StateMachine::from_stages(vec!["draft", "review", "approval", "released"]).unwrap();
+        let transitions = sm.get_valid_transitions(&WorkflowState::Draft);
+        assert_eq!(transitions.len(), 1);
+        assert_eq!(*transitions[0], WorkflowState::Review);
+
+        let no_transitions = sm.get_valid_transitions(&WorkflowState::Released);
+        assert!(no_transitions.is_empty());
+    }
+
+    #[test]
+    fn test_workflow_transition_is_valid() {
+        let t = WorkflowTransition::new(WorkflowState::Draft, WorkflowState::Review);
+        assert!(t.is_valid_transition(&WorkflowState::Draft));
+        assert!(!t.is_valid_transition(&WorkflowState::Review));
     }
 }

@@ -172,4 +172,70 @@ mod tests {
         chain.add_approval(record).unwrap();
         assert_eq!(chain.approvals.len(), 1);
     }
+
+    #[test]
+    fn test_get_approval_count() {
+        let mut chain = ApprovalChain::new("instance-1".to_string(), 2);
+
+        let record = ApprovalRecord::new(
+            "instance-1".to_string(),
+            "review".to_string(),
+            "user-1".to_string(),
+            "signature-1".to_string(),
+            ApprovalAction::Approve,
+            None,
+        );
+        chain.add_approval(record).unwrap();
+
+        assert_eq!(chain.get_approval_count("review"), 1);
+        assert_eq!(chain.get_approval_count("approval"), 0);
+    }
+
+    #[test]
+    fn test_approval_action_as_str() {
+        assert_eq!(ApprovalAction::Approve.as_str(), "APPROVE");
+        assert_eq!(ApprovalAction::Reject.as_str(), "REJECT");
+    }
+
+    #[test]
+    fn test_add_approval_duplicate_rejected() {
+        let mut chain = ApprovalChain::new("instance-1".to_string(), 2);
+
+        let record1 = ApprovalRecord::new(
+            "instance-1".to_string(),
+            "review".to_string(),
+            "user-1".to_string(),
+            "sig1".to_string(),
+            ApprovalAction::Reject,
+            Some("rejected".to_string()),
+        );
+        chain.add_approval(record1).unwrap();
+
+        let record2 = ApprovalRecord::new(
+            "instance-1".to_string(),
+            "review".to_string(),
+            "user-2".to_string(),
+            "sig2".to_string(),
+            ApprovalAction::Reject,
+            Some("also rejected".to_string()),
+        );
+        chain.add_approval(record2).unwrap();
+
+        assert_eq!(chain.approvals.len(), 2);
+    }
+
+    #[test]
+    fn test_approval_record_with_comment() {
+        let record = ApprovalRecord::new(
+            "instance-1".to_string(),
+            "review".to_string(),
+            "user-1".to_string(),
+            "signature-1".to_string(),
+            ApprovalAction::Approve,
+            Some("Looks good".to_string()),
+        );
+
+        assert_eq!(record.comment, Some("Looks good".to_string()));
+        assert_eq!(record.action, ApprovalAction::Approve);
+    }
 }
