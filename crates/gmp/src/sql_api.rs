@@ -300,6 +300,64 @@ mod tests {
     }
 
     #[test]
+    fn test_gmp_executor_hybrid_search() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let executor = GmpExecutor::new(storage.clone());
+
+        executor.init().unwrap();
+
+        executor
+            .import_document(
+                "Rust Guide",
+                "GUIDE",
+                "Learn Rust programming language with this comprehensive guide",
+                &["rust", "guide"],
+            )
+            .unwrap();
+
+        let results = executor.hybrid_search("Rust guide", 5).unwrap();
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn test_gmp_executor_vector_embed() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let executor = GmpExecutor::new(storage.clone());
+
+        executor.init().unwrap();
+
+        let embedding = executor.vector_embed("Test text");
+        assert!(!embedding.is_empty());
+    }
+
+    #[test]
+    fn test_gmp_executor_reindex_all() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let executor = GmpExecutor::new(storage.clone());
+
+        executor.init().unwrap();
+
+        executor
+            .import_document(
+                "Test Doc",
+                "TEST",
+                "Content for reindexing test",
+                &["test"],
+            )
+            .unwrap();
+
+        let count = executor.reindex_all().unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_gmp_executor_new() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let executor = GmpExecutor::new(storage.clone());
+        assert!(executor.init().is_ok());
+    }
+
+    #[test]
     fn test_bulk_import() {
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let executor = GmpExecutor::new(storage.clone());
@@ -337,5 +395,12 @@ mod tests {
         assert!(sql::select_by_type("GUIDE").contains("GUIDE"));
         assert!(sql::select_by_status("ACTIVE").contains("ACTIVE"));
         assert!(sql::select_by_date_range(19000, 20000).contains("19000"));
+    }
+
+    #[test]
+    fn test_sql_init_tables() {
+        assert!(sql::INIT_TABLES.contains("gmp_documents"));
+        assert!(sql::INIT_TABLES.contains("gmp_document_contents"));
+        assert!(sql::INIT_TABLES.contains("gmp_embeddings"));
     }
 }
