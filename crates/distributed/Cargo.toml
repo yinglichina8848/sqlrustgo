@@ -17,7 +17,7 @@ tokio = { version = "1.0", features = ["sync", "time", "rt-multi-thread", "macro
 tracing = "0.1"
 tonic = "0.12"
 prost = "0.13"
-prost-types = "0.13"
+prost-types = "0.14"
 tokio-stream = "0.1"
 futures = "0.3"
 async-trait = "0.1"
