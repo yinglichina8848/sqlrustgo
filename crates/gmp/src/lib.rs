@@ -51,6 +51,8 @@ pub mod audit_chain;
 pub mod audit_chain_tamper;
 pub mod audit_chain_wal;
 pub mod compliance;
+pub mod correction;
+pub mod correction_chain;
 pub mod document;
 pub mod electronic_signature;
 pub mod embedding;
@@ -87,6 +89,12 @@ pub use compliance::{
     ComplianceCheckRequest, ComplianceResult, ComplianceRule, ComplianceSummary, Severity,
     Violation,
 };
+
+pub use correction::{
+    CorrectionRecord, CREATE_CORRECTION_RECORDS_TABLE, TABLE_CORRECTION_RECORDS,
+};
+
+pub use correction_chain::{CorrectionChain, CorrectionChainEntry};
 
 pub use document::{
     create_gmp_tables, get_content, get_keywords, insert_document, insert_document_content,
