@@ -46,12 +46,10 @@ impl PartitionManager {
             .map_err(|e| SpillError::IoError(e))?;
         let mut writer = BufWriter::new(file);
 
-        for item in data {
-            let bytes = bincode::serialize(item)
-                .map_err(|e| SpillError::PartitionError(e.to_string()))?;
-            writer.write_all(&bytes)
-                .map_err(|e| SpillError::IoError(e))?;
-        }
+        let bytes = bincode::serialize(data)
+            .map_err(|e| SpillError::PartitionError(e.to_string()))?;
+        writer.write_all(&bytes)
+            .map_err(|e| SpillError::IoError(e))?;
 
         writer.flush()
             .map_err(|e| SpillError::IoError(e))?;
@@ -94,6 +92,9 @@ impl PartitionManager {
     }
 
     pub fn cleanup(&mut self) {
+        for partition in &self.partitions {
+            let _ = fs::remove_file(&partition.path);
+        }
         self.partitions.clear();
     }
 }
