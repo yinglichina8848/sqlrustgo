@@ -8,6 +8,7 @@ pub struct SessionConfig {
     pub stats_enabled: bool,
     pub max_memory_per_query: usize,
     pub spill_to_disk_threshold: usize,
+    pub spill_dir: Option<String>,
 }
 
 impl Default for SessionConfig {
@@ -28,6 +29,8 @@ impl Default for SessionConfig {
             .map(|v| v.parse().unwrap_or(128 * 1024 * 1024))
             .unwrap_or(128 * 1024 * 1024);
 
+        let spill_dir = env::var("SQLRUSTGO_SPILL_DIR").ok();
+
         Self {
             benchmark_mode,
             teaching_mode,
@@ -35,6 +38,7 @@ impl Default for SessionConfig {
             stats_enabled: !benchmark_mode && !teaching_mode,
             max_memory_per_query: max_memory,
             spill_to_disk_threshold: spill_threshold,
+            spill_dir,
         }
     }
 }
@@ -48,6 +52,7 @@ impl SessionConfig {
             stats_enabled: !benchmark_mode,
             max_memory_per_query: 256 * 1024 * 1024,
             spill_to_disk_threshold: 128 * 1024 * 1024,
+            spill_dir: None,
         }
     }
 
@@ -59,12 +64,26 @@ impl SessionConfig {
             stats_enabled: !teaching_mode,
             max_memory_per_query: 256 * 1024 * 1024,
             spill_to_disk_threshold: 128 * 1024 * 1024,
+            spill_dir: None,
         }
     }
 
-    pub fn with_memory_limit(mut self, max_memory: usize, spill_threshold: usize) -> Self {
+    pub fn with_spill_config(
+        mut self,
+        max_memory: usize,
+        spill_threshold: usize,
+        spill_dir: String,
+    ) -> Self {
         self.max_memory_per_query = max_memory;
         self.spill_to_disk_threshold = spill_threshold;
+        self.spill_dir = Some(spill_dir);
+        self
+    }
+
+    pub fn with_memory_limit(mut self, max_memory: usize, spill_threshold: usize, spill_dir: Option<String>) -> Self {
+        self.max_memory_per_query = max_memory;
+        self.spill_to_disk_threshold = spill_threshold;
+        self.spill_dir = spill_dir;
         self
     }
 }
