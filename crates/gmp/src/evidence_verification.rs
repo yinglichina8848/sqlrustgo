@@ -51,7 +51,7 @@ mod tests {
     fn test_incremental_verify() {
         let record = ImmutableRecord::new("incr-test", "Test", "Content");
         let chain = record.chain().clone();
-        let report = incremental_verify(&chain, 10);
+        let report = evidence_incremental_verify(&chain, 10);
         assert!(report.is_valid);
     }
 }

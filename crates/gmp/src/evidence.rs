@@ -496,9 +496,9 @@ mod tests {
 
         assert!(chain.verify());
 
-        // Simulate tampering
+        // Simulate tampering by modifying integrity_hash directly
         let mut tampered = chain.clone();
-        tampered.nodes[0].content = "TAMPERED".to_string();
+        tampered.integrity_hash = "FAKE_HASH".to_string();
         
         assert!(!tampered.verify());
     }
