@@ -100,7 +100,7 @@ impl EvidenceNode {
     ) -> Self {
         let content_hash = Self::hash_content(content);
         let self_hash = Self::compute_self_hash(node_id, node_type, &content_hash, previous_hash);
-        
+
         Self {
             node_id: node_id.to_string(),
             node_type: node_type.to_string(),
@@ -116,15 +116,23 @@ impl EvidenceNode {
     fn hash_content(content: &str) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         content.hash(&mut hasher);
         format!("{:016x}", hasher.finish())
     }
 
     /// Compute self-hash including previous hash for chain integrity
-    fn compute_self_hash(node_id: &str, node_type: &str, content_hash: &str, previous_hash: &str) -> String {
-        let data = format!("{}:{}:{}:{}", node_id, node_type, content_hash, previous_hash);
+    fn compute_self_hash(
+        node_id: &str,
+        node_type: &str,
+        content_hash: &str,
+        previous_hash: &str,
+    ) -> String {
+        let data = format!(
+            "{}:{}:{}:{}",
+            node_id, node_type, content_hash, previous_hash
+        );
         Self::hash_content(&data)
     }
 }
@@ -153,7 +161,7 @@ impl EvidenceChain {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
-            
+
         Self {
             chain_id,
             description,
@@ -166,18 +174,14 @@ impl EvidenceChain {
 
     /// Add a document node to the chain
     pub fn add_document(mut self, doc_id: &str, content: &str, metadata: EvidenceMetadata) -> Self {
-        let previous_hash = self.nodes.last()
+        let previous_hash = self
+            .nodes
+            .last()
             .map(|n| n.self_hash.clone())
             .unwrap_or_default();
-            
-        let node = EvidenceNode::new(
-            doc_id,
-            "document",
-            content,
-            &previous_hash,
-            metadata,
-        );
-        
+
+        let node = EvidenceNode::new(doc_id, "document", content, &previous_hash, metadata);
+
         self.nodes.push(node);
         self.integrity_hash = self.compute_integrity_hash();
         self
@@ -185,18 +189,14 @@ impl EvidenceChain {
 
     /// Add a SQL execution node
     pub fn add_sql(mut self, sql_id: &str, sql: &str, metadata: EvidenceMetadata) -> Self {
-        let previous_hash = self.nodes.last()
+        let previous_hash = self
+            .nodes
+            .last()
             .map(|n| n.self_hash.clone())
             .unwrap_or_default();
-            
-        let node = EvidenceNode::new(
-            sql_id,
-            "sql",
-            sql,
-            &previous_hash,
-            metadata,
-        );
-        
+
+        let node = EvidenceNode::new(sql_id, "sql", sql, &previous_hash, metadata);
+
         self.nodes.push(node);
         self.integrity_hash = self.compute_integrity_hash();
         self
@@ -210,19 +210,15 @@ impl EvidenceChain {
         embedding: &[f32],
         metadata: EvidenceMetadata,
     ) -> Self {
-        let previous_hash = self.nodes.last()
+        let previous_hash = self
+            .nodes
+            .last()
             .map(|n| n.self_hash.clone())
             .unwrap_or_default();
-            
+
         let content_repr = format!("{}:{:?}", content, embedding);
-        let node = EvidenceNode::new(
-            vector_id,
-            "vector",
-            &content_repr,
-            &previous_hash,
-            metadata,
-        );
-        
+        let node = EvidenceNode::new(vector_id, "vector", &content_repr, &previous_hash, metadata);
+
         self.nodes.push(node);
         self.integrity_hash = self.compute_integrity_hash();
         self
@@ -236,19 +232,15 @@ impl EvidenceChain {
         results: &str,
         metadata: EvidenceMetadata,
     ) -> Self {
-        let previous_hash = self.nodes.last()
+        let previous_hash = self
+            .nodes
+            .last()
             .map(|n| n.self_hash.clone())
             .unwrap_or_default();
-            
+
         let content = format!("Query: {}\nResults: {}", query, results);
-        let node = EvidenceNode::new(
-            graph_id,
-            "graph",
-            &content,
-            &previous_hash,
-            metadata,
-        );
-        
+        let node = EvidenceNode::new(graph_id, "graph", &content, &previous_hash, metadata);
+
         self.nodes.push(node);
         self.integrity_hash = self.compute_integrity_hash();
         self
@@ -270,18 +262,19 @@ impl EvidenceChain {
     pub fn compute_integrity_hash(&self) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
-        
-        // Include chain metadata
+
         self.chain_id.hash(&mut hasher);
         self.description.hash(&mut hasher);
-        
-        // Include all nodes
+
         for node in &self.nodes {
-            node.self_hash.hash(&mut hasher);
+            node.node_id.hash(&mut hasher);
+            node.node_type.hash(&mut hasher);
+            node.content.hash(&mut hasher);
+            node.previous_hash.hash(&mut hasher);
         }
-        
+
         format!("{:016x}", hasher.finish())
     }
 
@@ -330,7 +323,9 @@ impl EvidenceChainBuilder {
         embedding: &[f32],
         metadata: EvidenceMetadata,
     ) -> Self {
-        self.chain = self.chain.add_vector(vector_id, content, embedding, metadata);
+        self.chain = self
+            .chain
+            .add_vector(vector_id, content, embedding, metadata);
         self
     }
 
@@ -420,12 +415,10 @@ impl SearchEvidence {
     pub fn add_result(mut self, result: &str) -> Self {
         let metadata = EvidenceMetadata::new("search_result")
             .with_context("result_id", &format!("result-{}", self.results.len()));
-            
-        self.chain = self.chain.add_document(
-            &format!("result-{}", self.results.len()),
-            result,
-            metadata,
-        );
+
+        self.chain =
+            self.chain
+                .add_document(&format!("result-{}", self.results.len()), result, metadata);
         self.results.push(result.to_string());
         self
     }
@@ -490,7 +483,7 @@ mod tests {
     #[test]
     fn test_evidence_chain_tamper_detection() {
         let metadata = EvidenceMetadata::new("test");
-        
+
         let chain = EvidenceChain::new("test-chain-3".to_string(), "Tamper test".to_string())
             .add_document("doc-1", "Original content", metadata.clone());
 
@@ -499,7 +492,7 @@ mod tests {
         // Simulate tampering
         let mut tampered = chain.clone();
         tampered.nodes[0].content = "TAMPERED".to_string();
-        
+
         assert!(!tampered.verify());
     }
 
@@ -520,14 +513,14 @@ mod tests {
     #[test]
     fn test_evidence_chain_summary() {
         let metadata = EvidenceMetadata::new("test");
-        
+
         let chain = EvidenceChain::new("summary-test".to_string(), "Summary test".to_string())
             .add_document("doc-1", "Content 1", metadata.clone())
             .add_document("doc-2", "Content 2", metadata.clone())
             .add_vector("vec-1", "Embedding", &[0.1, 0.2], metadata);
 
         let summary = EvidenceChainSummary::from(&chain);
-        
+
         assert_eq!(summary.node_count, 3);
         assert_eq!(*summary.node_types.get("document").unwrap(), 2);
         assert_eq!(*summary.node_types.get("vector").unwrap(), 1);
@@ -543,7 +536,10 @@ mod tests {
 
         assert_eq!(metadata.source, "document");
         assert_eq!(metadata.score, Some(0.85));
-        assert_eq!(metadata.context.get("author"), Some(&"test-user".to_string()));
+        assert_eq!(
+            metadata.context.get("author"),
+            Some(&"test-user".to_string())
+        );
         assert_eq!(metadata.references.len(), 1);
     }
 }

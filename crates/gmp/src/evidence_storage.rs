@@ -78,7 +78,10 @@ pub fn save_evidence_chain(
     chain: &EvidenceChain,
 ) -> SqlResult<i64> {
     let nodes_json = serde_json::to_string(&chain.nodes).map_err(|e| {
-        sqlrustgo_types::SqlError::ExecutionError(format!("Failed to serialize evidence chain: {}", e))
+        sqlrustgo_types::SqlError::ExecutionError(format!(
+            "Failed to serialize evidence chain: {}",
+            e
+        ))
     })?;
 
     let now = SystemTime::now()
@@ -106,13 +109,17 @@ pub fn load_evidence_chain(
 ) -> SqlResult<Option<EvidenceChain>> {
     let rows = storage.scan(TABLE_EVIDENCE_RECORDS)?;
     for row in rows {
-        if row.get(1).map(|v| {
-            if let Value::Text(s) = v {
-                s == chain_id
-            } else {
-                false
-            }
-        }).unwrap_or(false) {
+        if row
+            .get(1)
+            .map(|v| {
+                if let Value::Text(s) = v {
+                    s == chain_id
+                } else {
+                    false
+                }
+            })
+            .unwrap_or(false)
+        {
             return Ok(reconstruct_chain_from_row(&row));
         }
     }
@@ -156,13 +163,17 @@ pub fn get_evidence_by_chain_id(
     let rows = storage.scan(TABLE_EVIDENCE_RECORDS)?;
     let mut results = Vec::new();
     for row in rows {
-        if row.get(1).map(|v| {
-            if let Value::Text(s) = v {
-                s == chain_id
-            } else {
-                false
-            }
-        }).unwrap_or(false) {
+        if row
+            .get(1)
+            .map(|v| {
+                if let Value::Text(s) = v {
+                    s == chain_id
+                } else {
+                    false
+                }
+            })
+            .unwrap_or(false)
+        {
             if let Some(chain) = reconstruct_chain_from_row(&row) {
                 results.push(chain);
             }
@@ -200,15 +211,13 @@ mod tests {
 
     #[test]
     fn test_create_evidence_table_schema() {
-        let columns = vec![
-            ColumnDefinition {
-                name: "id".to_string(),
-                data_type: "INTEGER".to_string(),
-                nullable: false,
-                primary_key: true,
-                auto_increment: true,
-            },
-        ];
+        let columns = vec![ColumnDefinition {
+            name: "id".to_string(),
+            data_type: "INTEGER".to_string(),
+            nullable: false,
+            primary_key: true,
+            auto_increment: true,
+        }];
         assert_eq!(columns[0].name, "id");
         assert_eq!(columns[0].primary_key, true);
     }

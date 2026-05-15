@@ -768,16 +768,14 @@ fn current_thread_id() -> u64 {
 
 #[cfg(not(target_os = "macos"))]
 fn current_thread_id() -> u64 {
-    // On other platforms, use address of a thread-local variable
-    use std::cell::RefCell;
-    thread_local!(static TL: RefCell<u64> = RefCell::new(0));
-    TL.with(|t| {
-        let mut val = t.borrow_mut();
-        if *val == 0 {
-            *val = (val.as_ptr() as u64).wrapping_add(1);
-        }
-        *val
-    })
+    use std::thread::ThreadId;
+    let id = std::thread::current().id();
+    // Convert ThreadId to u64 by hashing
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    id.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Get current timestamp in milliseconds
