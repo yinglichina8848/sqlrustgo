@@ -140,8 +140,8 @@ pub fn euclidean_distance_simd(a: &[f32], b: &[f32]) -> f32 {
 #[inline]
 pub fn cosine_similarity_simd(a: &[f32], b: &[f32]) -> f32 {
     let dot = dot_product_simd(a, b);
-    let norm_a = euclidean_distance_simd(a, a).sqrt();
-    let norm_b = euclidean_distance_simd(b, b).sqrt();
+    let norm_a = dot_product_simd(a, a).sqrt();
+    let norm_b = dot_product_simd(b, b).sqrt();
 
     if norm_a == 0.0 || norm_b == 0.0 {
         return 0.0;
@@ -276,6 +276,17 @@ where
     vectors
         .iter()
         .map(|v| cosine_distance_simd(query, v.as_ref()))
+        .collect()
+}
+
+/// Batch compute cosine similarities: query against multiple vectors
+pub fn batch_cosine_similarity_simd<'a, V>(query: &'a [f32], vectors: &'a [V]) -> Vec<f32>
+where
+    V: AsRef<[f32]>,
+{
+    vectors
+        .iter()
+        .map(|v| cosine_similarity_simd(query, v.as_ref()))
         .collect()
 }
 
