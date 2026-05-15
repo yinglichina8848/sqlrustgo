@@ -776,9 +776,20 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
     /// Execute a SQL statement and return results
     pub fn execute(&mut self, sql: &str) -> SqlResult<ExecutorResult> {
-        if !sql.trim().is_empty() && self.cache_config.enabled {
-            let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+        if sql.trim().is_empty() {
+            return Ok(ExecutorResult::new(vec![], 0));
+        }
 
+        let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+        let command_type = Self::get_statement_command_type(&statement);
+
+        let event_id = OBSERVABILITY
+            .events_statements
+            .write()
+            .unwrap()
+            .begin_statement(sql.to_string(), command_type);
+
+        let result = if self.cache_config.enabled {
             let is_idempotent_begin = matches!(
                 statement,
                 Statement::Transaction(TransactionStatement::BeginIdempotent { .. })
@@ -787,11 +798,17 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             if !is_idempotent_begin {
                 let cache_key = self.get_cache_key(sql);
                 if let Some(result) = self.query_cache.write().unwrap().get(&cache_key) {
+                    OBSERVABILITY
+                        .events_statements
+                        .write()
+                        .unwrap()
+                        .end_statement(event_id, 0, result.rows.len() as u64, 0, 0);
                     return Ok(result);
                 }
 
                 let table_names = Self::extract_table_names_from_statement(&statement);
                 let result = self.execute_statement(statement)?;
+                let rows_sent = result.rows.len() as u64;
 
                 if should_cache(&result) {
                     let entry = CacheEntry {
@@ -807,12 +824,72 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         .put(cache_key, entry, table_names);
                 }
 
+                OBSERVABILITY
+                    .events_statements
+                    .write()
+                    .unwrap()
+                    .end_statement(
+                        event_id,
+                        rows_sent,
+                        rows_sent,
+                        result.affected_rows as u64,
+                        0,
+                    );
+
                 return Ok(result);
             }
-        }
+            self.execute_statement(statement)?
+        } else {
+            let result = self.execute_statement(statement)?;
+            let rows_sent = result.rows.len() as u64;
+            OBSERVABILITY
+                .events_statements
+                .write()
+                .unwrap()
+                .end_statement(
+                    event_id,
+                    rows_sent,
+                    rows_sent,
+                    result.affected_rows as u64,
+                    0,
+                );
+            result
+        };
 
-        let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
-        self.execute_statement(statement)
+        Ok(result)
+    }
+
+    fn get_statement_command_type(statement: &Statement) -> String {
+        match statement {
+            Statement::Select(_) => "SELECT".to_string(),
+            Statement::Insert(_) => "INSERT".to_string(),
+            Statement::Update(_) => "UPDATE".to_string(),
+            Statement::Delete(_) => "DELETE".to_string(),
+            Statement::CreateTable(_) => "CREATE TABLE".to_string(),
+            Statement::DropTable(_) => "DROP TABLE".to_string(),
+            Statement::CreateIndex(_) => "CREATE INDEX".to_string(),
+            Statement::DropIndex(_) => "DROP INDEX".to_string(),
+            Statement::Truncate(_) => "TRUNCATE".to_string(),
+            Statement::Explain(_) => "EXPLAIN".to_string(),
+            Statement::Show(_) => "SHOW".to_string(),
+            Statement::Transaction(_) => "TRANSACTION".to_string(),
+            Statement::Merge(_) => "MERGE".to_string(),
+            Statement::Call(_) => "CALL".to_string(),
+            Statement::CreateProcedure(_) => "CREATE PROCEDURE".to_string(),
+            Statement::CreateTrigger(_) => "CREATE TRIGGER".to_string(),
+            Statement::AlterTable(_) => "ALTER TABLE".to_string(),
+            Statement::Grant(_) => "GRANT".to_string(),
+            Statement::Revoke(_) => "REVOKE".to_string(),
+            Statement::StartWorkflow(_) => "START WORKFLOW".to_string(),
+            Statement::ApproveWorkflow(_) => "APPROVE WORKFLOW".to_string(),
+            Statement::RejectWorkflow(_) => "REJECT WORKFLOW".to_string(),
+            Statement::Optimize(_) => "OPTIMIZE".to_string(),
+            Statement::Vacuum(_) => "VACUUM".to_string(),
+            Statement::Repair(_) => "REPAIR".to_string(),
+            Statement::Check(_) => "CHECK".to_string(),
+            Statement::WithSelect(_) => "WITH".to_string(),
+            _ => "OTHER".to_string(),
+        }
     }
 
     fn get_cache_key(&self, sql: &str) -> CacheKey {
@@ -1056,6 +1133,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     }
 
     /// Execute recursive CTE using iterative approach
+    #[allow(dead_code)]
     fn execute_recursive_cte(&mut self, ws: &WithSelect) -> SqlResult<ExecutorResult> {
         let with_clause = ws.with_clause.as_ref().unwrap();
         if with_clause.ctes.len() != 1 {
@@ -1236,6 +1314,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn extract_cte_columns(&self, select: &SelectStatement) -> Vec<ColumnDefinition> {
         select
             .columns
@@ -1250,6 +1329,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .collect()
     }
 
+    #[allow(dead_code)]
     fn replace_cte_reference(
         &self,
         select: &SelectStatement,

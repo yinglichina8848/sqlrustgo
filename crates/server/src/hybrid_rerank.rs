@@ -598,13 +598,11 @@ mod tests {
         };
         let reranker = HybridReranker::new(config);
 
-        let results = vec![
-            {
-                let mut r = ScoredResult::new("doc1".to_string(), SearchMode::Sql, 0.9);
-                r.result_type = "document".to_string();
-                r
-            },
-        ];
+        let results = vec![{
+            let mut r = ScoredResult::new("doc1".to_string(), SearchMode::Sql, 0.9);
+            r.result_type = "document".to_string();
+            r
+        }];
 
         let reranked = reranker.rerank(results);
         assert!(!reranked.is_empty());
@@ -621,13 +619,11 @@ mod tests {
         };
         let reranker = HybridReranker::new(config);
 
-        let results = vec![
-            {
-                let mut r = ScoredResult::new("doc1".to_string(), SearchMode::Sql, 0.05);
-                r.result_type = "document".to_string();
-                r
-            },
-        ];
+        let results = vec![{
+            let mut r = ScoredResult::new("doc1".to_string(), SearchMode::Sql, 0.05);
+            r.result_type = "document".to_string();
+            r
+        }];
 
         let reranked = reranker.rerank(results);
         assert!(reranked.is_empty());
