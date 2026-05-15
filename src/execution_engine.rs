@@ -714,8 +714,24 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::AlterTable(ref alter) => self.execute_alter_table(alter),
             Statement::Explain(ref explain) => self.execute_explain(explain),
             Statement::WithSelect(ref ws) => {
-                // Execute the inner SELECT (CTE definitions not yet executed)
-                self.execute_select(&ws.select)
+                if let Some(ref with_clause) = ws.with_clause {
+                    if with_clause.recursive || !with_clause.ctes.is_empty() {
+                        let catalog = if let Some(ref catalog_guard) = self.catalog {
+                            catalog_guard.read().unwrap().clone()
+                        } else {
+                            sqlrustgo_catalog::Catalog::new("cte_catalog".to_string())
+                        };
+                        let executor =
+                            StoredProcExecutor::new(Arc::new(catalog), self.storage.clone());
+                        executor
+                            .execute_with_cte(&sqlrustgo_parser::Statement::WithSelect(ws.clone()))
+                            .map_err(SqlError::ExecutionError)
+                    } else {
+                        self.execute_select(&ws.select)
+                    }
+                } else {
+                    self.execute_select(&ws.select)
+                }
             }
             Statement::Check(ref check) => self.execute_check(check),
             Statement::Optimize(ref opt) => self.execute_optimize(opt),
