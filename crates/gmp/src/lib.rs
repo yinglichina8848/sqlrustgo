@@ -87,6 +87,10 @@ pub use audit_chain_tamper::{
     RecoveryAction, TamperAlert, TamperViolation, VerificationResult,
 };
 
+pub use correction_chain::{
+    CorrectionChain, CorrectionEntry, CorrectionError, CorrectionReason, RecordCorrectionChain,
+};
+
 pub use compliance::{
     check_batch_compliance, check_document_compliance, get_compliance_summary,
     ComplianceCheckRequest, ComplianceResult, ComplianceRule, ComplianceSummary, Severity,

@@ -51,7 +51,7 @@ pub struct ElectronicSignature {
 }
 
 impl ElectronicSignature {
-    /// Create a new electronic signature
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         audit_chain_id: i64,
         user_id: String,
@@ -117,7 +117,7 @@ impl PolicyStatus {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_str_explicit(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "PENDING" => Some(PolicyStatus::Pending),
             "APPROVED" => Some(PolicyStatus::Approved),
@@ -261,6 +261,7 @@ impl PolicyEvaluation {
 
 /// Collected signature record
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct CollectedSignature {
     user_id: String,
     role: String,
@@ -665,7 +666,7 @@ CREATE TABLE IF NOT EXISTS gmp_signature_requests (
         )
     }
 
-    /// Build SQL to record an electronic signature
+    #[allow(clippy::too_many_arguments)]
     pub fn record_signature(
         audit_chain_id: i64,
         user_id: &str,
@@ -855,6 +856,7 @@ impl TrustedTimestampProvider for SystemTimeProvider {
 // ============================================================================
 
 pub trait ElectronicSignatureProvider: Send + Sync {
+    #[allow(clippy::too_many_arguments)]
     fn sign(
         &self,
         user_id: &str,
@@ -941,10 +943,10 @@ mod tests {
     fn test_policy_status() {
         assert_eq!(PolicyStatus::Pending.as_str(), "PENDING");
         assert_eq!(
-            PolicyStatus::from_str("APPROVED"),
+            PolicyStatus::from_str_explicit("APPROVED"),
             Some(PolicyStatus::Approved)
         );
-        assert_eq!(PolicyStatus::from_str("INVALID"), None);
+        assert_eq!(PolicyStatus::from_str_explicit("INVALID"), None);
     }
 
     #[test]
