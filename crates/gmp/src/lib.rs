@@ -51,6 +51,7 @@ pub mod audit_chain;
 pub mod audit_chain_tamper;
 pub mod audit_chain_wal;
 pub mod compliance;
+pub mod correction_chain;
 pub mod document;
 pub mod electronic_signature;
 pub mod embedding;
@@ -80,6 +81,10 @@ pub use audit_chain_wal::{
 pub use audit_chain_tamper::{
     detect_tamper, incremental_verify, quick_verify, verify_entry_checksum, verify_entry_link,
     RecoveryAction, TamperAlert, TamperViolation, VerificationResult,
+};
+
+pub use correction_chain::{
+    CorrectionChain, CorrectionEntry, CorrectionError, CorrectionReason, RecordCorrectionChain,
 };
 
 pub use compliance::{
