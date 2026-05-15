@@ -70,6 +70,20 @@ impl PerformanceSchema {
         let graph = OBSERVABILITY.lock_wait_graph.read().unwrap();
         graph.detect_deadlock()
     }
+
+    pub fn get_setup_actors() -> Vec<SetupActorsRow> {
+        vec![]
+    }
+
+    pub fn get_setup_instruments() -> Vec<SetupInstrumentsRow> {
+        vec![SetupInstrumentsRow {
+            name: "statement/sql/select".to_string(),
+            enabled: "YES".to_string(),
+            timed: "YES".to_string(),
+            properties: "STATEMENT".to_string(),
+            volatility: 0,
+        }]
+    }
 }
 
 pub struct TransactionHistoryRow {
@@ -108,4 +122,36 @@ pub struct WalStatsRow {
     pub replay_time_ms: u64,
     pub last_flush_lsn: u64,
     pub current_lsn: u64,
+}
+
+pub struct SetupActorsRow {
+    pub trigger_id: String,
+    pub flags: String,
+    pub enabled: String,
+    pub history: String,
+    pub properties: String,
+}
+
+pub struct SetupInstrumentsRow {
+    pub name: String,
+    pub enabled: String,
+    pub timed: String,
+    pub properties: String,
+    pub volatility: i32,
+}
+
+pub struct EventsStatementsSummaryByDigestRow {
+    pub schema_name: String,
+    pub digest: String,
+    pub digest_text: String,
+    pub count_star: u64,
+    pub sum_timer_wait: u64,
+    pub min_timer_wait: u64,
+    pub avg_timer_wait: u64,
+    pub max_timer_wait: u64,
+    pub sum_lock_time: u64,
+    pub sum_errors: u64,
+    pub sum_rows_affected: u64,
+    pub sum_rows_sent: u64,
+    pub sum_rows_examined: u64,
 }
