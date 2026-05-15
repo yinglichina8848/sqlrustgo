@@ -185,7 +185,8 @@ pub use sql_api::{sql, GmpExecutor};
 
 pub use mobile::{
     verify_device_signature, verify_device_trust, DeviceStatus, MobileCollection,
-    MobileCollectionRecord, MobileDevice, TABLE_MOBILE_COLLECTIONS, TABLE_MOBILE_DEVICES,
+    MobileCollectionRecord, MobileDevice, CollectionStatus, TrustVerificationResult,
+    TABLE_MOBILE_COLLECTIONS, TABLE_MOBILE_DEVICES,
 };
 
 pub use sop::{
@@ -195,5 +196,5 @@ pub use sop::{
 
 pub use calibration::{
     CalibrationDevice, CalibrationInterval, CalibrationRecord, CalibrationResult, CalibrationStatus,
-    TABLE_CALIBRATION_DEVICES, TABLE_CALIBRATION_RECORDS,
+    CalibrationMeasurement, TABLE_CALIBRATION_DEVICES, TABLE_CALIBRATION_RECORDS,
 };

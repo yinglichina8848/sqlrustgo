@@ -3,13 +3,13 @@
 //! This module provides mobile device registration, trust verification,
 //! and data collection audit capabilities.
 
-mod device;
-mod collection;
-mod trust;
+pub mod device;
+pub mod collection;
+pub mod trust;
 
 pub use device::{MobileDevice, DeviceStatus};
-pub use collection::{MobileCollection, MobileCollectionRecord};
-pub use trust::{verify_device_signature, verify_device_trust};
+pub use collection::{MobileCollection, MobileCollectionRecord, CollectionStatus};
+pub use trust::{verify_device_signature, verify_device_trust, TrustVerificationResult};
 
 /// Table name for mobile devices
 pub const TABLE_MOBILE_DEVICES: &str = "gmp_mobile_devices";

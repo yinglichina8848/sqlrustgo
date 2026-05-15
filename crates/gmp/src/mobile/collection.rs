@@ -27,6 +27,15 @@ impl CollectionStatus {
             CollectionStatus::Invalid => "INVALID",
         }
     }
+
+    pub fn parse_status(s: &str) -> Option<CollectionStatus> {
+        match s.to_uppercase().as_str() {
+            "PENDING" => Some(CollectionStatus::Pending),
+            "VERIFIED" => Some(CollectionStatus::Verified),
+            "INVALID" => Some(CollectionStatus::Invalid),
+            _ => None,
+        }
+    }
 }
 
 impl MobileCollectionRecord {

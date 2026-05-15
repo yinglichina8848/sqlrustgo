@@ -1251,7 +1251,18 @@ impl Parser {
             Some(Token::Training) => self.parse_record_training(),
             Some(Token::Bind) => self.parse_bind_sop(),
             Some(Token::Calibration) => self.parse_register_calibration_device(),
-            Some(Token::Record) => self.parse_record_calibration(),
+            Some(Token::Record) => {
+                self.next(); // consume RECORD
+                match self.current() {
+                    Some(Token::Training) => self.parse_record_training(),
+                    Some(Token::Calibration) => {
+                        self.next(); // consume CALIBRATION
+                        self.parse_record_calibration_inner()
+                    }
+                    Some(t) => Err(format!("Expected TRAINING or CALIBRATION after RECORD, got {:?}", t)),
+                    None => Err("Expected TRAINING or CALIBRATION after RECORD".to_string()),
+                }
+            }
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -1532,6 +1543,7 @@ impl Parser {
             Some(Token::View) => self.parse_create_view(),
             Some(Token::Event) => self.parse_create_event(),
             Some(Token::Approval) => self.parse_create_approval_policy(),
+            Some(Token::SOP) => self.parse_create_sop(),
             Some(t) => Err(format!(
                 "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, VIEW, or EVENT after CREATE, got {:?}",
                 t
@@ -2327,10 +2339,7 @@ impl Parser {
         }))
     }
 
-    fn parse_record_calibration(&mut self) -> Result<Statement, String> {
-        self.expect(Token::Record)?;
-        self.expect(Token::Calibration)?;
-
+    fn parse_record_calibration_inner(&mut self) -> Result<Statement, String> {
         let device_id = match self.next() {
             Some(Token::Identifier(id)) => id,
             Some(Token::StringLiteral(s)) => s,
