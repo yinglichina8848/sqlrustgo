@@ -190,15 +190,15 @@ pub use workflow::{
 pub use sql_api::{sql, GmpExecutor};
 
 pub use mobile::{
-    verify_device_signature, verify_device_trust, CollectionStatus, DeviceStatus,
-    MobileCollection, MobileCollectionRecord, MobileDevice, MobileTrustedCollection,
-    TrustVerificationResult, TABLE_MOBILE_COLLECTIONS, TABLE_MOBILE_DEVICES,
+    verify_device_signature, verify_device_trust, CollectionStatus, DeviceStatus, MobileCollection,
+    MobileCollectionRecord, MobileDevice, MobileTrustedCollection, TrustVerificationResult,
+    TABLE_MOBILE_COLLECTIONS, TABLE_MOBILE_DEVICES,
 };
 
 pub use sop::{
     BindingStatus, GmpOperation, SOPBinding, SopStatus, SopTrainingBinding,
-    StandardOperatingProcedure, TrainingRecord, TrainingStatus,
-    TrainingVerificationResult, TABLE_SOP, TABLE_TRAINING_RECORDS, TABLE_SOP_BINDINGS,
+    StandardOperatingProcedure, TrainingRecord, TrainingStatus, TrainingVerificationResult,
+    TABLE_SOP, TABLE_SOP_BINDINGS, TABLE_TRAINING_RECORDS,
 };
 
 pub use calibration::{
