@@ -102,6 +102,14 @@ impl PerformanceSchema {
     pub fn get_global_events() -> Vec<GlobalEventsRow> {
         vec![]
     }
+
+    pub fn get_events_waits_current() -> Vec<EventsWaitsCurrentRow> {
+        vec![]
+    }
+
+    pub fn get_events_waits_history(_limit: Option<usize>) -> Vec<EventsWaitsHistoryRow> {
+        vec![]
+    }
 }
 
 pub struct TransactionHistoryRow {
@@ -209,4 +217,34 @@ pub struct GlobalEventsRow {
     pub min_timer_wait: u64,
     pub avg_timer_wait: u64,
     pub max_timer_wait: u64,
+}
+
+pub struct EventsWaitsCurrentRow {
+    pub thread_id: u64,
+    pub event_id: u64,
+    pub event_name: String,
+    pub source: String,
+    pub timer_start: u64,
+    pub timer_end: u64,
+    pub timer_wait: u64,
+    pub object_schema: String,
+    pub object_name: String,
+    pub index_name: String,
+    pub operation: String,
+    pub number_of_bytes: i64,
+}
+
+pub struct EventsWaitsHistoryRow {
+    pub thread_id: u64,
+    pub event_id: u64,
+    pub event_name: String,
+    pub source: String,
+    pub timer_start: u64,
+    pub timer_end: u64,
+    pub timer_wait: u64,
+    pub object_schema: String,
+    pub object_name: String,
+    pub index_name: String,
+    pub operation: String,
+    pub number_of_bytes: i64,
 }
