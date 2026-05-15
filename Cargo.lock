@@ -5562,6 +5562,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlrustgo-spill"
+version = "0.1.0"
+dependencies = [
+ "parking_lot",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
 name = "sqlrustgo-sql-cli"
 version = "1.6.1"
 dependencies = [

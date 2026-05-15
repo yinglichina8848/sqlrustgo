@@ -17,14 +17,37 @@ impl AdaptiveMemoryTracker {
         }
     }
 
-    pub fn allocate(&self, bytes: usize) -> bool {
-        let prev = self.current_bytes.fetch_add(bytes as u64, Ordering::SeqCst);
-        let new = prev + bytes as u64;
-        new <= self.memory_limit as u64
+    pub fn allocate(&self, bytes: u64) -> bool {
+        loop {
+            let current = self.current_bytes.load(Ordering::SeqCst);
+            let new = current + bytes;
+            if new > self.memory_limit as u64 {
+                return false;
+            }
+            if self.current_bytes
+                .compare_exchange_weak(current, new, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return true;
+            }
+        }
     }
 
-    pub fn deallocate(&self, bytes: usize) {
-        self.current_bytes.fetch_sub(bytes as u64, Ordering::SeqCst);
+    pub fn deallocate(&self, bytes: u64) {
+        loop {
+            let current = self.current_bytes.load(Ordering::SeqCst);
+            if current < bytes {
+                self.current_bytes.fetch_sub(bytes, Ordering::SeqCst);
+                return;
+            }
+            if self
+                .current_bytes
+                .compare_exchange_weak(current, current - bytes, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return;
+            }
+        }
     }
 
     pub fn should_spill(&self) -> bool {
@@ -74,5 +97,18 @@ mod tests {
         tracker.allocate(100);
         tracker.deallocate(50);
         assert_eq!(tracker.current_usage(), 50);
+    }
+
+    #[test]
+    fn test_is_memory_exceeded() {
+        let tracker = AdaptiveMemoryTracker::new(100, 50);
+        assert!(!tracker.is_memory_exceeded());
+        assert!(tracker.allocate(80));
+        assert!(!tracker.is_memory_exceeded());
+        assert!(!tracker.allocate(30));
+        assert_eq!(tracker.current_usage(), 80);
+        assert!(!tracker.is_memory_exceeded());
+        tracker.deallocate(80);
+        assert!(!tracker.is_memory_exceeded());
     }
 }
