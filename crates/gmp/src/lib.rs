@@ -50,6 +50,7 @@ pub mod audit;
 pub mod audit_chain;
 pub mod audit_chain_tamper;
 pub mod audit_chain_wal;
+pub mod calibration;
 pub mod compliance;
 pub mod correction;
 pub mod correction_chain;
@@ -62,12 +63,14 @@ pub mod evidence_storage;
 pub mod evidence_verification;
 pub mod hsm;
 pub mod immutable_record;
+pub mod mobile;
 pub mod persist_sqlite;
 pub mod provenance;
 pub mod provenance_lineage;
 pub mod report;
 pub mod scenarios;
 pub mod semantic_embedding;
+pub mod sop;
 pub mod sql_api;
 pub mod vector_search;
 pub mod workflow;
@@ -179,3 +182,19 @@ pub use workflow::{
 };
 
 pub use sql_api::{sql, GmpExecutor};
+
+pub use mobile::{
+    verify_device_signature, verify_device_trust, CollectionStatus, DeviceStatus, MobileCollection,
+    MobileCollectionRecord, MobileDevice, TrustVerificationResult, TABLE_MOBILE_COLLECTIONS,
+    TABLE_MOBILE_DEVICES,
+};
+
+pub use sop::{
+    BindingStatus, SOPBinding, SopStatus, StandardOperatingProcedure, TrainingRecord,
+    TrainingStatus, TABLE_SOP, TABLE_SOP_BINDINGS, TABLE_TRAINING_RECORDS,
+};
+
+pub use calibration::{
+    CalibrationDevice, CalibrationInterval, CalibrationMeasurement, CalibrationRecord,
+    CalibrationResult, CalibrationStatus, TABLE_CALIBRATION_DEVICES, TABLE_CALIBRATION_RECORDS,
+};

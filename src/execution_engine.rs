@@ -14,6 +14,7 @@ use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
 use sqlrustgo_executor::{ExecutorResult, MergeExecutor};
+use sqlrustgo_gmp::workflow::{WorkflowEngine, WorkflowState};
 use sqlrustgo_observability::observability_state::{ObservabilityState, OBSERVABILITY};
 use sqlrustgo_observability::tables::{
     lock_wait_graph::LockWaitEdge, lock_wait_graph::LockWaitGraph,
@@ -22,15 +23,17 @@ use sqlrustgo_observability::tables::{
     transaction_history::TransactionStatus, wal_stats::WalStatsCollector,
 };
 use sqlrustgo_parser::parser::{
-    AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, CallStatement,
-    CheckOption, CheckStatement, CreateIndexStatement, CreateProcedureStatement,
-    CreateRoleStatement, CreateTableStatement, CreateTriggerStatement, DropRoleStatement,
-    DropTableStatement, ExplainStatement, GrantRoleStatement, GrantStatement, InsertStatement,
-    MergeStatement, ObjectType as ParserObjectType, OptimizeStatement, OrderByExpression,
-    Privilege as ParserPrivilege, RepairStatement, RevokeRoleStatement, RevokeStatement,
-    SelectStatement, SetRoleStatement, ShowStatement, StoredProcParam as ParserStoredProcParam,
-    StoredProcParamMode as ParserParamMode, StoredProcStatement as ParserStatement,
-    TruncateStatement, VacuumMode, VacuumStatement,
+    AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement,
+    ApproveWorkflowStatement, CallStatement, CheckOption, CheckStatement, CommonTableExpression,
+    CreateIndexStatement, CreateProcedureStatement, CreateRoleStatement, CreateTableStatement,
+    CreateTriggerStatement, DropRoleStatement, DropTableStatement, ExplainStatement,
+    GrantRoleStatement, GrantStatement, InsertStatement, MergeStatement,
+    ObjectType as ParserObjectType, OptimizeStatement, OrderByExpression,
+    Privilege as ParserPrivilege, RejectWorkflowStatement, RepairStatement, RevokeRoleStatement,
+    RevokeStatement, SelectStatement, SetRoleStatement, ShowStatement, StartWorkflowStatement,
+    StoredProcParam as ParserStoredProcParam, StoredProcParamMode as ParserParamMode,
+    StoredProcStatement as ParserStatement, TruncateStatement, VacuumMode, VacuumStatement,
+    WithClause, WithSelect,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::JoinType; // For join type matching
@@ -63,6 +66,7 @@ pub struct ExecutionEngine<S: StorageEngine> {
     current_user: Option<UserIdentity>,
     query_cache: Arc<RwLock<QueryCache>>,
     cache_config: QueryCacheConfig,
+    workflow_engine: WorkflowEngine,
 }
 
 /// Execution statistics for CBO
@@ -85,6 +89,30 @@ pub struct ColumnStatistics {
     pub distinct_count: u64,
     pub min_value: Option<SqlValue>,
     pub max_value: Option<SqlValue>,
+}
+
+/// CTE materialization context - tracks CTE name to temp table mapping
+#[derive(Debug, Clone, Default)]
+pub struct CteContext {
+    /// Maps CTE name to the temp table name that holds its materialized results
+    pub cte_tables: HashMap<String, String>,
+    /// List of temp table names to clean up after execution
+    pub temp_tables: Vec<String>,
+}
+
+impl CteContext {
+    /// Generate a unique temp table name for a CTE using timestamp + counter
+    pub fn temp_table_name(&self, cte_name: &str) -> String {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64;
+        let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+        format!("__cte_{}_{}_{}", cte_name, timestamp, counter)
+    }
 }
 
 /// Type alias for MemoryStorage-backed execution engine
@@ -158,6 +186,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: config.cache_config,
+            workflow_engine: WorkflowEngine::new(),
         }
     }
 
@@ -180,6 +209,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
+            workflow_engine: WorkflowEngine::new(),
         }
     }
 
@@ -202,6 +232,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
+            workflow_engine: WorkflowEngine::new(),
         }
     }
 
@@ -220,6 +251,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             current_user: None,
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
+            workflow_engine: WorkflowEngine::new(),
         }
     }
 
@@ -713,30 +745,28 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::Describe(ref desc) => self.execute_describe(&desc.table),
             Statement::AlterTable(ref alter) => self.execute_alter_table(alter),
             Statement::Explain(ref explain) => self.execute_explain(explain),
-            Statement::WithSelect(ref ws) => {
-                if let Some(ref with_clause) = ws.with_clause {
-                    if with_clause.recursive || !with_clause.ctes.is_empty() {
-                        let catalog = if let Some(ref catalog_guard) = self.catalog {
-                            catalog_guard.read().unwrap().clone()
-                        } else {
-                            sqlrustgo_catalog::Catalog::new("cte_catalog".to_string())
-                        };
-                        let executor =
-                            StoredProcExecutor::new(Arc::new(catalog), self.storage.clone());
-                        executor
-                            .execute_with_cte(&sqlrustgo_parser::Statement::WithSelect(ws.clone()))
-                            .map_err(SqlError::ExecutionError)
+            Statement::WithSelect(ref ws) => match &ws.with_clause {
+                None => self.execute_select(&ws.select),
+                Some(wc) if wc.recursive => {
+                    let catalog = if let Some(ref catalog_guard) = self.catalog {
+                        catalog_guard.read().unwrap().clone()
                     } else {
-                        self.execute_select(&ws.select)
-                    }
-                } else {
-                    self.execute_select(&ws.select)
+                        sqlrustgo_catalog::Catalog::new("cte_catalog".to_string())
+                    };
+                    let executor = StoredProcExecutor::new(Arc::new(catalog), self.storage.clone());
+                    executor
+                        .execute_with_cte(&sqlrustgo_parser::Statement::WithSelect(ws.clone()))
+                        .map_err(SqlError::ExecutionError)
                 }
-            }
+                Some(wc) => self.execute_non_recursive_cte(ws),
+            },
             Statement::Check(ref check) => self.execute_check(check),
             Statement::Optimize(ref opt) => self.execute_optimize(opt),
             Statement::Vacuum(ref vacuum) => self.execute_vacuum(vacuum),
             Statement::Repair(ref repair) => self.execute_repair(repair),
+            Statement::StartWorkflow(ref start) => self.execute_start_workflow(start),
+            Statement::ApproveWorkflow(ref approve) => self.execute_approve_workflow(approve),
+            Statement::RejectWorkflow(ref reject) => self.execute_reject_workflow(reject),
             _ => Err(SqlError::ExecutionError(format!(
                 "Unsupported statement type: {:?}",
                 std::mem::discriminant(&statement)
@@ -986,6 +1016,268 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         let row_count = limited_rows.len();
         Ok(ExecutorResult::new(limited_rows, row_count))
+    }
+
+    /// Execute non-recursive CTE: materialize CTEs then execute main query
+    fn execute_non_recursive_cte(&mut self, ws: &WithSelect) -> SqlResult<ExecutorResult> {
+        let with_clause = ws.with_clause.as_ref().unwrap();
+        let mut cte_context = CteContext::default();
+
+        for cte in &with_clause.ctes {
+            let temp_table_name = cte_context.temp_table_name(&cte.name);
+            self.materialize_cte(&cte.subquery, &temp_table_name, &cte.columns)?;
+            cte_context
+                .cte_tables
+                .insert(cte.name.clone(), temp_table_name.clone());
+            cte_context.temp_tables.push(temp_table_name);
+        }
+
+        let mut select_with_cte_names = ws.select.clone();
+        for cte in &with_clause.ctes {
+            if let Some(temp_name) = cte_context.cte_tables.get(&cte.name) {
+                if select_with_cte_names.table == cte.name {
+                    select_with_cte_names.table = temp_name.clone();
+                }
+                if let Some(ref mut from) = select_with_cte_names.from {
+                    for table in &mut from.tables {
+                        if table.name == cte.name {
+                            table.name = temp_name.clone();
+                        }
+                    }
+                }
+            }
+        }
+
+        let result = self.execute_select(&select_with_cte_names);
+
+        self.cleanup_cte_tables(&cte_context);
+
+        result
+    }
+
+    /// Execute recursive CTE using iterative approach
+    fn execute_recursive_cte(&mut self, ws: &WithSelect) -> SqlResult<ExecutorResult> {
+        let with_clause = ws.with_clause.as_ref().unwrap();
+        if with_clause.ctes.len() != 1 {
+            return Err(SqlError::ExecutionError(
+                "Recursive CTE must have exactly one CTE definition".to_string(),
+            ));
+        }
+
+        let cte = &with_clause.ctes[0];
+        let subquery = &cte.subquery;
+
+        let union_stmt = match subquery.as_ref() {
+            Statement::Union(u) => u,
+            _ => {
+                return Err(SqlError::ExecutionError(
+                    "Recursive CTE subquery must be a UNION".to_string(),
+                ));
+            }
+        };
+
+        if !union_stmt.union_all {
+            return Err(SqlError::ExecutionError(
+                "Recursive CTE must use UNION ALL".to_string(),
+            ));
+        }
+
+        let anchor_select = match union_stmt.left.as_ref() {
+            Statement::Select(s) => s,
+            _ => {
+                return Err(SqlError::ExecutionError(
+                    "Recursive CTE anchor must be a SELECT".to_string(),
+                ));
+            }
+        };
+
+        let recursive_select = match union_stmt.right.as_ref() {
+            Statement::Select(s) => s,
+            _ => {
+                return Err(SqlError::ExecutionError(
+                    "Recursive CTE recursive part must be a SELECT".to_string(),
+                ));
+            }
+        };
+
+        let temp_table_name = format!("__cte_{}_recursive", cte.name);
+        let working_table_name = format!("{}_working", temp_table_name);
+        let max_iterations = 1000;
+
+        let anchor_result = self.execute_select(anchor_select)?;
+        let anchor_rows = anchor_result.rows;
+
+        if anchor_rows.is_empty() {
+            return Ok(ExecutorResult::new(vec![], 0));
+        }
+
+        let columns = self.extract_cte_columns(anchor_select);
+
+        let mut all_rows = anchor_rows.clone();
+        let mut prev_rows = anchor_rows;
+        let mut iteration = 0;
+
+        loop {
+            if iteration >= max_iterations {
+                break;
+            }
+
+            {
+                let mut storage = self.storage.write().unwrap();
+
+                let working_info = TableInfo {
+                    name: working_table_name.clone(),
+                    columns: columns.clone(),
+                    foreign_keys: vec![],
+                    unique_constraints: vec![],
+                    check_constraints: vec![],
+                    partition_info: None,
+                    has_hidden_rowid: false,
+                    next_rowid: 1,
+                };
+                storage.create_table(&working_info).ok();
+                storage.insert(&working_table_name, prev_rows.clone())?;
+            }
+
+            let modified_select =
+                self.replace_cte_reference(recursive_select, &cte.name, &working_table_name)?;
+            let recursive_result = self.execute_select(&modified_select)?;
+            let recursive_rows = recursive_result.rows;
+
+            {
+                let mut storage = self.storage.write().unwrap();
+                storage.drop_table(&working_table_name).ok();
+            }
+
+            if recursive_rows.is_empty() {
+                break;
+            }
+
+            all_rows.extend(recursive_rows.clone());
+            prev_rows = recursive_rows;
+            iteration += 1;
+        }
+
+        let row_count = all_rows.len();
+        Ok(ExecutorResult::new(all_rows, row_count))
+    }
+
+    /// Materialize a CTE subquery into a temp table
+    fn materialize_cte(
+        &mut self,
+        subquery: &Statement,
+        temp_table_name: &str,
+        columns: &[String],
+    ) -> SqlResult<()> {
+        let rows = match subquery {
+            Statement::Select(s) => self.execute_select(s)?.rows,
+            Statement::Union(u) => {
+                let left_rows = match u.left.as_ref() {
+                    Statement::Select(s) => self.execute_select(s)?.rows,
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "CTE subquery must be SELECT or UNION".to_string(),
+                        ));
+                    }
+                };
+                let right_rows = match u.right.as_ref() {
+                    Statement::Select(s) => self.execute_select(s)?.rows,
+                    _ => {
+                        return Err(SqlError::ExecutionError(
+                            "CTE subquery must be SELECT or UNION".to_string(),
+                        ));
+                    }
+                };
+                let mut combined = left_rows;
+                combined.extend(right_rows);
+                combined
+            }
+            _ => {
+                return Err(SqlError::ExecutionError(
+                    "CTE subquery must be SELECT or UNION".to_string(),
+                ));
+            }
+        };
+
+        let table_columns = if columns.is_empty() {
+            vec![]
+        } else {
+            columns
+                .iter()
+                .map(|c| ColumnDefinition {
+                    name: c.clone(),
+                    data_type: "TEXT".to_string(),
+                    nullable: true,
+                    primary_key: false,
+                    auto_increment: false,
+                })
+                .collect()
+        };
+
+        let table_info = TableInfo {
+            name: temp_table_name.to_string(),
+            columns: table_columns,
+            foreign_keys: vec![],
+            unique_constraints: vec![],
+            check_constraints: vec![],
+            partition_info: None,
+            has_hidden_rowid: false,
+            next_rowid: 1,
+        };
+
+        {
+            let mut storage = self.storage.write().unwrap();
+            storage.create_table(&table_info)?;
+            if !rows.is_empty() {
+                storage.insert(temp_table_name, rows)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn extract_cte_columns(&self, select: &SelectStatement) -> Vec<ColumnDefinition> {
+        select
+            .columns
+            .iter()
+            .map(|col| ColumnDefinition {
+                name: col.name.clone(),
+                data_type: "TEXT".to_string(),
+                nullable: true,
+                primary_key: false,
+                auto_increment: false,
+            })
+            .collect()
+    }
+
+    fn replace_cte_reference(
+        &self,
+        select: &SelectStatement,
+        cte_name: &str,
+        temp_table_name: &str,
+    ) -> SqlResult<SelectStatement> {
+        let mut new_select = select.clone();
+
+        if new_select.table == cte_name {
+            new_select.table = temp_table_name.to_string();
+        }
+
+        if let Some(ref mut from) = new_select.from {
+            for table in &mut from.tables {
+                if table.name == cte_name {
+                    table.name = temp_table_name.to_string();
+                }
+            }
+        }
+
+        Ok(new_select)
+    }
+
+    fn cleanup_cte_tables(&self, context: &CteContext) {
+        let mut storage = self.storage.write().unwrap();
+        for table_name in &context.temp_tables {
+            storage.drop_table(table_name).ok();
+        }
     }
 
     /// Execute SELECT with FOR UPDATE locking
@@ -4086,7 +4378,6 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
 
         match storage.get_table_info(&repair.name) {
             Ok(_info) => {
-                // In a real implementation, this would attempt to repair corrupted pages
                 let rows = vec![vec![
                     Value::Text(repair.name.clone()),
                     Value::Text("repair".to_string()),
@@ -4098,6 +4389,99 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Err(e) => Err(SqlError::ExecutionError(format!(
                 "Cannot repair table '{}': {}",
                 repair.name, e
+            ))),
+        }
+    }
+
+    fn execute_start_workflow(
+        &mut self,
+        start: &StartWorkflowStatement,
+    ) -> SqlResult<ExecutorResult> {
+        let context: std::collections::HashMap<String, serde_json::Value> = start
+            .context
+            .iter()
+            .map(|(k, v)| {
+                let json_value = if v.parse::<i64>().is_ok() {
+                    serde_json::Value::Number(v.parse().unwrap())
+                } else if v.parse::<f64>().is_ok() {
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(v.parse().unwrap()).unwrap(),
+                    )
+                } else {
+                    serde_json::Value::String(v.clone())
+                };
+                (k.clone(), json_value)
+            })
+            .collect();
+
+        match self
+            .workflow_engine
+            .start_workflow(&start.workflow_name, context)
+        {
+            Ok(instance_id) => {
+                let rows = vec![vec![
+                    Value::Text("OK".to_string()),
+                    Value::Text(instance_id),
+                    Value::Text(format!("Workflow '{}' started", start.workflow_name)),
+                ]];
+                Ok(ExecutorResult::new(rows, 1))
+            }
+            Err(e) => Err(SqlError::ExecutionError(format!(
+                "Failed to start workflow: {}",
+                e
+            ))),
+        }
+    }
+
+    fn execute_approve_workflow(
+        &mut self,
+        approve: &ApproveWorkflowStatement,
+    ) -> SqlResult<ExecutorResult> {
+        match self.workflow_engine.approve(
+            &approve.instance_id,
+            &approve.stage,
+            &approve.approver_id,
+            &approve.signature,
+            approve.comment.clone(),
+        ) {
+            Ok(()) => {
+                let rows = vec![vec![
+                    Value::Text("OK".to_string()),
+                    Value::Text(format!(
+                        "Workflow instance '{}' approved at stage '{}'",
+                        approve.instance_id, approve.stage
+                    )),
+                ]];
+                Ok(ExecutorResult::new(rows, 1))
+            }
+            Err(e) => Err(SqlError::ExecutionError(format!(
+                "Failed to approve workflow: {}",
+                e
+            ))),
+        }
+    }
+
+    fn execute_reject_workflow(
+        &mut self,
+        reject: &RejectWorkflowStatement,
+    ) -> SqlResult<ExecutorResult> {
+        match self
+            .workflow_engine
+            .reject(&reject.instance_id, reject.reason.clone())
+        {
+            Ok(()) => {
+                let rows = vec![vec![
+                    Value::Text("OK".to_string()),
+                    Value::Text(format!(
+                        "Workflow instance '{}' rejected",
+                        reject.instance_id
+                    )),
+                ]];
+                Ok(ExecutorResult::new(rows, 1))
+            }
+            Err(e) => Err(SqlError::ExecutionError(format!(
+                "Failed to reject workflow: {}",
+                e
             ))),
         }
     }
@@ -4117,8 +4501,9 @@ impl ExecutionEngine<MemoryStorage> {
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
             current_user: None,
-            cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: QueryCacheConfig::default(),
+            workflow_engine: WorkflowEngine::new(),
         }
     }
 
@@ -4135,8 +4520,9 @@ impl ExecutionEngine<MemoryStorage> {
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
             current_user: None,
-            cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: QueryCacheConfig::default(),
+            workflow_engine: WorkflowEngine::new(),
         }
     }
 
@@ -4153,8 +4539,9 @@ impl ExecutionEngine<MemoryStorage> {
             default_isolation: TmIsolationLevel::default(),
             current_role: None,
             current_user: None,
-            cache_config: QueryCacheConfig::default(),
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: QueryCacheConfig::default(),
+            workflow_engine: WorkflowEngine::new(),
         }
     }
 }
@@ -4982,6 +5369,48 @@ fn evaluate_binary_op(left: &Value, right: &Value, op: &str) -> Value {
         ">=" => Value::Boolean(compare_values(left, right) >= 0),
         "<" => Value::Boolean(compare_values(left, right) < 0),
         "<=" => Value::Boolean(compare_values(left, right) <= 0),
+        "+" => {
+            if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                Value::Integer(l + r)
+            } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                Value::Float(l + r)
+            } else if let (Value::Text(l), Value::Text(r)) = (left, right) {
+                Value::Text(l.clone() + r)
+            } else {
+                Value::Null
+            }
+        }
+        "-" => {
+            if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                Value::Integer(l - r)
+            } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                Value::Float(l - r)
+            } else {
+                Value::Null
+            }
+        }
+        "*" => {
+            if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                Value::Integer(l * r)
+            } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                Value::Float(l * r)
+            } else {
+                Value::Null
+            }
+        }
+        "/" => {
+            if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                if *r == 0 {
+                    Value::Null // Division by zero
+                } else {
+                    Value::Integer(l / r)
+                }
+            } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                Value::Float(l / r)
+            } else {
+                Value::Null
+            }
+        }
         "AND" | "&&" => {
             if let (Value::Boolean(l), Value::Boolean(r)) = (left, right) {
                 Value::Boolean(*l && *r)
@@ -5696,5 +6125,100 @@ mod tests {
         let result = engine.execute("BEGIN IDEMPOTENT KEY 'test-key-3'").unwrap();
         assert_eq!(result.affected_rows, 1);
         assert_eq!(result.rows.len(), 1);
+    }
+
+    #[test]
+    fn test_cte_non_recursive_basic() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO t1 VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')")
+            .unwrap();
+
+        let result = engine
+            .execute("WITH cte AS (SELECT id, name FROM t1 WHERE id > 1) SELECT * FROM cte")
+            .unwrap();
+
+        assert_eq!(result.rows.len(), 2);
+    }
+
+    #[test]
+    fn test_cte_multiple_ctes() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine
+            .execute("CREATE TABLE orders (user_id INTEGER, amount INTEGER)")
+            .unwrap();
+        engine
+            .execute("INSERT INTO orders VALUES (1, 100), (1, 200), (2, 150)")
+            .unwrap();
+
+        let result = engine
+            .execute(
+                "WITH active AS (SELECT user_id, SUM(amount) as total FROM orders WHERE amount > 50 GROUP BY user_id) \
+                 SELECT * FROM active",
+            )
+            .unwrap();
+
+        assert_eq!(result.rows.len(), 2);
+    }
+
+    #[test]
+    fn test_recursive_cte_counter() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine.execute("CREATE TABLE nums (n INTEGER)").unwrap();
+        engine.execute("INSERT INTO nums VALUES (1)").unwrap();
+
+        let result = engine
+            .execute(
+                "WITH RECURSIVE counter(n) AS (SELECT n FROM nums UNION ALL SELECT n + 1 FROM counter WHERE n < 5) \
+                 SELECT n FROM counter",
+            )
+            .unwrap();
+
+        assert_eq!(result.rows.len(), 5);
+    }
+
+    #[test]
+    fn test_recursive_cte_depth_limit() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine.execute("CREATE TABLE nums (n INTEGER)").unwrap();
+        engine.execute("INSERT INTO nums VALUES (1)").unwrap();
+
+        let result = engine
+            .execute(
+                "WITH RECURSIVE counter(n) AS (SELECT n FROM nums UNION ALL SELECT n + 1 FROM counter WHERE n < 1000) \
+                 SELECT n FROM counter",
+            )
+            .unwrap();
+
+        assert_eq!(result.rows.len(), 1000);
+    }
+
+    #[test]
+    fn test_recursive_cte_max_iterations() {
+        let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+        let mut engine = ExecutionEngine::new(storage);
+
+        engine.execute("CREATE TABLE nums (n INTEGER)").unwrap();
+        engine.execute("INSERT INTO nums VALUES (1)").unwrap();
+
+        let result = engine
+            .execute(
+                "WITH RECURSIVE counter(n) AS (SELECT n FROM nums UNION ALL SELECT n + 1 FROM counter) \
+                 SELECT n FROM counter LIMIT 1005",
+            )
+            .unwrap();
+
+        assert_eq!(result.rows.len(), 1001);
     }
 }

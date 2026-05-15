@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+#[cfg(test)]
+use super::provenance::SourceType;
 use super::provenance::{OperationType, ProvenanceRecord};
 
 #[derive(Debug, Clone)]

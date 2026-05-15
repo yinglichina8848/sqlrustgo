@@ -353,10 +353,14 @@ docs/releases/v3.2.0/oo/
 - [ ] GMP-6: Trusted Timestamp RFC3161
 - [ ] GMP-7: 审计链验证工具
 - [ ] GMP-8: HSM/KMS 集成 (TPM/HSM/KMS)
+- [ ] GMP-9: Workflow Engine ✅
+- [ ] GMP-10: 移动端可信采集 ✅
+- [ ] GMP-11: SOP/培训绑定 ✅
+- [ ] GMP-12: Device Calibration ✅
 - [ ] PERF-1: Point SELECT QPS ≥1M
 - [ ] PERF-2: TPC-H SF=10 22/22
-- [ ] SQL-1: RECURSIVE CTE 完整支持
-- [ ] SQL-2: Performance Schema ≥60%
+- [x] SQL-1: RECURSIVE CTE 完整支持 ✅
+- [x] SQL-2: Performance Schema ≥60% ✅
 
 ### 8.2 质量验收
 
