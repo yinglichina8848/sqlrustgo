@@ -501,7 +501,119 @@ fn test_signature_request_expiry() {
     // Should not be expired immediately
     assert!(!request.is_expired());
 
-    // Manually set expires_at to past
     request.expires_at = request.created_at - 1000;
     assert!(request.is_expired());
+}
+
+#[test]
+fn test_sequential_signature_flow() {
+    use sqlrustgo_gmp::electronic_signature::{ApprovalPolicy, ApprovalPolicyEvaluator, PolicyStatus};
+
+    let policy = ApprovalPolicy::new(
+        "batch_release".to_string(),
+        2,
+        vec!["QA_MANAGER".to_string(), "PRODUCTION_MANAGER".to_string()],
+        true,
+        72,
+        Some("Requires QA and Production manager approval".to_string()),
+    );
+
+    let mut evaluator = ApprovalPolicyEvaluator::new(&policy, "req-1".to_string());
+
+    assert_eq!(evaluator.current_status(), PolicyStatus::Pending);
+
+    let eval1 = evaluator.add_signature("user1", "QA_MANAGER").unwrap();
+    assert_eq!(eval1.status, PolicyStatus::Pending);
+    assert_eq!(eval1.current_signatures, 1);
+    assert_eq!(eval1.missing_roles, vec!["PRODUCTION_MANAGER"]);
+
+    let eval2 = evaluator.add_signature("user2", "PRODUCTION_MANAGER").unwrap();
+    assert_eq!(eval2.status, PolicyStatus::Approved);
+    assert_eq!(eval2.current_signatures, 2);
+    assert!(eval2.is_complete);
+}
+
+#[test]
+fn test_parallel_signature_flow() {
+    use sqlrustgo_gmp::electronic_signature::{ApprovalPolicy, ApprovalPolicyEvaluator, PolicyStatus};
+
+    let policy = ApprovalPolicy::new(
+        "batch_release".to_string(),
+        2,
+        vec!["QA_MANAGER".to_string(), "PRODUCTION_MANAGER".to_string()],
+        false,
+        72,
+        None,
+    );
+
+    let mut evaluator = ApprovalPolicyEvaluator::new(&policy, "req-2".to_string());
+
+    assert_eq!(evaluator.current_status(), PolicyStatus::Pending);
+
+    let eval1 = evaluator.add_signature("user1", "PRODUCTION_MANAGER").unwrap();
+    assert_eq!(eval1.status, PolicyStatus::Pending);
+    assert_eq!(eval1.current_signatures, 1);
+
+    let eval2 = evaluator.add_signature("user2", "QA_MANAGER").unwrap();
+    assert_eq!(eval2.status, PolicyStatus::Approved);
+    assert_eq!(eval2.current_signatures, 2);
+    assert!(eval2.is_complete);
+}
+
+#[test]
+fn test_sequential_order_violation() {
+    use sqlrustgo_gmp::electronic_signature::{ApprovalPolicy, ApprovalPolicyEvaluator, SignatureError};
+
+    let policy = ApprovalPolicy::new(
+        "batch_release".to_string(),
+        2,
+        vec!["QA_MANAGER".to_string(), "PRODUCTION_MANAGER".to_string()],
+        true,
+        72,
+        None,
+    );
+
+    let mut evaluator = ApprovalPolicyEvaluator::new(&policy, "req-3".to_string());
+
+    let result = evaluator.add_signature("user1", "PRODUCTION_MANAGER");
+    assert!(matches!(result, Err(SignatureError::SequentialOrderViolation { .. })));
+}
+
+#[test]
+fn test_duplicate_signature_rejection() {
+    use sqlrustgo_gmp::electronic_signature::{ApprovalPolicy, ApprovalPolicyEvaluator, SignatureError};
+
+    let policy = ApprovalPolicy::new(
+        "batch_release".to_string(),
+        2,
+        vec!["QA_MANAGER".to_string(), "PRODUCTION_MANAGER".to_string()],
+        false,
+        72,
+        None,
+    );
+
+    let mut evaluator = ApprovalPolicyEvaluator::new(&policy, "req-4".to_string());
+
+    evaluator.add_signature("user1", "QA_MANAGER").unwrap();
+    let result = evaluator.add_signature("user1", "PRODUCTION_MANAGER");
+    assert!(matches!(result, Err(SignatureError::SignatureAlreadyExists { .. })));
+}
+
+#[test]
+fn test_insufficient_permissions_rejection() {
+    use sqlrustgo_gmp::electronic_signature::{ApprovalPolicy, ApprovalPolicyEvaluator, SignatureError};
+
+    let policy = ApprovalPolicy::new(
+        "batch_release".to_string(),
+        2,
+        vec!["QA_MANAGER".to_string(), "PRODUCTION_MANAGER".to_string()],
+        false,
+        72,
+        None,
+    );
+
+    let mut evaluator = ApprovalPolicyEvaluator::new(&policy, "req-5".to_string());
+
+    let result = evaluator.add_signature("user1", "ADMIN");
+    assert!(matches!(result, Err(SignatureError::InsufficientPermissions { .. })));
 }
