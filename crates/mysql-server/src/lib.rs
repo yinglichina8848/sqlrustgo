@@ -1765,6 +1765,7 @@ fn execute_select_statement(
     Ok((cols, ctypes, r.rows))
 }
 
+#[inline]
 fn is_select(sql: &str) -> bool {
     let trimmed = sql.trim();
     // Fast path: check first char to avoid allocation in common case
