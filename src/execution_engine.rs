@@ -2159,6 +2159,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
     fn execute_update(&self, update: &UpdateStatement) -> SqlResult<ExecutorResult> {
         let table_name = update.table.clone();
 
+        // Handle multi-table UPDATE (UPDATE t1, t2 FROM t1 JOIN t2 ON ...)
+        if let Some(ref from_clause) = update.from_clause {
+            if !from_clause.tables.is_empty() || !from_clause.join_clauses.is_empty() {
+                return self.execute_multi_table_update(update);
+            }
+        }
+
         // If no WHERE clause, use the simple storage.update() path
         if update.where_clause.is_none() {
             let mut storage = self.storage.write().unwrap();
@@ -2452,6 +2459,162 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             .unwrap()
             .invalidate_table(&table_name);
         Ok(ExecutorResult::new(vec![], count))
+    }
+
+    fn execute_multi_table_update(&self, update: &UpdateStatement) -> SqlResult<ExecutorResult> {
+        let target_table = update.table.clone();
+        let from_clause = update.from_clause.as_ref().unwrap();
+
+        let mut tables_data: std::collections::HashMap<String, Vec<Vec<Value>>> =
+            std::collections::HashMap::new();
+        let mut tables_info: std::collections::HashMap<String, TableInfo> =
+            std::collections::HashMap::new();
+
+        tables_data.insert(target_table.clone(), {
+            let storage = self.storage.read().unwrap();
+            storage.scan(&target_table)?
+        });
+        {
+            let storage = self.storage.read().unwrap();
+            tables_info.insert(
+                target_table.clone(),
+                storage.get_table_info(&target_table)?.clone(),
+            );
+        }
+
+        for from_table in &from_clause.tables {
+            if from_table.name != target_table {
+                tables_data.insert(from_table.name.clone(), {
+                    let storage = self.storage.read().unwrap();
+                    storage.scan(&from_table.name)?
+                });
+                {
+                    let storage = self.storage.read().unwrap();
+                    tables_info.insert(
+                        from_table.name.clone(),
+                        storage.get_table_info(&from_table.name)?.clone(),
+                    );
+                }
+            }
+        }
+
+        let target_info = tables_info.get(&target_table).unwrap();
+        let mut target_rows = tables_data.get(&target_table).unwrap().clone();
+        let mut count = 0usize;
+
+        for idx in 0..target_rows.len() {
+            let mut matched = true;
+
+            if let Some(ref where_clause) = update.where_clause {
+                let mut row_ctx: std::collections::HashMap<String, Value> =
+                    std::collections::HashMap::new();
+                for (tbl_name, rows) in &tables_data {
+                    if let Some(tbl_info) = tables_info.get(tbl_name) {
+                        for (col_idx, col) in tbl_info.columns.iter().enumerate() {
+                            if idx < rows.len() {
+                                row_ctx.insert(
+                                    format!("{}.{}", tbl_name, col.name),
+                                    rows[idx].get(col_idx).cloned().unwrap_or(Value::Null),
+                                );
+                            }
+                        }
+                    }
+                }
+                matched = Self::eval_predicate_with_multi_table(
+                    where_clause,
+                    &row_ctx,
+                    target_info,
+                );
+            }
+
+            if matched {
+                for (ref col_name, ref set_expr) in &update.set_clauses {
+                    if let Some((col_idx, _)) = target_info
+                        .columns
+                        .iter()
+                        .enumerate()
+                        .find(|(_, c)| c.name == *col_name || col_name.ends_with(&format!(".{}", c.name)))
+                    {
+                        let value = Self::eval_expression(set_expr, &target_rows[idx], target_info)?;
+                        if col_idx < target_rows[idx].len() {
+                            target_rows[idx][col_idx] = value;
+                        }
+                    }
+                }
+                count += 1;
+            }
+        }
+
+        let mut storage = self.storage.write().unwrap();
+        storage.delete(&target_table, &[])?;
+        storage.insert(&target_table, target_rows)?;
+
+        self.query_cache.write().unwrap().invalidate_table(&target_table);
+        Ok(ExecutorResult::new(vec![], count))
+    }
+
+    fn eval_predicate_with_multi_table(
+        expr: &Expression,
+        row_ctx: &std::collections::HashMap<String, Value>,
+        _table_info: &TableInfo,
+    ) -> bool {
+        match expr {
+            Expression::BinaryOp(left, op, right) => {
+                let l = Self::eval_expr_with_ctx(left, row_ctx);
+                let r = Self::eval_expr_with_ctx(right, row_ctx);
+                match op.as_str() {
+                    "=" => l == r,
+                    "!=" | "<>" => l != r,
+                    ">" => l > r,
+                    "<" => l < r,
+                    ">=" => l >= r,
+                    "<=" => l <= r,
+                    "AND" | "and" => Self::eval_predicate_with_multi_table(left, row_ctx, _table_info)
+                        && Self::eval_predicate_with_multi_table(right, row_ctx, _table_info),
+                    "OR" | "or" => Self::eval_predicate_with_multi_table(left, row_ctx, _table_info)
+                        || Self::eval_predicate_with_multi_table(right, row_ctx, _table_info),
+                    _ => false,
+                }
+            }
+            Expression::Identifier(name) => {
+                if let Some(Value::Boolean(b)) = row_ctx.get(name) {
+                    *b
+                } else {
+                    false
+                }
+            }
+            _ => true,
+        }
+    }
+
+    fn eval_expr_with_ctx(
+        expr: &Expression,
+        ctx: &std::collections::HashMap<String, Value>,
+    ) -> Value {
+        match expr {
+            Expression::Literal(v) => expression_to_value(&Expression::Literal(v.clone())),
+            Expression::Identifier(name) => ctx.get(name).cloned().unwrap_or(Value::Null),
+            _ => Value::Null,
+        }
+    }
+
+    fn eval_expression(expr: &Expression, row: &[Value], table_info: &TableInfo) -> Result<Value, String> {
+        match expr {
+            Expression::Literal(_) => Ok(expression_to_value(expr)),
+            Expression::Identifier(name) => {
+                if let Some(col_idx) = find_column_index(name, table_info) {
+                    Ok(row.get(col_idx).cloned().unwrap_or(Value::Null))
+                } else {
+                    Ok(expression_to_value(expr))
+                }
+            }
+            Expression::BinaryOp(left, op, right) => {
+                let left_val = Self::eval_expression(left, row, table_info).unwrap_or(Value::Null);
+                let right_val = Self::eval_expression(right, row, table_info).unwrap_or(Value::Null);
+                Ok(evaluate_binary_op(&left_val, &right_val, op))
+            }
+            _ => Ok(Value::Null),
+        }
     }
 
     fn execute_delete(&self, delete: &DeleteStatement) -> SqlResult<ExecutorResult> {
