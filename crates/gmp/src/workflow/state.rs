@@ -145,10 +145,22 @@ mod tests {
     #[test]
     fn test_state_from_str_all_variants() {
         assert_eq!(WorkflowState::from_str("draft"), Some(WorkflowState::Draft));
-        assert_eq!(WorkflowState::from_str("review"), Some(WorkflowState::Review));
-        assert_eq!(WorkflowState::from_str("approval"), Some(WorkflowState::Approval));
-        assert_eq!(WorkflowState::from_str("released"), Some(WorkflowState::Released));
-        assert_eq!(WorkflowState::from_str("rejected"), Some(WorkflowState::Rejected));
+        assert_eq!(
+            WorkflowState::from_str("review"),
+            Some(WorkflowState::Review)
+        );
+        assert_eq!(
+            WorkflowState::from_str("approval"),
+            Some(WorkflowState::Approval)
+        );
+        assert_eq!(
+            WorkflowState::from_str("released"),
+            Some(WorkflowState::Released)
+        );
+        assert_eq!(
+            WorkflowState::from_str("rejected"),
+            Some(WorkflowState::Rejected)
+        );
         assert_eq!(WorkflowState::from_str("invalid"), None);
     }
 
@@ -206,7 +218,8 @@ mod tests {
 
     #[test]
     fn test_get_valid_transitions() {
-        let sm = StateMachine::from_stages(vec!["draft", "review", "approval", "released"]).unwrap();
+        let sm =
+            StateMachine::from_stages(vec!["draft", "review", "approval", "released"]).unwrap();
         let transitions = sm.get_valid_transitions(&WorkflowState::Draft);
         assert_eq!(transitions.len(), 1);
         assert_eq!(*transitions[0], WorkflowState::Review);

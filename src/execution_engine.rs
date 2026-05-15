@@ -14,6 +14,7 @@ use sqlrustgo_executor::trigger::{
     TriggerEvent as ExecTriggerEvent, TriggerExecutor, TriggerTiming as ExecTriggerTiming,
 };
 use sqlrustgo_executor::{ExecutorResult, MergeExecutor};
+use sqlrustgo_gmp::workflow::{WorkflowEngine, WorkflowState};
 use sqlrustgo_observability::observability_state::{ObservabilityState, OBSERVABILITY};
 use sqlrustgo_observability::tables::{
     lock_wait_graph::LockWaitEdge, lock_wait_graph::LockWaitGraph,
@@ -22,17 +23,17 @@ use sqlrustgo_observability::tables::{
     transaction_history::TransactionStatus, wal_stats::WalStatsCollector,
 };
 use sqlrustgo_parser::parser::{
-    AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement, CallStatement,
-    CheckOption, CheckStatement, CommonTableExpression, CreateIndexStatement,
-    CreateProcedureStatement, CreateRoleStatement, CreateTableStatement, CreateTriggerStatement,
-    DropRoleStatement, DropTableStatement, ExplainStatement, GrantRoleStatement, GrantStatement,
-    InsertStatement, MergeStatement, ObjectType as ParserObjectType, OptimizeStatement,
-    OrderByExpression, Privilege as ParserPrivilege, RepairStatement, RevokeRoleStatement,
-    RevokeStatement, SelectStatement, SetRoleStatement, ShowStatement,
+    AggregateCall, AggregateFunction, AlterTableOperation, AlterTableStatement,
+    ApproveWorkflowStatement, CallStatement, CheckOption, CheckStatement, CommonTableExpression,
+    CreateIndexStatement, CreateProcedureStatement, CreateRoleStatement, CreateTableStatement,
+    CreateTriggerStatement, DropRoleStatement, DropTableStatement, ExplainStatement,
+    GrantRoleStatement, GrantStatement, InsertStatement, MergeStatement,
+    ObjectType as ParserObjectType, OptimizeStatement, OrderByExpression,
+    Privilege as ParserPrivilege, RejectWorkflowStatement, RepairStatement, RevokeRoleStatement,
+    RevokeStatement, SelectStatement, SetRoleStatement, ShowStatement, StartWorkflowStatement,
     StoredProcParam as ParserStoredProcParam, StoredProcParamMode as ParserParamMode,
     StoredProcStatement as ParserStatement, TruncateStatement, VacuumMode, VacuumStatement,
-    WithClause, WithSelect, ApproveWorkflowStatement, RejectWorkflowStatement,
-    StartWorkflowStatement,
+    WithClause, WithSelect,
 };
 use sqlrustgo_parser::transaction::IsolationLevel as ParserIsolationLevel;
 use sqlrustgo_parser::JoinType; // For join type matching
@@ -46,7 +47,6 @@ use sqlrustgo_transaction::{
     TransactionManager, TxId,
 };
 use sqlrustgo_types::Value as SqlValue;
-use sqlrustgo_gmp::workflow::{WorkflowEngine, WorkflowState};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -745,13 +745,21 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::Describe(ref desc) => self.execute_describe(&desc.table),
             Statement::AlterTable(ref alter) => self.execute_alter_table(alter),
             Statement::Explain(ref explain) => self.execute_explain(explain),
-            Statement::WithSelect(ref ws) => {
-                match &ws.with_clause {
-                    None => self.execute_select(&ws.select),
-                    Some(wc) if wc.recursive => self.execute_recursive_cte(ws),
-                    Some(wc) => self.execute_non_recursive_cte(ws),
+            Statement::WithSelect(ref ws) => match &ws.with_clause {
+                None => self.execute_select(&ws.select),
+                Some(wc) if wc.recursive => {
+                    let catalog = if let Some(ref catalog_guard) = self.catalog {
+                        catalog_guard.read().unwrap().clone()
+                    } else {
+                        sqlrustgo_catalog::Catalog::new("cte_catalog".to_string())
+                    };
+                    let executor = StoredProcExecutor::new(Arc::new(catalog), self.storage.clone());
+                    executor
+                        .execute_with_cte(&sqlrustgo_parser::Statement::WithSelect(ws.clone()))
+                        .map_err(SqlError::ExecutionError)
                 }
-            }
+                Some(wc) => self.execute_non_recursive_cte(ws),
+            },
             Statement::Check(ref check) => self.execute_check(check),
             Statement::Optimize(ref opt) => self.execute_optimize(opt),
             Statement::Vacuum(ref vacuum) => self.execute_vacuum(vacuum),
@@ -1018,7 +1026,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         for cte in &with_clause.ctes {
             let temp_table_name = cte_context.temp_table_name(&cte.name);
             self.materialize_cte(&cte.subquery, &temp_table_name, &cte.columns)?;
-            cte_context.cte_tables.insert(cte.name.clone(), temp_table_name.clone());
+            cte_context
+                .cte_tables
+                .insert(cte.name.clone(), temp_table_name.clone());
             cte_context.temp_tables.push(temp_table_name);
         }
 
@@ -1129,7 +1139,8 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 storage.insert(&working_table_name, prev_rows.clone())?;
             }
 
-            let modified_select = self.replace_cte_reference(recursive_select, &cte.name, &working_table_name)?;
+            let modified_select =
+                self.replace_cte_reference(recursive_select, &cte.name, &working_table_name)?;
             let recursive_result = self.execute_select(&modified_select)?;
             let recursive_rows = recursive_result.rows;
 
@@ -1191,13 +1202,16 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         let table_columns = if columns.is_empty() {
             vec![]
         } else {
-            columns.iter().map(|c| ColumnDefinition {
-                name: c.clone(),
-                data_type: "TEXT".to_string(),
-                nullable: true,
-                primary_key: false,
-                auto_increment: false,
-            }).collect()
+            columns
+                .iter()
+                .map(|c| ColumnDefinition {
+                    name: c.clone(),
+                    data_type: "TEXT".to_string(),
+                    nullable: true,
+                    primary_key: false,
+                    auto_increment: false,
+                })
+                .collect()
         };
 
         let table_info = TableInfo {
@@ -4390,7 +4404,9 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 let json_value = if v.parse::<i64>().is_ok() {
                     serde_json::Value::Number(v.parse().unwrap())
                 } else if v.parse::<f64>().is_ok() {
-                    serde_json::Value::Number(serde_json::Number::from_f64(v.parse().unwrap()).unwrap())
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(v.parse().unwrap()).unwrap(),
+                    )
                 } else {
                     serde_json::Value::String(v.clone())
                 };
@@ -4398,7 +4414,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             })
             .collect();
 
-        match self.workflow_engine.start_workflow(&start.workflow_name, context) {
+        match self
+            .workflow_engine
+            .start_workflow(&start.workflow_name, context)
+        {
             Ok(instance_id) => {
                 let rows = vec![vec![
                     Value::Text("OK".to_string()),
@@ -4428,7 +4447,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Ok(()) => {
                 let rows = vec![vec![
                     Value::Text("OK".to_string()),
-                    Value::Text(format!("Workflow instance '{}' approved at stage '{}'", approve.instance_id, approve.stage)),
+                    Value::Text(format!(
+                        "Workflow instance '{}' approved at stage '{}'",
+                        approve.instance_id, approve.stage
+                    )),
                 ]];
                 Ok(ExecutorResult::new(rows, 1))
             }
@@ -4443,11 +4465,17 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         &mut self,
         reject: &RejectWorkflowStatement,
     ) -> SqlResult<ExecutorResult> {
-        match self.workflow_engine.reject(&reject.instance_id, reject.reason.clone()) {
+        match self
+            .workflow_engine
+            .reject(&reject.instance_id, reject.reason.clone())
+        {
             Ok(()) => {
                 let rows = vec![vec![
                     Value::Text("OK".to_string()),
-                    Value::Text(format!("Workflow instance '{}' rejected", reject.instance_id)),
+                    Value::Text(format!(
+                        "Workflow instance '{}' rejected",
+                        reject.instance_id
+                    )),
                 ]];
                 Ok(ExecutorResult::new(rows, 1))
             }
@@ -5373,7 +5401,7 @@ fn evaluate_binary_op(left: &Value, right: &Value, op: &str) -> Value {
         "/" => {
             if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
                 if *r == 0 {
-                    Value::Null  // Division by zero
+                    Value::Null // Division by zero
                 } else {
                     Value::Integer(l / r)
                 }
@@ -6145,9 +6173,7 @@ mod tests {
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage);
 
-        engine
-            .execute("CREATE TABLE nums (n INTEGER)")
-            .unwrap();
+        engine.execute("CREATE TABLE nums (n INTEGER)").unwrap();
         engine.execute("INSERT INTO nums VALUES (1)").unwrap();
 
         let result = engine
@@ -6165,9 +6191,7 @@ mod tests {
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage);
 
-        engine
-            .execute("CREATE TABLE nums (n INTEGER)")
-            .unwrap();
+        engine.execute("CREATE TABLE nums (n INTEGER)").unwrap();
         engine.execute("INSERT INTO nums VALUES (1)").unwrap();
 
         let result = engine
@@ -6185,9 +6209,7 @@ mod tests {
         let storage = Arc::new(RwLock::new(MemoryStorage::new()));
         let mut engine = ExecutionEngine::new(storage);
 
-        engine
-            .execute("CREATE TABLE nums (n INTEGER)")
-            .unwrap();
+        engine.execute("CREATE TABLE nums (n INTEGER)").unwrap();
         engine.execute("INSERT INTO nums VALUES (1)").unwrap();
 
         let result = engine

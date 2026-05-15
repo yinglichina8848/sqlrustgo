@@ -215,12 +215,8 @@ mod tests {
     fn test_create_definition_error() {
         let mut engine = WorkflowEngine::new();
 
-        let result = engine.create_definition(
-            "test".to_string(),
-            vec!["draft", "invalid_stage"],
-            None,
-            1,
-        );
+        let result =
+            engine.create_definition("test".to_string(), vec!["draft", "invalid_stage"], None, 1);
         assert!(result.is_err());
     }
 
@@ -314,12 +310,7 @@ mod tests {
         let mut engine = WorkflowEngine::new();
 
         engine
-            .create_definition(
-                "def1".to_string(),
-                vec!["draft", "released"],
-                None,
-                1,
-            )
+            .create_definition("def1".to_string(), vec!["draft", "released"], None, 1)
             .unwrap();
 
         engine
@@ -342,12 +333,7 @@ mod tests {
         let mut engine = WorkflowEngine::new();
 
         engine
-            .create_definition(
-                "test".to_string(),
-                vec!["draft", "released"],
-                None,
-                1,
-            )
+            .create_definition("test".to_string(), vec!["draft", "released"], None, 1)
             .unwrap();
 
         let id1 = engine.start_workflow("test", HashMap::new()).unwrap();

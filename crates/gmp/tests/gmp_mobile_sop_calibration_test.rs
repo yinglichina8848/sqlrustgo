@@ -3,18 +3,18 @@
 //! Tests for GMP-10 (Mobile Device Management),
 //! GMP-11 (SOP and Training), and GMP-12 (Calibration Management).
 
+use sqlrustgo_gmp::calibration::{
+    CalibrationDevice, CalibrationInterval, CalibrationMeasurement, CalibrationRecord,
+    CalibrationResult, CalibrationStatus, TABLE_CALIBRATION_DEVICES, TABLE_CALIBRATION_RECORDS,
+};
 use sqlrustgo_gmp::mobile::{
-    MobileDevice, DeviceStatus, MobileCollectionRecord, CollectionStatus,
-    verify_device_trust, verify_device_signature, TrustVerificationResult,
-    TABLE_MOBILE_DEVICES, TABLE_MOBILE_COLLECTIONS,
+    verify_device_signature, verify_device_trust, CollectionStatus, DeviceStatus,
+    MobileCollectionRecord, MobileDevice, TrustVerificationResult, TABLE_MOBILE_COLLECTIONS,
+    TABLE_MOBILE_DEVICES,
 };
 use sqlrustgo_gmp::sop::{
-    StandardOperatingProcedure, SopStatus, TrainingRecord, TrainingStatus,
-    SOPBinding, BindingStatus, TABLE_SOP, TABLE_TRAINING_RECORDS, TABLE_SOP_BINDINGS,
-};
-use sqlrustgo_gmp::calibration::{
-    CalibrationDevice, CalibrationInterval, CalibrationRecord, CalibrationResult,
-    CalibrationStatus, CalibrationMeasurement, TABLE_CALIBRATION_DEVICES, TABLE_CALIBRATION_RECORDS,
+    BindingStatus, SOPBinding, SopStatus, StandardOperatingProcedure, TrainingRecord,
+    TrainingStatus, TABLE_SOP, TABLE_SOP_BINDINGS, TABLE_TRAINING_RECORDS,
 };
 
 // =============================================================================
@@ -23,10 +23,22 @@ use sqlrustgo_gmp::calibration::{
 
 #[test]
 fn test_device_status_parse() {
-    assert_eq!(DeviceStatus::parse_status("REGISTERED"), Some(DeviceStatus::Registered));
-    assert_eq!(DeviceStatus::parse_status("SUSPENDED"), Some(DeviceStatus::Suspended));
-    assert_eq!(DeviceStatus::parse_status("REVOKED"), Some(DeviceStatus::Revoked));
-    assert_eq!(DeviceStatus::parse_status("registered"), Some(DeviceStatus::Registered));
+    assert_eq!(
+        DeviceStatus::parse_status("REGISTERED"),
+        Some(DeviceStatus::Registered)
+    );
+    assert_eq!(
+        DeviceStatus::parse_status("SUSPENDED"),
+        Some(DeviceStatus::Suspended)
+    );
+    assert_eq!(
+        DeviceStatus::parse_status("REVOKED"),
+        Some(DeviceStatus::Revoked)
+    );
+    assert_eq!(
+        DeviceStatus::parse_status("registered"),
+        Some(DeviceStatus::Registered)
+    );
     assert_eq!(DeviceStatus::parse_status("unknown"), None);
 }
 
@@ -138,10 +150,22 @@ fn test_verify_device_signature() {
 
 #[test]
 fn test_collection_status_parse() {
-    assert_eq!(CollectionStatus::parse_status("PENDING"), Some(CollectionStatus::Pending));
-    assert_eq!(CollectionStatus::parse_status("VERIFIED"), Some(CollectionStatus::Verified));
-    assert_eq!(CollectionStatus::parse_status("INVALID"), Some(CollectionStatus::Invalid));
-    assert_eq!(CollectionStatus::parse_status("pending"), Some(CollectionStatus::Pending));
+    assert_eq!(
+        CollectionStatus::parse_status("PENDING"),
+        Some(CollectionStatus::Pending)
+    );
+    assert_eq!(
+        CollectionStatus::parse_status("VERIFIED"),
+        Some(CollectionStatus::Verified)
+    );
+    assert_eq!(
+        CollectionStatus::parse_status("INVALID"),
+        Some(CollectionStatus::Invalid)
+    );
+    assert_eq!(
+        CollectionStatus::parse_status("pending"),
+        Some(CollectionStatus::Pending)
+    );
     assert_eq!(CollectionStatus::parse_status("unknown"), None);
 }
 
@@ -199,8 +223,14 @@ fn test_mobile_table_constants() {
 #[test]
 fn test_sop_status_parse() {
     assert_eq!(SopStatus::parse_status("ACTIVE"), Some(SopStatus::Active));
-    assert_eq!(SopStatus::parse_status("INACTIVE"), Some(SopStatus::Inactive));
-    assert_eq!(SopStatus::parse_status("SUPERSEDED"), Some(SopStatus::Superseded));
+    assert_eq!(
+        SopStatus::parse_status("INACTIVE"),
+        Some(SopStatus::Inactive)
+    );
+    assert_eq!(
+        SopStatus::parse_status("SUPERSEDED"),
+        Some(SopStatus::Superseded)
+    );
     assert_eq!(SopStatus::parse_status("active"), Some(SopStatus::Active));
     assert_eq!(SopStatus::parse_status("unknown"), None);
 }
@@ -263,10 +293,22 @@ fn test_sop_is_active() {
 
 #[test]
 fn test_training_status_parse() {
-    assert_eq!(TrainingStatus::parse_status("VALID"), Some(TrainingStatus::Valid));
-    assert_eq!(TrainingStatus::parse_status("EXPIRED"), Some(TrainingStatus::Expired));
-    assert_eq!(TrainingStatus::parse_status("SUPERSEDED"), Some(TrainingStatus::Superseded));
-    assert_eq!(TrainingStatus::parse_status("valid"), Some(TrainingStatus::Valid));
+    assert_eq!(
+        TrainingStatus::parse_status("VALID"),
+        Some(TrainingStatus::Valid)
+    );
+    assert_eq!(
+        TrainingStatus::parse_status("EXPIRED"),
+        Some(TrainingStatus::Expired)
+    );
+    assert_eq!(
+        TrainingStatus::parse_status("SUPERSEDED"),
+        Some(TrainingStatus::Superseded)
+    );
+    assert_eq!(
+        TrainingStatus::parse_status("valid"),
+        Some(TrainingStatus::Valid)
+    );
     assert_eq!(TrainingStatus::parse_status("unknown"), None);
 }
 
@@ -406,10 +448,22 @@ fn test_calibration_interval_to_seconds() {
 
 #[test]
 fn test_calibration_status_parse() {
-    assert_eq!(CalibrationStatus::parse_status("CURRENT"), Some(CalibrationStatus::Current));
-    assert_eq!(CalibrationStatus::parse_status("DUE"), Some(CalibrationStatus::Due));
-    assert_eq!(CalibrationStatus::parse_status("EXPIRED"), Some(CalibrationStatus::Expired));
-    assert_eq!(CalibrationStatus::parse_status("current"), Some(CalibrationStatus::Current));
+    assert_eq!(
+        CalibrationStatus::parse_status("CURRENT"),
+        Some(CalibrationStatus::Current)
+    );
+    assert_eq!(
+        CalibrationStatus::parse_status("DUE"),
+        Some(CalibrationStatus::Due)
+    );
+    assert_eq!(
+        CalibrationStatus::parse_status("EXPIRED"),
+        Some(CalibrationStatus::Expired)
+    );
+    assert_eq!(
+        CalibrationStatus::parse_status("current"),
+        Some(CalibrationStatus::Current)
+    );
     assert_eq!(CalibrationStatus::parse_status("unknown"), None);
 }
 
@@ -453,9 +507,18 @@ fn test_calibration_device_is_calibration_due() {
 
 #[test]
 fn test_calibration_result_parse() {
-    assert_eq!(CalibrationResult::parse_status("PASS"), Some(CalibrationResult::Pass));
-    assert_eq!(CalibrationResult::parse_status("FAIL"), Some(CalibrationResult::Fail));
-    assert_eq!(CalibrationResult::parse_status("pass"), Some(CalibrationResult::Pass));
+    assert_eq!(
+        CalibrationResult::parse_status("PASS"),
+        Some(CalibrationResult::Pass)
+    );
+    assert_eq!(
+        CalibrationResult::parse_status("FAIL"),
+        Some(CalibrationResult::Fail)
+    );
+    assert_eq!(
+        CalibrationResult::parse_status("pass"),
+        Some(CalibrationResult::Pass)
+    );
     assert_eq!(CalibrationResult::parse_status("unknown"), None);
 }
 
@@ -516,15 +579,13 @@ fn test_calibration_record_with_measurements() {
 
 #[test]
 fn test_calibration_record_all_measurements_passed() {
-    let measurements = vec![
-        CalibrationMeasurement {
-            parameter: "temp".to_string(),
-            expected: 25.0,
-            measured: 25.5, // Outside tolerance
-            tolerance: 0.1,
-            passed: false,
-        },
-    ];
+    let measurements = vec![CalibrationMeasurement {
+        parameter: "temp".to_string(),
+        expected: 25.0,
+        measured: 25.5, // Outside tolerance
+        tolerance: 0.1,
+        passed: false,
+    }];
 
     let record = CalibrationRecord::new(
         "calib-device-001".to_string(),
