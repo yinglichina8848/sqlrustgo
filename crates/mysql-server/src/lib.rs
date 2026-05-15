@@ -1706,6 +1706,7 @@ fn infer_column_types(
     cols.iter().map(|_| "VARCHAR(255)".to_string()).collect()
 }
 
+#[inline]
 #[allow(clippy::type_complexity)]
 fn execute_select(
     sql: &str,
@@ -1726,6 +1727,7 @@ fn execute_select(
     Ok((cols, ctypes, r.rows))
 }
 
+#[inline]
 fn execute_write(
     sql: &str,
     engine: &mut MemoryExecutionEngine,
