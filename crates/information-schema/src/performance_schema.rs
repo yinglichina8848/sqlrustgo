@@ -7,6 +7,7 @@ lazy_static::lazy_static! {
     static ref PS_STATE: RwLock<PsState> = RwLock::new(PsState::new());
 }
 
+#[allow(dead_code)]
 struct PsState {
     setup_actors: Vec<SetupActorsRow>,
     setup_instruments: Vec<SetupInstrumentsRow>,
@@ -148,11 +149,57 @@ impl PerformanceSchema {
     }
 
     pub fn get_events_statements_current_rows() -> Vec<EventsStatementsRow> {
-        PS_STATE.read().unwrap().events_statements_current.clone()
+        OBSERVABILITY
+            .events_statements
+            .read()
+            .unwrap()
+            .get_current()
+            .map(|e| EventsStatementsRow {
+                thread_id: e.thread_id,
+                event_id: e.event_id,
+                event_name: e.command_type.clone(),
+                sql_text: e.sql_text,
+                digest: e.digest,
+                digest_text: None,
+                timer_start: e.timer_start,
+                timer_end: e.timer_end,
+                timer_wait: e.timer_wait,
+                lock_time: e.lock_time,
+                rows_examined: e.rows_examined,
+                rows_sent: e.rows_sent,
+                rows_affected: e.rows_affected,
+                created_tmp_disk_tables: e.created_tmp_disk_tables,
+                created_tmp_tables: e.created_tmp_tables,
+            })
+            .map(|row| vec![row])
+            .unwrap_or_default()
     }
 
     pub fn get_events_statements_history_rows() -> Vec<EventsStatementsRow> {
-        PS_STATE.read().unwrap().events_statements_history.clone()
+        OBSERVABILITY
+            .events_statements
+            .read()
+            .unwrap()
+            .get_history(None)
+            .into_iter()
+            .map(|e| EventsStatementsRow {
+                thread_id: e.thread_id,
+                event_id: e.event_id,
+                event_name: e.command_type,
+                sql_text: e.sql_text,
+                digest: e.digest,
+                digest_text: None,
+                timer_start: e.timer_start,
+                timer_end: e.timer_end,
+                timer_wait: e.timer_wait,
+                lock_time: e.lock_time,
+                rows_examined: e.rows_examined,
+                rows_sent: e.rows_sent,
+                rows_affected: e.rows_affected,
+                created_tmp_disk_tables: e.created_tmp_disk_tables,
+                created_tmp_tables: e.created_tmp_tables,
+            })
+            .collect()
     }
 
     pub fn get_events_waits_current_rows() -> Vec<EventsWaitsRow> {
@@ -165,6 +212,34 @@ impl PerformanceSchema {
 
     pub fn get_global_events_rows() -> Vec<GlobalEventsRow> {
         Vec::new()
+    }
+
+    pub fn begin_statement(sql: String, command: String) -> u64 {
+        OBSERVABILITY
+            .events_statements
+            .write()
+            .unwrap()
+            .begin_statement(sql, command)
+    }
+
+    pub fn end_statement(
+        event_id: u64,
+        rows_examined: u64,
+        rows_sent: u64,
+        rows_affected: u64,
+        error_count: u64,
+    ) {
+        OBSERVABILITY
+            .events_statements
+            .write()
+            .unwrap()
+            .end_statement(
+                event_id,
+                rows_examined,
+                rows_sent,
+                rows_affected,
+                error_count,
+            );
     }
 }
 
@@ -325,6 +400,7 @@ mod tests {
 
     #[test]
     fn test_ps_events_statements() {
+        OBSERVABILITY.events_statements.write().unwrap().reset();
         let current = PerformanceSchema::get_events_statements_current_rows();
         let history = PerformanceSchema::get_events_statements_history_rows();
         assert!(current.is_empty());

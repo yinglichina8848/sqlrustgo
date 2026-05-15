@@ -5,8 +5,9 @@
 //! and makes it accessible to both the execution engine and information_schema.
 
 use crate::tables::{
-    lock_wait_graph::LockWaitGraph, recovery_history::RecoveryHistory,
-    transaction_history::TransactionHistory, wal_stats::WalStatsCollector,
+    events_statements::EventsStatementsCollector, lock_wait_graph::LockWaitGraph,
+    recovery_history::RecoveryHistory, transaction_history::TransactionHistory,
+    wal_stats::WalStatsCollector,
 };
 use std::sync::RwLock;
 
@@ -21,6 +22,7 @@ pub struct ObservabilityState {
     pub lock_wait_graph: RwLock<LockWaitGraph>,
     pub recovery_history: RwLock<RecoveryHistory>,
     pub wal_stats: RwLock<WalStatsCollector>,
+    pub events_statements: RwLock<EventsStatementsCollector>,
 }
 
 impl ObservabilityState {
@@ -31,6 +33,7 @@ impl ObservabilityState {
             lock_wait_graph: RwLock::new(LockWaitGraph::new()),
             recovery_history: RwLock::new(RecoveryHistory::new(std::env::temp_dir(), 10000)),
             wal_stats: RwLock::new(WalStatsCollector::new()),
+            events_statements: RwLock::new(EventsStatementsCollector::new()),
         }
     }
 }
