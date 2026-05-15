@@ -1,7 +1,8 @@
 # SQLRustGo 文档索引
 
-> **最后更新**: 2026-05-12
-> **当前版本**: v3.1.0 (Alpha → Beta 阶段)
+> **最后更新**: 2026-05-15
+> **当前版本**: v3.2.0 (Beta Phase)
+> **状态**: Alpha Gate ✅ Conditional Passed
 
 ---
 
@@ -10,22 +11,24 @@
 ```
 docs/
 ├── releases/                    # 版本发布文档
-│   ├── v2.9.0/                  # v2.9.0 (当前开发版本)
+│   ├── v3.2.0/                  # v3.2.0 (当前开发版本: Beta)
+│   ├── v3.1.0/                  # v3.1.0 (GA)
+│   ├── v3.0.0/                  # v3.0.0 (GA)
+│   ├── v2.9.0/                  # v2.9.0
 │   ├── v2.8.0/                  # v2.8.0 (GA)
-│   ├── v2.7.0/                  # v2.7.0 (GA)
-│   ├── v2.6.0/                  # v2.6.0
-│   ├── v2.0/                    # v2.0 规划文档
 │   └── ...
-│
+
 ├── governance/                  # 治理文档
-│   ├── gate_spec.md            # 门禁规范 (A/B/R/G)
+│   ├── GOVERNANCE_INDEX.md     # 治理文档索引
+│   ├── GATE_SPEC_MASTER.md     # 门禁规范 (A/B/R/G)
 │   └── GATE_CI_CD.md          # CI/CD 流水线
-│
+
 ├── proof/                       # 形式化验证
 │   ├── REGISTRY_INDEX.md       # Proof 注册表索引
 │   └── TOOLCHAIN_INSTALLATION.md
-│
-├── benchmark/                   # 性能基准
+
+├── gmp/                        # GMP 合规文档
+├── gmp-compliance/             # GMP 合规评估
 └── ...
 ```
 
@@ -33,7 +36,23 @@ docs/
 
 ## 二、版本发布文档
 
-### v3.1.0 (当前版本: Alpha → Beta 阶段)
+### v3.2.0 (当前版本: Beta Phase)
+
+| 文档 | 说明 |
+|------|------|
+| [综合说明](releases/v3.2.0/README.md) | v3.2.0 完整文档 |
+| [发布说明](releases/v3.2.0/RELEASE_NOTES.md) | 版本发布说明 |
+| [变更日志](releases/v3.2.0/CHANGELOG.md) | 详细变更记录 |
+| [功能矩阵](releases/v3.2.0/FEATURE_MATRIX.md) | 功能实现状态 |
+| [开发计划](releases/v3.2.0/DEVELOPMENT_PLAN.md) | 开发计划 |
+| [Alpha 门禁报告](releases/v3.2.0/ALPHA_GATE_REPORT.md) | Alpha Gate 检查结果 |
+| [Beta 门禁报告](releases/v3.2.0/BETA_GATE_REPORT.md) | Beta Gate 检查结果 |
+| [测试计划](releases/v3.2.0/TEST_PLAN.md) | 测试目标与阶段安排 |
+| [安装指南](releases/v3.2.0/INSTALL.md) | 安装配置 |
+| [部署指南](releases/v3.2.0/DEPLOYMENT_GUIDE.md) | 生产部署 |
+| [快速开始](releases/v3.2.0/QUICK_START.md) | 快速入门 |
+
+### v3.1.0 (已发布: GA 2026-05-11)
 
 | 文档 | 说明 |
 |------|------|
@@ -69,8 +88,10 @@ docs/
 
 | 文档 | 说明 |
 |------|------|
-| [门禁规范](governance/gate_spec.md) | A/B/R/G 四级门禁规格 |
+| [治理文档索引](governance/GOVERNANCE_INDEX.md) | 治理文档导航 |
+| [门禁规范](governance/GATE_SPEC_MASTER.md) | A/B/R/GA 四级门禁规格 |
 | [CI/CD 流水线](governance/GATE_CI_CD.md) | 门禁 CI/CD 实现 |
+| [ Governance Standard](governance/GOVERNANCE_STANDARD.md) | 治理标准 |
 
 ---
 
@@ -80,7 +101,6 @@ docs/
 |------|------|
 | [Proof 注册表索引](proof/REGISTRY_INDEX.md) | 所有 Proof 文件索引 |
 | [工具链安装](proof/TOOLCHAIN_INSTALLATION.md) | TLA+ / Formulog 安装 |
-| [Phase S 验证流程](proof/PHASE_S_VERIFICATION_WORKFLOW.md) | S 系列验证流程 |
 
 ---
 
@@ -88,12 +108,12 @@ docs/
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| 3.0 | 2026-05-05 | 更新为 v2.9.0，添加 v2.9.0 完整文档链 |
-| 2.1 | 2026-04-22 | 更新为 v2.7.0 GA，添加 v2.7.0 文档入口 |
-| 2.0 | 2026-04-17 | 更新为 v2.6.0，清理过时版本链接 |
-| 1.1 | 2026-03-05 | 新增 v1.3.0 计划，重组教学材料目录 |
+| 3.1 | 2026-05-15 | 更新为 v3.2.0 Beta，添加 v3.2.0 完整文档链 |
+| 3.0 | 2026-05-05 | 更新为 v3.1.0 Alpha，添加 v3.1.0 文档 |
+| 2.1 | 2026-04-22 | 更新为 v2.9.0，添加 v2.9.0 文档入口 |
+| 2.0 | 2026-04-17 | 更新为 v2.8.0，清理过时版本链接 |
 | 1.0 | 2026-03-04 | 初始版本，整合所有文档索引 |
 
 ---
 
-*本文档由 yinglichina8848 维护*
+*本文档由 hermes-z6g4 维护*
