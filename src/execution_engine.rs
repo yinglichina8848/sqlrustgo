@@ -612,8 +612,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 let right_result = self.execute_select(right_select)?;
 
                 if intersect_stmt.intersect_all {
-                    let mut right_counts: std::collections::HashMap<&Vec<sqlrustgo_types::Value>, i64> =
-                        std::collections::HashMap::new();
+                    let mut right_counts: std::collections::HashMap<
+                        &Vec<sqlrustgo_types::Value>,
+                        i64,
+                    > = std::collections::HashMap::new();
                     for row in &right_result.rows {
                         *right_counts.entry(row).or_insert(0) += 1;
                     }
@@ -661,8 +663,10 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 let right_result = self.execute_select(right_select)?;
 
                 if except_stmt.except_all {
-                    let mut right_counts: std::collections::HashMap<&Vec<sqlrustgo_types::Value>, i64> =
-                        std::collections::HashMap::new();
+                    let mut right_counts: std::collections::HashMap<
+                        &Vec<sqlrustgo_types::Value>,
+                        i64,
+                    > = std::collections::HashMap::new();
                     for row in &right_result.rows {
                         *right_counts.entry(row).or_insert(0) += 1;
                     }
