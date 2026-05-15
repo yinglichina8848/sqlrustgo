@@ -186,7 +186,7 @@ impl DeadlockDetector {
     // ─────────────────────────────────────────────────────────────────────────
 
     /// UNSAFE for concurrent use. Use `try_wait_edge()` instead.
-    #[cfg(test)]
+    #[allow(dead_code)]
     pub fn add_edge_unsafe(&self, blocked: TxId, holder: TxId) {
         let mut inner = self.inner.lock().unwrap();
         inner.add_edge(blocked, holder);
@@ -364,12 +364,12 @@ mod tests {
         detector.add_edge_unsafe(TxId::new(2), TxId::new(3));
 
         let d1 = Arc::clone(&detector);
-        let r1 = thread::spawn(move || d1.try_wait_edge(TxId::new(1), [TxId::new(2)].into()))
+        let _r1 = thread::spawn(move || d1.try_wait_edge(TxId::new(1), [TxId::new(2)].into()))
             .join()
             .unwrap();
 
         let d3 = Arc::clone(&detector);
-        let r3 = thread::spawn(move || {
+        let _r3 = thread::spawn(move || {
             // T3 trying to wait for T2 would create T3→T2→T1→T2 cycle (T2→T1 already exists)
             d3.try_wait_edge(TxId::new(3), [TxId::new(2)].into())
         })
