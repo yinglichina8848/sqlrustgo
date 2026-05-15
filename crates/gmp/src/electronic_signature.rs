@@ -4,9 +4,7 @@
 //!
 //! ## Core Formula
 //!
-//! ```
 //! Electronic Signature = Private Key Signature + Signing Reason + Timestamp
-//! ```
 //!
 //! ## Features
 //!
