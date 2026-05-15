@@ -11,7 +11,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 
 #[test]
 #[ignore]
-    fn test_left_join_preserves_all_left_rows() {
+fn test_left_join_preserves_all_left_rows() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE employees (id INTEGER, name TEXT)")
@@ -54,7 +54,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 
 #[test]
 #[ignore]
-    fn test_left_join_non_matching_rows_have_null() {
+fn test_left_join_non_matching_rows_have_null() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE employees (id INTEGER, name TEXT)")
@@ -90,7 +90,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 
 #[test]
 #[ignore]
-    fn test_left_join_no_matches_returns_all_left_with_null() {
+fn test_left_join_no_matches_returns_all_left_with_null() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE left_table (id INTEGER, value TEXT)")
@@ -121,7 +121,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 
 #[test]
 #[ignore]
-    fn test_left_join_null_keys_do_not_match() {
+fn test_left_join_null_keys_do_not_match() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")
@@ -150,7 +150,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 
 #[test]
 #[ignore]
-    fn test_left_join_multiple_right_matches() {
+fn test_left_join_multiple_right_matches() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE employees (id INTEGER, name TEXT)")
@@ -181,7 +181,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 
 #[test]
 #[ignore]
-    fn test_left_join_mixed_null_and_normal_keys() {
+fn test_left_join_mixed_null_and_normal_keys() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")
@@ -229,7 +229,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 
 #[test]
 #[ignore]
-    fn test_filter_with_null_comparison() {
+fn test_filter_with_null_comparison() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t (id INTEGER, name TEXT)")
@@ -249,7 +249,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 
 #[test]
 #[ignore]
-    fn test_filter_null_column_vs_value() {
+fn test_filter_null_column_vs_value() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t (a INTEGER, b INTEGER)")
@@ -267,7 +267,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 
 #[test]
 #[ignore]
-    fn test_filter_is_null() {
+fn test_filter_is_null() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t (id INTEGER, name TEXT)")
@@ -285,7 +285,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 
 #[test]
 #[ignore]
-    fn test_filter_is_not_null() {
+fn test_filter_is_not_null() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t (id INTEGER, name TEXT)")
@@ -307,7 +307,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 #[test]
 #[ignore = "Parser does not support NOT (expr) syntax - NOT implementation is Phase 2"]
 #[ignore]
-    fn test_filter_not_null_comparison() {
+fn test_filter_not_null_comparison() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t (id INTEGER, name TEXT)")
@@ -329,7 +329,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 
 #[test]
 #[ignore]
-    fn test_filter_and_with_null() {
+fn test_filter_and_with_null() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t (a INTEGER, b INTEGER)")
@@ -349,7 +349,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 // Tests JOIN + IS NULL combination - locks NULL handling across join and filter paths
 #[test]
 #[ignore]
-    fn test_join_with_is_null_filter() {
+fn test_join_with_is_null_filter() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t1 (id INTEGER)").unwrap();
     engine
@@ -386,7 +386,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 // Tests filter + JOIN combination with NULL handling in both paths
 #[test]
 #[ignore]
-    fn test_filter_with_null_and_join() {
+fn test_filter_with_null_and_join() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t1 (id INTEGER)").unwrap();
     engine.execute("CREATE TABLE t2 (id INTEGER)").unwrap();
@@ -423,7 +423,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 // Tests COUNT with NULL - locks aggregate NULL handling strategy
 #[test]
 #[ignore]
-    fn test_count_with_null() {
+fn test_count_with_null() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (val INTEGER)").unwrap();
     engine
@@ -458,7 +458,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 // Tests: SELECT COUNT(t2.id) FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.id IS NOT NULL
 #[test]
 #[ignore]
-    fn test_semantic_join_where_aggregate() {
+fn test_semantic_join_where_aggregate() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t1 (id INTEGER)").unwrap();
     engine.execute("CREATE TABLE t2 (id INTEGER)").unwrap();
@@ -488,7 +488,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 // Risk 2: HAVING with GROUP BY (schema mismatch check)
 #[test]
 #[ignore]
-    fn test_semantic_having_with_group_by() {
+fn test_semantic_having_with_group_by() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t (dept INTEGER, val INTEGER)")
@@ -513,7 +513,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 // Risk 3: Aggregate with all NULL values
 #[test]
 #[ignore]
-    fn test_semantic_aggregate_all_null() {
+fn test_semantic_aggregate_all_null() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (val INTEGER)").unwrap();
     engine
@@ -552,7 +552,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 // Risk 4: GROUP BY with NULL keys
 #[test]
 #[ignore]
-    fn test_semantic_group_by_null_key() {
+fn test_semantic_group_by_null_key() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t (k INTEGER, v INTEGER)")
@@ -582,7 +582,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 // Risk 5: Filter + Aggregate order (WHERE applied before aggregate)
 #[test]
 #[ignore]
-    fn test_semantic_filter_before_aggregate() {
+fn test_semantic_filter_before_aggregate() {
     let mut engine = create_engine();
     engine.execute("CREATE TABLE t (val INTEGER)").unwrap();
     engine
@@ -610,7 +610,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 // Tests: SELECT t1.id, COUNT(t2.id) FROM t1 LEFT JOIN t2 ON t1.id = t2.id GROUP BY t1.id HAVING COUNT(t2.id) > 0
 #[test]
 #[ignore]
-    fn test_semantic_join_group_by_having() {
+fn test_semantic_join_group_by_having() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")
@@ -658,7 +658,7 @@ fn create_engine() -> ExecutionEngine<MemoryStorage> {
 // Risk 6b: JOIN + GROUP BY + HAVING with NULL values in join key
 #[test]
 #[ignore]
-    fn test_semantic_join_group_by_having_null_key() {
+fn test_semantic_join_group_by_having_null_key() {
     let mut engine = create_engine();
     engine
         .execute("CREATE TABLE t1 (id INTEGER, name TEXT)")

@@ -108,10 +108,10 @@ else
 fi
 
 # A6: HSM/KMS
-check "A6: HSM/KMS integration" cargo test -p sqlrustgo-hsm --lib
+check "A6: HSM/KMS integration" cargo test -p sqlrustgo-gmp --lib
 
 # A7: MySQL Protocol
-check "A7: MySQL protocol test" cargo test --test mysql_protocol_test
+check "A7: MySQL protocol test" cargo test -p sqlrustgo-mysql-server --lib
 
 # A8: OO Docs
 check "A8: check_oo_docs.sh" bash scripts/gate/check_oo_docs.sh
