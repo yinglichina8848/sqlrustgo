@@ -24,6 +24,7 @@ arrow.workspace = true
 aes-gcm = "0.10"
 rand.workspace = true
 sha2.workspace = true
+rustc-hash = { workspace = true }
 
 [dev-dependencies]
 tempfile.workspace = true
