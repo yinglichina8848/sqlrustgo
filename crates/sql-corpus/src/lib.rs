@@ -975,12 +975,70 @@ impl SqlCorpus {
         self.executor.reset();
     }
 
+    /// Execute all SQL files recursively (legacy method - may use high memory)
+    #[deprecated(note = "Use execute_batched() for memory-constrained environments")]
     pub fn execute_all(&mut self) -> HashMap<String, CorpusFileResult> {
         let mut results = HashMap::new();
         self.execute_directory(&mut results);
         results
     }
 
+    /// Execute a single subdirectory batch (memory-efficient)
+    #[allow(deprecated)]
+    pub fn execute_batch(&mut self, subdir: &str) -> HashMap<String, CorpusFileResult> {
+        let mut results = HashMap::new();
+        let batch_root = self.corpus_root.join(subdir);
+
+        if !batch_root.is_dir() {
+            return results;
+        }
+
+        for entry in fs::read_dir(&batch_root).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+
+            if path.is_dir() {
+                // Recursively process subdirectories within the batch
+                let mut sub_corpus = SqlCorpus::new(path.clone());
+                let sub_results = sub_corpus.execute_all();
+                results.extend(sub_results);
+            } else if path.extension().is_some_and(|e| e == "sql") {
+                let file_result = self.execute_file(&path);
+                let relative_path = path
+                    .strip_prefix(&self.corpus_root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .to_string();
+                results.insert(relative_path, file_result);
+            }
+        }
+
+        // Release memory by clearing executor state after batch
+        self.reset();
+        results
+    }
+
+    /// List all top-level subdirectories (for batch processing)
+    pub fn list_batches(&self) -> Vec<String> {
+        let mut batches = Vec::new();
+        if !self.corpus_root.is_dir() {
+            return batches;
+        }
+
+        for entry in fs::read_dir(&self.corpus_root).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    batches.push(name.to_string());
+                }
+            }
+        }
+        batches.sort();
+        batches
+    }
+
+    #[allow(deprecated)]
     fn execute_directory(&mut self, results: &mut HashMap<String, CorpusFileResult>) {
         if !self.corpus_root.is_dir() {
             return;
