@@ -1,10 +1,8 @@
 #![allow(deprecated)]
 
 use sqlrustgo_gmp::signature::{
-    chain::SignedAuditChain,
-    keys::PrivateKey,
-    signed_entry::SignedAuditEntry,
-    SignatureAlgorithm, Signer,
+    chain::SignedAuditChain, keys::PrivateKey, signed_entry::SignedAuditEntry, SignatureAlgorithm,
+    Signer,
 };
 
 #[test]
@@ -185,5 +183,8 @@ fn test_signed_audit_entry_with_optional_fields() {
     assert_eq!(entry.record_id, Some("rec-123".to_string()));
     assert_eq!(entry.old_value, Some("old value".to_string()));
     assert_eq!(entry.new_value, Some("new value".to_string()));
-    assert_eq!(entry.certificate_path, Some("/path/to/cert.pem".to_string()));
+    assert_eq!(
+        entry.certificate_path,
+        Some("/path/to/cert.pem".to_string())
+    );
 }

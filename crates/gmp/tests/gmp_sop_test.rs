@@ -1,7 +1,7 @@
 use sqlrustgo_gmp::sop::{
-    SopStatus, StandardOperatingProcedure, BindingStatus, SOPBinding,
-    TrainingRecord, TrainingStatus, GmpOperation, SopTrainingBinding,
-    TABLE_SOP, TABLE_TRAINING_RECORDS, TABLE_SOP_BINDINGS,
+    BindingStatus, GmpOperation, SOPBinding, SopStatus, SopTrainingBinding,
+    StandardOperatingProcedure, TrainingRecord, TrainingStatus, TABLE_SOP, TABLE_SOP_BINDINGS,
+    TABLE_TRAINING_RECORDS,
 };
 
 #[test]
@@ -16,8 +16,14 @@ fn test_sop_status_parse() {
     assert_eq!(SopStatus::parse_status("ACTIVE"), Some(SopStatus::Active));
     assert_eq!(SopStatus::parse_status("active"), Some(SopStatus::Active));
     assert_eq!(SopStatus::parse_status("Active"), Some(SopStatus::Active));
-    assert_eq!(SopStatus::parse_status("INACTIVE"), Some(SopStatus::Inactive));
-    assert_eq!(SopStatus::parse_status("SUPERSEDED"), Some(SopStatus::Superseded));
+    assert_eq!(
+        SopStatus::parse_status("INACTIVE"),
+        Some(SopStatus::Inactive)
+    );
+    assert_eq!(
+        SopStatus::parse_status("SUPERSEDED"),
+        Some(SopStatus::Superseded)
+    );
     assert_eq!(SopStatus::parse_status("INVALID"), None);
     assert_eq!(SopStatus::parse_status(""), None);
 }
@@ -163,9 +169,18 @@ fn test_training_status_as_str() {
 
 #[test]
 fn test_training_status_parse() {
-    assert_eq!(TrainingStatus::parse_status("VALID"), Some(TrainingStatus::Valid));
-    assert_eq!(TrainingStatus::parse_status("EXPIRED"), Some(TrainingStatus::Expired));
-    assert_eq!(TrainingStatus::parse_status("SUPERSEDED"), Some(TrainingStatus::Superseded));
+    assert_eq!(
+        TrainingStatus::parse_status("VALID"),
+        Some(TrainingStatus::Valid)
+    );
+    assert_eq!(
+        TrainingStatus::parse_status("EXPIRED"),
+        Some(TrainingStatus::Expired)
+    );
+    assert_eq!(
+        TrainingStatus::parse_status("SUPERSEDED"),
+        Some(TrainingStatus::Superseded)
+    );
     assert_eq!(TrainingStatus::parse_status("INVALID"), None);
 }
 
@@ -203,7 +218,11 @@ fn test_sop_training_binding_register_operation() {
 fn test_sop_training_binding_verify_training_success() {
     let mut binding = SopTrainingBinding::new();
     binding.record_training("user-001", "sop-001", "cert-001");
-    binding.register_operation(GmpOperation::new("op-001", "CALIBRATION", vec!["sop-001".to_string()]));
+    binding.register_operation(GmpOperation::new(
+        "op-001",
+        "CALIBRATION",
+        vec!["sop-001".to_string()],
+    ));
 
     let result = binding.verify_training("user-001", "op-001");
     assert!(result.is_verified);
@@ -215,7 +234,11 @@ fn test_sop_training_binding_verify_training_success() {
 fn test_sop_training_binding_verify_training_missing() {
     let mut binding = SopTrainingBinding::new();
     binding.record_training("user-001", "sop-001", "cert-001");
-    binding.register_operation(GmpOperation::new("op-001", "CALIBRATION", vec!["sop-001".to_string(), "sop-002".to_string()]));
+    binding.register_operation(GmpOperation::new(
+        "op-001",
+        "CALIBRATION",
+        vec!["sop-001".to_string(), "sop-002".to_string()],
+    ));
 
     let result = binding.verify_training("user-001", "op-001");
     assert!(!result.is_verified);
