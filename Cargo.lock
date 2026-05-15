@@ -5067,6 +5067,7 @@ dependencies = [
  "sqlrustgo-common",
  "sqlrustgo-parser",
  "sqlrustgo-planner",
+ "sqlrustgo-spill",
  "sqlrustgo-storage",
  "sqlrustgo-transaction",
  "sqlrustgo-types",
@@ -5307,6 +5308,21 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< Updated upstream
+=======
+name = "sqlrustgo-spill"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "parking_lot",
+ "serde",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
+>>>>>>> Stashed changes
 name = "sqlrustgo-sql-cli"
 version = "1.6.1"
 dependencies = [

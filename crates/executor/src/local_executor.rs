@@ -18,6 +18,7 @@ use crate::sql_normalizer::SqlNormalizer;
 use crate::{Executor, ExecutorResult};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use sqlrustgo_spill::{AdaptiveMemoryTracker, PartitionManager};
 
 /// Memory usage tracker for query execution
 pub struct MemoryTracker {
@@ -178,6 +179,10 @@ pub struct LocalExecutor<'a> {
     current_sql: StdRwLock<String>,
     /// Prepared statement cache
     prepared_statements: StdRwLock<PreparedStatementManager>,
+    /// Memory tracker for adaptive spilling (optional)
+    memory_tracker: Option<Arc<AdaptiveMemoryTracker>>,
+    /// Partition manager for spilling to disk (optional)
+    partition_manager: Option<Arc<PartitionManager>>,
 }
 
 impl<'a> LocalExecutor<'a> {
@@ -190,6 +195,8 @@ impl<'a> LocalExecutor<'a> {
             slow_query_log: StdRwLock::new(None),
             current_sql: StdRwLock::new(String::new()),
             prepared_statements: StdRwLock::new(PreparedStatementManager::new(100)),
+            memory_tracker: None,
+            partition_manager: None,
         }
     }
 
@@ -202,9 +209,74 @@ impl<'a> LocalExecutor<'a> {
             slow_query_log: StdRwLock::new(None),
             current_sql: StdRwLock::new(String::new()),
             prepared_statements: StdRwLock::new(PreparedStatementManager::new(100)),
+            memory_tracker: None,
+            partition_manager: None,
         }
     }
 
+    /// Create a LocalExecutor with spill configuration for memory-bounded queries
+    ///
+    /// # Arguments
+    /// * `storage` - The storage engine to use
+    /// * `memory_limit` - Maximum memory in bytes for query execution
+    /// * `spill_threshold` - Threshold in bytes at which to start spilling
+    ///
+    /// # Example
+    /// ```
+    /// use sqlrustgo_executor::LocalExecutor;
+    /// use sqlrustgo_storage::memory::MemoryStorage;
+    ///
+    /// let storage = MemoryStorage::new();
+    /// let executor = LocalExecutor::with_spill_config(&storage, 256 * 1024 * 1024, 128 * 1024 * 1024);
+    /// ```
+    pub fn with_spill_config(
+        storage: &'a dyn StorageEngine,
+        memory_limit: usize,
+        spill_threshold: usize,
+    ) -> Self {
+        let tracker = Arc::new(AdaptiveMemoryTracker::new(memory_limit, spill_threshold));
+        let manager = Arc::new(PartitionManager::new().expect("Failed to create partition manager"));
+
+        Self {
+            storage,
+            cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
+            cache_config: QueryCacheConfig::default(),
+            slow_query_log: StdRwLock::new(None),
+            current_sql: StdRwLock::new(String::new()),
+            prepared_statements: StdRwLock::new(PreparedStatementManager::new(100)),
+            memory_tracker: Some(tracker),
+            partition_manager: Some(manager),
+        }
+    }
+
+    /// Get memory tracker if available
+    pub fn memory_tracker(&self) -> Option<&Arc<AdaptiveMemoryTracker>> {
+        self.memory_tracker.as_ref()
+    }
+
+    /// Get partition manager if available
+    pub fn partition_manager(&self) -> Option<&Arc<PartitionManager>> {
+        self.partition_manager.as_ref()
+    }
+
+    /// Check if spilling is enabled
+    pub fn is_spilling_enabled(&self) -> bool {
+        self.memory_tracker.is_some() && self.partition_manager.is_some()
+    }
+}
+
+impl<'a> Drop for LocalExecutor<'a> {
+    fn drop(&mut self) {
+        if let Some(ref manager) = self.partition_manager {
+            // Cleanup partition files
+            // Note: Arc::clone gives us a & reference, but we need &mut for cleanup()
+            // Since PartitionManager is inside Arc, we can't call cleanup() directly
+            // The TempDir in PartitionManager will auto-cleanup on drop
+        }
+    }
+}
+
+impl<'a> LocalExecutor<'a> {
     /// Enable slow query logging with the given configuration
     pub fn with_slow_query_log(self, config: SlowQueryConfig) -> Self {
         if config.enabled {
