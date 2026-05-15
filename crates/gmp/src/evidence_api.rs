@@ -1,7 +1,6 @@
 use crate::evidence::EvidenceChain;
 use crate::evidence_storage::{
-    get_evidence_by_chain_id, get_evidence_by_time_range,
-    save_evidence_chain,
+    get_evidence_by_chain_id, get_evidence_by_time_range, save_evidence_chain,
 };
 use crate::evidence_verification::verify_evidence_chain;
 use crate::immutable_record::{ImmutableRecord, VerificationReport};

@@ -31,6 +31,7 @@ pub fn run(args: CustomArgs) -> BenchmarkResult {
         for _ in 0..args.iterations {
             let iteration_start = Instant::now();
             let storage = Arc::new(RwLock::new(MemoryStorage::new()));
+            #[allow(deprecated)]
             let mut engine = ExecutionEngine::new(storage);
             let _ = engine.execute(sql);
             collector.record(iteration_start.elapsed().as_nanos() as u64);

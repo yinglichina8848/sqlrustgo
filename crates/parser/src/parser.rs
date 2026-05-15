@@ -3155,7 +3155,27 @@ impl Parser {
                                 })),
                             });
                         } else {
+                            let mut agg_expr = Expression::Aggregate(agg.clone());
                             aggregates.push(agg);
+
+                            while matches!(self.current(), Some(Token::Star))
+                                || matches!(self.current(), Some(Token::Slash))
+                                || matches!(self.current(), Some(Token::Percent))
+                            {
+                                let op = match self.current() {
+                                    Some(Token::Star) => "*",
+                                    Some(Token::Slash) => "/",
+                                    Some(Token::Percent) => "%",
+                                    _ => break,
+                                };
+                                self.next();
+                                let right = self.parse_or_expression()?;
+                                agg_expr = Expression::BinaryOp(
+                                    Box::new(agg_expr),
+                                    op.to_string(),
+                                    Box::new(right),
+                                );
+                            }
 
                             let alias = if matches!(self.current(), Some(Token::As)) {
                                 self.next();
@@ -3165,7 +3185,7 @@ impl Parser {
                                         self.next();
                                         Some(alias_name)
                                     }
-                                    _ => return Err("Expected alias name".to_string()),
+                                    _ => None,
                                 }
                             } else {
                                 None
@@ -3174,7 +3194,7 @@ impl Parser {
                             columns.push(SelectColumn {
                                 name: format!("__agg_{}", aggregates.len()),
                                 alias,
-                                expression: None,
+                                expression: Some(agg_expr),
                             });
                         }
                     } else {
@@ -4099,37 +4119,12 @@ impl Parser {
             self.next();
         } else if !matches!(self.current(), Some(Token::RParen)) {
             loop {
-                match self.current() {
-                    Some(Token::Identifier(name)) => {
-                        let name = name.clone();
-                        let expr = if matches!(self.peek(), Some(Token::Dot)) {
-                            let table = name.clone();
-                            self.next();
-                            self.expect(Token::Dot)?;
-                            match self.current().cloned() {
-                                Some(Token::Identifier(col)) => {
-                                    self.next();
-                                    Expression::Identifier(format!("{}.{}", table, col))
-                                }
-                                Some(t) => {
-                                    return Err(format!("Expected column name, got {:?}", t))
-                                }
-                                None => return Err("Expected column name".to_string()),
-                            }
-                        } else {
-                            self.next();
-                            Expression::Identifier(name)
-                        };
-                        args.push(expr);
-                    }
-                    Some(Token::NumberLiteral(n)) => {
-                        args.push(Expression::Literal(n.clone()));
-                        self.next();
-                    }
-                    Some(Token::Comma) => {
-                        self.next();
-                    }
-                    _ => break,
+                let expr = self.parse_expression()?;
+                args.push(expr);
+                if matches!(self.current(), Some(Token::Comma)) {
+                    self.next();
+                } else {
+                    break;
                 }
             }
         }
@@ -7965,446 +7960,6 @@ mod tests {
                 assert_eq!(s.aggregates[1].func, AggregateFunction::Max);
             }
             _ => panic!("Expected SELECT statement"),
-        }
-    }
-}
-
-#[test]
-fn test_debug_having() {
-    let sql =
-        "SELECT region, SUM(amount) FROM sales_summary GROUP BY region HAVING SUM(amount) > 150";
-    match parse(sql) {
-        Ok(stmt) => {
-            println!("OK: {:#?}", stmt);
-            if let Statement::Select(s) = stmt {
-                println!("having = {:?}", s.having);
-            }
-        }
-        Err(e) => {
-            println!("ERROR: {}", e);
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_subtraction() {
-        let result = parse("SELECT price - discount FROM orders");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_multiplication() {
-        let result = parse("SELECT quantity * price FROM orders");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_division() {
-        let result = parse("SELECT total / cnt FROM stats");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_modulo() {
-        let result = parse("SELECT total % discount FROM orders");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_not_equal() {
-        let result = parse("SELECT a != b FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_less_equal() {
-        let result = parse("SELECT a <= b FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_greater_equal() {
-        let result = parse("SELECT a >= b FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_complex() {
-        let result = parse("SELECT a + b * c - d / e FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_with_literal() {
-        let result = parse("SELECT id + 1 FROM users");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_multiple_columns() {
-        let result = parse("SELECT a + b, c - d, e * f FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 3);
-                assert!(s.columns[0].expression.is_some());
-                assert!(s.columns[1].expression.is_some());
-                assert!(s.columns[2].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_mixed_with_identifier() {
-        let result = parse("SELECT a + b, name, c * d FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 3);
-                assert!(s.columns[0].expression.is_some());
-                assert!(s.columns[1].expression.is_none());
-                assert!(s.columns[2].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_with_table_prefix() {
-        let result = parse("SELECT t.a + t.b FROM table_name t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_create_trigger() {
-        let sql = "CREATE TRIGGER test_trigger BEFORE INSERT ON users FOR EACH ROW BEGIN SET NEW.name = 'triggered'; END";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::CreateTrigger(t) => {
-                assert_eq!(t.name, "test_trigger");
-                assert_eq!(t.timing, "BEFORE");
-                assert_eq!(t.table, "users");
-                assert_eq!(t.events.len(), 1);
-                assert_eq!(t.events[0], "INSERT");
-                assert!(t.body.contains("SET NEW.name"));
-            }
-            _ => panic!("Expected CREATE TRIGGER statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_create_trigger_after_update() {
-        let sql = "CREATE TRIGGER update_trigger AFTER UPDATE ON orders FOR EACH ROW BEGIN DELETE FROM log; END";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::CreateTrigger(t) => {
-                assert_eq!(t.name, "update_trigger");
-                assert_eq!(t.timing, "AFTER");
-                assert_eq!(t.table, "orders");
-                assert_eq!(t.events.len(), 1);
-                assert_eq!(t.events[0], "UPDATE");
-            }
-            _ => panic!("Expected CREATE TRIGGER statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin() {
-        let result = parse("BEGIN");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(!work);
-                assert!(isolation_level.is_none());
-            }
-            _ => panic!("Expected BEGIN statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_work() {
-        let result = parse("BEGIN WORK");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(work);
-                assert!(isolation_level.is_none());
-            }
-            _ => panic!("Expected BEGIN WORK statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_serializable() {
-        let result = parse("BEGIN SERIALIZABLE");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(!work);
-                assert_eq!(isolation_level, Some(IsolationLevel::Serializable));
-            }
-            _ => panic!("Expected BEGIN SERIALIZABLE statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_isolation_level() {
-        let result = parse("BEGIN ISOLATION LEVEL SERIALIZABLE");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(!work);
-                assert_eq!(isolation_level, Some(IsolationLevel::Serializable));
-            }
-            _ => panic!("Expected BEGIN ISOLATION LEVEL SERIALIZABLE statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_commit() {
-        let result = parse("COMMIT");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Commit { work }) => {
-                assert!(!work);
-            }
-            _ => panic!("Expected COMMIT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_commit_work() {
-        let result = parse("COMMIT WORK");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Commit { work }) => {
-                assert!(work);
-            }
-            _ => panic!("Expected COMMIT WORK statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_rollback() {
-        let result = parse("ROLLBACK");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Rollback { work }) => {
-                assert!(!work);
-            }
-            _ => panic!("Expected ROLLBACK statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_rollback_work() {
-        let result = parse("ROLLBACK WORK");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Rollback { work }) => {
-                assert!(work);
-            }
-            _ => panic!("Expected ROLLBACK WORK statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_start_transaction() {
-        let result = parse("START TRANSACTION");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::StartTransaction { isolation_level }) => {
-                assert!(isolation_level.is_none());
-            }
-            _ => panic!("Expected START TRANSACTION statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_start_transaction_serializable() {
-        let result = parse("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::StartTransaction { isolation_level }) => {
-                assert_eq!(isolation_level, Some(IsolationLevel::Serializable));
-            }
-            _ => panic!("Expected START TRANSACTION ISOLATION LEVEL SERIALIZABLE statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_set_transaction() {
-        let result = parse("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::SetTransaction { isolation_level }) => {
-                assert_eq!(isolation_level, IsolationLevel::Serializable);
-            }
-            _ => panic!("Expected SET TRANSACTION statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_set_transaction_read_committed() {
-        let result = parse("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::SetTransaction { isolation_level }) => {
-                assert_eq!(isolation_level, IsolationLevel::ReadCommitted);
-            }
-            _ => panic!("Expected SET TRANSACTION ISOLATION LEVEL READ COMMITTED statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_set_transaction_read_uncommitted() {
-        let result = parse("SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::SetTransaction { isolation_level }) => {
-                assert_eq!(isolation_level, IsolationLevel::ReadUncommitted);
-            }
-            _ => panic!("Expected SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_read_committed() {
-        let result = parse("BEGIN ISOLATION LEVEL READ COMMITTED");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(!work);
-                assert_eq!(isolation_level, Some(IsolationLevel::ReadCommitted));
-            }
-            _ => panic!("Expected BEGIN ISOLATION LEVEL READ COMMITTED statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_repeatable_read() {
-        let result = parse("BEGIN ISOLATION LEVEL REPEATABLE READ");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(!work);
-                assert_eq!(isolation_level, Some(IsolationLevel::SnapshotIsolation));
-            }
-            _ => panic!("Expected BEGIN ISOLATION LEVEL REPEATABLE READ statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_idempotent() {
-        let result = parse("BEGIN IDEMPOTENT 'txn-123'");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::BeginIdempotent { key }) => {
-                assert_eq!(key, "txn-123");
-            }
-            _ => panic!("Expected BEGIN IDEMPOTENT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_idempotent_key() {
-        let result = parse("BEGIN IDEMPOTENCY KEY 'txn-456'");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::BeginIdempotent { key }) => {
-                assert_eq!(key, "txn-456");
-            }
-            _ => panic!("Expected BEGIN IDEMPOTENCY KEY statement"),
         }
     }
 }

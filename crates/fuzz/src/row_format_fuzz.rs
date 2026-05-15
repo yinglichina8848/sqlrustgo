@@ -11,6 +11,7 @@ use std::collections::HashSet;
 
 /// Test configuration
 const MAX_ROUNDS: usize = 10_000;
+#[allow(dead_code)]
 const MAX_VARS: usize = 1000;
 
 /// A fuzzer for row format encode/decode
@@ -52,7 +53,7 @@ impl RowFormatFuzzer {
         let value_type = type_hint.unwrap_or((self.next_rng() % 6) as u8);
         match value_type {
             0 => Value::Null,
-            1 => Value::Boolean((self.next_rng() % 2) == 0),
+            1 => Value::Boolean(self.next_rng().is_multiple_of(2)),
             2 => Value::Integer((self.next_rng() as i64) % 10000),
             3 => Value::Float((self.next_rng() as f64) / 100.0),
             4 => {
@@ -83,7 +84,7 @@ impl RowFormatFuzzer {
     fn gen_varlen_columns(&mut self, count: usize) -> Vec<Option<Vec<u8>>> {
         (0..count)
             .map(|_| {
-                if (self.next_rng() % 4) == 0 {
+                if self.next_rng().is_multiple_of(4) {
                     None // 25% NULL
                 } else {
                     let len = (self.next_rng() % 500) as usize;
@@ -95,7 +96,9 @@ impl RowFormatFuzzer {
 
     /// Generate random null bitmap
     fn gen_null_bitmap(&mut self, count: usize) -> Vec<bool> {
-        (0..count).map(|_| (self.next_rng() % 4) == 0).collect()
+        (0..count)
+            .map(|_| self.next_rng().is_multiple_of(4))
+            .collect()
     }
 
     /// Run fuzzing rounds
@@ -141,7 +144,7 @@ impl RowFormatFuzzer {
             }
 
             // Decode the row
-            let (decoded_key, decoded_fixed, decoded_varlen, decoded_nulls) =
+            let (decoded_key, decoded_fixed, _decoded_varlen, _decoded_nulls) =
                 match decoder::decode_row(&encoded, fixed_count, varlen_count) {
                     Ok(d) => d,
                     Err(e) => {

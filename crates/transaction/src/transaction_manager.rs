@@ -652,7 +652,7 @@ mod tests {
 
         let mgr = TransactionManager::new();
         let key = "txn-test-4";
-        let statement = TransactionStatement::Begin {
+        let _statement = TransactionStatement::Begin {
             work: false,
             isolation_level: None,
         };

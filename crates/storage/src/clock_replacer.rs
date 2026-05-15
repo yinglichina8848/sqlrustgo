@@ -17,7 +17,7 @@
 //! 4. Repeat until page found or full cycle
 //! ```
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::{Arc, RwLock};
 
 /// Page frame with reference bit for CLOCK algorithm
@@ -43,7 +43,7 @@ impl ClockFrame {
 /// without requiring immediate eviction on each access.
 pub struct ClockReplacer {
     /// Clock frames indexed by page_id
-    frames: RwLock<HashMap<u32, Arc<RwLock<ClockFrame>>>>,
+    frames: RwLock<FxHashMap<u32, Arc<RwLock<ClockFrame>>>>,
     /// Clock hand position (index into frame order)
     hand: RwLock<usize>,
     /// Maximum number of frames
@@ -56,7 +56,7 @@ impl ClockReplacer {
     /// Create a new CLOCK replacer with given capacity
     pub fn new(capacity: usize) -> Self {
         Self {
-            frames: RwLock::new(HashMap::new()),
+            frames: RwLock::new(FxHashMap::default()),
             hand: RwLock::new(0),
             capacity,
             size: RwLock::new(0),

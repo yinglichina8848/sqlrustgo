@@ -6,7 +6,7 @@ use crate::binlog_protocol::{
     BinlogEventData, BinlogProtocol, PacketReader, PacketWriter, ReplicationMessage,
 };
 use crate::replication::{BinlogEvent, BinlogEventType, BinlogWriter};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -38,7 +38,7 @@ pub struct BinlogServer {
     server_version: String,
     binlog_path: PathBuf,
     binlog_writer: Arc<Mutex<BinlogWriter>>,
-    subscribers: Arc<Mutex<HashMap<u32, SlaveSubscriber>>>,
+    subscribers: Arc<Mutex<FxHashMap<u32, SlaveSubscriber>>>,
     is_running: Arc<Mutex<bool>>,
 }
 
@@ -61,7 +61,7 @@ impl BinlogServer {
             server_version: env!("CARGO_PKG_VERSION").to_string(),
             binlog_path,
             binlog_writer: Arc::new(Mutex::new(binlog_writer)),
-            subscribers: Arc::new(Mutex::new(HashMap::new())),
+            subscribers: Arc::new(Mutex::new(FxHashMap::default())),
             is_running: Arc::new(Mutex::new(false)),
         })
     }
@@ -163,7 +163,7 @@ fn handle_slave_connection(
     server_id: u32,
     server_version: &str,
     binlog_writer: Arc<Mutex<BinlogWriter>>,
-    subscribers: Arc<Mutex<HashMap<u32, SlaveSubscriber>>>,
+    subscribers: Arc<Mutex<FxHashMap<u32, SlaveSubscriber>>>,
 ) -> std::io::Result<()> {
     stream.set_nonblocking(false)?;
 
