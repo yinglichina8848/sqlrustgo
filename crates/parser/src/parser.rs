@@ -3226,10 +3226,16 @@ impl Parser {
             }
             Some(Token::Left) => {
                 self.next();
+                if matches!(self.current(), Some(Token::Outer)) {
+                    self.next();
+                }
                 JoinType::Left
             }
             Some(Token::Right) => {
                 self.next();
+                if matches!(self.current(), Some(Token::Outer)) {
+                    self.next();
+                }
                 JoinType::Right
             }
             Some(Token::Full) => {
@@ -3310,38 +3316,14 @@ impl Parser {
         if matches!(self.current(), Some(Token::Star)) {
             self.next();
         } else if !matches!(self.current(), Some(Token::RParen)) {
+            // Parse full expressions using parse_expression for complex args like SUM(col * 1 - discount)
             loop {
-                match self.current() {
-                    Some(Token::Identifier(name)) => {
-                        let name = name.clone();
-                        let expr = if matches!(self.peek(), Some(Token::Dot)) {
-                            let table = name.clone();
-                            self.next();
-                            self.expect(Token::Dot)?;
-                            match self.current().cloned() {
-                                Some(Token::Identifier(col)) => {
-                                    self.next();
-                                    Expression::Identifier(format!("{}.{}", table, col))
-                                }
-                                Some(t) => {
-                                    return Err(format!("Expected column name, got {:?}", t))
-                                }
-                                None => return Err("Expected column name".to_string()),
-                            }
-                        } else {
-                            self.next();
-                            Expression::Identifier(name)
-                        };
-                        args.push(expr);
-                    }
-                    Some(Token::NumberLiteral(n)) => {
-                        args.push(Expression::Literal(n.clone()));
-                        self.next();
-                    }
-                    Some(Token::Comma) => {
-                        self.next();
-                    }
-                    _ => break,
+                let expr = self.parse_expression()?;
+                args.push(expr);
+                if matches!(self.current(), Some(Token::Comma)) {
+                    self.next();
+                } else {
+                    break;
                 }
             }
         }
