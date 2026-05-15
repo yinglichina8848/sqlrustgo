@@ -740,6 +740,35 @@ impl<'a> InformationSchema<'a> {
         performance_schema::PerformanceSchema::detect_deadlocks()
     }
 
+    pub fn get_setup_actors(&self) -> Vec<performance_schema::SetupActorsRow> {
+        performance_schema::PerformanceSchema::get_setup_actors()
+    }
+
+    pub fn get_setup_instruments(&self) -> Vec<performance_schema::SetupInstrumentsRow> {
+        performance_schema::PerformanceSchema::get_setup_instruments()
+    }
+
+    pub fn get_events_statements_history(
+        &self,
+        limit: Option<usize>,
+    ) -> Vec<performance_schema::EventsStatementsHistoryRow> {
+        performance_schema::PerformanceSchema::get_events_statements_history(limit)
+    }
+
+    pub fn get_events_statements_summary_by_digest(
+        &self,
+        limit: Option<usize>,
+    ) -> Vec<performance_schema::EventsStatementsSummaryByDigestRow> {
+        performance_schema::PerformanceSchema::get_events_statements_summary_by_digest(limit)
+    }
+
+    pub fn get_events_waits_history(
+        &self,
+        limit: Option<usize>,
+    ) -> Vec<performance_schema::EventsWaitsHistoryRow> {
+        performance_schema::PerformanceSchema::get_events_waits_history(limit)
+    }
+
     fn fk_action_to_string(action: &Option<sqlrustgo_catalog::ForeignKeyAction>) -> String {
         match action {
             Some(sqlrustgo_catalog::ForeignKeyAction::Cascade) => "CASCADE".to_string(),
