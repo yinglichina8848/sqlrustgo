@@ -391,6 +391,12 @@ impl<'a> Lexer<'a> {
                     "IDEMPOTENT" => Token::Idempotent,
                     "OVER" => Token::Over,
                     "BETWEEN" => Token::Between,
+                    "SIGN" => Token::Sign,
+                    "RECORD" => Token::Record,
+                    "POLICY" => Token::Policy,
+                    "APPROVAL" => Token::Approval,
+                    "REASON" => Token::Reason,
+                    "APPROVED" => Token::Approved,
                     _ => Token::Identifier(ident),
                 }
             }
