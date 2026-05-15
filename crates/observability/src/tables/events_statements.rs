@@ -290,8 +290,13 @@ impl<'a> StatementScope<'a> {
 
 impl<'a> Drop for StatementScope<'a> {
     fn drop(&mut self) {
-        self.collector
-            .end_statement(self.event_id, self.rows_examined, self.rows_sent, self.rows_affected, self.error_count);
+        self.collector.end_statement(
+            self.event_id,
+            self.rows_examined,
+            self.rows_sent,
+            self.rows_affected,
+            self.error_count,
+        );
     }
 }
 

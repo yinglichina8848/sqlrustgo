@@ -292,8 +292,6 @@ path = "tests/stored_procedure_parser_test.rs"
 name = "scheduler_integration_test"
 path = "crates/server/tests/scheduler_integration_test.rs"
 
-# Memory limit for tests: 8GB (8 * 1024 * 1024 * 1024 bytes)
-# This prevents any single test from consuming excessive memory
 [profile.test]
 opt-level = 0
 debug = 1
