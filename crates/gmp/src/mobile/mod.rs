@@ -4,10 +4,12 @@
 //! and data collection audit capabilities.
 
 pub mod collection;
+pub mod collection_manager;
 pub mod device;
 pub mod trust;
 
 pub use collection::{CollectionStatus, MobileCollection, MobileCollectionRecord};
+pub use collection_manager::MobileTrustedCollection;
 pub use device::{DeviceStatus, MobileDevice};
 pub use trust::{verify_device_signature, verify_device_trust, TrustVerificationResult};
 

@@ -1,5 +1,6 @@
 mod binding;
 mod training;
+mod training_binding;
 
 use serde::{Deserialize, Serialize};
 
@@ -86,6 +87,7 @@ fn generate_id() -> String {
 
 pub use binding::{BindingStatus, SOPBinding};
 pub use training::{TrainingRecord, TrainingStatus};
+pub use training_binding::{GmpOperation, SopTrainingBinding, TrainingVerificationResult};
 
 pub const TABLE_SOP: &str = "gmp_standard_operating_procedures";
 pub const TABLE_TRAINING_RECORDS: &str = "gmp_training_records";
