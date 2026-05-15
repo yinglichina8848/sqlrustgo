@@ -56,6 +56,7 @@ pub mod correction_chain;
 pub mod document;
 pub mod electronic_signature;
 pub mod embedding;
+pub mod evidence;
 pub mod hsm;
 pub mod persist_sqlite;
 pub mod provenance;
