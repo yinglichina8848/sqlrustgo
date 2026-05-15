@@ -128,4 +128,68 @@ mod tests {
         let provider = create_provider(&config);
         assert!(provider.is_ok());
     }
+
+    #[test]
+    fn test_create_provider_unsupported() {
+        let config = HsmConfig::tpm20("/path");
+        let provider = create_provider(&config);
+        assert!(provider.is_err());
+    }
+
+    #[test]
+    fn test_software_tpm_delete_key() {
+        let config = HsmConfig::software_tpm();
+        let provider = SoftwareTpmProvider::new(&config).unwrap();
+
+        provider.generate_key("test_key").unwrap();
+        let result = provider.delete_key("test_key");
+        assert!(result.is_ok());
+
+        let result = provider.sign("test_key", b"data");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_software_tpm_list_keys() {
+        let config = HsmConfig::software_tpm();
+        let provider = SoftwareTpmProvider::new(&config).unwrap();
+
+        let keys = provider.list_keys().unwrap();
+        assert!(keys.is_empty());
+
+        provider.generate_key("key1").unwrap();
+        provider.generate_key("key2").unwrap();
+
+        let keys = provider.list_keys().unwrap();
+        assert_eq!(keys.len(), 2);
+        assert!(keys.contains(&"key1".to_string()));
+        assert!(keys.contains(&"key2".to_string()));
+    }
+
+    #[test]
+    fn test_software_tpm_verify_invalid_signature() {
+        let config = HsmConfig::software_tpm();
+        let provider = SoftwareTpmProvider::new(&config).unwrap();
+
+        provider.generate_key("test_key").unwrap();
+
+        let is_valid = provider
+            .verify("test_key", b"test data", &[0u8; 32])
+            .unwrap();
+        assert!(!is_valid);
+    }
+
+    #[test]
+    fn test_software_tpm_verify_wrong_data() {
+        let config = HsmConfig::software_tpm();
+        let provider = SoftwareTpmProvider::new(&config).unwrap();
+
+        provider.generate_key("test_key").unwrap();
+        let signature = provider.sign("test_key", b"original data").unwrap();
+
+        let is_valid = provider
+            .verify("test_key", b"different data", &signature)
+            .unwrap();
+        assert!(!is_valid);
+    }
 }

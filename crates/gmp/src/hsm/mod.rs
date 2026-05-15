@@ -47,6 +47,7 @@ impl std::fmt::Display for HsmProviderType {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct HsmConfig {
     pub provider_type: HsmProviderType,
     pub config_path: Option<String>,
@@ -83,6 +84,10 @@ mod tests {
     fn test_hsm_provider_type_display() {
         assert_eq!(format!("{}", HsmProviderType::SoftwareTpm), "SoftwareTPM");
         assert_eq!(format!("{}", HsmProviderType::Tpm20), "TPM2.0");
+        assert_eq!(format!("{}", HsmProviderType::Pkcs11), "PKCS#11");
+        assert_eq!(format!("{}", HsmProviderType::AwsKms), "AWS KMS");
+        assert_eq!(format!("{}", HsmProviderType::AzureKms), "Azure KMS");
+        assert_eq!(format!("{}", HsmProviderType::GcpKms), "GCP KMS");
     }
 
     #[test]
@@ -93,8 +98,49 @@ mod tests {
     }
 
     #[test]
+    fn test_hsm_config_tpm20() {
+        let config = HsmConfig::tpm20("/path/to/config");
+        assert_eq!(config.provider_type, HsmProviderType::Tpm20);
+        assert_eq!(config.config_path, Some("/path/to/config".to_string()));
+    }
+
+    #[test]
+    fn test_hsm_config_pkcs11() {
+        let config = HsmConfig::pkcs11("/path/to/library");
+        assert_eq!(config.provider_type, HsmProviderType::Pkcs11);
+        assert_eq!(config.config_path, Some("/path/to/library".to_string()));
+    }
+
+    #[test]
     fn test_hsm_error_display() {
         let err = HsmError::KeyNotFound("test_key".to_string());
         assert_eq!(format!("{}", err), "Key not found: test_key");
+
+        let err = HsmError::SigningFailed("signing error".to_string());
+        assert_eq!(format!("{}", err), "Signing failed: signing error");
+
+        let err = HsmError::KeyGenerationFailed("key gen error".to_string());
+        assert_eq!(format!("{}", err), "Key generation failed: key gen error");
+
+        let err = HsmError::NotAvailable("HSM unavailable".to_string());
+        assert_eq!(format!("{}", err), "HSM not available: HSM unavailable");
+
+        let err = HsmError::InvalidConfig("invalid config".to_string());
+        assert_eq!(format!("{}", err), "Invalid configuration: invalid config");
+    }
+
+    #[test]
+    fn test_hsm_provider_type_equality() {
+        assert_eq!(HsmProviderType::SoftwareTpm, HsmProviderType::SoftwareTpm);
+        assert_eq!(HsmProviderType::Tpm20, HsmProviderType::Tpm20);
+        assert_ne!(HsmProviderType::SoftwareTpm, HsmProviderType::Tpm20);
+    }
+
+    #[test]
+    fn test_hsm_config_clone() {
+        let config = HsmConfig::tpm20("/path/to/config");
+        let cloned = config.clone();
+        assert_eq!(config.provider_type, cloned.provider_type);
+        assert_eq!(config.config_path, cloned.config_path);
     }
 }
