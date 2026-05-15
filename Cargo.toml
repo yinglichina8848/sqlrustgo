@@ -75,6 +75,7 @@ sqlrustgo-qmd-bridge = { path = "crates/qmd-bridge" }
 sqlrustgo-gis = { path = "crates/gis" }
 information-schema = { path = "crates/information-schema" }
 sqlrustgo-observability = { path = "crates/observability" }
+sqlrustgo-spill = { path = "crates/spill" }
 
 tokio = { version = "1.0", features = ["full"] }
 tonic = "0.14"
