@@ -14,7 +14,10 @@ pub struct SortSpillOperator<T: Clone + serde::Serialize + serde::de::Deserializ
 }
 
 impl<T: Clone + serde::Serialize + serde::de::DeserializeOwned> SortSpillOperator<T> {
-    pub fn new(tracker: Arc<AdaptiveMemoryTracker>, comparator: fn(&T, &T) -> Ordering) -> SpillResult<Self> {
+    pub fn new(
+        tracker: Arc<AdaptiveMemoryTracker>,
+        comparator: fn(&T, &T) -> Ordering,
+    ) -> SpillResult<Self> {
         Ok(Self {
             tracker,
             partition_manager: PartitionManager::new()?,
@@ -51,11 +54,14 @@ impl<T: Clone + serde::Serialize + serde::de::DeserializeOwned> SortSpillOperato
 
     fn sort_current_partition(&mut self) -> SpillResult<()> {
         self.current_partition.sort_by(self.comparator);
-        let partition_id = self.partition_manager.write_partition(&self.current_partition)?;
+        let partition_id = self
+            .partition_manager
+            .write_partition(&self.current_partition)?;
         self.spilled_runs.push(partition_id);
-        
+
         let size = std::mem::size_of::<T>() as u64;
-        self.tracker.deallocate(size * self.current_partition.len() as u64);
+        self.tracker
+            .deallocate(size * self.current_partition.len() as u64);
         self.current_partition.clear();
         Ok(())
     }
@@ -69,7 +75,9 @@ impl<T: Clone + serde::Serialize + serde::de::DeserializeOwned> Iterator for Sor
     }
 }
 
-impl<T: Clone + serde::Serialize + serde::de::DeserializeOwned> SpillingIterator for SortSpillOperator<T> {
+impl<T: Clone + serde::Serialize + serde::de::DeserializeOwned> SpillingIterator
+    for SortSpillOperator<T>
+{
     fn start_spill(&mut self) -> SpillResult<()> {
         if self.current_partition.is_empty() {
             return Ok(());

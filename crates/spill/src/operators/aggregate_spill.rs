@@ -11,7 +11,9 @@ pub struct AggregatedState {
     pub sum: f64,
 }
 
-pub struct AggregateSpillOperator<G: Clone + std::hash::Hash + Eq + serde::Serialize + serde::de::DeserializeOwned> {
+pub struct AggregateSpillOperator<
+    G: Clone + std::hash::Hash + Eq + serde::Serialize + serde::de::DeserializeOwned,
+> {
     tracker: Arc<AdaptiveMemoryTracker>,
     partition_manager: PartitionManager,
     groups: HashMap<G, AggregatedState>,
@@ -35,10 +37,10 @@ impl<G: Clone + std::hash::Hash + Eq + serde::Serialize + serde::de::Deserialize
             self.spill_groups()?;
         }
 
-        let state = self.groups.entry(group_key).or_insert(AggregatedState {
-            count: 0,
-            sum: 0.0,
-        });
+        let state = self
+            .groups
+            .entry(group_key)
+            .or_insert(AggregatedState { count: 0, sum: 0.0 });
         state.count += 1;
         state.sum += value;
 
@@ -50,7 +52,9 @@ impl<G: Clone + std::hash::Hash + Eq + serde::Serialize + serde::de::Deserialize
         for (key, state) in self.groups.drain() {
             self.spilled_groups.push((key, state));
         }
-        let _partition_id = self.partition_manager.write_partition(&self.spilled_groups)?;
+        let _partition_id = self
+            .partition_manager
+            .write_partition(&self.spilled_groups)?;
         self.spilled_groups.clear();
         Ok(())
     }
@@ -82,7 +86,9 @@ impl<G: Clone + std::hash::Hash + Eq + serde::Serialize + serde::de::Deserialize
     }
 }
 
-impl<G: Clone + std::hash::Hash + Eq + serde::Serialize + serde::de::DeserializeOwned> Iterator for AggregateSpillOperator<G> {
+impl<G: Clone + std::hash::Hash + Eq + serde::Serialize + serde::de::DeserializeOwned> Iterator
+    for AggregateSpillOperator<G>
+{
     type Item = (G, AggregatedState);
 
     fn next(&mut self) -> Option<Self::Item> {

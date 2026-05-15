@@ -24,7 +24,8 @@ impl AdaptiveMemoryTracker {
             if new > self.memory_limit as u64 {
                 return false;
             }
-            if self.current_bytes
+            if self
+                .current_bytes
                 .compare_exchange_weak(current, new, Ordering::SeqCst, Ordering::SeqCst)
                 .is_ok()
             {

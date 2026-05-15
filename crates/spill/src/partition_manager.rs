@@ -16,8 +16,7 @@ struct PartitionFile {
 
 impl PartitionManager {
     pub fn new() -> SpillResult<Self> {
-        let spill_dir = tempfile::tempdir()
-            .map_err(|e| SpillError::IoError(e))?;
+        let spill_dir = tempfile::tempdir().map_err(|e| SpillError::IoError(e))?;
         Ok(Self {
             spill_dir,
             partitions: Vec::new(),
@@ -25,43 +24,37 @@ impl PartitionManager {
     }
 
     pub fn with_dir(path: PathBuf) -> SpillResult<Self> {
-        fs::create_dir_all(&path)
-            .map_err(|e| SpillError::IoError(e))?;
-        let spill_dir = TempDir::new_in(&path)
-            .map_err(|e| SpillError::IoError(e))?;
+        fs::create_dir_all(&path).map_err(|e| SpillError::IoError(e))?;
+        let spill_dir = TempDir::new_in(&path).map_err(|e| SpillError::IoError(e))?;
         Ok(Self {
             spill_dir,
             partitions: Vec::new(),
         })
     }
 
-    pub fn write_partition<T: serde::Serialize>(
-        &mut self,
-        data: &[T],
-    ) -> SpillResult<usize> {
+    pub fn write_partition<T: serde::Serialize>(&mut self, data: &[T]) -> SpillResult<usize> {
         let partition_id = self.partitions.len();
-        let path = self.spill_dir.path().join(format!("partition_{}.bin", partition_id));
+        let path = self
+            .spill_dir
+            .path()
+            .join(format!("partition_{}.bin", partition_id));
 
-        let file = File::create(&path)
-            .map_err(|e| SpillError::IoError(e))?;
+        let file = File::create(&path).map_err(|e| SpillError::IoError(e))?;
         let mut writer = BufWriter::new(file);
 
-        let bytes = bincode::serialize(data)
-            .map_err(|e| SpillError::PartitionError(e.to_string()))?;
-        writer.write_all(&bytes)
+        let bytes =
+            bincode::serialize(data).map_err(|e| SpillError::PartitionError(e.to_string()))?;
+        writer
+            .write_all(&bytes)
             .map_err(|e| SpillError::IoError(e))?;
 
-        writer.flush()
-            .map_err(|e| SpillError::IoError(e))?;
+        writer.flush().map_err(|e| SpillError::IoError(e))?;
 
         let size_bytes = fs::metadata(&path)
             .map_err(|e| SpillError::IoError(e))?
             .len();
 
-        let partition = PartitionFile {
-            path,
-            size_bytes,
-        };
+        let partition = PartitionFile { path, size_bytes };
         self.partitions.push(partition);
 
         Ok(partition_id)
@@ -71,14 +64,14 @@ impl PartitionManager {
         &self,
         partition_id: usize,
     ) -> SpillResult<Vec<T>> {
-        let partition = self.partitions.get(partition_id)
-            .ok_or_else(|| SpillError::PartitionError(format!("Invalid partition {}", partition_id)))?;
+        let partition = self.partitions.get(partition_id).ok_or_else(|| {
+            SpillError::PartitionError(format!("Invalid partition {}", partition_id))
+        })?;
 
-        let bytes = fs::read(&partition.path)
-            .map_err(|e| SpillError::IoError(e))?;
+        let bytes = fs::read(&partition.path).map_err(|e| SpillError::IoError(e))?;
 
-        let items: Vec<T> = bincode::deserialize(&bytes)
-            .map_err(|e| SpillError::PartitionError(e.to_string()))?;
+        let items: Vec<T> =
+            bincode::deserialize(&bytes).map_err(|e| SpillError::PartitionError(e.to_string()))?;
 
         Ok(items)
     }
@@ -104,4 +97,3 @@ impl Default for PartitionManager {
         Self::new().expect("Failed to create tempdir")
     }
 }
-

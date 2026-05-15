@@ -12,7 +12,10 @@ pub struct BuildEntry<K, V> {
     pub values: Vec<V>,
 }
 
-pub struct HashJoinSpillOperator<K: Hash + Eq + Clone + serde::Serialize + serde::de::DeserializeOwned, V: Clone + serde::Serialize + serde::de::DeserializeOwned> {
+pub struct HashJoinSpillOperator<
+    K: Hash + Eq + Clone + serde::Serialize + serde::de::DeserializeOwned,
+    V: Clone + serde::Serialize + serde::de::DeserializeOwned,
+> {
     tracker: Arc<AdaptiveMemoryTracker>,
     partition_manager: PartitionManager,
     build_hash: HashMap<K, Vec<V>>,
@@ -20,9 +23,10 @@ pub struct HashJoinSpillOperator<K: Hash + Eq + Clone + serde::Serialize + serde
     spilled_entries: Vec<(K, V)>,
 }
 
-impl<K: Hash + Eq + Clone + serde::Serialize + serde::de::DeserializeOwned,
-     V: Clone + serde::Serialize + serde::de::DeserializeOwned>
-    HashJoinSpillOperator<K, V>
+impl<
+        K: Hash + Eq + Clone + serde::Serialize + serde::de::DeserializeOwned,
+        V: Clone + serde::Serialize + serde::de::DeserializeOwned,
+    > HashJoinSpillOperator<K, V>
 {
     pub fn new(tracker: Arc<AdaptiveMemoryTracker>) -> SpillResult<Self> {
         Ok(Self {
@@ -57,7 +61,9 @@ impl<K: Hash + Eq + Clone + serde::Serialize + serde::de::DeserializeOwned,
                 self.spilled_entries.push((key.clone(), value));
             }
         }
-        let _partition_id = self.partition_manager.write_partition(&self.spilled_entries)?;
+        let _partition_id = self
+            .partition_manager
+            .write_partition(&self.spilled_entries)?;
         self.spilled_entries.clear();
         Ok(())
     }
@@ -71,9 +77,10 @@ impl<K: Hash + Eq + Clone + serde::Serialize + serde::de::DeserializeOwned,
     }
 }
 
-impl<K: Hash + Eq + Clone + serde::Serialize + serde::de::DeserializeOwned,
-     V: Clone + serde::Serialize + serde::de::DeserializeOwned>
-    SpillingIterator for HashJoinSpillOperator<K, V>
+impl<
+        K: Hash + Eq + Clone + serde::Serialize + serde::de::DeserializeOwned,
+        V: Clone + serde::Serialize + serde::de::DeserializeOwned,
+    > SpillingIterator for HashJoinSpillOperator<K, V>
 {
     fn start_spill(&mut self) -> SpillResult<()> {
         self.spill_build_side()
@@ -95,9 +102,10 @@ impl<K: Hash + Eq + Clone + serde::Serialize + serde::de::DeserializeOwned,
     }
 }
 
-impl<K: Hash + Eq + Clone + serde::Serialize + serde::de::DeserializeOwned,
-     V: Clone + serde::Serialize + serde::de::DeserializeOwned>
-    Iterator for HashJoinSpillOperator<K, V>
+impl<
+        K: Hash + Eq + Clone + serde::Serialize + serde::de::DeserializeOwned,
+        V: Clone + serde::Serialize + serde::de::DeserializeOwned,
+    > Iterator for HashJoinSpillOperator<K, V>
 {
     type Item = (K, V);
 
