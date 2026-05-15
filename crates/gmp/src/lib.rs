@@ -70,6 +70,7 @@ pub mod scenarios;
 pub mod semantic_embedding;
 pub mod sql_api;
 pub mod vector_search;
+pub mod workflow;
 
 // Re-export commonly used types
 pub use audit::{
@@ -170,6 +171,11 @@ pub use immutable_record::{ImmutableRecord, ImmutableRecordBuilder, Verification
 
 pub use evidence_api::{
     create_evidence, create_signed_evidence, get_evidence, list_evidence, verify_evidence,
+};
+
+pub use workflow::{
+    ApprovalAction, ApprovalChain, ApprovalRecord, TimeoutChecker, WorkflowDefinition,
+    WorkflowEngine, WorkflowInstance, WorkflowState, WorkflowTransition,
 };
 
 pub use sql_api::{sql, GmpExecutor};
