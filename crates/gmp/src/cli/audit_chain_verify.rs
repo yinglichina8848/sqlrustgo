@@ -1,10 +1,7 @@
 use serde::{Deserialize, Serialize};
-use sqlrustgo_gmp::audit_chain::{
-    AuditChain, AuditChainError, GENESIS_PREV_HASH,
-};
+use sqlrustgo_gmp::audit_chain::{AuditChain, AuditChainError, GENESIS_PREV_HASH};
 use sqlrustgo_gmp::audit_chain_tamper::{
-    detect_tamper, quick_verify, verify_entry_checksum,
-    TamperViolation,
+    detect_tamper, quick_verify, verify_entry_checksum, TamperViolation,
 };
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -89,7 +86,11 @@ pub struct ChainStatistics {
 
 pub fn violation_to_json(violation: &TamperViolation) -> serde_json::Value {
     match violation {
-        TamperViolation::ChecksumMismatch { seq, expected, actual } => {
+        TamperViolation::ChecksumMismatch {
+            seq,
+            expected,
+            actual,
+        } => {
             serde_json::json!({
                 "type": "ChecksumMismatch",
                 "seq": seq,
@@ -97,7 +98,11 @@ pub fn violation_to_json(violation: &TamperViolation) -> serde_json::Value {
                 "actual": hex::encode(actual)
             })
         }
-        TamperViolation::ChainBroken { seq, expected_prev_hash, actual_prev_hash } => {
+        TamperViolation::ChainBroken {
+            seq,
+            expected_prev_hash,
+            actual_prev_hash,
+        } => {
             serde_json::json!({
                 "type": "ChainBroken",
                 "seq": seq,
@@ -126,9 +131,13 @@ pub fn violation_to_json(violation: &TamperViolation) -> serde_json::Value {
     }
 }
 
-pub fn recovery_action_to_string(action: &sqlrustgo_gmp::audit_chain_tamper::RecoveryAction) -> String {
+pub fn recovery_action_to_string(
+    action: &sqlrustgo_gmp::audit_chain_tamper::RecoveryAction,
+) -> String {
     match action {
-        sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::RecoverFromWal => "RecoverFromWal".to_string(),
+        sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::RecoverFromWal => {
+            "RecoverFromWal".to_string()
+        }
         sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::ManualAudit => "ManualAudit".to_string(),
         sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::FreezeChain => "FreezeChain".to_string(),
         sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::NoRecovery => "NoRecovery".to_string(),
@@ -141,7 +150,11 @@ fn run_quick_verify(chain: &AuditChain) -> VerificationResults {
         passed,
         entries_verified: if passed { chain.len() } else { 0 },
         first_failure: None,
-        error: if passed { None } else { Some("Quick verify failed".to_string()) },
+        error: if passed {
+            None
+        } else {
+            Some("Quick verify failed".to_string())
+        },
         entry_results: None,
     }
 }
@@ -157,9 +170,18 @@ fn run_full_verify(chain: &AuditChain) -> VerificationResults {
         },
         Err(e) => {
             let (first_failure, error_msg) = match &e {
-                AuditChainError::SeqMismatch { expected, actual, .. } => (Some(*actual), format!("SeqMismatch: expected {}, got {}", expected, actual)),
-                AuditChainError::HashMismatch { .. } => (None, "HashMismatch: chain broken".to_string()),
-                AuditChainError::ChecksumInvalid { seq } => (Some(*seq), format!("ChecksumInvalid at seq {}", seq)),
+                AuditChainError::SeqMismatch {
+                    expected, actual, ..
+                } => (
+                    Some(*actual),
+                    format!("SeqMismatch: expected {}, got {}", expected, actual),
+                ),
+                AuditChainError::HashMismatch { .. } => {
+                    (None, "HashMismatch: chain broken".to_string())
+                }
+                AuditChainError::ChecksumInvalid { seq } => {
+                    (Some(*seq), format!("ChecksumInvalid at seq {}", seq))
+                }
                 AuditChainError::EmptyChain => (None, "EmptyChain".to_string()),
             };
             VerificationResults {
@@ -200,7 +222,11 @@ fn run_entry_verify(chain: &AuditChain, seq: u64) -> VerificationResults {
             VerificationResults {
                 passed: checksum_valid && link_valid,
                 entries_verified: 1,
-                first_failure: if checksum_valid && link_valid { None } else { Some(seq) },
+                first_failure: if checksum_valid && link_valid {
+                    None
+                } else {
+                    Some(seq)
+                },
                 error: None,
                 entry_results: Some(entry_results),
             }
@@ -249,7 +275,11 @@ pub fn load_chain_from_path(_path: &PathBuf) -> Result<AuditChain, String> {
     Ok(AuditChain::new())
 }
 
-pub fn run_verification(mode: &VerifyMode, chain_path: &PathBuf, entry_seq: Option<u64>) -> Result<AuditChainVerifyReport, String> {
+pub fn run_verification(
+    mode: &VerifyMode,
+    chain_path: &PathBuf,
+    entry_seq: Option<u64>,
+) -> Result<AuditChainVerifyReport, String> {
     let start = SystemTime::now();
     let timestamp = start.duration_since(UNIX_EPOCH).unwrap().as_secs();
     let chain = load_chain_from_path(chain_path)?;
@@ -292,7 +322,10 @@ pub fn run_verification(mode: &VerifyMode, chain_path: &PathBuf, entry_seq: Opti
     })
 }
 
-pub fn write_report(report: &AuditChainVerifyReport, output_path: Option<&PathBuf>) -> Result<(), String> {
+pub fn write_report(
+    report: &AuditChainVerifyReport,
+    output_path: Option<&PathBuf>,
+) -> Result<(), String> {
     let json = serde_json::to_string_pretty(report)
         .map_err(|e| format!("Failed to serialize report: {}", e))?;
 

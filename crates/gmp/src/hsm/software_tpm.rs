@@ -20,21 +20,23 @@ impl SoftwareTpmProvider {
 impl HsmProvider for SoftwareTpmProvider {
     fn generate_key(&self, key_id: &str) -> Result<(), HsmError> {
         let key_bytes: [u8; 32] = rand::random();
-        let mut keys = self.keys.write().map_err(|_| {
-            HsmError::KeyGenerationFailed("Lock poisoned".to_string())
-        })?;
+        let mut keys = self
+            .keys
+            .write()
+            .map_err(|_| HsmError::KeyGenerationFailed("Lock poisoned".to_string()))?;
         keys.insert(key_id.to_string(), key_bytes.to_vec());
         Ok(())
     }
 
     fn sign(&self, key_id: &str, data: &[u8]) -> Result<Vec<u8>, HsmError> {
-        let keys = self.keys.read().map_err(|_| {
-            HsmError::SigningFailed("Lock poisoned".to_string())
-        })?;
+        let keys = self
+            .keys
+            .read()
+            .map_err(|_| HsmError::SigningFailed("Lock poisoned".to_string()))?;
 
-        let key = keys.get(key_id).ok_or_else(|| {
-            HsmError::KeyNotFound(key_id.to_string())
-        })?;
+        let key = keys
+            .get(key_id)
+            .ok_or_else(|| HsmError::KeyNotFound(key_id.to_string()))?;
 
         let mut hasher = Sha256::new();
         hasher.update(key);
@@ -44,13 +46,14 @@ impl HsmProvider for SoftwareTpmProvider {
     }
 
     fn verify(&self, key_id: &str, data: &[u8], signature: &[u8]) -> Result<bool, HsmError> {
-        let keys = self.keys.read().map_err(|_| {
-            HsmError::SigningFailed("Lock poisoned".to_string())
-        })?;
+        let keys = self
+            .keys
+            .read()
+            .map_err(|_| HsmError::SigningFailed("Lock poisoned".to_string()))?;
 
-        let key = keys.get(key_id).ok_or_else(|| {
-            HsmError::KeyNotFound(key_id.to_string())
-        })?;
+        let key = keys
+            .get(key_id)
+            .ok_or_else(|| HsmError::KeyNotFound(key_id.to_string()))?;
 
         let mut hasher = Sha256::new();
         hasher.update(key);
@@ -61,17 +64,19 @@ impl HsmProvider for SoftwareTpmProvider {
     }
 
     fn delete_key(&self, key_id: &str) -> Result<(), HsmError> {
-        let mut keys = self.keys.write().map_err(|_| {
-            HsmError::KeyNotFound("Lock poisoned".to_string())
-        })?;
+        let mut keys = self
+            .keys
+            .write()
+            .map_err(|_| HsmError::KeyNotFound("Lock poisoned".to_string()))?;
         keys.remove(key_id);
         Ok(())
     }
 
     fn list_keys(&self) -> Result<Vec<String>, HsmError> {
-        let keys = self.keys.read().map_err(|_| {
-            HsmError::NotAvailable("Lock poisoned".to_string())
-        })?;
+        let keys = self
+            .keys
+            .read()
+            .map_err(|_| HsmError::NotAvailable("Lock poisoned".to_string()))?;
         Ok(keys.keys().cloned().collect())
     }
 }
@@ -102,7 +107,9 @@ mod tests {
         let signature = provider.sign("test_key", b"test data").unwrap();
         assert_eq!(signature.len(), 32);
 
-        let is_valid = provider.verify("test_key", b"test data", &signature).unwrap();
+        let is_valid = provider
+            .verify("test_key", b"test data", &signature)
+            .unwrap();
         assert!(is_valid);
     }
 
