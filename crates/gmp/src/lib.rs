@@ -51,11 +51,15 @@ pub mod audit_chain;
 pub mod audit_chain_tamper;
 pub mod audit_chain_wal;
 pub mod compliance;
+pub mod correction;
 pub mod correction_chain;
 pub mod document;
 pub mod electronic_signature;
 pub mod embedding;
+pub mod hsm;
 pub mod persist_sqlite;
+pub mod provenance;
+pub mod provenance_lineage;
 pub mod report;
 pub mod scenarios;
 pub mod semantic_embedding;
@@ -93,6 +97,19 @@ pub use compliance::{
     Violation,
 };
 
+pub use correction::{
+    CorrectionRecord, CREATE_CORRECTION_RECORDS_TABLE, TABLE_CORRECTION_RECORDS,
+};
+
+pub use correction_chain::{CorrectionChain, CorrectionChainEntry};
+
+pub use provenance::{
+    OperationType, ProvenanceRecord, SourceType, CREATE_PROVENANCE_RECORDS_TABLE,
+    TABLE_PROVENANCE_RECORDS,
+};
+
+pub use provenance_lineage::{LineageGraph, LineageNode};
+
 pub use document::{
     create_gmp_tables, get_content, get_keywords, insert_document, insert_document_content,
     insert_document_keyword, query_by_effective_date, query_by_status, query_by_type, DocStatus,
@@ -128,5 +145,13 @@ pub use electronic_signature::{
     CREATE_APPROVAL_POLICIES_TABLE, CREATE_ELECTRONIC_SIGNATURES_TABLE,
     CREATE_SIGNATURE_REQUESTS_TABLE,
 };
+
+pub use hsm::{
+    HsmConfig, HsmError, HsmProvider, HsmProviderType,
+};
+
+pub use hsm::software_tpm::SoftwareTpmProvider;
+
+pub use hsm::software_tpm::create_provider;
 
 pub use sql_api::{sql, GmpExecutor};

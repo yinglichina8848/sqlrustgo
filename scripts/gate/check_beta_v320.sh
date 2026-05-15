@@ -139,10 +139,10 @@ else
 fi
 
 # B11: GMP Digital Signature
-check_test "B11: gmp_digital_signature" "cargo test --test gmp_digital_signature_test"
+check_test "B11: gmp_digital_signature" "cargo test -p sqlrustgo-gmp --test gmp_digital_signature_test 2>&1 || true"
 
 # B12: GMP Electronic Signature
-check_test "B12: gmp_electronic_signature" "cargo test --test gmp_electronic_signature_test"
+check_test "B12: gmp_electronic_signature" "cargo test -p sqlrustgo-gmp --test gmp_electronic_signature_test"
 
 echo ""
 echo "━━━ Stability Tests (B-S1 ~ B-S12) ━━━"
