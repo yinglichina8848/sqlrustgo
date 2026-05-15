@@ -63,6 +63,7 @@ impl Inner {
         false
     }
 
+    #[allow(dead_code)]
     fn bfs_reachable(&self, start: TxId, target: TxId) -> bool {
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
@@ -216,11 +217,12 @@ impl DeadlockDetector {
         None
     }
 
+    #[allow(dead_code)]
     fn bfs_cycle(
         graph: &HashMap<TxId, HashSet<TxId>>,
         start: TxId,
         visited: &mut HashSet<TxId>,
-        path: &mut Vec<TxId>,
+        path: &mut [TxId],
     ) -> Option<Vec<TxId>> {
         let mut queue = VecDeque::new();
         queue.push_back((start, vec![start]));
