@@ -5681,6 +5681,7 @@ dependencies = [
 name = "sqlrustgo-transaction"
 version = "3.0.0"
 dependencies = [
+ "criterion 0.8.2",
  "ed25519-dalek",
  "hex",
  "log",

@@ -22,3 +22,8 @@ rand = "0.8"
 
 [dev-dependencies]
 tempfile.workspace = true
+criterion = "0.8"
+
+[[bench]]
+name = "deadlock_bench"
+harness = false
