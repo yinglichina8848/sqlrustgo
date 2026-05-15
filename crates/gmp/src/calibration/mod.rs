@@ -1,8 +1,10 @@
 pub mod device;
+pub mod manager;
 pub mod record;
 pub mod status;
 
 pub use device::{CalibrationDevice, CalibrationInterval};
+pub use manager::DeviceCalibrationManager;
 pub use record::{CalibrationMeasurement, CalibrationRecord, CalibrationResult};
 pub use status::CalibrationStatus;
 
