@@ -259,6 +259,186 @@ impl PolicyEvaluation {
     }
 }
 
+/// Collected signature record
+#[derive(Debug, Clone)]
+struct CollectedSignature {
+    user_id: String,
+    role: String,
+    timestamp: i64,
+}
+
+/// Approval policy evaluator for tracking multi-signature workflows
+pub struct ApprovalPolicyEvaluator {
+    policy: ApprovalPolicy,
+    collected_signatures: Vec<CollectedSignature>,
+    current_step: i32,
+    request_id: String,
+}
+
+impl ApprovalPolicyEvaluator {
+    pub fn new(policy: &ApprovalPolicy, request_id: String) -> Self {
+        Self {
+            policy: policy.clone(),
+            collected_signatures: Vec::new(),
+            current_step: 1,
+            request_id,
+        }
+    }
+
+    pub fn add_signature(
+        &mut self,
+        user_id: &str,
+        role: &str,
+    ) -> Result<PolicyEvaluation, SignatureError> {
+        if self.policy.sequential {
+            self.add_signature_sequential(user_id, role)
+        } else {
+            self.add_signature_parallel(user_id, role)
+        }
+    }
+
+    fn add_signature_parallel(
+        &mut self,
+        user_id: &str,
+        role: &str,
+    ) -> Result<PolicyEvaluation, SignatureError> {
+        if self.is_complete() {
+            return Err(SignatureError::SignatureAlreadyExists {
+                signature_id: format!("policy {} already satisfied", self.policy.id),
+            });
+        }
+
+        if !self.has_required_role(role) {
+            return Err(SignatureError::InsufficientPermissions {
+                required_role: format!("one of {:?}", self.policy.required_roles),
+            });
+        }
+
+        if self.has_user_signed(user_id) {
+            return Err(SignatureError::SignatureAlreadyExists {
+                signature_id: user_id.to_string(),
+            });
+        }
+
+        self.collected_signatures.push(CollectedSignature {
+            user_id: user_id.to_string(),
+            role: role.to_string(),
+            timestamp: current_timestamp_ms(),
+        });
+
+        Ok(self.evaluate())
+    }
+
+    fn add_signature_sequential(
+        &mut self,
+        user_id: &str,
+        role: &str,
+    ) -> Result<PolicyEvaluation, SignatureError> {
+        if self.is_complete() {
+            return Err(SignatureError::SignatureAlreadyExists {
+                signature_id: format!("policy {} already satisfied", self.policy.id),
+            });
+        }
+
+        let expected_role = self.get_expected_role()?;
+        if role != expected_role {
+            return Err(SignatureError::SequentialOrderViolation {
+                expected_step: self.current_step,
+                actual_step: self.current_step,
+            });
+        }
+
+        if self.has_user_signed(user_id) {
+            return Err(SignatureError::SignatureAlreadyExists {
+                signature_id: user_id.to_string(),
+            });
+        }
+
+        self.collected_signatures.push(CollectedSignature {
+            user_id: user_id.to_string(),
+            role: role.to_string(),
+            timestamp: current_timestamp_ms(),
+        });
+
+        self.current_step += 1;
+
+        Ok(self.evaluate())
+    }
+
+    fn has_required_role(&self, role: &str) -> bool {
+        self.policy.required_roles.iter().any(|r| r == role)
+    }
+
+    fn has_user_signed(&self, user_id: &str) -> bool {
+        self.collected_signatures.iter().any(|s| s.user_id == user_id)
+    }
+
+    fn get_expected_role(&self) -> Result<&str, SignatureError> {
+        let idx = (self.current_step - 1) as usize;
+        if idx >= self.policy.required_roles.len() {
+            return Err(SignatureError::PolicyNotSatisfied {
+                missing: vec![],
+            });
+        }
+        Ok(&self.policy.required_roles[idx])
+    }
+
+    pub fn current_status(&self) -> PolicyStatus {
+        if self.is_complete() {
+            PolicyStatus::Approved
+        } else {
+            PolicyStatus::Pending
+        }
+    }
+
+    fn is_complete(&self) -> bool {
+        self.collected_signatures.len() >= self.policy.required_signatures
+    }
+
+    pub fn evaluate(&self) -> PolicyEvaluation {
+        let missing_roles = if self.policy.sequential {
+            self.get_missing_roles_sequential()
+        } else {
+            self.get_missing_roles_parallel()
+        };
+
+        PolicyEvaluation {
+            policy_id: self.policy.id.clone(),
+            request_id: self.request_id.clone(),
+            status: self.current_status(),
+            current_signatures: self.collected_signatures.len(),
+            required_signatures: self.policy.required_signatures,
+            is_complete: self.is_complete(),
+            missing_roles,
+        }
+    }
+
+    fn get_missing_roles_sequential(&self) -> Vec<String> {
+        let mut missing = Vec::new();
+        for (i, role) in self.policy.required_roles.iter().enumerate() {
+            let step = (i + 1) as i32;
+            if step >= self.current_step {
+                let has_signed = self.collected_signatures.iter().any(|s| s.role == *role);
+                if !has_signed {
+                    missing.push(role.clone());
+                }
+            }
+        }
+        missing
+    }
+
+    fn get_missing_roles_parallel(&self) -> Vec<String> {
+        let mut missing = Vec::new();
+        for role in &self.policy.required_roles {
+            let has_signed = self.collected_signatures.iter().any(|s| s.role == *role);
+            if !has_signed {
+                missing.push(role.clone());
+            }
+        }
+        missing
+    }
+}
+
 // ============================================================================
 // Error Types
 // ============================================================================
