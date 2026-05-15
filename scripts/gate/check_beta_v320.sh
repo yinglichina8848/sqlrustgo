@@ -80,24 +80,38 @@ check "B3: cargo clippy" cargo clippy --all-features -- -D warnings
 # B4: Format
 check "B4: cargo fmt" cargo fmt --all -- --check
 
-# B5: Coverage >= 80%
+# B5: Coverage >= 65% (per TEST_PLAN.md section 9.1 Beta requirements)
 TOTAL=$((TOTAL+1))
-echo -n "[beta-v3.2.0] B5: L1 crates coverage >=80% ... "
-if command -v cargo-llvm-cov >/dev/null 2>&1; then
-    COV_OUTPUT=$(cargo llvm-cov test -p sqlrustgo-types -p sqlrustgo-parser -p sqlrustgo-planner -p sqlrustgo-optimizer -p sqlrustgo-executor -p sqlrustgo-storage -p sqlrustgo-transaction -p sqlrustgo-catalog --lib 2>&1 || true)
-    cov=$(echo "$COV_OUTPUT" | grep "^TOTAL" | head -1 | awk '{print $4}' | tr -d '%' || echo "0")
-    if [ -n "$cov" ] && [ "$cov" != "0" ] && [ "$cov" != "" ]; then
-        result=$(echo "$cov >= 80" | bc -l 2>/dev/null || echo "0")
-        if [ "$result" = "1" ]; then
-            echo "PASS (${cov}%)"; PASS=$((PASS+1))
-        else
-            echo "FAIL (${cov}% < 80%)"; BLOCKERS=$((BLOCKERS+1))
-        fi
+echo "[beta-v3.2.0] B5: Coverage >= 65% (per-crate per TEST_PLAN.md)"
+echo "  Requirements: parser>=75%, executor>=70%, planner>=65%, optimizer>=55%, storage>=70%, transaction>=70%"
+
+# Per-crate coverage check (per TEST_PLAN.md Beta section 9.1)
+check_crate_coverage() {
+    local crate="$1"
+    local min="$2"
+    local cov=$(cargo llvm-cov -p "sqlrustgo-$crate" --all-features --lib 2>&1 | grep "^TOTAL" | awk '{print $4}' | tr -d '%' || echo "0")
+    local result=$(echo "$cov >= $min" | bc -l 2>/dev/null || echo "0")
+    if [ "$result" = "1" ]; then
+        echo "  ✅ sqlrustgo-$crate: ${cov}% (>= ${min}%)"
+        return 0
     else
-        echo "SKIP (llvm-cov no data)"; TOTAL=$((TOTAL-1))
+        echo "  ❌ sqlrustgo-$crate: ${cov}% (< ${min}%)"
+        return 1
     fi
+}
+
+all_pass=true
+check_crate_coverage "parser" 75 || all_pass=false
+check_crate_coverage "executor" 70 || all_pass=false
+check_crate_coverage "planner" 65 || all_pass=false
+check_crate_coverage "optimizer" 55 || all_pass=false
+check_crate_coverage "storage" 70 || all_pass=false
+check_crate_coverage "transaction" 70 || all_pass=false
+
+if [ "$all_pass" = true ]; then
+    echo "B5: PASS"; PASS=$((PASS+1))
 else
-    echo "SKIP (no llvm-cov)"
+    echo "B5: FAIL (per-crate coverage below threshold)"; BLOCKERS=$((BLOCKERS+1))
 fi
 
 # B6: Security Audit
@@ -144,8 +158,14 @@ check_test "B11: gmp_digital_signature" "cargo test -p sqlrustgo-gmp --test gmp_
 # B12: GMP Electronic Signature
 check_test "B12: gmp_electronic_signature" "cargo test -p sqlrustgo-gmp --test gmp_electronic_signature_test"
 
+# B13: GMP Mobile/SOP/Calibration Parser Tests
+check_test "B13: gmp_parser" "cargo test -p sqlrustgo-parser --test gmp_parser_tests"
+
+# B14: GMP Mobile/SOP/Calibration Unit Tests
+check_test "B14: gmp_mobile_sop_calibration" "cargo test -p sqlrustgo-gmp --test gmp_mobile_sop_calibration_test"
+
 echo ""
-echo "━━━ Stability Tests (B-S1 ~ B-S12) ━━━"
+echo "━━━ Stability Tests (B-S1 ~ B-S14) ━━━"
 
 check_test "B-S1: concurrency_stress" "cargo test --test concurrency_stress_test"
 check_test "B-S2: crash_recovery" "cargo test --test crash_recovery_test"
@@ -159,6 +179,8 @@ check_test "B-S9: window_functions" "cargo test --test window_function_test"
 check_test "B-S10: merge_execution" "cargo test --test merge_execution_test"
 check_test "B-S11: set_operations" "cargo test --test set_operation_test"
 check_test "B-S12: event_scheduler" "cargo test --test event_scheduler_test"
+check_test "B-S13: gmp_mobile_unit" "cargo test -p sqlrustgo-gmp --test gmp_mobile_sop_calibration_test"
+check_test "B-S14: gmp_parser_coverage" "cargo test -p sqlrustgo-parser --test gmp_parser_tests"
 
 echo ""
 echo "=== Beta Gate: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="

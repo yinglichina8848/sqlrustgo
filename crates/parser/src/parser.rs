@@ -67,6 +67,21 @@ pub enum Statement {
     // GMP Electronic Signature statements
     SignRecord(SignRecordStatement),
     CreateApprovalPolicy(CreateApprovalPolicyStatement),
+    // GMP Workflow statements
+    StartWorkflow(StartWorkflowStatement),
+    ApproveWorkflow(ApproveWorkflowStatement),
+    RejectWorkflow(RejectWorkflowStatement),
+    // GMP Mobile statements
+    RegisterDevice(RegisterDeviceStatement),
+    DeviceHeartbeat(DeviceHeartbeatStatement),
+    CollectData(CollectDataStatement),
+    // GMP SOP statements
+    CreateSOP(CreateSOPStatement),
+    RecordTraining(RecordTrainingStatement),
+    BindSOP(BindSOPStatement),
+    // GMP Calibration statements
+    RegisterCalibrationDevice(RegisterCalibrationDeviceStatement),
+    RecordCalibration(RecordCalibrationStatement),
 }
 
 /// UNION statement
@@ -258,6 +273,97 @@ pub struct CreateApprovalPolicyStatement {
     pub sequential: bool,
     pub timeout_hours: Option<i32>,
     pub description: Option<String>,
+}
+
+/// START WORKFLOW statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct StartWorkflowStatement {
+    pub workflow_name: String,
+    pub context: Vec<(String, String)>,
+}
+
+/// APPROVE WORKFLOW statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApproveWorkflowStatement {
+    pub instance_id: String,
+    pub stage: String,
+    pub approver_id: String,
+    pub signature: String,
+    pub comment: Option<String>,
+}
+
+/// REJECT WORKFLOW statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct RejectWorkflowStatement {
+    pub instance_id: String,
+    pub reason: String,
+}
+
+/// REGISTER DEVICE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct RegisterDeviceStatement {
+    pub device_id: String,
+    pub device_name: String,
+    pub device_type: String,
+    pub certificate_fingerprint: Option<String>,
+}
+
+/// DEVICE HEARTBEAT statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeviceHeartbeatStatement {
+    pub device_id: String,
+    pub status: String,
+}
+
+/// COLLECT DATA statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CollectDataStatement {
+    pub device_id: String,
+    pub collection_type: String,
+    pub data: Vec<(String, String)>,
+}
+
+/// CREATE SOP statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateSOPStatement {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub qualification_requirements: Vec<String>,
+}
+
+/// RECORD TRAINING statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecordTrainingStatement {
+    pub sop_id: String,
+    pub user_id: String,
+    pub training_date: i64,
+    pub status: String,
+}
+
+/// BIND SOP statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct BindSOPStatement {
+    pub workflow_name: String,
+    pub step_name: String,
+    pub sop_id: String,
+}
+
+/// REGISTER CALIBRATION DEVICE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct RegisterCalibrationDeviceStatement {
+    pub device_id: String,
+    pub device_type: String,
+    pub interval_days: i32,
+}
+
+/// RECORD CALIBRATION statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecordCalibrationStatement {
+    pub device_id: String,
+    pub result: String,
+    pub measured_value: f64,
+    pub tolerance: f64,
 }
 
 /// Common Table Expression (CTE)
@@ -1111,15 +1217,55 @@ impl Parser {
             | Some(Token::Commit)
             | Some(Token::Rollback)
             | Some(Token::Set)
-            | Some(Token::Start)
             | Some(Token::Savepoint)
             | Some(Token::Release) => self.parse_transaction(),
+            Some(Token::Start) => {
+                let next_is_workflow = matches!(self.peek(), Some(Token::Workflow));
+                if next_is_workflow {
+                    self.parse_start_workflow()
+                } else {
+                    self.parse_transaction()
+                }
+            }
+            Some(Token::Approve) | Some(Token::Reject) => {
+                let next_is_workflow = matches!(self.peek(), Some(Token::Workflow));
+                if next_is_workflow {
+                    match self.current() {
+                        Some(Token::Approve) => self.parse_approve_workflow(),
+                        Some(Token::Reject) => self.parse_reject_workflow(),
+                        _ => Err("Unexpected token".to_string()),
+                    }
+                } else {
+                    Err("Expected WORKFLOW after APPROVE/REJECT".to_string())
+                }
+            }
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
             Some(Token::Show) => self.parse_show(),
             Some(Token::Describe) | Some(Token::Desc) => self.parse_describe(),
             Some(Token::Explain) => self.parse_explain(),
             Some(Token::Sign) => self.parse_sign_record(),
+            Some(Token::Register) => self.parse_register_device(),
+            Some(Token::Device) => self.parse_device_statement(),
+            Some(Token::SOP) => self.parse_create_sop(),
+            Some(Token::Training) => self.parse_record_training(),
+            Some(Token::Bind) => self.parse_bind_sop(),
+            Some(Token::Calibration) => self.parse_register_calibration_device(),
+            Some(Token::Record) => {
+                self.next(); // consume RECORD
+                match self.current() {
+                    Some(Token::Training) => self.parse_record_training(),
+                    Some(Token::Calibration) => {
+                        self.next(); // consume CALIBRATION
+                        self.parse_record_calibration_inner()
+                    }
+                    Some(t) => Err(format!(
+                        "Expected TRAINING or CALIBRATION after RECORD, got {:?}",
+                        t
+                    )),
+                    None => Err("Expected TRAINING or CALIBRATION after RECORD".to_string()),
+                }
+            }
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -1400,6 +1546,7 @@ impl Parser {
             Some(Token::View) => self.parse_create_view(),
             Some(Token::Event) => self.parse_create_event(),
             Some(Token::Approval) => self.parse_create_approval_policy(),
+            Some(Token::SOP) => self.parse_create_sop(),
             Some(t) => Err(format!(
                 "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, VIEW, or EVENT after CREATE, got {:?}",
                 t
@@ -1966,6 +2113,425 @@ impl Parser {
                 description,
             },
         ))
+    }
+
+    fn parse_register_device(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Register)?;
+        self.expect(Token::Device)?;
+
+        let device_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device ID, got {:?}", t)),
+            None => return Err("Expected device ID".to_string()),
+        };
+
+        let device_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device name, got {:?}", t)),
+            None => return Err("Expected device name".to_string()),
+        };
+
+        let device_type = match self.next() {
+            Some(Token::Identifier(t)) => t,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device type, got {:?}", t)),
+            None => return Err("Expected device type".to_string()),
+        };
+
+        let mut certificate_fingerprint = None;
+        if matches!(self.current(), Some(Token::Certificate)) {
+            self.next();
+            self.expect(Token::Fingerprint)?;
+            certificate_fingerprint = Some(match self.next() {
+                Some(Token::Identifier(s)) => s,
+                Some(Token::StringLiteral(s)) => s,
+                Some(t) => return Err(format!("Expected fingerprint value, got {:?}", t)),
+                None => return Err("Expected fingerprint value".to_string()),
+            });
+        }
+
+        Ok(Statement::RegisterDevice(RegisterDeviceStatement {
+            device_id,
+            device_name,
+            device_type,
+            certificate_fingerprint,
+        }))
+    }
+
+    fn parse_device_statement(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Device)?;
+        match self.current() {
+            Some(Token::Heartbeat) => {
+                self.next();
+                let device_id = match self.next() {
+                    Some(Token::Identifier(id)) => id,
+                    Some(Token::StringLiteral(s)) => s,
+                    Some(t) => return Err(format!("Expected device ID, got {:?}", t)),
+                    None => return Err("Expected device ID".to_string()),
+                };
+                Ok(Statement::DeviceHeartbeat(DeviceHeartbeatStatement {
+                    device_id,
+                    status: "ACTIVE".to_string(),
+                }))
+            }
+            Some(Token::Collect) => {
+                self.next();
+                self.expect(Token::Data)?;
+                let device_id = match self.next() {
+                    Some(Token::Identifier(id)) => id,
+                    Some(Token::StringLiteral(s)) => s,
+                    Some(t) => return Err(format!("Expected device ID, got {:?}", t)),
+                    None => return Err("Expected device ID".to_string()),
+                };
+                let collection_type = match self.next() {
+                    Some(Token::Identifier(t)) => t,
+                    Some(Token::StringLiteral(s)) => s,
+                    Some(t) => return Err(format!("Expected collection type, got {:?}", t)),
+                    None => return Err("Expected collection type".to_string()),
+                };
+                Ok(Statement::CollectData(CollectDataStatement {
+                    device_id,
+                    collection_type,
+                    data: Vec::new(),
+                }))
+            }
+            Some(t) => Err(format!(
+                "Expected HEARTBEAT or COLLECT after DEVICE, got {:?}",
+                t
+            )),
+            None => Err("Expected HEARTBEAT or COLLECT after DEVICE".to_string()),
+        }
+    }
+
+    fn parse_create_sop(&mut self) -> Result<Statement, String> {
+        self.expect(Token::SOP)?;
+
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected SOP name, got {:?}", t)),
+            None => return Err("Expected SOP name".to_string()),
+        };
+
+        let version = match self.next() {
+            Some(Token::Identifier(v)) => v,
+            Some(Token::StringLiteral(s)) => s,
+            Some(Token::Version) => {
+                self.next();
+                match self.next() {
+                    Some(Token::Identifier(v)) => v,
+                    Some(Token::StringLiteral(s)) => s,
+                    Some(t) => return Err(format!("Expected version, got {:?}", t)),
+                    None => return Err("Expected version".to_string()),
+                }
+            }
+            Some(t) => return Err(format!("Expected version, got {:?}", t)),
+            None => return Err("Expected version".to_string()),
+        };
+
+        let description = match self.next() {
+            Some(Token::Identifier(d)) => d,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected description, got {:?}", t)),
+            None => String::new(),
+        };
+
+        Ok(Statement::CreateSOP(CreateSOPStatement {
+            name,
+            version,
+            description,
+            qualification_requirements: Vec::new(),
+        }))
+    }
+
+    fn parse_record_training(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Training)?;
+
+        let sop_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected SOP ID, got {:?}", t)),
+            None => return Err("Expected SOP ID".to_string()),
+        };
+
+        let user_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected user ID, got {:?}", t)),
+            None => return Err("Expected user ID".to_string()),
+        };
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+
+        Ok(Statement::RecordTraining(RecordTrainingStatement {
+            sop_id,
+            user_id,
+            training_date: timestamp,
+            status: "VALID".to_string(),
+        }))
+    }
+
+    fn parse_bind_sop(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Bind)?;
+        self.expect(Token::SOP)?;
+
+        let workflow_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected workflow name, got {:?}", t)),
+            None => return Err("Expected workflow name".to_string()),
+        };
+
+        let step_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected step name, got {:?}", t)),
+            None => return Err("Expected step name".to_string()),
+        };
+
+        let sop_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected SOP ID, got {:?}", t)),
+            None => return Err("Expected SOP ID".to_string()),
+        };
+
+        Ok(Statement::BindSOP(BindSOPStatement {
+            workflow_name,
+            step_name,
+            sop_id,
+        }))
+    }
+
+    fn parse_register_calibration_device(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Calibration)?;
+        self.expect(Token::Device)?;
+
+        let device_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device ID, got {:?}", t)),
+            None => return Err("Expected device ID".to_string()),
+        };
+
+        let device_type = match self.next() {
+            Some(Token::Identifier(t)) => t,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device type, got {:?}", t)),
+            None => return Err("Expected device type".to_string()),
+        };
+
+        let interval_days = if matches!(self.current(), Some(Token::Interval)) {
+            self.next();
+            match self.next() {
+                Some(Token::NumberLiteral(n)) => n.parse().unwrap_or(365),
+                Some(Token::Identifier(n)) => n.parse().unwrap_or(365),
+                Some(t) => return Err(format!("Expected interval value, got {:?}", t)),
+                None => 365,
+            }
+        } else {
+            365
+        };
+
+        Ok(Statement::RegisterCalibrationDevice(
+            RegisterCalibrationDeviceStatement {
+                device_id,
+                device_type,
+                interval_days,
+            },
+        ))
+    }
+
+    fn parse_record_calibration_inner(&mut self) -> Result<Statement, String> {
+        let device_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device ID, got {:?}", t)),
+            None => return Err("Expected device ID".to_string()),
+        };
+
+        let result = match self.next() {
+            Some(Token::Pass) => "PASS".to_string(),
+            Some(Token::Fail) => "FAIL".to_string(),
+            Some(Token::Identifier(s)) => s,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected result (PASS/FAIL), got {:?}", t)),
+            None => return Err("Expected result".to_string()),
+        };
+
+        Ok(Statement::RecordCalibration(RecordCalibrationStatement {
+            device_id,
+            result,
+            measured_value: 0.0,
+            tolerance: 0.01,
+        }))
+    }
+
+    fn parse_start_workflow(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Workflow)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected workflow name, got {:?}", t)),
+            None => return Err("Expected workflow name".to_string()),
+        };
+
+        let mut context = Vec::new();
+        if let Some(Token::For) = self.current() {
+            self.next();
+            while let Some(Token::Identifier(key)) = self.current() {
+                let key_name = key.clone();
+                self.next();
+                self.expect(Token::Equal)?;
+                match self.next() {
+                    Some(Token::NumberLiteral(n)) => {
+                        context.push((key_name, n.clone()));
+                    }
+                    Some(Token::StringLiteral(s)) => {
+                        context.push((key_name, format!("'{}'", s)));
+                    }
+                    Some(Token::Identifier(id)) => {
+                        context.push((key_name, id.clone()));
+                    }
+                    t => return Err(format!("Expected value, got {:?}", t)),
+                }
+                if let Some(Token::Comma) = self.current() {
+                    self.next();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        Ok(Statement::StartWorkflow(StartWorkflowStatement {
+            workflow_name: name,
+            context,
+        }))
+    }
+
+    fn parse_approve_workflow(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Workflow)?;
+        let instance_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected instance_id, got {:?}", t)),
+            None => return Err("Expected instance_id".to_string()),
+        };
+
+        self.expect(Token::Identifier("WITH".to_string()))?;
+        let mut stage = String::new();
+        let mut approver_id = String::new();
+        let mut signature = String::new();
+        let mut comment = None;
+
+        loop {
+            let key_opt = match self.current().cloned() {
+                Some(Token::Identifier(ref key)) => Some(key.clone()),
+                _ => None,
+            };
+
+            if let Some(key) = key_opt {
+                self.next();
+                self.expect(Token::Equal)?;
+                match key.to_uppercase().as_str() {
+                    "STAGE" => {
+                        stage = match self.next() {
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            t => return Err(format!("Expected stage value, got {:?}", t)),
+                        };
+                    }
+                    "APPROVER_ID" => {
+                        approver_id = match self.next() {
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            t => return Err(format!("Expected approver_id value, got {:?}", t)),
+                        };
+                    }
+                    "SIGNATURE" => {
+                        signature = match self.next() {
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            t => return Err(format!("Expected signature value, got {:?}", t)),
+                        };
+                    }
+                    "COMMENT" => {
+                        comment = match self.next() {
+                            Some(Token::StringLiteral(s)) => Some(s),
+                            t => return Err(format!("Expected comment value, got {:?}", t)),
+                        };
+                    }
+                    _ => return Err(format!("Unknown parameter: {}", key)),
+                }
+            } else if let Some(Token::Comma) = self.current() {
+                self.next();
+            } else {
+                break;
+            }
+
+            if self.current().is_none() {
+                break;
+            }
+        }
+
+        Ok(Statement::ApproveWorkflow(ApproveWorkflowStatement {
+            instance_id,
+            stage,
+            approver_id,
+            signature,
+            comment,
+        }))
+    }
+
+    fn parse_reject_workflow(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Workflow)?;
+        let instance_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected instance_id, got {:?}", t)),
+            None => return Err("Expected instance_id".to_string()),
+        };
+
+        self.expect(Token::Identifier("WITH".to_string()))?;
+        let mut reason = String::new();
+
+        loop {
+            let key_opt = match self.current().cloned() {
+                Some(Token::Identifier(ref key)) => Some(key.clone()),
+                _ => None,
+            };
+
+            if let Some(key) = key_opt {
+                let key_upper = key.to_uppercase();
+                if key_upper == "REASON" {
+                    self.next();
+                    self.expect(Token::Equal)?;
+                    reason = match self.next() {
+                        Some(Token::StringLiteral(s)) => s,
+                        Some(Token::Identifier(s)) => s,
+                        t => return Err(format!("Expected reason value, got {:?}", t)),
+                    };
+                    break;
+                }
+            } else if let Some(Token::Comma) = self.current() {
+                self.next();
+            } else {
+                break;
+            }
+            if self.current().is_none() {
+                break;
+            }
+        }
+
+        Ok(Statement::RejectWorkflow(RejectWorkflowStatement {
+            instance_id,
+            reason,
+        }))
     }
 
     fn parse_string_array(&mut self) -> Result<Vec<String>, String> {

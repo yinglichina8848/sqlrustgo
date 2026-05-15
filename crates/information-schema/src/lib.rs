@@ -741,32 +741,31 @@ impl<'a> InformationSchema<'a> {
     }
 
     pub fn get_setup_actors(&self) -> Vec<performance_schema::SetupActorsRow> {
-        performance_schema::PerformanceSchema::get_setup_actors()
+        performance_schema::PerformanceSchema::get_setup_actors_rows()
     }
 
     pub fn get_setup_instruments(&self) -> Vec<performance_schema::SetupInstrumentsRow> {
-        performance_schema::PerformanceSchema::get_setup_instruments()
+        performance_schema::PerformanceSchema::get_setup_instruments_rows()
     }
 
-    pub fn get_events_statements_history(
-        &self,
-        limit: Option<usize>,
-    ) -> Vec<performance_schema::EventsStatementsHistoryRow> {
-        performance_schema::PerformanceSchema::get_events_statements_history(limit)
+    pub fn get_events_statements_current(&self) -> Vec<performance_schema::EventsStatementsRow> {
+        performance_schema::PerformanceSchema::get_events_statements_current_rows()
     }
 
-    pub fn get_events_statements_summary_by_digest(
-        &self,
-        limit: Option<usize>,
-    ) -> Vec<performance_schema::EventsStatementsSummaryByDigestRow> {
-        performance_schema::PerformanceSchema::get_events_statements_summary_by_digest(limit)
+    pub fn get_events_statements_history(&self) -> Vec<performance_schema::EventsStatementsRow> {
+        performance_schema::PerformanceSchema::get_events_statements_history_rows()
     }
 
-    pub fn get_events_waits_history(
-        &self,
-        limit: Option<usize>,
-    ) -> Vec<performance_schema::EventsWaitsHistoryRow> {
-        performance_schema::PerformanceSchema::get_events_waits_history(limit)
+    pub fn get_events_waits_current(&self) -> Vec<performance_schema::EventsWaitsRow> {
+        performance_schema::PerformanceSchema::get_events_waits_current_rows()
+    }
+
+    pub fn get_events_waits_history(&self) -> Vec<performance_schema::EventsWaitsRow> {
+        performance_schema::PerformanceSchema::get_events_waits_history_rows()
+    }
+
+    pub fn get_global_events(&self) -> Vec<performance_schema::GlobalEventsRow> {
+        performance_schema::PerformanceSchema::get_global_events_rows()
     }
 
     fn fk_action_to_string(action: &Option<sqlrustgo_catalog::ForeignKeyAction>) -> String {
