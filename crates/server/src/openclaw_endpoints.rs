@@ -20,6 +20,7 @@ use sqlrustgo_storage::engine::{StorageEngine, TriggerEvent, TriggerInfo, Trigge
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
+use md5;
 
 // ============================================================================
 // Request/Response Types
@@ -2446,6 +2447,86 @@ fn execute_sql(
             Ok(SqlExecResult {
                 columns: vec![],
                 rows: vec![],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::SignRecord(sign) => {
+            let table_name = &sign.table_name;
+            if !storage.has_table(table_name) {
+                return Err(format!("Table '{}' not found", table_name));
+            }
+
+            let reason = &sign.reason;
+            let user_id = "CURRENT_USER";
+            let session_id = None;
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+
+            let record_id = if let Some(ref rid) = sign.record_id {
+                rid.clone()
+            } else {
+                format!("{}_{}", table_name, timestamp)
+            };
+
+            let signature_data = format!(
+                "SIGN RECORD: table={}, record={}, reason={}, user={}, timestamp={}",
+                table_name, record_id, reason, user_id, timestamp
+            );
+
+            let signature_hex = format!("{:x}", md5::compute(signature_data.as_bytes()));
+
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(record_id),
+                sqlrustgo_storage::engine::Value::Text(user_id.to_string()),
+                sqlrustgo_storage::engine::Value::Text(reason.clone()),
+                sqlrustgo_storage::engine::Value::Text(signature_hex),
+                sqlrustgo_storage::engine::Value::Integer(timestamp),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "record_id".to_string(),
+                    "user_id".to_string(),
+                    "reason".to_string(),
+                    "signature".to_string(),
+                    "timestamp".to_string(),
+                ],
+                rows: vec![result_row],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::CreateApprovalPolicy(policy) => {
+            let policy_name = &policy.name;
+            let required_sigs = policy.required_signatures;
+            let sequential = policy.sequential;
+            let timeout = policy.timeout_hours.unwrap_or(72);
+            let description = policy.description.clone().unwrap_or_default();
+
+            let roles_str = policy.required_roles.join(", ");
+
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(policy_name.clone()),
+                sqlrustgo_storage::engine::Value::Integer(required_sigs),
+                sqlrustgo_storage::engine::Value::Text(roles_str),
+                sqlrustgo_storage::engine::Value::Boolean(sequential),
+                sqlrustgo_storage::engine::Value::Integer(timeout),
+                sqlrustgo_storage::engine::Value::Text(description),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "policy_name".to_string(),
+                    "required_signatures".to_string(),
+                    "required_roles".to_string(),
+                    "sequential".to_string(),
+                    "timeout_hours".to_string(),
+                    "description".to_string(),
+                ],
+                rows: vec![result_row],
                 affected_rows: 0,
             })
         }

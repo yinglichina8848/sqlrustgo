@@ -64,6 +64,9 @@ pub enum Statement {
     CreateEvent(CreateEventStatement),
     DropEvent(DropEventStatement),
     AlterEvent(AlterEventStatement),
+    // GMP Electronic Signature statements
+    SignRecord(SignRecordStatement),
+    CreateApprovalPolicy(CreateApprovalPolicyStatement),
 }
 
 /// UNION statement
@@ -233,6 +236,28 @@ pub struct AlterEventStatement {
     pub body: Option<String>,
     pub enable: Option<bool>,
     pub comment: Option<String>,
+}
+
+/// SIGN RECORD statement for electronic signatures
+/// Syntax: SIGN RECORD FOR table_name (column = value, ...) REASON 'reason'
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignRecordStatement {
+    pub table_name: String,
+    pub record_id: Option<String>,
+    pub columns: Vec<(String, String)>,
+    pub reason: String,
+}
+
+/// CREATE APPROVAL POLICY statement for four-eyes principle
+/// Syntax: CREATE APPROVAL POLICY policy_name (required_signatures = N, required_roles = ('role1', 'role2'), sequential = TRUE)
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateApprovalPolicyStatement {
+    pub name: String,
+    pub required_signatures: i32,
+    pub required_roles: Vec<String>,
+    pub sequential: bool,
+    pub timeout_hours: Option<i32>,
+    pub description: Option<String>,
 }
 
 /// Common Table Expression (CTE)
@@ -1094,6 +1119,7 @@ impl Parser {
             Some(Token::Show) => self.parse_show(),
             Some(Token::Describe) | Some(Token::Desc) => self.parse_describe(),
             Some(Token::Explain) => self.parse_explain(),
+            Some(Token::Sign) => self.parse_sign_record(),
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -1373,6 +1399,7 @@ impl Parser {
             Some(Token::Role) => self.parse_create_role(),
             Some(Token::View) => self.parse_create_view(),
             Some(Token::Event) => self.parse_create_event(),
+            Some(Token::Approval) => self.parse_create_approval_policy(),
             Some(t) => Err(format!(
                 "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, VIEW, or EVENT after CREATE, got {:?}",
                 t
@@ -1741,6 +1768,213 @@ impl Parser {
             enable,
             comment,
         }))
+    }
+
+    fn parse_sign_record(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Sign)?;
+        self.expect(Token::Record)?;
+
+        let table_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::For) => {
+                let name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    Some(t) => return Err(format!("Expected table name after FOR, got {:?}", t)),
+                    None => return Err("Expected table name".to_string()),
+                };
+                name
+            }
+            Some(t) => {
+                return Err(format!(
+                    "Expected FOR or table name after SIGN RECORD, got {:?}",
+                    t
+                ))
+            }
+            None => return Err("Expected FOR or table name after SIGN RECORD".to_string()),
+        };
+
+        let mut columns = Vec::new();
+
+        if matches!(self.current(), Some(Token::LParen)) {
+            self.next();
+            loop {
+                match self.current() {
+                    Some(Token::Identifier(name)) => {
+                        let col_name = name.clone();
+                        self.next();
+                        self.expect(Token::Equal)?;
+                        let value = match self.next() {
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            Some(Token::NumberLiteral(n)) => n,
+                            Some(t) => return Err(format!("Expected value, got {:?}", t)),
+                            None => return Err("Expected value".to_string()),
+                        };
+                        columns.push((col_name, value));
+                    }
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    Some(Token::RParen) => {
+                        self.next();
+                        break;
+                    }
+                    _ => return Err("Expected column name or )".to_string()),
+                }
+            }
+        }
+
+        self.expect(Token::Reason)?;
+        let reason = match self.next() {
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected reason string, got {:?}", t)),
+            None => return Err("Expected reason string".to_string()),
+        };
+
+        Ok(Statement::SignRecord(SignRecordStatement {
+            table_name,
+            record_id: None,
+            columns,
+            reason,
+        }))
+    }
+
+    fn parse_create_approval_policy(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Approval)?;
+        self.expect(Token::Policy)?;
+
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected policy name, got {:?}", t)),
+            None => return Err("Expected policy name".to_string()),
+        };
+
+        self.expect(Token::LParen)?;
+
+        let mut required_signatures = 1;
+        let mut required_roles = Vec::new();
+        let mut sequential = true;
+        let mut timeout_hours = None;
+        let mut description = None;
+
+        loop {
+            match self.current() {
+                Some(Token::Identifier(ref name)) => {
+                    let key = name.to_uppercase();
+                    self.next();
+                    self.expect(Token::Equal)?;
+                    match key.as_str() {
+                        "REQUIRED_SIGNATURES" => {
+                            required_signatures = match self.next() {
+                                Some(Token::NumberLiteral(n)) => n.parse().unwrap_or(1),
+                                Some(Token::Identifier(n)) => n.parse().unwrap_or(1),
+                                t => {
+                                    return Err(format!(
+                                        "Expected number for required_signatures, got {:?}",
+                                        t
+                                    ))
+                                }
+                            };
+                        }
+                        "REQUIRED_ROLES" => {
+                            required_roles = self.parse_string_array()?;
+                        }
+                        "SEQUENTIAL" => {
+                            sequential = match self.next() {
+                                Some(Token::True) => {
+                                    self.next();
+                                    true
+                                }
+                                Some(Token::False) => {
+                                    self.next();
+                                    false
+                                }
+                                Some(Token::Identifier(ref s)) => {
+                                    let val = s.to_uppercase();
+                                    self.next();
+                                    val == "TRUE"
+                                }
+                                t => {
+                                    return Err(format!(
+                                        "Expected TRUE or FALSE for sequential, got {:?}",
+                                        t
+                                    ))
+                                }
+                            };
+                        }
+                        "TIMEOUT_HOURS" => {
+                            timeout_hours = Some(match self.next() {
+                                Some(Token::NumberLiteral(n)) => n.parse().unwrap_or(72),
+                                Some(Token::Identifier(n)) => n.parse().unwrap_or(72),
+                                t => {
+                                    return Err(format!(
+                                        "Expected number for timeout_hours, got {:?}",
+                                        t
+                                    ))
+                                }
+                            });
+                        }
+                        "DESCRIPTION" => {
+                            description = Some(match self.next() {
+                                Some(Token::StringLiteral(s)) => s,
+                                t => {
+                                    return Err(format!(
+                                        "Expected string for description, got {:?}",
+                                        t
+                                    ))
+                                }
+                            });
+                        }
+                        _ => return Err(format!("Unknown policy option: {}", key)),
+                    }
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                Some(Token::End) => {
+                    break;
+                }
+                t => return Err(format!("Expected option name or ), got {:?}", t)),
+            }
+        }
+
+        Ok(Statement::CreateApprovalPolicy(
+            CreateApprovalPolicyStatement {
+                name,
+                required_signatures,
+                required_roles,
+                sequential,
+                timeout_hours,
+                description,
+            },
+        ))
+    }
+
+    fn parse_string_array(&mut self) -> Result<Vec<String>, String> {
+        self.expect(Token::LParen)?;
+        let mut items = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::StringLiteral(s)) => {
+                    items.push(s.clone());
+                    self.next();
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                _ => return Err("Expected string in array".to_string()),
+            }
+        }
+        Ok(items)
     }
 
     fn parse_drop_view(&mut self) -> Result<Statement, String> {
