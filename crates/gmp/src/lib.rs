@@ -57,7 +57,11 @@ pub mod document;
 pub mod electronic_signature;
 pub mod embedding;
 pub mod evidence;
+pub mod evidence_api;
+pub mod evidence_storage;
+pub mod evidence_verification;
 pub mod hsm;
+pub mod immutable_record;
 pub mod persist_sqlite;
 pub mod provenance;
 pub mod provenance_lineage;
@@ -147,5 +151,27 @@ pub use hsm::{HsmConfig, HsmError, HsmProvider, HsmProviderType};
 pub use hsm::software_tpm::SoftwareTpmProvider;
 
 pub use hsm::software_tpm::create_provider;
+
+pub use evidence::{
+    EvidenceChain, EvidenceChainBuilder, EvidenceChainSummary, EvidenceMetadata, EvidenceNode,
+    SearchEvidence,
+};
+
+pub use evidence_storage::{
+    create_evidence_tables, get_evidence_by_chain_id, get_evidence_by_time_range,
+    save_evidence_chain, TABLE_EVIDENCE_RECORDS,
+};
+
+pub use evidence_verification::{
+    evidence_incremental_verify, verify_cross_chain, verify_evidence_chain,
+};
+
+pub use immutable_record::{
+    ImmutableRecord, ImmutableRecordBuilder, VerificationReport,
+};
+
+pub use evidence_api::{
+    create_evidence, get_evidence, list_evidence, verify_evidence, create_signed_evidence,
+};
 
 pub use sql_api::{sql, GmpExecutor};
