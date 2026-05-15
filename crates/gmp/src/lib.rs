@@ -118,7 +118,8 @@ pub use semantic_embedding::{
 
 pub use electronic_signature::{
     sql as e_signature_sql, ApprovalPolicy, ApprovalPolicyEvaluator, ElectronicSignature,
-    PolicyEvaluation, PolicyStatus, SignatureError, SignatureRequest,
+    ElectronicSignatureProvider, PolicyEvaluation, PolicyStatus, SignatureError, SignatureRequest,
+    SystemTimeProvider, TrustedTimestampProvider,
     CREATE_APPROVAL_POLICIES_TABLE, CREATE_ELECTRONIC_SIGNATURES_TABLE,
     CREATE_SIGNATURE_REQUESTS_TABLE,
 };

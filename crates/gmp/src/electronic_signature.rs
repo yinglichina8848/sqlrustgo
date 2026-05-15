@@ -817,6 +817,63 @@ pub fn sign_ed25519(signing_key_bytes: &[u8; 32], data: &[u8]) -> Vec<u8> {
 }
 
 // ============================================================================
+// Trusted Timestamp Provider (GMP-6)
+// ============================================================================
+
+pub trait TrustedTimestampProvider: Send + Sync {
+    fn get_timestamp(&self) -> Result<i64, SignatureError>;
+    fn verify_timestamp(&self, timestamp: i64) -> Result<bool, SignatureError>;
+}
+
+pub struct SystemTimeProvider;
+
+impl SystemTimeProvider {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for SystemTimeProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TrustedTimestampProvider for SystemTimeProvider {
+    fn get_timestamp(&self) -> Result<i64, SignatureError> {
+        Ok(current_timestamp_ms())
+    }
+
+    fn verify_timestamp(&self, timestamp: i64) -> Result<bool, SignatureError> {
+        let now = current_timestamp_ms();
+        Ok(timestamp <= now && timestamp > now - 86400 * 1000)
+    }
+}
+
+// ============================================================================
+// Electronic Signature Provider (Trait for 21 CFR Part 11 Compliance)
+// ============================================================================
+
+pub trait ElectronicSignatureProvider: Send + Sync {
+    fn sign(
+        &self,
+        user_id: &str,
+        session_id: Option<&str>,
+        role: Option<&str>,
+        data_hash: &[u8],
+        reason: &str,
+        signing_key: &[u8; 32],
+        verifying_key: &[u8; 32],
+    ) -> Result<ElectronicSignature, SignatureError>;
+
+    fn verify(
+        &self,
+        signature: &ElectronicSignature,
+        data_hash: &[u8],
+    ) -> Result<bool, SignatureError>;
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
