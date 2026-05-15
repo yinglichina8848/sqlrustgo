@@ -10,7 +10,34 @@ mkdir -p "$COVERAGE_DIR"
 
 MODE="${1:-full}"
 
+detect_memory_and_threads() {
+    local memory_gb
+    if [[ "$(uname)" == "Darwin" ]]; then
+        memory_gb=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 8589934592) / 1024 / 1024 / 1024 ))
+    else
+        memory_gb=$(( $(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}') / 1024 / 1024 ))
+    fi
+
+    local threads
+    if [[ "$memory_gb" -lt 8 ]]; then
+        threads=1
+    elif [[ "$memory_gb" -lt 16 ]]; then
+        threads=2
+    elif [[ "$memory_gb" -lt 32 ]]; then
+        threads=4
+    else
+        threads=8
+    fi
+
+    echo "$memory_gb $threads"
+}
+
+MEMORY_INFO=$(detect_memory_and_threads)
+SYSTEM_MEMORY_GB=$(echo "$MEMORY_INFO" | awk '{print $1}')
+TEST_THREADS=$(echo "$MEMORY_INFO" | awk '{print $2}')
+
 echo "=== Running Coverage Gate Check (llvm-cov) ==="
+echo "System memory: ${SYSTEM_MEMORY_GB}GB, Test threads: $TEST_THREADS"
 
 # Check if llvm-cov is available
 if ! command -v cargo-llvm-cov &>/dev/null; then
@@ -43,14 +70,14 @@ if [ "$MODE" = "full" ]; then
     TIMEOUT=600
 
     if command -v timeout &>/dev/null; then
-        timeout "$TIMEOUT" cargo llvm-cov test --workspace --all-features --lib --no-fail-fast 2>&1 || {
+        timeout "$TIMEOUT" cargo llvm-cov test --workspace --all-features --lib --no-fail-fast -- --test-threads="$TEST_THREADS" 2>&1 || {
             # If full coverage times out, try per-crate
             echo "Full coverage timed out after ${TIMEOUT}s, trying per-crate approach..."
-            bash "$SCRIPT_DIR/check_coverage_parallel.sh" --parallel 4 --timeout 300
+            bash "$SCRIPT_DIR/check_coverage_parallel.sh" --parallel "$TEST_THREADS" --timeout 300
             exit 0
         }
     else
-        cargo llvm-cov test --workspace --all-features --lib --no-fail-fast 2>&1 || true
+        cargo llvm-cov test --workspace --all-features --lib --no-fail-fast -- --test-threads="$TEST_THREADS" 2>&1 || true
     fi
 
     # Generate JSON report from collected coverage data
