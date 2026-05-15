@@ -27,7 +27,7 @@ impl Inner {
 
     fn would_create_cycle(&self, from: TxId, to_set: &HashSet<TxId>) -> bool {
         for &to in to_set {
-            if self.dfs_reachable(to, from, &mut HashSet::new()) {
+            if self.bfs_reachable(to, from) {
                 return true;
             }
         }
@@ -44,23 +44,6 @@ impl Inner {
                 holders
             );
         }
-    }
-
-    fn dfs_reachable(&self, current: TxId, target: TxId, visited: &mut HashSet<TxId>) -> bool {
-        if current == target {
-            return true;
-        }
-        if !visited.insert(current) {
-            return false;
-        }
-        if let Some(holders) = self.waits_for.get(&current) {
-            for &holder in holders {
-                if self.dfs_reachable(holder, target, visited) {
-                    return true;
-                }
-            }
-        }
-        false
     }
 
     #[allow(dead_code)]
