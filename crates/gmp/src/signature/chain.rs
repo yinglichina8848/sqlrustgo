@@ -14,7 +14,9 @@ pub struct SignedAuditChain {
 
 impl SignedAuditChain {
     pub fn new() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+        }
     }
 
     pub fn append(&mut self, entry: SignedAuditEntry) -> Result<(), SignatureError> {

@@ -92,14 +92,17 @@ fn test_concurrent_crash_simulation() {
     // This test simulates crash recovery by creating tables and data,
     // then verifying the data persists in the same engine
     let mut engine = create_fresh_engine();
-    let _ = engine.execute("CREATE TABLE data (id INTEGER)");
+    let _ = engine.execute("CREATE TABLE test_data (id INTEGER)");
 
     for i in 0..5 {
-        let _ = engine.execute(&format!("INSERT INTO data VALUES ({})", i));
+        let _ = engine.execute(&format!("INSERT INTO test_data VALUES ({})", i));
     }
 
     // Verify data persists in the same engine
-    let result = engine.execute("SELECT COUNT(*) FROM data");
+    let result = engine.execute("SELECT COUNT(*) FROM test_data");
+    if let Err(e) = &result {
+        eprintln!("SELECT COUNT(*) failed: {:?}", e);
+    }
     assert!(result.is_ok());
 }
 

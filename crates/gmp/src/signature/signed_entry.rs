@@ -20,6 +20,7 @@ pub struct SignedAuditEntry {
 }
 
 impl SignedAuditEntry {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         seq: u64,
         prev_hash: [u8; 32],

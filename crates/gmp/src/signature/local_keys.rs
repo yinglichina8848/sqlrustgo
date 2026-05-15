@@ -30,7 +30,7 @@ impl KeyManager for LocalKeyManager {
         if path.to_string_lossy().contains("ecdsa") || path.to_string_lossy().contains("p256") {
             Ok(PrivateKey::EcdsaP256(data))
         } else {
-            Ok(PrivateKey::RsaSha256(data))
+            Ok(PrivateKey::Ed25519(data))
         }
     }
 
@@ -40,7 +40,7 @@ impl KeyManager for LocalKeyManager {
         if path.to_string_lossy().contains("ecdsa") || path.to_string_lossy().contains("p256") {
             Ok(PublicKey::EcdsaP256(data))
         } else {
-            Ok(PublicKey::RsaSha256(data))
+            Ok(PublicKey::Ed25519(data))
         }
     }
 

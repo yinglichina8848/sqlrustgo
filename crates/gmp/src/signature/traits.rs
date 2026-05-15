@@ -15,5 +15,10 @@ pub trait KeyManager: Send + Sync {
 }
 
 pub trait SignatureVerifier: Send + Sync {
-    fn verify(&self, data: &[u8], signature: &[u8], public_key: &PublicKey) -> Result<bool, SignatureError>;
+    fn verify(
+        &self,
+        data: &[u8],
+        signature: &[u8],
+        public_key: &PublicKey,
+    ) -> Result<bool, SignatureError>;
 }
