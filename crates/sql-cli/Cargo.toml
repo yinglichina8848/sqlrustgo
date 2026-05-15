@@ -20,7 +20,7 @@ sqlrustgo-transaction = { path = "../transaction" }
 sqlrustgo-security = { path = "../security" }
 
 # External dependencies
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.52", features = ["full"] }
 anyhow = "1.0"
 thiserror = "2.0"
 log = "0.4"
