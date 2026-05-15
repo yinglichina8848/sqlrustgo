@@ -4,8 +4,13 @@
 //! for tamper-evident audit chains.
 
 pub mod algorithms;
+pub mod ecdsa;
 pub mod error;
 pub mod keys;
+pub mod local_keys;
+pub mod rsa;
+pub mod signed_entry;
+pub mod chain;
 pub mod traits;
 
 pub use algorithms::SignatureAlgorithm;
