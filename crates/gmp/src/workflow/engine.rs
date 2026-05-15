@@ -203,4 +203,165 @@ mod tests {
         let instance = engine.get_instance(&instance_id).unwrap();
         assert_eq!(instance.current_state, WorkflowState::Rejected);
     }
+
+    #[test]
+    fn test_workflow_engine_new() {
+        let engine = WorkflowEngine::new();
+        assert!(engine.list_definitions().is_empty());
+        assert!(engine.list_instances().is_empty());
+    }
+
+    #[test]
+    fn test_create_definition_error() {
+        let mut engine = WorkflowEngine::new();
+
+        let result = engine.create_definition(
+            "test".to_string(),
+            vec!["draft", "invalid_stage"],
+            None,
+            1,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_start_workflow_definition_not_found() {
+        let mut engine = WorkflowEngine::new();
+        let result = engine.start_workflow("nonexistent", HashMap::new());
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Workflow definition not found");
+    }
+
+    #[test]
+    fn test_approve_single_signature() {
+        let mut engine = WorkflowEngine::new();
+
+        engine
+            .create_definition(
+                "test".to_string(),
+                vec!["draft", "review", "released"],
+                None,
+                1,
+            )
+            .unwrap();
+
+        let instance_id = engine.start_workflow("test", HashMap::new()).unwrap();
+
+        engine
+            .approve(&instance_id, "review", "user-1", "signature-1", None)
+            .unwrap();
+
+        let instance = engine.get_instance(&instance_id).unwrap();
+        assert_eq!(instance.current_state, WorkflowState::Review);
+    }
+
+    #[test]
+    fn test_approve_instance_not_found() {
+        let mut engine = WorkflowEngine::new();
+        let result = engine.approve("nonexistent", "review", "user-1", "sig", None);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Instance not found");
+    }
+
+    #[test]
+    fn test_reject_instance_not_found() {
+        let mut engine = WorkflowEngine::new();
+        let result = engine.reject("nonexistent", "reason".to_string());
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Instance not found");
+    }
+
+    #[test]
+    fn test_check_timeouts_no_timeout() {
+        let mut engine = WorkflowEngine::new();
+
+        engine
+            .create_definition(
+                "test".to_string(),
+                vec!["draft", "review", "released"],
+                None,
+                1,
+            )
+            .unwrap();
+
+        engine.start_workflow("test", HashMap::new()).unwrap();
+
+        let expired = engine.check_timeouts();
+        assert!(expired.is_empty());
+    }
+
+    #[test]
+    fn test_check_timeouts_no_timeout_set() {
+        let mut engine = WorkflowEngine::new();
+
+        engine
+            .create_definition(
+                "test".to_string(),
+                vec!["draft", "review", "released"],
+                None,
+                1,
+            )
+            .unwrap();
+
+        let _instance_id = engine.start_workflow("test", HashMap::new()).unwrap();
+
+        let expired = engine.check_timeouts();
+        assert!(expired.is_empty());
+    }
+
+    #[test]
+    fn test_list_definitions() {
+        let mut engine = WorkflowEngine::new();
+
+        engine
+            .create_definition(
+                "def1".to_string(),
+                vec!["draft", "released"],
+                None,
+                1,
+            )
+            .unwrap();
+
+        engine
+            .create_definition(
+                "def2".to_string(),
+                vec!["draft", "review", "released"],
+                None,
+                1,
+            )
+            .unwrap();
+
+        let defs = engine.list_definitions();
+        assert_eq!(defs.len(), 2);
+        assert!(defs.contains(&&"def1".to_string()));
+        assert!(defs.contains(&&"def2".to_string()));
+    }
+
+    #[test]
+    fn test_list_instances() {
+        let mut engine = WorkflowEngine::new();
+
+        engine
+            .create_definition(
+                "test".to_string(),
+                vec!["draft", "released"],
+                None,
+                1,
+            )
+            .unwrap();
+
+        let id1 = engine.start_workflow("test", HashMap::new()).unwrap();
+        let id2 = engine.start_workflow("test", HashMap::new()).unwrap();
+
+        let instances = engine.list_instances();
+        assert_eq!(instances.len(), 2);
+        assert!(instances.contains(&&id1));
+        assert!(instances.contains(&&id2));
+    }
+
+    #[test]
+    fn test_workflow_engine_default() {
+        let engine = WorkflowEngine::default();
+        assert!(engine.list_definitions().is_empty());
+    }
 }

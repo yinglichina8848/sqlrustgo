@@ -80,4 +80,45 @@ mod tests {
         assert!(!checker.is_active_state(&WorkflowState::Released));
         assert!(!checker.is_active_state(&WorkflowState::Rejected));
     }
+
+    #[test]
+    fn test_check_timeouts_empty() {
+        let checker = TimeoutChecker::new(Duration::from_secs(60));
+        let instances = vec![];
+        let expired = checker.check_timeouts(&instances, 60);
+        assert!(expired.is_empty());
+    }
+
+    #[test]
+    fn test_check_timeouts_no_expired() {
+        let checker = TimeoutChecker::new(Duration::from_secs(60));
+
+        let mut ctx = HashMap::new();
+        ctx.insert("batch_id".to_string(), serde_json::json!(1));
+
+        let instance = WorkflowInstance::new("test".to_string(), ctx);
+        let instances = vec![instance];
+
+        let expired = checker.check_timeouts(&instances, 604800);
+        assert!(expired.is_empty());
+    }
+
+    #[test]
+    fn test_timeout_checker_new() {
+        let checker = TimeoutChecker::new(Duration::from_secs(120));
+        assert!(checker.check_interval.as_secs() == 120);
+    }
+
+    #[test]
+    fn test_is_expired_rejected_state() {
+        let checker = TimeoutChecker::new(Duration::from_secs(60));
+
+        let mut ctx = HashMap::new();
+        ctx.insert("batch_id".to_string(), serde_json::json!(1));
+
+        let mut instance = WorkflowInstance::new("test".to_string(), ctx);
+        instance.transition_to(WorkflowState::Rejected);
+
+        assert!(!checker.is_expired(&instance, 0));
+    }
 }
