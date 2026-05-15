@@ -58,6 +58,8 @@ pub mod electronic_signature;
 pub mod embedding;
 pub mod hsm;
 pub mod persist_sqlite;
+pub mod provenance;
+pub mod provenance_lineage;
 pub mod report;
 pub mod scenarios;
 pub mod semantic_embedding;
@@ -96,6 +98,13 @@ pub use correction::{
 };
 
 pub use correction_chain::{CorrectionChain, CorrectionChainEntry};
+
+pub use provenance::{
+    OperationType, ProvenanceRecord, SourceType, CREATE_PROVENANCE_RECORDS_TABLE,
+    TABLE_PROVENANCE_RECORDS,
+};
+
+pub use provenance_lineage::{LineageGraph, LineageNode};
 
 pub use document::{
     create_gmp_tables, get_content, get_keywords, insert_document, insert_document_content,
