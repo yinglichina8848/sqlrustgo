@@ -80,8 +80,6 @@ impl Inner {
 #[derive(Debug, Default)]
 struct IncrementalCache {
     last_checked_tx: Option<TxId>,
-    affected_paths: Vec<TxId>,
-    version: u64,
 }
 
 #[derive(Debug)]
@@ -165,7 +163,7 @@ impl DeadlockDetector {
         )
     }
 
-    pub fn detect_cycle_incremental(&self, tx_id: TxId) -> Option<Vec<TxId>> {
+    pub fn detect_cycle_incremental(&mut self, tx_id: TxId) -> Option<Vec<TxId>> {
         let inner = self.inner.lock().unwrap();
 
         if self.incremental_cache.last_checked_tx == Some(tx_id) {
@@ -179,6 +177,7 @@ impl DeadlockDetector {
             &mut Vec::new(),
         );
 
+        self.incremental_cache.last_checked_tx = Some(tx_id);
         result
     }
 
