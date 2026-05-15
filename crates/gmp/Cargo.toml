@@ -31,10 +31,16 @@ tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
 k256 = "0.14.0-rc.9"
 rsa = "0.9"
 pem = "3.0"
+clap = { version = "4.0", features = ["derive"] }
 
 [[bin]]
 name = "sqlrustgo-gmp-cli"
 path = "src/cli.rs"
+doc = false
+
+[[bin]]
+name = "audit-chain-verify"
+path = "src/cli/audit_chain_verify_main.rs"
 doc = false
 
 [dev-dependencies]
