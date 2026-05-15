@@ -526,4 +526,151 @@ mod tests {
         assert_eq!(weights.vector, 1.0);
         assert_eq!(weights.graph, 1.0);
     }
+
+    #[test]
+    fn test_mode_weights_custom() {
+        let weights = ModeWeights {
+            sql: 2.0,
+            vector: 1.5,
+            graph: 1.0,
+            multi_match_bonus: 0.2,
+        };
+        assert_eq!(weights.sql, 2.0);
+        assert_eq!(weights.vector, 1.5);
+    }
+
+    #[test]
+    fn test_rerank_config_custom() {
+        let config = RerankConfig {
+            enabled: false,
+            algorithm: "linear".to_string(),
+            mode_weights: ModeWeights {
+                sql: 2.0,
+                vector: 1.0,
+                graph: 0.5,
+                multi_match_bonus: 0.1,
+            },
+            top_k: 20,
+            min_score: Some(0.5),
+        };
+        assert!(!config.enabled);
+        assert_eq!(config.algorithm, "linear");
+        assert_eq!(config.top_k, 20);
+        assert_eq!(config.min_score, Some(0.5));
+    }
+
+    #[test]
+    fn test_linear_weighted_fusion() {
+        let config = RerankConfig {
+            enabled: true,
+            algorithm: "linear".to_string(),
+            mode_weights: ModeWeights::default(),
+            top_k: 10,
+            min_score: None,
+        };
+        let reranker = HybridReranker::new(config);
+
+        let results = vec![
+            {
+                let mut r = ScoredResult::new("doc1".to_string(), SearchMode::Sql, 0.9);
+                r.result_type = "document".to_string();
+                r
+            },
+            {
+                let mut r = ScoredResult::new("doc2".to_string(), SearchMode::Vector, 0.8);
+                r.result_type = "document".to_string();
+                r
+            },
+        ];
+
+        let reranked = reranker.rerank(results);
+        assert!(!reranked.is_empty());
+    }
+
+    #[test]
+    fn test_composite_fusion() {
+        let config = RerankConfig {
+            enabled: true,
+            algorithm: "composite".to_string(),
+            mode_weights: ModeWeights::default(),
+            top_k: 10,
+            min_score: None,
+        };
+        let reranker = HybridReranker::new(config);
+
+        let results = vec![
+            {
+                let mut r = ScoredResult::new("doc1".to_string(), SearchMode::Sql, 0.9);
+                r.result_type = "document".to_string();
+                r
+            },
+        ];
+
+        let reranked = reranker.rerank(results);
+        assert!(!reranked.is_empty());
+    }
+
+    #[test]
+    fn test_rerank_with_min_score() {
+        let config = RerankConfig {
+            enabled: true,
+            algorithm: "rrf".to_string(),
+            mode_weights: ModeWeights::default(),
+            top_k: 10,
+            min_score: Some(0.1),
+        };
+        let reranker = HybridReranker::new(config);
+
+        let results = vec![
+            {
+                let mut r = ScoredResult::new("doc1".to_string(), SearchMode::Sql, 0.05);
+                r.result_type = "document".to_string();
+                r
+            },
+        ];
+
+        let reranked = reranker.rerank(results);
+        assert!(reranked.is_empty());
+    }
+
+    #[test]
+    fn test_rerank_top_k_limit() {
+        let config = RerankConfig {
+            enabled: true,
+            algorithm: "rrf".to_string(),
+            mode_weights: ModeWeights::default(),
+            top_k: 2,
+            min_score: None,
+        };
+        let reranker = HybridReranker::new(config);
+
+        let results = vec![
+            {
+                let mut r = ScoredResult::new("doc1".to_string(), SearchMode::Sql, 0.9);
+                r.result_type = "document".to_string();
+                r
+            },
+            {
+                let mut r = ScoredResult::new("doc2".to_string(), SearchMode::Sql, 0.8);
+                r.result_type = "document".to_string();
+                r
+            },
+            {
+                let mut r = ScoredResult::new("doc3".to_string(), SearchMode::Sql, 0.7);
+                r.result_type = "document".to_string();
+                r
+            },
+        ];
+
+        let reranked = reranker.rerank(results);
+        assert!(reranked.len() <= 2);
+    }
+
+    #[test]
+    fn test_scored_result_add_mode_score() {
+        let mut result = ScoredResult::new("doc1".to_string(), SearchMode::Sql, 0.9);
+        result.add_mode_score(SearchMode::Vector, 0.8);
+        result.add_mode_score(SearchMode::Graph, 0.7);
+        assert_eq!(result.mode_scores.len(), 3);
+    }
 }

@@ -377,4 +377,41 @@ mod tests {
         assert_ne!(Value::Text("a".to_string()), Value::Text("b".to_string()));
         assert_ne!(Value::Blob(vec![0x01]), Value::Blob(vec![0x02]));
     }
-}
+
+    #[test]
+    fn test_value_to_number() {
+        assert_eq!(Value::Integer(42).to_number(), Some(42.0));
+        assert_eq!(Value::Float(3.14).to_number(), Some(3.14));
+        assert_eq!(Value::Null.to_number(), None);
+        assert_eq!(Value::Text("hello".to_string()).to_number(), None);
+        assert_eq!(Value::Boolean(true).to_number(), None);
+    }
+
+    #[test]
+    fn test_value_estimate_memory_size() {
+        assert_eq!(Value::Null.estimate_memory_size(), 0);
+        assert_eq!(Value::Boolean(true).estimate_memory_size(), 1);
+        assert_eq!(Value::Integer(42).estimate_memory_size(), 8);
+        assert_eq!(Value::Float(3.14).estimate_memory_size(), 8);
+        assert_eq!(Value::Text("hello".to_string()).estimate_memory_size(), 5);
+        assert_eq!(Value::Blob(vec![0x01, 0x02]).estimate_memory_size(), 2);
+    }
+
+    #[test]
+    fn test_value_ord() {
+        use std::cmp::Ordering;
+        assert_eq!(Value::Integer(1).cmp(&Value::Integer(2)), Ordering::Less);
+        assert_eq!(Value::Integer(2).cmp(&Value::Integer(1)), Ordering::Greater);
+        assert_eq!(Value::Null.cmp(&Value::Integer(1)), Ordering::Greater);
+        assert_eq!(Value::Integer(1).cmp(&Value::Null), Ordering::Less);
+        assert_eq!(Value::Text("a".to_string()).cmp(&Value::Text("b".to_string())), Ordering::Less);
+    }
+
+    #[test]
+    fn test_value_partial_ord() {
+        assert!(Value::Integer(1) < Value::Integer(2));
+        assert!(Value::Integer(2) > Value::Integer(1));
+        assert!(Value::Null > Value::Integer(1));
+    }
+
+    }
