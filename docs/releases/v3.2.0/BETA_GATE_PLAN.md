@@ -62,14 +62,14 @@
 
 | 任务 | Issue | 计划工时 | 状态 | 依赖 |
 |------|-------|----------|------|------|
-| GMP-9 Workflow Engine | #908 | 3周 | ❌ 未开始 | GMP-2, GMP-7 |
-| GMP-10 移动端采集 | #909 | 2周 | ❌ 未开始 | GMP-6 |
-| GMP-11 SOP绑定 | #910 | 2周 | ❌ 未开始 | GMP-2 |
-| GMP-12 Device Calibration | #911 | 1周 | ❌ 未开始 | GMP-6 |
+| GMP-9 Workflow Engine | #908 | 3周 | ✅ 完成 | GMP-2, GMP-7 |
+| GMP-10 移动端采集 | #909 | 2周 | ✅ 完成 | GMP-6 |
+| GMP-11 SOP绑定 | #910 | 2周 | ✅ 完成 | GMP-2 |
+| GMP-12 Device Calibration | #911 | 1周 | ✅ 完成 | GMP-6 |
 | PERF-3 并发 200+ | #922 | 1周 | ✅ 完成 | - |
 | PERF-4 死锁检测 <50ms | #923 | 1周 | ❌ 未开始 | - |
-| SQL-1 RECURSIVE CTE | #930 | 2周 | ❌ 未开始 | - |
-| SQL-2 Performance Schema | #931 | 2周 | ❌ 未开始 | - |
+| SQL-1 RECURSIVE CTE | #930 | 2周 | ✅ 完成 | - |
+| SQL-2 Performance Schema | #931 | 2周 | ✅ 完成 | - |
 
 ### 2.3 P2 任务 (v3.3.0)
 

@@ -144,8 +144,14 @@ check_test "B11: gmp_digital_signature" "cargo test -p sqlrustgo-gmp --test gmp_
 # B12: GMP Electronic Signature
 check_test "B12: gmp_electronic_signature" "cargo test -p sqlrustgo-gmp --test gmp_electronic_signature_test"
 
+# B13: GMP Mobile/SOP/Calibration Parser Tests
+check_test "B13: gmp_parser" "cargo test -p sqlrustgo-parser --test gmp_parser_tests"
+
+# B14: GMP Mobile/SOP/Calibration Unit Tests
+check_test "B14: gmp_mobile_sop_calibration" "cargo test -p sqlrustgo-gmp --test gmp_mobile_sop_calibration_test"
+
 echo ""
-echo "━━━ Stability Tests (B-S1 ~ B-S12) ━━━"
+echo "━━━ Stability Tests (B-S1 ~ B-S14) ━━━"
 
 check_test "B-S1: concurrency_stress" "cargo test --test concurrency_stress_test"
 check_test "B-S2: crash_recovery" "cargo test --test crash_recovery_test"
@@ -159,6 +165,8 @@ check_test "B-S9: window_functions" "cargo test --test window_function_test"
 check_test "B-S10: merge_execution" "cargo test --test merge_execution_test"
 check_test "B-S11: set_operations" "cargo test --test set_operation_test"
 check_test "B-S12: event_scheduler" "cargo test --test event_scheduler_test"
+check_test "B-S13: gmp_mobile_unit" "cargo test -p sqlrustgo-gmp --test gmp_mobile_sop_calibration_test"
+check_test "B-S14: gmp_parser_coverage" "cargo test -p sqlrustgo-parser --test gmp_parser_tests"
 
 echo ""
 echo "=== Beta Gate: PASS=$PASS / $TOTAL, BLOCKERS=$BLOCKERS ==="

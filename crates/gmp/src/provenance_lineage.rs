@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use super::provenance::{OperationType, ProvenanceRecord};
+#[cfg(test)]
+use super::provenance::SourceType;
 
 #[derive(Debug, Clone)]
 pub struct LineageNode {
