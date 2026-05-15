@@ -56,6 +56,7 @@ pub mod correction_chain;
 pub mod document;
 pub mod electronic_signature;
 pub mod embedding;
+pub mod hsm;
 pub mod persist_sqlite;
 pub mod report;
 pub mod scenarios;
@@ -131,5 +132,13 @@ pub use electronic_signature::{
     CREATE_APPROVAL_POLICIES_TABLE, CREATE_ELECTRONIC_SIGNATURES_TABLE,
     CREATE_SIGNATURE_REQUESTS_TABLE,
 };
+
+pub use hsm::{
+    HsmConfig, HsmError, HsmProvider, HsmProviderType,
+};
+
+pub use hsm::software_tpm::SoftwareTpmProvider;
+
+pub use hsm::software_tpm::create_provider;
 
 pub use sql_api::{sql, GmpExecutor};

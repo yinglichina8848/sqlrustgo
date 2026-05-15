@@ -29,6 +29,7 @@ async-trait = "0.1"
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
 k256 = "0.14.0-rc.9"
+ring = "0.17"
 rsa = "0.9"
 pem = "3.0"
 clap = { version = "4.0", features = ["derive"] }
