@@ -7,7 +7,6 @@
 use sqlrustgo_transaction::{
     mvcc::TxId,
     ssi::{SerializationGraph, SsiDetectorSync, SsiError},
-    IsolationLevel,
 };
 
 /// Test basic SerializationGraph cycle detection
@@ -141,8 +140,8 @@ fn test_rw_conflict_detection() {
     // T2 writes X
     detector.record_write(tx2, b"X".to_vec());
 
-    let r1 = detector.validate_commit(tx1);
-    let r2 = detector.validate_commit(tx2);
+    let _r1 = detector.validate_commit(tx1);
+    let _r2 = detector.validate_commit(tx2);
 
     // T2's write of X that T1 read might cause serialization failure
     // At least one should fail if they form a dependency cycle
