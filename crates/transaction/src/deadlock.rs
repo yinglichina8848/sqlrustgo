@@ -77,10 +77,18 @@ impl Inner {
 //   - PROOF_016_023_mvcc_atomic.tla         (PASS: atomic prevents cycle)
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[derive(Debug, Default)]
+struct IncrementalCache {
+    last_checked_tx: Option<TxId>,
+    affected_paths: Vec<TxId>,
+    version: u64,
+}
+
 #[derive(Debug)]
 pub struct DeadlockDetector {
     inner: Mutex<Inner>,
     lock_wait_timeout: Duration,
+    incremental_cache: IncrementalCache,
 }
 
 impl DeadlockDetector {
@@ -92,6 +100,7 @@ impl DeadlockDetector {
         Self {
             inner: Mutex::new(Inner::default()),
             lock_wait_timeout: timeout,
+            incremental_cache: IncrementalCache::default(),
         }
     }
 
@@ -154,6 +163,23 @@ impl DeadlockDetector {
             &mut HashSet::new(),
             &mut Vec::new(),
         )
+    }
+
+    pub fn detect_cycle_incremental(&self, tx_id: TxId) -> Option<Vec<TxId>> {
+        let inner = self.inner.lock().unwrap();
+
+        if self.incremental_cache.last_checked_tx == Some(tx_id) {
+            return None;
+        }
+
+        let result = Self::bfs_cycle(
+            &inner.waits_for,
+            tx_id,
+            &mut HashSet::new(),
+            &mut Vec::new(),
+        );
+
+        result
     }
 
     // ─────────────────────────────────────────────────────────────────────────
