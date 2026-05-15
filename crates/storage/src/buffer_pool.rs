@@ -1,13 +1,14 @@
 //! Buffer Pool Manager with LRU cache, prefetch, and memory pool optimization
 
 use crate::page::Page;
-use std::collections::{HashMap, VecDeque};
+use rustc_hash::FxHashMap;
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, RwLock};
 
 /// Buffer Pool with LRU eviction, prefetch, and memory pool
 pub struct BufferPool {
     /// Page storage with LRU tracking
-    pages: Mutex<HashMap<u32, Arc<Page>>>,
+    pages: Mutex<FxHashMap<u32, Arc<Page>>>,
     /// LRU queue - most recently used at front
     lru: Mutex<VecDeque<u32>>,
     /// Capacity
@@ -41,7 +42,7 @@ impl BufferPool {
     /// Create a new buffer pool with LRU eviction
     pub fn new(capacity: usize) -> Self {
         Self {
-            pages: Mutex::new(HashMap::new()),
+            pages: Mutex::new(FxHashMap::default()),
             lru: Mutex::new(VecDeque::new()),
             capacity,
             prefetch_window: 2,
@@ -52,7 +53,7 @@ impl BufferPool {
     /// Create buffer pool with custom prefetch window
     pub fn with_prefetch(capacity: usize, prefetch_window: usize) -> Self {
         Self {
-            pages: Mutex::new(HashMap::new()),
+            pages: Mutex::new(FxHashMap::default()),
             lru: Mutex::new(VecDeque::new()),
             capacity,
             prefetch_window,

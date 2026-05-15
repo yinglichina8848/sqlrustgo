@@ -6,9 +6,7 @@
 //! Arguments:
 //!   rounds - Number of fuzzing rounds (default: 10000)
 
-use sqlrustgo_fuzz::row_format_fuzz::{
-    run_default_fuzz, run_quick_fuzz, FuzzResult, RowFormatFuzzer,
-};
+use sqlrustgo_fuzz::row_format_fuzz::{run_quick_fuzz, FuzzResult, RowFormatFuzzer};
 use std::process;
 
 fn main() {

@@ -1,9 +1,8 @@
 use crate::evidence::EvidenceChain;
 use crate::evidence_storage::{
-    create_evidence_tables, get_evidence_by_chain_id, get_evidence_by_time_range,
-    save_evidence_chain, TABLE_EVIDENCE_RECORDS,
+    get_evidence_by_chain_id, get_evidence_by_time_range, save_evidence_chain,
 };
-use crate::evidence_verification::{verify_cross_chain, verify_evidence_chain};
+use crate::evidence_verification::verify_evidence_chain;
 use crate::immutable_record::{ImmutableRecord, VerificationReport};
 use sqlrustgo_storage::StorageEngine;
 use sqlrustgo_types::SqlResult;

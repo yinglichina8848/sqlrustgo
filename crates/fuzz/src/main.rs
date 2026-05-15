@@ -62,7 +62,7 @@ fn main() {
 
         match srg_result {
             Ok(out) => {
-                let stdout = String::from_utf8_lossy(&out.stdout);
+                let _stdout = String::from_utf8_lossy(&out.stdout);
                 let stderr = String::from_utf8_lossy(&out.stderr);
                 if !out.status.success() && !stderr.contains("not supported") {
                     failures.push((sql.clone(), "SQLRustGo exec error".to_string()));
