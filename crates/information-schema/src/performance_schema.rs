@@ -315,7 +315,11 @@ mod tests {
         assert!(!rows.is_empty());
         assert!(rows.len() >= 5);
         let row = &rows[0];
-        assert!(row.name.contains("statement/sql/select") || row.name.contains("statement/sql/insert") || row.name.contains("wait/io"));
+        assert!(
+            row.name.contains("statement/sql/select")
+                || row.name.contains("statement/sql/insert")
+                || row.name.contains("wait/io")
+        );
         assert_eq!(row.enabled, "YES");
     }
 

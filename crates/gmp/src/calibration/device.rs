@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::status::CalibrationStatus;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalibrationInterval {
@@ -34,7 +34,12 @@ pub struct CalibrationDevice {
 }
 
 impl CalibrationDevice {
-    pub fn new(device_id: String, device_type: String, calibration_interval_days: u32, tolerance_criteria: String) -> Self {
+    pub fn new(
+        device_id: String,
+        device_type: String,
+        calibration_interval_days: u32,
+        tolerance_criteria: String,
+    ) -> Self {
         let now = chrono_timestamp();
         let interval = CalibrationInterval::from_days(calibration_interval_days);
         let next_cal = now + interval.to_seconds();

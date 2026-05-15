@@ -1259,7 +1259,10 @@ impl Parser {
                         self.next(); // consume CALIBRATION
                         self.parse_record_calibration_inner()
                     }
-                    Some(t) => Err(format!("Expected TRAINING or CALIBRATION after RECORD, got {:?}", t)),
+                    Some(t) => Err(format!(
+                        "Expected TRAINING or CALIBRATION after RECORD, got {:?}",
+                        t
+                    )),
                     None => Err("Expected TRAINING or CALIBRATION after RECORD".to_string()),
                 }
             }
@@ -2194,7 +2197,10 @@ impl Parser {
                     data: Vec::new(),
                 }))
             }
-            Some(t) => Err(format!("Expected HEARTBEAT or COLLECT after DEVICE, got {:?}", t)),
+            Some(t) => Err(format!(
+                "Expected HEARTBEAT or COLLECT after DEVICE, got {:?}",
+                t
+            )),
             None => Err("Expected HEARTBEAT or COLLECT after DEVICE".to_string()),
         }
     }
@@ -2332,11 +2338,13 @@ impl Parser {
             365
         };
 
-        Ok(Statement::RegisterCalibrationDevice(RegisterCalibrationDeviceStatement {
-            device_id,
-            device_type,
-            interval_days,
-        }))
+        Ok(Statement::RegisterCalibrationDevice(
+            RegisterCalibrationDeviceStatement {
+                device_id,
+                device_type,
+                interval_days,
+            },
+        ))
     }
 
     fn parse_record_calibration_inner(&mut self) -> Result<Statement, String> {
