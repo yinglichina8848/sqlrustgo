@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::RwLock;
 
 #[derive(Debug, thiserror::Error)]
@@ -40,14 +40,14 @@ fn derive_dek_from_master(
 
 pub struct BasicKeyManager {
     master_key: [u8; MASTER_KEY_SIZE],
-    dek_cache: RwLock<HashMap<u32, (u32, [u8; 32])>>,
+    dek_cache: RwLock<FxHashMap<u32, (u32, [u8; 32])>>,
 }
 
 impl BasicKeyManager {
     pub fn new(master_key: [u8; MASTER_KEY_SIZE]) -> Self {
         Self {
             master_key,
-            dek_cache: RwLock::new(HashMap::new()),
+            dek_cache: RwLock::new(FxHashMap::default()),
         }
     }
 

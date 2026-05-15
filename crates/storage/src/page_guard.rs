@@ -147,7 +147,7 @@ mod tests {
 
     // Mock BufferPool for testing
     struct MockBufferPool {
-        pin_count: std::sync::Mutex<std::collections::HashMap<u32, u32>>,
+        pin_count: std::sync::Mutex<rustc_hash::FxHashMap<u32, u32>>,
     }
 
     impl PoolLike for MockBufferPool {
@@ -174,7 +174,7 @@ mod tests {
     impl MockBufferPool {
         fn new() -> Self {
             Self {
-                pin_count: std::sync::Mutex::new(std::collections::HashMap::new()),
+                pin_count: std::sync::Mutex::new(rustc_hash::FxHashMap::default()),
             }
         }
 
