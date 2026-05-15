@@ -130,5 +130,107 @@ fn main() {
     }
     println!("  partsupp: {} rows", partsupp_count);
 
+    let customer_count = 1500;
+    let customer_file = File::create(format!("{}/customer.tbl", out_dir)).unwrap();
+    let mut customer_file = std::io::BufWriter::new(customer_file);
+    for i in 0..customer_count {
+        let c_custkey = i + 1;
+        let c_name = format!("Customer#{:07}", c_custkey);
+        let c_address = format!("{} Address", i * 13);
+        let c_nationkey = i % 25;
+        let c_phone = format!("{:02}-{:04}-{:04}", (i % 100) + 10, (i * 7) % 10000, (i * 11) % 10000);
+        let c_acctbal = format!("{:.2}", ((i % 10000) as f64 / 100.0) - 500.0);
+        let c_mktsegment = match i % 5 {
+            0 => "AUTOMOBILE",
+            1 => "BUILDING",
+            2 => "FURNITURE",
+            3 => "HOUSEHOLD",
+            _ => "MACHINERY",
+        };
+        let c_comment = format!("Customer comment {}", i);
+        write_line(&mut customer_file, &[
+            &c_custkey.to_string(), &c_name, &c_address, &c_nationkey.to_string(),
+            &c_phone, &c_acctbal, c_mktsegment, &c_comment
+        ]);
+    }
+    println!("  customer: {} rows", customer_count);
+
+    let orders_count = 15000;
+    let orders_file = File::create(format!("{}/orders.tbl", out_dir)).unwrap();
+    let mut orders_file = std::io::BufWriter::new(orders_file);
+    for i in 0..orders_count {
+        let o_orderkey = i + 1;
+        let o_custkey = (i % 1500) + 1;
+        let o_orderstatus = match i % 4 {
+            0 => "F",
+            1 => "O",
+            2 => "P",
+            _ => "S",
+        };
+        let o_totalprice = format!("{:.2}", ((i % 100000) as f64) / 100.0 + 100.0);
+        let o_orderdate = format!("1992-{:02}-{:02}", (i % 12) + 1, (i % 28) + 1);
+        let o_orderpriority = match i % 5 {
+            0 => "1-URGENT",
+            1 => "2-HIGH",
+            2 => "3-MEDIUM",
+            3 => "4-LOW",
+            _ => "5-NOT SPECIFIED",
+        };
+        let o_clerk = format!("Clerk#{:06}", i % 1000);
+        let o_shippriority = (i % 10).to_string();
+        let o_comment = format!("Order comment {}", i);
+        write_line(&mut orders_file, &[
+            &o_orderkey.to_string(), &o_custkey.to_string(), o_orderstatus, &o_totalprice,
+            &o_orderdate, o_orderpriority, &o_clerk, &o_shippriority, &o_comment
+        ]);
+    }
+    println!("  orders: {} rows", orders_count);
+
+    let lineitem_count = 60000;
+    let lineitem_file = File::create(format!("{}/lineitem.tbl", out_dir)).unwrap();
+    let mut lineitem_file = std::io::BufWriter::new(lineitem_file);
+    for i in 0..lineitem_count {
+        let l_orderkey = (i % orders_count) + 1;
+        let l_partkey = (i % 2000) + 1;
+        let l_suppkey = (i % 100) + 1;
+        let l_linenumber = (i % 7) + 1;
+        let l_quantity = format!("{:.00}", (i % 50) as f64 + 1.0);
+        let l_extendedprice = format!("{:.2}", ((i % 100000) as f64) / 100.0 + 100.0);
+        let l_discount = format!("{:.2}", ((i % 50) as f64) / 100.0);
+        let l_tax = format!("{:.2}", ((i % 30) as f64) / 100.0);
+        let l_returnflag = match i % 3 {
+            0 => "N",
+            1 => "R",
+            _ => "A",
+        };
+        let l_linestatus = if i % 2 == 0 { "O" } else { "F" };
+        let l_shipdate = format!("1994-{:02}-{:02}", (i % 12) + 1, (i % 28) + 1);
+        let l_commitdate = format!("1994-{:02}-{:02}", (i % 12) + 2, (i % 28) + 1);
+        let l_receiptdate = format!("1994-{:02}-{:02}", (i % 12) + 3, (i % 28) + 1);
+        let l_shipinstruct = match i % 4 {
+            0 => "COLLECT COD",
+            1 => "DELIVER IN PERSON",
+            2 => "NONE",
+            _ => "TAKE BACK RETURN",
+        };
+        let l_shipmode = match i % 7 {
+            0 => "AIR",
+            1 => "FOB",
+            2 => "MAIL",
+            3 => "RAIL",
+            4 => "SHIP",
+            5 => "TRUCK",
+            _ => "REG AIR",
+        };
+        let l_comment = format!("Lineitem comment {}", i);
+        write_line(&mut lineitem_file, &[
+            &l_orderkey.to_string(), &l_partkey.to_string(), &l_suppkey.to_string(),
+            &l_linenumber.to_string(), &l_quantity, &l_extendedprice, &l_discount, &l_tax,
+            l_returnflag, l_linestatus, &l_shipdate, &l_commitdate, &l_receiptdate,
+            l_shipinstruct, l_shipmode, &l_comment
+        ]);
+    }
+    println!("  lineitem: {} rows", lineitem_count);
+
     println!("Data generation complete!");
 }
