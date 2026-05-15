@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use super::provenance::{OperationType, ProvenanceRecord, SourceType};
+use super::provenance::{OperationType, ProvenanceRecord};
+#[cfg(test)]
+use super::provenance::SourceType;
 
 #[derive(Debug, Clone)]
 pub struct LineageNode {
@@ -34,7 +36,7 @@ impl LineageGraph {
         let record_id = record.record_id.clone();
         let children_ids = vec![record_id.clone()];
 
-        let mut new_node = LineageNode {
+        let new_node = LineageNode {
             record_id: record_id.clone(),
             parent_ids: parent_ids.clone(),
             children_ids: vec![],

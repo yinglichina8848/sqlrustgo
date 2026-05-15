@@ -768,7 +768,6 @@ fn current_thread_id() -> u64 {
 
 #[cfg(not(target_os = "macos"))]
 fn current_thread_id() -> u64 {
-    use std::thread::ThreadId;
     let id = std::thread::current().id();
     // Convert ThreadId to u64 by hashing
     use std::collections::hash_map::DefaultHasher;

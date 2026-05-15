@@ -27,7 +27,7 @@ impl Inner {
 
     fn would_create_cycle(&self, from: TxId, to_set: &HashSet<TxId>) -> bool {
         for &to in to_set {
-            if self.dfs_reachable(to, from, &mut HashSet::new()) {
+            if self.dfs_reachable(to, from, &mut HashSet::with_capacity(self.waits_for.len())) {
                 return true;
             }
         }

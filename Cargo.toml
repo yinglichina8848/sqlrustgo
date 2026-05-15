@@ -147,6 +147,7 @@ information-schema.workspace = true
 sqlrustgo-transaction.workspace = true
 sqlrustgo-observability.workspace = true
 sqlrustgo-server.workspace = true
+sqlrustgo-gmp.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 anyhow.workspace = true

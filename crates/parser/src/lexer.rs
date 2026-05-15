@@ -397,6 +397,9 @@ impl<'a> Lexer<'a> {
                     "APPROVAL" => Token::Approval,
                     "REASON" => Token::Reason,
                     "APPROVED" => Token::Approved,
+                    "WORKFLOW" => Token::Workflow,
+                    "APPROVE" => Token::Approve,
+                    "REJECT" => Token::Reject,
                     _ => Token::Identifier(ident),
                 }
             }
