@@ -145,7 +145,8 @@ impl LineageGraph {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::provenance::{OperationType, ProvenanceRecord, SourceType};
+    use crate::provenance_lineage::LineageGraph;
 
     fn create_test_record(record_id: &str, lineage_path: Vec<String>) -> ProvenanceRecord {
         ProvenanceRecord::new(
