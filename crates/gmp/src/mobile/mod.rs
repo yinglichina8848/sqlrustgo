@@ -3,12 +3,12 @@
 //! This module provides mobile device registration, trust verification,
 //! and data collection audit capabilities.
 
-pub mod device;
 pub mod collection;
+pub mod device;
 pub mod trust;
 
-pub use device::{MobileDevice, DeviceStatus};
-pub use collection::{MobileCollection, MobileCollectionRecord, CollectionStatus};
+pub use collection::{CollectionStatus, MobileCollection, MobileCollectionRecord};
+pub use device::{DeviceStatus, MobileDevice};
 pub use trust::{verify_device_signature, verify_device_trust, TrustVerificationResult};
 
 /// Table name for mobile devices

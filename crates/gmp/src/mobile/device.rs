@@ -38,11 +38,7 @@ pub struct MobileDevice {
 }
 
 impl MobileDevice {
-    pub fn new(
-        device_id: String,
-        certificate_fingerprint: String,
-        public_key: String,
-    ) -> Self {
+    pub fn new(device_id: String, certificate_fingerprint: String, public_key: String) -> Self {
         let now = chrono_timestamp();
         Self {
             device_id,

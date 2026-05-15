@@ -81,8 +81,14 @@ mod tests {
         let mut instance = WorkflowInstance::new("test".to_string(), ctx);
         instance.set_context("key2".to_string(), serde_json::json!("value2"));
 
-        assert_eq!(instance.context.get("key1").unwrap(), &serde_json::json!("value1"));
-        assert_eq!(instance.context.get("key2").unwrap(), &serde_json::json!("value2"));
+        assert_eq!(
+            instance.context.get("key1").unwrap(),
+            &serde_json::json!("value1")
+        );
+        assert_eq!(
+            instance.context.get("key2").unwrap(),
+            &serde_json::json!("value2")
+        );
     }
 
     #[test]

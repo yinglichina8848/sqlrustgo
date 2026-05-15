@@ -58,4 +58,21 @@ mod tests {
         let report = verify_evidence(&chain);
         assert!(report.is_valid);
     }
+
+    #[test]
+    fn test_evidence_chain_properties() {
+        let record = create_evidence("chain-props", "Props Test", "Content");
+        let chain = record.chain();
+        assert_eq!(chain.len(), 1);
+        assert!(chain.verify());
+    }
+
+    #[test]
+    fn test_evidence_chain_multiple_records() {
+        let mut record = create_evidence("multi-chain", "Multi Test", "Initial");
+        record.add_document("section1", "Additional content");
+        let chain = record.chain();
+        assert!(chain.len() >= 1);
+        assert!(chain.verify());
+    }
 }
