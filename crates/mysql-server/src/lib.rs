@@ -3,6 +3,7 @@
 //! Supports mysql_native_password auth + TLS (mariadb-connector-c 3.4+ compatible)
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use crossbeam_channel::{bounded, Sender};
 use rcgen::{CertificateParams, KeyPair};
 use sha1::{Digest, Sha1};
 use sqlrustgo::execution_engine::EngineConfig;
@@ -17,6 +18,7 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 
 const SERVER_VERSION: &str = "8.0.33-SQLRustGo";
+const DEFAULT_THREAD_POOL_SIZE: usize = 200;
 #[allow(dead_code)]
 const AUTH_PLUGIN: &str = "mysql_native_password";
 const SCRAMBLE_LENGTH: usize = 20;
@@ -1921,6 +1923,60 @@ fn make_tls_config() -> rustls::ServerConfig {
         .unwrap()
 }
 
+#[allow(dead_code)]
+struct ConnectionTask {
+    stream: TcpStream,
+    addr: SocketAddr,
+    storage: Arc<RwLock<MemoryStorage>>,
+    tls_config: Arc<rustls::ServerConfig>,
+    user_store: Arc<UserStore>,
+}
+
+#[allow(dead_code)]
+struct ConnectionThreadPool {
+    sender: Sender<ConnectionTask>,
+    handles: Vec<thread::JoinHandle<()>>,
+}
+
+#[allow(dead_code)]
+impl ConnectionThreadPool {
+    fn new(pool_size: usize) -> Self {
+        let (sender, receiver) = bounded::<ConnectionTask>(pool_size * 2);
+        let handles: Vec<_> = (0..pool_size)
+            .map(|worker_id| {
+                let receiver = receiver.clone();
+                thread::spawn(move || {
+                    tracing::debug!("Worker thread {} started", worker_id);
+                    while let Ok(task) = receiver.recv() {
+                        handle_connection(
+                            task.stream,
+                            task.addr,
+                            task.storage,
+                            task.tls_config,
+                            task.user_store,
+                        );
+                    }
+                    tracing::debug!("Worker thread {} stopped", worker_id);
+                })
+            })
+            .collect();
+        Self { sender, handles }
+    }
+
+    fn spawn(&self, task: ConnectionTask) {
+        if self.sender.send(task).is_err() {
+            tracing::error!("Failed to send task to thread pool");
+        }
+    }
+
+    fn shutdown(mut self) {
+        drop(self.sender);
+        for handle in self.handles.drain(..) {
+            let _ = handle.join();
+        }
+    }
+}
+
 #[allow(unused_assignments, clippy::too_many_arguments)]
 fn do_command_loop<S: Read + Write>(
     stream: &mut S,
@@ -2367,8 +2423,9 @@ fn handle_connection(
     addr: SocketAddr,
     storage: Arc<RwLock<MemoryStorage>>,
     tls_config: Arc<rustls::ServerConfig>,
-    user_store: UserStore,
+    user_store: Arc<UserStore>,
 ) {
+    let user_store = (*user_store).clone();
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(600)))
         .ok();
@@ -2547,8 +2604,13 @@ fn handle_connection(
 }
 
 pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
+    run_server_with_pool(host, port, DEFAULT_THREAD_POOL_SIZE)
+}
+
+pub fn run_server_with_pool(host: &str, port: u16, pool_size: usize) -> MySqlResult<()> {
     let addr = format!("{}:{}", host, port);
     let listener = TcpListener::bind(&addr)?;
+    listener.set_nonblocking(true)?;
     tracing::info!("MySQL server listening on {}", addr);
     let tls_config = Arc::new(make_tls_config());
     tracing::info!("TLS ready (self-signed cert)");
@@ -2565,27 +2627,26 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
         }
     }
 
-    // TODO: Event Scheduler Integration
-    // - Requires global Catalog with Event storage
-    // - Requires Catalog-backed MemoryExecutionEngine
-    // - EventSchedulerService should be spawned as async task
-    // - See crates/server/src/event_scheduler.rs for EventSchedulerService
-    tracing::info!("Event scheduler: requires global Catalog integration");
+    tracing::info!("Connection thread pool size: {}", pool_size);
+    let user_store = Arc::new(UserStore::new());
+    let pool = ConnectionThreadPool::new(pool_size);
 
-    let user_store = UserStore::new();
-    for s in listener.incoming() {
-        match s {
-            Ok(stream) => {
-                let addr = stream
-                    .peer_addr()
-                    .unwrap_or(SocketAddr::from(([0, 0, 0, 0], 0)));
-                let st = storage.clone();
-                let tc = tls_config.clone();
-                let us = user_store.clone();
-                thread::spawn(move || handle_connection(stream, addr, st, tc, us));
+    loop {
+        match listener.accept() {
+            Ok((stream, addr)) => {
+                let task = ConnectionTask {
+                    stream,
+                    addr,
+                    storage: storage.clone(),
+                    tls_config: tls_config.clone(),
+                    user_store: user_store.clone(),
+                };
+                pool.spawn(task);
+            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(std::time::Duration::from_micros(100));
             }
             Err(e) => tracing::error!("Accept: {}", e),
         }
     }
-    Ok(())
 }
