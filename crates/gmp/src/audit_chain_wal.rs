@@ -3,7 +3,7 @@
 //! Provides persistent storage for audit chains via Write-Ahead Log.
 //! Ensures audit entries are durable before transaction commits.
 
-use crate::audit_chain::{AuditChain, AuditChainEntry, AuditChainError, AuditChainState};
+use crate::audit_chain::{AuditChain, AuditChainEntry, AuditChainState};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{File, OpenOptions};
@@ -203,6 +203,7 @@ impl AuditChainWalEntry {
 }
 
 /// Audit chain WAL writer
+#[allow(dead_code)]
 pub struct AuditChainWalWriter {
     writer: BufWriter<File>,
     lsn: u64,
@@ -282,6 +283,7 @@ impl AuditChainWalWriter {
 }
 
 /// Audit chain WAL reader
+#[allow(dead_code)]
 pub struct AuditChainWalReader {
     reader: BufReader<File>,
     path: PathBuf,
@@ -402,7 +404,7 @@ impl AuditChainWalManager {
 /// Compute SHA-256 checksum for an audit chain entry
 pub fn compute_entry_checksum(entry: &AuditChainEntry) -> [u8; 32] {
     let mut hasher = Sha256::new();
-    hasher.update(&entry.prev_hash);
+    hasher.update(entry.prev_hash);
     hasher.update(entry.seq.to_le_bytes());
     hasher.update(entry.timestamp.to_le_bytes());
     hasher.update(entry.user_id.as_bytes());
