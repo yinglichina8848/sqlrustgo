@@ -1,6 +1,6 @@
 use crate::encryption::{AesEncryptionManager, DecryptedPage, EncryptedPage, EncryptionError};
 use crate::key_manager::{KeyManager, KeyManagerError};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -29,7 +29,7 @@ pub enum EncryptedStorageError {
 pub struct EncryptedFileStorage {
     data_dir: PathBuf,
     key_manager: Box<dyn KeyManager>,
-    page_cache: RwLock<HashMap<u32, DecryptedPage>>,
+    page_cache: RwLock<FxHashMap<u32, DecryptedPage>>,
     table_id: u32,
 }
 
@@ -43,7 +43,7 @@ impl EncryptedFileStorage {
         Ok(Self {
             data_dir,
             key_manager,
-            page_cache: RwLock::new(HashMap::new()),
+            page_cache: RwLock::new(FxHashMap::default()),
             table_id,
         })
     }

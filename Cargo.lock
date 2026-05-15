@@ -5574,7 +5574,9 @@ dependencies = [
 name = "sqlrustgo-spill"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "parking_lot",
+ "serde",
  "tempfile",
  "thiserror 1.0.69",
  "tracing",
