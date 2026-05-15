@@ -2597,7 +2597,27 @@ impl Parser {
                                 })),
                             });
                         } else {
+                            let mut agg_expr = Expression::Aggregate(agg.clone());
                             aggregates.push(agg);
+
+                            while matches!(self.current(), Some(Token::Star))
+                                || matches!(self.current(), Some(Token::Slash))
+                                || matches!(self.current(), Some(Token::Percent))
+                            {
+                                let op = match self.current() {
+                                    Some(Token::Star) => "*",
+                                    Some(Token::Slash) => "/",
+                                    Some(Token::Percent) => "%",
+                                    _ => break,
+                                };
+                                self.next();
+                                let right = self.parse_or_expression()?;
+                                agg_expr = Expression::BinaryOp(
+                                    Box::new(agg_expr),
+                                    op.to_string(),
+                                    Box::new(right),
+                                );
+                            }
 
                             let alias = if matches!(self.current(), Some(Token::As)) {
                                 self.next();
@@ -2607,7 +2627,7 @@ impl Parser {
                                         self.next();
                                         Some(alias_name)
                                     }
-                                    _ => return Err("Expected alias name".to_string()),
+                                    _ => None,
                                 }
                             } else {
                                 None
@@ -2616,7 +2636,7 @@ impl Parser {
                             columns.push(SelectColumn {
                                 name: format!("__agg_{}", aggregates.len()),
                                 alias,
-                                expression: None,
+                                expression: Some(agg_expr),
                             });
                         }
                     } else {
@@ -3541,37 +3561,12 @@ impl Parser {
             self.next();
         } else if !matches!(self.current(), Some(Token::RParen)) {
             loop {
-                match self.current() {
-                    Some(Token::Identifier(name)) => {
-                        let name = name.clone();
-                        let expr = if matches!(self.peek(), Some(Token::Dot)) {
-                            let table = name.clone();
-                            self.next();
-                            self.expect(Token::Dot)?;
-                            match self.current().cloned() {
-                                Some(Token::Identifier(col)) => {
-                                    self.next();
-                                    Expression::Identifier(format!("{}.{}", table, col))
-                                }
-                                Some(t) => {
-                                    return Err(format!("Expected column name, got {:?}", t))
-                                }
-                                None => return Err("Expected column name".to_string()),
-                            }
-                        } else {
-                            self.next();
-                            Expression::Identifier(name)
-                        };
-                        args.push(expr);
-                    }
-                    Some(Token::NumberLiteral(n)) => {
-                        args.push(Expression::Literal(n.clone()));
-                        self.next();
-                    }
-                    Some(Token::Comma) => {
-                        self.next();
-                    }
-                    _ => break,
+                let expr = self.parse_expression()?;
+                args.push(expr);
+                if matches!(self.current(), Some(Token::Comma)) {
+                    self.next();
+                } else {
+                    break;
                 }
             }
         }
