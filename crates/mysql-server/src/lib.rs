@@ -805,6 +805,7 @@ impl Packet {
     }
 }
 
+#[inline]
 fn write_lenenc_int<W: Write>(w: &mut W, v: u64) -> MySqlResult<()> {
     if v < 251 {
         w.write_u8(v as u8)?;
@@ -821,6 +822,7 @@ fn write_lenenc_int<W: Write>(w: &mut W, v: u64) -> MySqlResult<()> {
     Ok(())
 }
 
+#[inline]
 fn read_lenenc_int<R: Read>(r: &mut R) -> MySqlResult<u64> {
     let first = r.read_u8()?;
     match first {
@@ -833,6 +835,7 @@ fn read_lenenc_int<R: Read>(r: &mut R) -> MySqlResult<u64> {
     }
 }
 
+#[inline]
 fn write_lenenc_string<W: Write>(w: &mut W, s: &[u8]) -> MySqlResult<()> {
     write_lenenc_int(w, s.len() as u64)?;
     w.write_all(s)?;
@@ -866,6 +869,7 @@ fn make_handshake_packet(seq: u8, scramble: &[u8; SCRAMBLE_LENGTH]) -> Packet {
     }
 }
 
+#[inline]
 pub fn make_ok_packet(seq: u8, affected: u64, last_id: u64, status: u16, warnings: u16) -> Packet {
     let mut p = Vec::new();
     p.push(0x00);
@@ -1054,6 +1058,7 @@ mod col_type {
     pub const BLOB: u8 = 0xfc;
 }
 
+#[inline]
 fn col_type_from_string(t: &str) -> u8 {
     let u = t.to_uppercase();
     if u.contains("BIGINT") {
@@ -1079,6 +1084,7 @@ fn col_type_from_string(t: &str) -> u8 {
     }
 }
 
+#[inline]
 fn col_len_from_type(t: &str) -> u32 {
     let u = t.to_uppercase();
     if u.contains("INT(1)") {
@@ -1111,6 +1117,7 @@ fn value_to_string(v: &Value) -> String {
     }
 }
 
+#[inline]
 fn write_text_row<W: Write>(w: &mut W, row: &[Value]) -> MySqlResult<()> {
     for v in row {
         match v {
@@ -1148,6 +1155,7 @@ fn build_column_def_packet(name: &str, sql_type: &str, seq: u8) -> Packet {
     }
 }
 
+#[inline]
 fn send_result_set<W: Write>(
     w: &mut W,
     cols: &[String],
@@ -1156,15 +1164,9 @@ fn send_result_set<W: Write>(
     mut seq: u8,
     cap: u32,
 ) -> MySqlResult<u8> {
-    tracing::info!(
-        "send_result_set: {} cols, {} rows, start_seq={}",
-        cols.len(),
-        rows.len(),
-        seq
-    );
-
     // Batch all packets for efficient writing
-    let mut packets: Vec<Packet> = Vec::with_capacity(2 + cols.len() + rows.len());
+    let num_packets = 2 + cols.len() + rows.len() + 1; // +1 for final EOF/OK
+    let mut packets: Vec<Packet> = Vec::with_capacity(num_packets);
 
     // Column count packet
     {
@@ -1219,7 +1221,6 @@ fn send_result_set<W: Write>(
     Packet::write_all_to(&packets, w)?;
     seq = seq.wrapping_add(1);
 
-    tracing::info!("send_result_set done: final_seq={}", seq);
     Ok(seq)
 }
 
@@ -1959,7 +1960,7 @@ fn do_command_loop<S: Read + Write>(
                     .trim_end_matches('\0')
                     .trim()
                     .to_string();
-                tracing::info!("Query [{}]: {}", addr, q);
+                tracing::debug!("Query [{}]: {}", addr, q);
                 if q.is_empty() {
                     make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
                     seq = seq.wrapping_add(1);
