@@ -148,7 +148,7 @@ impl DeadlockDetector {
     /// Used for diagnostic / background detector (not for pre-check).
     pub fn detect_cycle(&self, start: TxId) -> Option<Vec<TxId>> {
         let inner = self.inner.lock().unwrap();
-        Self::dfs_cycle(
+        Self::bfs_cycle(
             &inner.waits_for,
             start,
             &mut HashSet::new(),
@@ -174,46 +174,21 @@ impl DeadlockDetector {
         inner.would_create_cycle(from, to_set)
     }
 
-    fn dfs_cycle(
-        graph: &HashMap<TxId, HashSet<TxId>>,
-        current: TxId,
-        visited: &mut HashSet<TxId>,
-        path: &mut Vec<TxId>,
-    ) -> Option<Vec<TxId>> {
-        if path.contains(&current) {
-            let idx = path.iter().position(|x| *x == current).unwrap();
-            return Some(path[idx..].to_vec());
-        }
-        if visited.contains(&current) {
-            return None;
-        }
-        visited.insert(current);
-        path.push(current);
-        if let Some(holders) = graph.get(&current) {
-            for &holder in holders {
-                if let Some(cycle) = Self::dfs_cycle(graph, holder, visited, path) {
-                    return Some(cycle);
-                }
-            }
-        }
-        path.pop();
-        None
-    }
-
     #[allow(dead_code)]
     fn bfs_cycle(
         graph: &HashMap<TxId, HashSet<TxId>>,
         start: TxId,
         visited: &mut HashSet<TxId>,
-        path: &mut [TxId],
+        _path: &mut [TxId],
     ) -> Option<Vec<TxId>> {
         let mut queue = VecDeque::new();
         queue.push_back((start, vec![start]));
 
         while let Some((current, current_path)) = queue.pop_front() {
-            if path.contains(&current) {
-                let idx = path.iter().position(|x| *x == current).unwrap();
-                return Some(path[idx..].to_vec());
+            if let Some(idx) = current_path.iter().position(|x| *x == current) {
+                if idx < current_path.len() - 1 {
+                    return Some(current_path[idx..current_path.len() - 1].to_vec());
+                }
             }
             if visited.contains(&current) {
                 continue;
