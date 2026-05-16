@@ -607,6 +607,13 @@ impl AuthManager {
                     message: format!("Parent role {} not found", parent_id),
                 });
             }
+
+            if self.would_create_cycle(parent_id) {
+                return Err(AuthError {
+                    code: AuthErrorCode::InvalidGrant,
+                    message: "Circular role inheritance detected".to_string(),
+                });
+            }
         }
 
         let id = self.next_role_id;
@@ -617,6 +624,73 @@ impl AuthManager {
         self.roles_by_name.insert(name.to_string(), id);
 
         Ok(id)
+    }
+
+    fn would_create_cycle(&self, parent_id: u64) -> bool {
+        let mut visited = std::collections::HashSet::new();
+        let mut current = parent_id;
+        while let Some(role_id) = self.roles.get(&current).and_then(|r| r.parent_role_id) {
+            if visited.contains(&role_id) {
+                return true;
+            }
+            visited.insert(role_id);
+            current = role_id;
+        }
+        false
+    }
+
+    pub fn update_role_parent(&mut self, role_id: u64, new_parent_id: u64) -> AuthResult<()> {
+        if new_parent_id == role_id {
+            return Err(AuthError {
+                code: AuthErrorCode::InvalidGrant,
+                message: "A role cannot be its own parent".to_string(),
+            });
+        }
+
+        if !self.roles.contains_key(&role_id) {
+            return Err(AuthError {
+                code: AuthErrorCode::RoleNotFound,
+                message: format!("Role {} not found", role_id),
+            });
+        }
+
+        if !self.roles.contains_key(&new_parent_id) {
+            return Err(AuthError {
+                code: AuthErrorCode::RoleNotFound,
+                message: format!("Parent role {} not found", new_parent_id),
+            });
+        }
+
+        if self.would_create_cycle_update(role_id, new_parent_id) {
+            return Err(AuthError {
+                code: AuthErrorCode::InvalidGrant,
+                message: "Circular role inheritance detected".to_string(),
+            });
+        }
+
+        let role = self.roles.get_mut(&role_id).ok_or(AuthError {
+            code: AuthErrorCode::RoleNotFound,
+            message: format!("Role {} not found", role_id),
+        })?;
+        role.parent_role_id = Some(new_parent_id);
+        Ok(())
+    }
+
+    fn would_create_cycle_update(&self, role_id: u64, new_parent_id: u64) -> bool {
+        if new_parent_id == role_id {
+            return true;
+        }
+        let mut visited = std::collections::HashSet::new();
+        visited.insert(role_id);
+        let mut current = new_parent_id;
+        while let Some(parent) = self.roles.get(&current).and_then(|r| r.parent_role_id) {
+            if visited.contains(&parent) {
+                return true;
+            }
+            visited.insert(parent);
+            current = parent;
+        }
+        false
     }
 
     pub fn get_role(&self, id: u64) -> Option<&Role> {
@@ -1682,6 +1756,25 @@ mod tests {
                 code: AuthErrorCode::RoleNotFound,
                 ..
             })
+        ));
+    }
+
+    #[test]
+    fn test_circular_role_inheritance() {
+        let mut auth = AuthManager::new();
+
+        let role_a_id = auth.create_role("role_a", None).unwrap();
+        let role_b_id = auth.create_role("role_b", Some(role_a_id)).unwrap();
+
+        let result = auth.update_role_parent(role_a_id, role_b_id);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            AuthError {
+                code: AuthErrorCode::InvalidGrant,
+                message,
+                ..
+            } if message.contains("Circular")
         ));
     }
 
