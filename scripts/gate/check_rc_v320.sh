@@ -3,6 +3,8 @@
 # 基于 gate_spec.md + v3.2.0 DEVELOPMENT_PLAN.md
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 PASS=0; TOTAL=0; BLOCKERS=0
 FAIL_REASONS=()
