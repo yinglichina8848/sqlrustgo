@@ -3,23 +3,30 @@
 # R9 / B8: TPC-H Performance Gate
 #
 # Runs TPC-H queries against SQLRustGo and enforces time thresholds.
-# Supports SF=0.1 (alpha/beta) and SF=1 (RC/GA).
+# Supports SF=0.1 (alpha/beta), SF=1 (RC), and SF=10 (GA).
 #
 # Thresholds (Alpha/Beta — SF=0.1):
 #   Q1:  ≤ 10.0s
 #   Q6:  ≤  6.0s
 #   All 22 queries must complete without OOM.
 #
-# Thresholds (RC/GA — SF=1):
+# Thresholds (RC — SF=1):
 #   Q1:  ≤ 30.0s
 #   Q6:  ≤ 15.0s
 #   All 22 queries must complete without OOM.
 #
+# Thresholds (GA — SF=10):
+#   Q1:  ≤ 300.0s (5 min)
+#   Q6:  ≤ 180.0s (3 min)
+#   All 22 queries must complete without OOM (spill-to-disk enabled).
+#
 # Usage:
 #   bash scripts/gate/check_tpch.sh              (SF=0.1, alpha/beta)
-#   bash scripts/gate/check_tpch.sh sf=1         (SF=1, RC/GA)
-#   bash scripts/gate/check_tpch.sh --sf1        (SF=1, RC/GA)
-#   bash scripts/gate/check_tpch.sh --skip-data  (skip data check)
+#   bash scripts/gate/check_tpch.sh sf=1          (SF=1, RC/GA)
+#   bash scripts/gate/check_tpch.sh --sf1         (SF=1, RC/GA)
+#   bash scripts/gate/check_tpch.sh sf=10         (SF=10, GA)
+#   bash scripts/gate/check_tpch.sh --sf10        (SF=10, GA)
+#   bash scripts/gate/check_tpch.sh --skip-data   (skip data check)
 # ============================================================
 set -euo pipefail
 
@@ -56,13 +63,17 @@ case "$SF" in
         TIME_Q1=30000; TIME_Q6=15000
         Q_COUNT=22; TABLE_COUNT=8
         ;;
+    10)
+        TIME_Q1=300000; TIME_Q6=180000
+        Q_COUNT=22; TABLE_COUNT=8
+        ;;
     *)
-        echo "❌ Unsupported SF: $SF (use 0.1 or 1)"
+        echo "❌ Unsupported SF: $SF (use 0.1, 1, or 10)"
         exit 1
         ;;
 esac
 
-echo "=== R9/B8: TPC-H Performance Gate (SF=$SF) ==="
+echo "=== R9/B8: TPC-H Performance Gate (SF=$SF) - Beta/RC/GA ==="
 echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "Data dir: $DATA_DIR"
 echo "Result file: $RESULT_FILE"
