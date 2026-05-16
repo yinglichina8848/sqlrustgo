@@ -86,6 +86,7 @@ impl DefaultPlanner {
         }
     }
 
+    #[allow(dead_code)]
     fn has_storage(&self) -> bool {
         self.storage.is_some()
     }
