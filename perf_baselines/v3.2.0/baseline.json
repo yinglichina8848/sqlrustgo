@@ -1,0 +1,16 @@
+{
+  "date": "2026-05-16",
+  "version": "v3.2.0",
+  "note": "Initial baseline for v3.2.0 - established after fix/chaos-gate-yaml merged (PR #1086)",
+  "benchmarks": {
+    "simple_select": {"qps": 324015.5},
+    "insert": {"qps": 55322.74},
+    "update": {"qps": 58458.25},
+    "delete": {"qps": 62293.43},
+    "join": {"qps": 10970.19},
+    "aggregation": {"qps": 1269209.97},
+    "order_by": {"qps": 19950.96},
+    "concurrent_select_8t": {"qps": 487320.62},
+    "complex_where": {"qps": 368.19}
+  }
+}
