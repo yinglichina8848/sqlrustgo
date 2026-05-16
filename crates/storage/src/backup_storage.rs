@@ -151,7 +151,7 @@ impl RemoteBackupStorage {
 
     fn sign_request(&self, method: &str, path: &str, body: &[u8]) -> HashMap<String, String> {
         use sha2::{Digest, Sha256};
-        use hmac::{Hmac, Mac};
+        
 
         let date = chrono::Utc::now().format("%Y%m%d").to_string();
         let datetime = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
