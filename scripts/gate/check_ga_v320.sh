@@ -206,7 +206,7 @@ check_test "G-S3: long_run_stability" "cargo test --test long_run_stability_test
 check_test "G-S4: wal_integration" "cargo test --test wal_integration_test 2>&1" "G-S4"
 check_test "G-S5: network_tcp" "cargo test --test network_tcp_smoke_test 2>&1" "G-S5"
 check_test "G-S6: ssi_stress" "cargo test -p sqlrustgo-transaction --test ssi_stress_test 2>&1" "G-S6"
-check_test "G-S7: audit_trail" "cargo test -p sqlrustgo-executor --test audit_trail_test 2>&1" "G-S7"
+check_test "G-S7: audit_trail" "cargo test -p sqlrustgo-gmp --test audit_trail_test 2>&1" "G-S7"
 check_test "G-S8: integration_tests" "bash scripts/test/run_integration.sh --quick 2>&1" "G-S8"
 check_test "G-S9: sysbench" "bash scripts/gate/check_sysbench.sh ga 2>&1" "G-S9"
 check_test "G-S10: regression_check" "bash scripts/gate/check_regression.sh 2>&1" "G-S10"
