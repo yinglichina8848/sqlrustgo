@@ -159,7 +159,7 @@ A-Gate ──▶ B-Gate ──▶ R-Gate ──▶ G-Gate
 | A3 | Clippy 检查 | `cargo clippy --all-features -- -D warnings` | 零警告 | `{warnings, exit_code}` |
 | A4 | 格式化检查 | `cargo fmt --all -- --check` | 无格式错误 | `{diff_count, exit_code}` |
 | A5 | 文档链接检查 | `bash scripts/gate/check_docs_links.sh` | 无死链 | `{broken_links}` |
-| A6 | 覆盖率检查 | `cargo llvm-cov --all-features --lcov` | ≥50% | `{total_pct}` |
+| A6 | 覆盖率检查 | `cargo llvm-cov test L1_CRATES --lib` | ≥50% | `{total_pct}` |
 | A7 | 安全扫描 | `cargo audit` | 无高危漏洞 | `{vulnerabilities}` |
 
 #### B-Gate (Beta Gate) 检查清单
@@ -170,7 +170,7 @@ A-Gate ──▶ B-Gate ──▶ R-Gate ──▶ G-Gate
 | B2 | 全量测试 | `cargo test --all-features` | ≥90% 通过 | `{passed, failed, exit_code}` |
 | B3 | Clippy 检查 | `cargo clippy --all-features -- -D warnings` | 零警告 | `{warnings, exit_code}` |
 | B4 | 格式化检查 | `cargo fmt --all -- --check` | 无格式错误 | `{diff_count, exit_code}` |
-| B5 | 覆盖率检查 | `cargo llvm-cov --all-features --lcov` | ≥75% | `{total_pct}` |
+| B5 | 覆盖率检查 | `cargo llvm-cov test L1_CRATES --lib` | ≥75% | `{total_pct}` |
 | B6 | 安全扫描 | `cargo audit` | 无高危漏洞 | `{vulnerabilities}` |
 | B7 | 文档链接检查 | `bash scripts/gate/check_docs_links.sh` | 无死链 | `{broken_links}` |
 | B8 | TPC-H SF=0.1 | `scripts/gate/check_tpch.sh sf=0.1` | 22/22 通过，无 OOM | `{passed, total, oom_count}` |
@@ -182,6 +182,39 @@ A-Gate ──▶ B-Gate ──▶ R-Gate ──▶ G-Gate
 | B-S5 | network_tcp_smoke_test | `cargo test --test network_tcp_smoke_test` | 全部通过 | `{passed, total}` |
 | B-S6 | ssi_stress_test | `cargo test -p sqlrustgo-transaction --test ssi_stress_test` | 全部通过 | `{passed, total}` |
 
+#### 覆盖率测量规范 (A-Gate ~ G-Gate 通用)
+
+> **L1 Crates 定义**: 仅针对核心 crate 测量覆盖率，不包含 server、network、gis、vector、graph 等辅助 crate。
+
+**L1 Crates 列表**:
+```
+sqlrustgo-types, sqlrustgo-parser, sqlrustgo-planner,
+sqlrustgo-optimizer, sqlrustgo-executor, sqlrustgo-storage,
+sqlrustgo-transaction, sqlrustgo-catalog
+```
+
+**覆盖率命令**:
+```bash
+cargo llvm-cov test \
+    -p sqlrustgo-types \
+    -p sqlrustgo-parser \
+    -p sqlrustgo-planner \
+    -p sqlrustgo-optimizer \
+    -p sqlrustgo-executor \
+    -p sqlrustgo-storage \
+    -p sqlrustgo-transaction \
+    -p sqlrustgo-catalog \
+    --lib
+```
+
+**各阶段阈值**:
+| 阶段 | 阈值 |
+|------|------|
+| A-Gate | ≥50% |
+| B-Gate | ≥75% |
+| R-Gate | ≥85% |
+| G-Gate | ≥85% |
+
 #### R-Gate (RC Gate) 检查清单
 
 | # | 检查项 | 命令/方法 | 通过标准 | 证据格式 |
@@ -190,7 +223,7 @@ A-Gate ──▶ B-Gate ──▶ R-Gate ──▶ G-Gate
 | R2 | Test | `cargo test --all-features` | 100% 通过 | `{passed, failed, exit_code}` |
 | R3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 | `{warnings, exit_code}` |
 | R4 | Format | `cargo fmt --all -- --check` | 无格式错误 | `{diff_count, exit_code}` |
-| R5 | Coverage | `cargo llvm-cov --all-features --lcov` | ≥85% | `{total_pct, module_pcts}` |
+| R5 | Coverage | `cargo llvm-cov test L1_CRATES --lib` | ≥85% | `{total_pct, module_pcts}` |
 | R6 | Security | `cargo audit` | 无高危漏洞 | `{vulnerabilities}` |
 | R7 | Docs | R7a 死链 + R7b 文档存在 + R7c 版本一致 + R7d 文档一致 | 无死链/缺失/不一致 | `{broken_links, missing_docs}` |
 | R8 | SQL Compat | `cargo test -p sqlrustgo-sql-corpus` | ≥95% | `{passed, total, pct}` |
@@ -207,7 +240,7 @@ A-Gate ──▶ B-Gate ──▶ R-Gate ──▶ G-Gate
 | G2 | Test | `cargo test --all-features` | 100% 通过 | `{passed, failed, exit_code}` |
 | G3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 | `{warnings, exit_code}` |
 | G4 | Format | `cargo fmt --all -- --check` | 无格式错误 | `{diff_count, exit_code}` |
-| G5 | Coverage | `cargo llvm-cov --all-features --lcov` | ≥85% | `{total_pct, module_pcts}` |
+| G5 | Coverage | `cargo llvm-cov test L1_CRATES --lib` | ≥85% | `{total_pct, module_pcts}` |
 | G6 | Security | `cargo audit` | 无高危漏洞 | `{vulnerabilities}` |
 | G7 | Point Select QPS | `cargo bench -- point_select` | **≥10,000 ops/s** | `{qps, threshold, pass}` |
 | G8 | UPDATE QPS | `cargo bench -- update_simple` | **≥5,000 ops/s** | `{qps, threshold, pass}` |
