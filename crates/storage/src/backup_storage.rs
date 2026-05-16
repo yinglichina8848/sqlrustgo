@@ -44,6 +44,29 @@ impl RemoteConfig {
     }
 }
 
+use hmac::{Hmac, Mac};
+use sha2::Digest;
+
+fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
+    type HmacSha256 = Hmac<sha2::Sha256>;
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
+    mac.update(data);
+    mac.finalize().into_bytes().to_vec()
+}
+
+fn sha256_hex(data: &[u8]) -> String {
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(data);
+    format!("{:x}", hasher.finalize())
+}
+
+fn hex_to_bytes(hex: &str) -> Vec<u8> {
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+        .collect()
+}
+
 pub trait BackupStorage: Send + Sync {
     fn save(&self, key: &str, data: &[u8]) -> SqlResult<()>;
     fn load(&self, key: &str) -> SqlResult<Vec<u8>>;
@@ -149,9 +172,8 @@ impl RemoteBackupStorage {
         )
     }
 
-    fn sign_request(&self, method: &str, path: &str, body: &[u8]) -> HashMap<String, String> {
+fn sign_request(&self, method: &str, path: &str, body: &[u8]) -> HashMap<String, String> {
         use sha2::{Digest, Sha256};
-        
 
         let date = chrono::Utc::now().format("%Y%m%d").to_string();
         let datetime = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
@@ -239,8 +261,8 @@ impl BackupStorage for RemoteBackupStorage {
         request = request.header("Content-Type", "application/octet-stream");
         request = request.header("x-amz-acl", "private");
 
-        for (key, value) in signed_headers {
-            request = request.header(&key, &value);
+        for (k, v) in signed_headers {
+            request = request.header(&k, &v);
         }
 
         let response = request
