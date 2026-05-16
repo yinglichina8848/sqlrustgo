@@ -27,6 +27,8 @@ pub mod system_tables;
 pub mod table;
 
 pub use auth::{AuthManager, Privilege, User, UserIdentity};
+pub mod auth_rls;
+pub use auth_rls::{RowLevelSecurity, TablePolicy};
 pub use catalog::Catalog;
 pub use column::ColumnDefinition;
 pub use data_type::DataType;
