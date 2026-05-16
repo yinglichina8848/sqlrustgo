@@ -46,6 +46,12 @@ pub struct DefaultPlanner {
     optimizer: DefaultOptimizer,
     storage: Option<Arc<RwLock<dyn StorageEngine>>>,
     cost_model: SimpleCostModel,
+    auth: Option<Arc<dyn AuthContext>>,
+}
+
+pub trait AuthContext: Send + Sync {
+    fn get_rls_predicate(&self, user_id: u64, table: &str) -> Option<String>;
+    fn get_user_id(&self) -> u64;
 }
 
 impl DefaultPlanner {
@@ -54,6 +60,7 @@ impl DefaultPlanner {
             optimizer: DefaultOptimizer::new(),
             storage: None,
             cost_model: SimpleCostModel::default_model(),
+            auth: None,
         }
     }
 
@@ -63,13 +70,32 @@ impl DefaultPlanner {
             optimizer: DefaultOptimizer::new(),
             storage: Some(storage),
             cost_model: SimpleCostModel::default_model(),
+            auth: None,
         }
     }
 
-    /// Returns true if storage is available for CBO index selection
+    pub fn with_auth(
+        storage: Arc<RwLock<dyn StorageEngine>>,
+        auth: Arc<dyn AuthContext>,
+    ) -> Self {
+        Self {
+            optimizer: DefaultOptimizer::new(),
+            storage: Some(storage),
+            cost_model: SimpleCostModel::default_model(),
+            auth: Some(auth),
+        }
+    }
+
     #[allow(dead_code)]
     fn has_storage(&self) -> bool {
         self.storage.is_some()
+    }
+
+    fn get_rls_predicate(&self, table: &str) -> Option<String> {
+        self.auth.as_ref().and_then(|a| {
+            let user_id = a.get_user_id();
+            a.get_rls_predicate(user_id, table)
+        })
     }
 
     /// Select best scan method using cost model
@@ -103,13 +129,23 @@ impl DefaultPlanner {
                 }
             }
 
-            return Box::new(
-                SeqScanExec::new(table_name.to_string(), schema.clone())
-                    .with_stats(row_count, page_count),
-            );
+            let mut scan = SeqScanExec::new(table_name.to_string(), schema.clone())
+                .with_stats(row_count, page_count);
+
+            if let Some(predicate) = self.get_rls_predicate(table_name) {
+                scan = scan.with_rls_predicate(predicate);
+            }
+
+            return Box::new(scan);
         }
 
-        Box::new(SeqScanExec::new(table_name.to_string(), schema.clone()))
+        let mut scan = SeqScanExec::new(table_name.to_string(), schema.clone());
+
+        if let Some(predicate) = self.get_rls_predicate(table_name) {
+            scan = scan.with_rls_predicate(predicate);
+        }
+
+        Box::new(scan)
     }
 
     /// Select best join method using cost model
