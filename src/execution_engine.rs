@@ -67,6 +67,7 @@ pub struct ExecutionEngine<S: StorageEngine> {
     query_cache: Arc<RwLock<QueryCache>>,
     cache_config: QueryCacheConfig,
     workflow_engine: WorkflowEngine,
+    prepared_inserts: HashMap<String, InsertStatement>,
 }
 
 /// Execution statistics for CBO
@@ -187,6 +188,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: config.cache_config,
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -210,6 +212,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -233,6 +236,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -252,6 +256,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -2583,10 +2588,123 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(ExecutorResult::new(vec![], affected_rows).with_last_insert_id(first_auto_inc))
     }
 
-    /// Check if a new record matches an existing row based on primary key or unique constraints
-    /// Returns true if the new record matches the existing record on ALL columns of:
-    /// - The primary key, OR
-    /// - Any unique constraint
+    pub fn execute_prepared_insert(
+        &mut self,
+        sql: &str,
+        params: Vec<Value>,
+    ) -> SqlResult<ExecutorResult> {
+        if !self.prepared_inserts.contains_key(sql) {
+            let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+            if let Statement::Insert(insert) = statement {
+                self.prepared_inserts.insert(sql.to_string(), insert);
+            } else {
+                return Err("Not an INSERT statement".into());
+            }
+        }
+        let insert = self.prepared_inserts.get(sql).unwrap().clone();
+
+        let can_use_fast = !insert.is_replace
+            && insert.on_duplicate_key_update.is_none()
+            && insert.select.is_none();
+
+        if can_use_fast {
+            let table_name = &insert.table;
+            let columns = if insert.columns.is_empty() {
+                None
+            } else {
+                Some(&insert.columns)
+            };
+            let num_cols = if let Some(cols) = columns {
+                cols.len()
+            } else {
+                0
+            };
+
+            let table_info = {
+                let storage = self.storage.read().unwrap();
+                storage.get_table_info(table_name)?.clone()
+            };
+
+            let actual_num_cols = if num_cols == 0 {
+                table_info.columns.len()
+            } else {
+                num_cols
+            };
+
+            let has_constraints =
+                !table_info.foreign_keys.is_empty() || !table_info.check_constraints.is_empty();
+
+            let trigger_executor = TriggerExecutor::new(self.storage.clone());
+            let has_triggers = !trigger_executor
+                .get_triggers_for_operation(
+                    table_name,
+                    ExecTriggerTiming::Before,
+                    ExecTriggerEvent::Insert,
+                )
+                .is_empty()
+                || !trigger_executor
+                    .get_triggers_for_operation(
+                        table_name,
+                        ExecTriggerTiming::After,
+                        ExecTriggerEvent::Insert,
+                    )
+                    .is_empty();
+
+            if !has_constraints && !has_triggers {
+                let mut records: Vec<Vec<Value>> = Vec::with_capacity(insert.values.len());
+                for row_exprs in &insert.values {
+                    let mut record = Vec::with_capacity(actual_num_cols);
+                    for col_idx in 0..actual_num_cols {
+                        let value_idx = if let Some(cols) = columns {
+                            cols.iter()
+                                .position(|c| {
+                                    table_info.columns.iter().position(|tc| &tc.name == c)
+                                        == Some(col_idx)
+                                })
+                                .unwrap_or(col_idx)
+                        } else {
+                            col_idx
+                        };
+                        if let Some(expr) = row_exprs.get(value_idx) {
+                            if let Some(param_idx) = self.find_param_index(expr, params.len()) {
+                                record.push(params.get(param_idx).cloned().unwrap_or(Value::Null));
+                            } else {
+                                record.push(expression_to_value(expr));
+                            }
+                        } else {
+                            record.push(Value::Null);
+                        }
+                    }
+                    records.push(record);
+                }
+
+                let count = records.len();
+                {
+                    let mut storage = self.storage.write().unwrap();
+                    storage.insert(table_name, records)?;
+                }
+
+                self.query_cache
+                    .write()
+                    .unwrap()
+                    .invalidate_table(table_name);
+
+                return Ok(ExecutorResult::new(vec![], count));
+            }
+        }
+
+        self.execute_insert(&insert)
+    }
+
+    fn find_param_index(&self, expr: &sqlrustgo_parser::Expression, _param_count: usize) -> Option<usize> {
+        match expr {
+            sqlrustgo_parser::Expression::Literal(s) => {
+                s.strip_prefix('$').and_then(|v| v.parse().ok())
+            }
+            _ => None,
+        }
+    }
+
     fn record_matches_unique_key(
         &self,
         existing: &[Value],
@@ -4681,6 +4799,7 @@ impl ExecutionEngine<MemoryStorage> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -4700,6 +4819,7 @@ impl ExecutionEngine<MemoryStorage> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -4719,6 +4839,7 @@ impl ExecutionEngine<MemoryStorage> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 }
