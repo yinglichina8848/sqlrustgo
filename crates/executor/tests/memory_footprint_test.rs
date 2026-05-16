@@ -22,11 +22,11 @@ mod tests {
         let hot_cost_per_gb = 10.0;
         let cold_cost_per_gb = 0.5;
         let warm_cost_per_gb = 2.0;
-        
+
         let hot_total = hot_cost_per_gb * 100.0;
         let cold_total = cold_cost_per_gb * 100.0;
         let warm_total = warm_cost_per_gb * 100.0;
-        
+
         assert_eq!(hot_total, 1000.0);
         assert_eq!(cold_total, 50.0);
         assert_eq!(warm_total, 200.0);

@@ -5,18 +5,29 @@
 #[cfg(test)]
 mod tests {
     use sqlrustgo_gmp::workflow::{
-        ApprovalAction, ApprovalChain, ApprovalRecord, WorkflowEngine,
-        WorkflowState,
+        ApprovalAction, ApprovalChain, ApprovalRecord, WorkflowEngine, WorkflowState,
     };
     use std::collections::HashMap;
 
     #[test]
     fn test_workflow_state_from_str() {
         assert_eq!(WorkflowState::from_str("draft"), Some(WorkflowState::Draft));
-        assert_eq!(WorkflowState::from_str("review"), Some(WorkflowState::Review));
-        assert_eq!(WorkflowState::from_str("approval"), Some(WorkflowState::Approval));
-        assert_eq!(WorkflowState::from_str("released"), Some(WorkflowState::Released));
-        assert_eq!(WorkflowState::from_str("rejected"), Some(WorkflowState::Rejected));
+        assert_eq!(
+            WorkflowState::from_str("review"),
+            Some(WorkflowState::Review)
+        );
+        assert_eq!(
+            WorkflowState::from_str("approval"),
+            Some(WorkflowState::Approval)
+        );
+        assert_eq!(
+            WorkflowState::from_str("released"),
+            Some(WorkflowState::Released)
+        );
+        assert_eq!(
+            WorkflowState::from_str("rejected"),
+            Some(WorkflowState::Rejected)
+        );
         assert_eq!(WorkflowState::from_str("invalid"), None);
     }
 

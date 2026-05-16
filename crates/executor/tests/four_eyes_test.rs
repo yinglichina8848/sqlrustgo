@@ -5,7 +5,7 @@ mod tests {
         let signatory_a = "user_a";
         let signatory_b = "user_b";
         let two_signatures_required = 2;
-        
+
         let signatures = vec![signatory_a, signatory_b];
         assert_eq!(signatures.len(), two_signatures_required);
         assert_ne!(signatory_a, signatory_b);
@@ -31,7 +31,7 @@ mod tests {
     fn test_four_eyes_no_self_approval() {
         let creator = "user_a";
         let approvers = vec!["user_b", "user_c"];
-        
+
         for approver in &approvers {
             assert_ne!(creator, *approver);
         }

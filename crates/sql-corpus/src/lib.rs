@@ -952,7 +952,10 @@ impl SimpleExecutor {
         if let Statement::Select(ref select) = *with_select.select {
             self.execute_select(select)?;
         } else {
-            return Err(format!("Expected SELECT in WITH, got {:?}", with_select.select));
+            return Err(format!(
+                "Expected SELECT in WITH, got {:?}",
+                with_select.select
+            ));
         }
         Ok(())
     }

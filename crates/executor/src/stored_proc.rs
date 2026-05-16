@@ -950,21 +950,22 @@ impl StoredProcExecutor {
                                 .map_err(|e| format!("Failed to scan table: {}", e))?
                         };
 
-                        let filtered: Vec<Vec<Value>> = if let Some(ref where_expr) = select.where_clause {
-                            records
-                                .into_iter()
-                                .filter(|_row| {
-                                    let where_val = self.expression_to_value(where_expr, ctx);
-                                    if let Value::Boolean(b) = where_val {
-                                        b
-                                    } else {
-                                        where_val != Value::Null
-                                    }
-                                })
-                                .collect()
-                        } else {
-                            records
-                        };
+                        let filtered: Vec<Vec<Value>> =
+                            if let Some(ref where_expr) = select.where_clause {
+                                records
+                                    .into_iter()
+                                    .filter(|_row| {
+                                        let where_val = self.expression_to_value(where_expr, ctx);
+                                        if let Value::Boolean(b) = where_val {
+                                            b
+                                        } else {
+                                            where_val != Value::Null
+                                        }
+                                    })
+                                    .collect()
+                            } else {
+                                records
+                            };
 
                         ctx.set_session_var(
                             "__last_select_result",
@@ -974,12 +975,16 @@ impl StoredProcExecutor {
                         Ok(())
                     }
                     sqlrustgo_parser::Statement::Union(union_stmt) => {
-                        let left_table = if let sqlrustgo_parser::Statement::Select(left_select) = union_stmt.left.as_ref() {
+                        let left_table = if let sqlrustgo_parser::Statement::Select(left_select) =
+                            union_stmt.left.as_ref()
+                        {
                             left_select.first_table()
                         } else {
                             return Err("Union left side must be SELECT".to_string());
                         };
-                        let right_table = if let sqlrustgo_parser::Statement::Select(right_select) = union_stmt.right.as_ref() {
+                        let right_table = if let sqlrustgo_parser::Statement::Select(right_select) =
+                            union_stmt.right.as_ref()
+                        {
                             right_select.first_table()
                         } else {
                             return Err("Union right side must be SELECT".to_string());
@@ -989,13 +994,20 @@ impl StoredProcExecutor {
                             ctx.cte_tables.get(&left_table).cloned().unwrap_or_default()
                         } else {
                             let storage = self.storage.read().unwrap();
-                            storage.scan(&left_table).map_err(|e| format!("Failed to scan table: {}", e))?
+                            storage
+                                .scan(&left_table)
+                                .map_err(|e| format!("Failed to scan table: {}", e))?
                         };
                         let right_records = if ctx.cte_tables.contains_key(&right_table) {
-                            ctx.cte_tables.get(&right_table).cloned().unwrap_or_default()
+                            ctx.cte_tables
+                                .get(&right_table)
+                                .cloned()
+                                .unwrap_or_default()
                         } else {
                             let storage = self.storage.read().unwrap();
-                            storage.scan(&right_table).map_err(|e| format!("Failed to scan table: {}", e))?
+                            storage
+                                .scan(&right_table)
+                                .map_err(|e| format!("Failed to scan table: {}", e))?
                         };
 
                         let mut combined = left_records;

@@ -41,14 +41,21 @@ cd "$PROJECT_ROOT"
 detect_version() {
     local branch
     branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
-if [[ "$branch" =~ "develop/v3.2" ]] || [[ "$branch" =~ "v3.2" ]]; then
+    # Feature branch: check branch name first
+    if [[ "$branch" =~ "develop/v3.2" ]] || [[ "$branch" =~ "v3.2" ]]; then
         echo "v3.2.0"
     elif [[ "$branch" =~ "develop/v3" ]] || [[ "$branch" =~ "v3.0" ]]; then
         echo "v3.0.0"
     elif [[ "$branch" =~ "develop/v2.9" ]] || [[ "$branch" =~ "v2.9" ]]; then
         echo "v2.9.0"
     else
-        echo "v2.9.0"  # default fallback
+        # Fallback: check if current commit is part of v3.2.0 history
+        if git rev-parse --verify develop/v3.2.0 >/dev/null 2>&1 && \
+           git merge-base --is-ancestor $(git rev-parse develop/v3.2.0 2>/dev/null) HEAD 2>/dev/null; then
+            echo "v3.2.0"
+        else
+            echo "v2.9.0"
+        fi
     fi
 }
 
