@@ -41,17 +41,7 @@ run-name: ${{ gitea.ref_name }} - ${{ gitea.sha }}
       - ARCHITECTURE_RULES.md
       - CHANGELOG.md
       - RELEASE_NOTES.md
-  workflow_dispatch:
-    inputs:
-      profile:
-        description: 'Tarpaulin profile (full or quick)'
-        required: true
-        default: 'quick'
-        type: choice
-        options:
-          - quick
-          - full
-
+  
 env:
   CARGO_TERM_COLOR: always
 
