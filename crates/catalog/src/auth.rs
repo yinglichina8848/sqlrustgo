@@ -482,8 +482,11 @@ pub struct AuthManager {
     privileges: HashMap<UserIdentity, Vec<PrivilegeGrant>>,
     #[allow(dead_code)]
     next_user_id: u64,
+    #[allow(dead_code)]
     next_role_id: u64,
+    #[allow(dead_code)]
     next_grant_id: u64,
+    rls: super::auth_rls::RowLevelSecurity,
 }
 
 impl AuthManager {
@@ -497,6 +500,7 @@ impl AuthManager {
             next_user_id: 1,
             next_role_id: 1,
             next_grant_id: 1,
+            rls: super::auth_rls::RowLevelSecurity::new(),
         };
 
         auth.roles
@@ -1048,6 +1052,18 @@ impl AuthManager {
             }
         }
         Ok(false)
+    }
+
+    pub fn add_rls_policy(&mut self, user_id: u64, table: &str, predicate: &str) {
+        self.rls.add_policy(user_id, table, predicate);
+    }
+
+    pub fn get_rls_predicate(&self, user_id: u64, table: &str) -> Option<String> {
+        self.rls.get_predicate(user_id, table)
+    }
+
+    pub fn has_rls_policy(&self, user_id: u64, table: &str) -> bool {
+        self.rls.has_policy(user_id, table)
     }
 
     pub fn drop_role(&mut self, role_id: u64) -> AuthResult<()> {
