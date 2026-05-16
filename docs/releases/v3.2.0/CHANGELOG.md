@@ -71,6 +71,24 @@
 - `ApprovalPolicyEvaluator` — multi-signature approval
 - PR: #1046
 
+**GMP-10: Mobile Trusted Collection**
+- `MobileTrustedCollection` — mobile device data collection protocol
+- `DeviceFingerprint` — device identification and validation
+- `TrustedCollectionVerifier` — collection integrity verification
+- PR: #1077
+
+**GMP-11: SOP/Training Binding**
+- `SOPBinding` — standard operating procedure binding
+- `TrainingRecord` — training completion tracking
+- `BindingVerifier` — user qualification verification
+- PR: #1078
+
+**GMP-12: Device Calibration**
+- `CalibrationRecord` — device calibration metadata
+- `CalibrationManager` — calibration schedule and tracking
+- `CalibrationVerifier` — calibration validity checking
+- PR: #1079
+
 #### Performance (P1)
 
 **PERF-1: MySQL Flush Optimization**
@@ -81,7 +99,7 @@
 **PERF-2: TPC-H SF=10 (Spill Framework)**
 - Spill framework integration into LocalExecutor
 - Disk-based sorting for large result sets
-- 22/22 TPC-H queries pass without OOM
+- ⚠️ Status: Spill Framework 已合并，TPC-H SF=10 需在 RC Gate 中验证
 - PR: #1064
 
 **PERF-3: Concurrent Connection Pool 200+**
