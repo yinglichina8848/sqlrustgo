@@ -1,8 +1,8 @@
 use crate::page_access_tracker::PageAccessTracker;
 use crate::storage_tier::StorageTier;
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
-use std::collections::VecDeque;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -57,7 +57,8 @@ impl TierManager {
     }
 
     pub fn get_page_tier(&self, page_id: u32) -> StorageTier {
-        self.tracker.get_access_info(page_id)
+        self.tracker
+            .get_access_info(page_id)
             .map(|info| info.current_tier())
             .unwrap_or(StorageTier::Hot)
     }
