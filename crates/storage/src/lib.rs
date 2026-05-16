@@ -1,6 +1,7 @@
 // SQLRustGo storage module
 
 pub mod backup;
+pub mod backup_storage;
 pub mod binary_format;
 pub mod binary_storage;
 pub mod bplus_tree;
@@ -21,6 +22,7 @@ pub mod predicate;
 pub mod read_write_split;
 pub mod recovery;
 pub mod row_format;
+pub mod storage_tier;
 pub mod wal;
 
 pub use binary_format::BinaryFormat;
