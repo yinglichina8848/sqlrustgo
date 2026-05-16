@@ -36,7 +36,7 @@ jobs:
           cd repo
           cargo build -p sqlrustgo-mysql-server --quiet 2>&1 | tail -3
 
-      - name: Chaos Test 1: CPU Stress
+      - name: "Chaos Test 1: CPU Stress"
         run: |
           cd repo
           echo "=== Chaos Test 1: CPU Stress (80% utilization) ==="
@@ -47,7 +47,7 @@ jobs:
             echo "⚠️ CPU Stress Test: completed"
           fi
 
-      - name: Chaos Test 2: Network Loss
+      - name: "Chaos Test 2: Network Loss"
         run: |
           cd repo
           echo "=== Chaos Test 2: Network Packet Loss (30%) ==="

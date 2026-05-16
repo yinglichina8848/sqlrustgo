@@ -115,8 +115,8 @@ bash scripts/gate/check_proof.sh
 | M5 | GMP-2 电子签名完善 | #901 | - | ✅ |
 | M6 | PERF-3 并发200+ | #922 | #1013 | ✅ |
 | M6 | SQL-2 Performance Schema | #931 | #1071 | ✅ |
-| M7 | PERF-1 MySQL flush | #920 | - | 🔄 |
-| M7 | PERF-2 TPC-H SF=10 | #921 | - | ✅ |
+| M7 | PERF-1 MySQL flush | #920 | #1059 | ✅ |
+| M7 | PERF-2 TPC-H SF=10 | #921 | #1064 | ✅ |
 | M8 | SQL-1 RECURSIVE CTE | #930 | - | ✅ |
 | - | PERF-4 死锁检测 | #923 | #1043 | ✅ |
 | - | PERF-5 内存优化 | #924 | #1045 | ✅ |
@@ -125,7 +125,7 @@ bash scripts/gate/check_proof.sh
 | - | GMP-11 SOP绑定 | #910 | - | ✅ |
 | - | GMP-12 Device Calibration | #911 | - | ✅ |
 
-**P1 完成度**: ~90% (8/9 任务完成)
+**P1 完成度**: 100% (9/9 任务完成)
 
 ---
 
@@ -149,7 +149,7 @@ bash scripts/gate/check_proof.sh
 
 ### 待完成
 
-1. 🔄 PERF-1 MySQL flush (修复中)
+1. ✅ PERF-1 MySQL flush (PR #1059 已合并)
 2. ✅ PERF-2 TPC-H SF=10 (spill framework 集成完成)
 
 ---
@@ -162,14 +162,14 @@ bash scripts/gate/check_proof.sh
 - [x] 完成 SQL-2 Performance Schema
 - [x] 完成 GMP-10/11/12
 - [x] 完成 PERF-4 死锁检测
-- [ ] 完成 PERF-1 MySQL flush
+- [x] 完成 PERF-1 MySQL flush
 - [x] 完成 PERF-2 TPC-H SF=10 (spill framework)
-- [ ] 提升覆盖率到 75%
+- [ ] 提升覆盖率到 85%
 - [ ] 验证 Beta Gate 门禁
 
 ### 长期目标
 
-- [ ] 完成 PERF-1 MySQL flush
+- [x] 完成 PERF-1 MySQL flush
 - [x] 完成 PERF-2 TPC-H SF=10
 - [ ] 通过 Beta Gate (25/25)
 
