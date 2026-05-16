@@ -45,6 +45,7 @@ pub struct SeqScanExec {
     projection: Option<Vec<usize>>,
     row_count: u64,
     page_count: u64,
+    rls_predicate: Option<String>,
 }
 
 impl SeqScanExec {
@@ -55,6 +56,7 @@ impl SeqScanExec {
             projection: None,
             row_count: 0,
             page_count: 0,
+            rls_predicate: None,
         }
     }
 
@@ -69,12 +71,21 @@ impl SeqScanExec {
         self
     }
 
+    pub fn with_rls_predicate(mut self, predicate: String) -> Self {
+        self.rls_predicate = Some(predicate);
+        self
+    }
+
     pub fn table_name(&self) -> &str {
         &self.table_name
     }
 
     pub fn projection(&self) -> Option<&[usize]> {
         self.projection.as_deref()
+    }
+
+    pub fn rls_predicate(&self) -> Option<&String> {
+        self.rls_predicate.as_ref()
     }
 
     pub fn execute(&self) -> Result<Vec<HashMap<String, Value>>, String> {
