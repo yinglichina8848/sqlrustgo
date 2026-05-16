@@ -26,17 +26,17 @@ jobs:
         run: |
           set -e
           REPO="openclaw/sqlrustgo"
-          git clone --depth=1 "${{ git.server_url }}/${{ git.repository }}.git" repo
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
           cd repo
-          git fetch --depth=1 origin "${{ git.commit_sha }}"
-          git checkout "${{ git.commit_sha }}"
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
 
       - name: Detect Changed Crates
         id: changed
         run: |
           set -e
           cd repo
-          CHANGED=$(bash scripts/ci/detect_changed_crates.sh "${{ gitea.ref_name }}" 2>/dev/null || echo "")
+          CHANGED=$(bash scripts/ci/detect_changed_crates.sh "$GITEA_REF" 2>/dev/null || echo "")
           echo "crates=$CHANGED"
           if [ -n "$CHANGED" ]; then
             echo "$CHANGED" | tr ' ' '\n' > /tmp/changed_crates.txt
@@ -73,10 +73,10 @@ jobs:
         run: |
           set -e
           REPO="openclaw/sqlrustgo"
-          git clone --depth=1 "${{ git.server_url }}/${{ git.repository }}.git" repo
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
           cd repo
-          git fetch --depth=1 origin "${{ git.commit_sha }}"
-          git checkout "${{ git.commit_sha }}"
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
 
       - name: Restore Cache
         run: |
@@ -116,20 +116,20 @@ jobs:
         run: |
           set -e
           REPO="openclaw/sqlrustgo"
-          git clone --depth=1 "${{ git.server_url }}/${{ git.repository }}.git" repo
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
           cd repo
-          git fetch --depth=1 origin "${{ git.commit_sha }}"
-          git checkout "${{ git.commit_sha }}"
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
 
       - name: Detect Changed Crates
         id: changed
         run: |
           set -e
           cd repo
-          CHANGED=$(bash scripts/ci/detect_changed_crates.sh "${{ gitea.ref_name }}" 2>/dev/null || echo "")
+          CHANGED=$(bash scripts/ci/detect_changed_crates.sh "$GITEA_REF" 2>/dev/null || echo "")
           echo "Changed crates: $CHANGED"
           if [ -z "$CHANGED" ]; then
-            echo "SKIP_L2=yes" >> $GITHUB_ENV
+            echo "SKIP_L2=yes" >> $GITHUB_OUTPUT
           else
             echo "$CHANGED" | tr ' ' '\n' > /tmp/changed_crates.txt
           fi
@@ -153,16 +153,16 @@ jobs:
     runs-on:
       - hp-z6g4
     timeout-minutes: 45
-    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    if: gitea.event_name == 'pull_request' && gitea.event.pull_request.merged == true
     steps:
       - name: Checkout
         run: |
           set -e
           REPO="openclaw/sqlrustgo"
-          git clone --depth=1 "${{ git.server_url }}/${{ git.repository }}.git" repo
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
           cd repo
-          git fetch --depth=1 origin "${{ git.commit_sha }}"
-          git checkout "${{ git.commit_sha }}"
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
 
       - name: Restore Cache
         run: |
