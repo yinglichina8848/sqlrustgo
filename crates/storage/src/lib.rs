@@ -8,6 +8,7 @@ pub mod bplus_tree;
 pub mod buffer_pool;
 pub mod checkpoint;
 pub mod page_access_tracker;
+pub mod storage_tier;
 pub mod tier_manager;
 // pub mod columnar; // TODO: re-enable once StorageEngine trait is synced
 // NOTE: ColumnarStorage has trait sync issues; tpch-import uses MemoryStorage + Parquet export
@@ -24,7 +25,6 @@ pub mod predicate;
 pub mod read_write_split;
 pub mod recovery;
 pub mod row_format;
-pub mod storage_tier;
 pub mod wal;
 
 pub use binary_format::BinaryFormat;

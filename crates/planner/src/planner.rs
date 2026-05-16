@@ -74,10 +74,7 @@ impl DefaultPlanner {
         }
     }
 
-    pub fn with_auth(
-        storage: Arc<RwLock<dyn StorageEngine>>,
-        auth: Arc<dyn AuthContext>,
-    ) -> Self {
+    pub fn with_auth(storage: Arc<RwLock<dyn StorageEngine>>, auth: Arc<dyn AuthContext>) -> Self {
         Self {
             optimizer: DefaultOptimizer::new(),
             storage: Some(storage),

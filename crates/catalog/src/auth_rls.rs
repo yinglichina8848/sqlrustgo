@@ -17,24 +17,19 @@ impl RowLevelSecurity {
     }
 
     pub fn add_policy(&mut self, user_id: u64, table: &str, predicate: &str) {
-        self.policies
-            .entry(user_id)
-            .or_default()
-            .push(TablePolicy {
-                table_name: table.to_string(),
-                predicate: predicate.to_string(),
-            });
+        self.policies.entry(user_id).or_default().push(TablePolicy {
+            table_name: table.to_string(),
+            predicate: predicate.to_string(),
+        });
     }
 
     pub fn get_predicate(&self, user_id: u64, table: &str) -> Option<String> {
-        self.policies
-            .get(&user_id)
-            .and_then(|policies| {
-                policies
-                    .iter()
-                    .find(|p| p.table_name == table)
-                    .map(|p| p.predicate.clone())
-            })
+        self.policies.get(&user_id).and_then(|policies| {
+            policies
+                .iter()
+                .find(|p| p.table_name == table)
+                .map(|p| p.predicate.clone())
+        })
     }
 
     pub fn has_policy(&self, user_id: u64, table: &str) -> bool {
@@ -55,7 +50,10 @@ mod tests {
         let mut rls = RowLevelSecurity::new();
         rls.add_policy(1, "orders", "region = '华北'");
 
-        assert_eq!(rls.get_predicate(1, "orders"), Some("region = '华北'".to_string()));
+        assert_eq!(
+            rls.get_predicate(1, "orders"),
+            Some("region = '华北'".to_string())
+        );
         assert_eq!(rls.get_predicate(1, "products"), None);
         assert_eq!(rls.get_predicate(999, "orders"), None);
     }

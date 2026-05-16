@@ -33,7 +33,8 @@ impl PageAccessInfo {
 
     pub fn record_access(&self) {
         self.access_count.fetch_add(1, Ordering::Relaxed);
-        self.last_access_time.store(current_time_secs(), Ordering::Relaxed);
+        self.last_access_time
+            .store(current_time_secs(), Ordering::Relaxed);
     }
 
     pub fn access_count(&self) -> u64 {
@@ -50,7 +51,8 @@ impl PageAccessInfo {
 
     pub fn update_tier(&self, new_tier: super::StorageTier) {
         *self.current_tier.lock().unwrap() = new_tier;
-        self.last_tier_change.store(current_time_secs(), Ordering::Relaxed);
+        self.last_tier_change
+            .store(current_time_secs(), Ordering::Relaxed);
     }
 
     pub fn minutes_since_last_access(&self) -> u64 {
