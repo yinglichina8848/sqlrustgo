@@ -186,9 +186,13 @@ check_test "G-QA4: merge_execution_test" "cargo test --test merge_execution_test
 check_test "G-QA5: set_operation_test" "cargo test --test set_operation_test 2>&1" "G-QA5"
 check_test "G-QA6: explain_analyze_test" "cargo test --test explain_analyze_test 2>&1" "G-QA6"
 check_test "G-QA7: ddl_statement_test" "cargo test --test ddl_statement_test 2>&1" "G-QA7"
-check_test "G-QA8: gmp_digital_signature_test" "cargo test --test gmp_digital_signature_test 2>&1" "G-QA8"
-check_test "G-QA9: gmp_electronic_signature_test" "cargo test --test gmp_electronic_signature_test 2>&1" "G-QA9"
-check "G-QA10: QA Enhancement Suite" "GATE_STAGE=ga bash scripts/gate/check_qa_enhancement.sh" "G-QA10"
+check_test "G-QA8: gmp_digital_signature_test" "cargo test -p sqlrustgo-gmp --test gmp_digital_signature_test 2>&1" "G-QA8"
+check_test "G-QA9: gmp_electronic_signature_test" "cargo test -p sqlrustgo-gmp --test gmp_electronic_signature_test 2>&1" "G-QA9"
+check_test "G-QA10: gmp_signature_algorithms_test" "cargo test -p sqlrustgo-gmp --test gmp_signature_algorithms_test 2>&1" "G-QA10"
+check_test "G-QA11: gmp_signature_chain_test" "cargo test -p sqlrustgo-gmp --test gmp_signature_chain_test 2>&1" "G-QA11"
+check_test "G-QA12: gmp_audit_chain_verify_test" "cargo test -p sqlrustgo-gmp --test gmp_audit_chain_verify_test 2>&1" "G-QA12"
+check_test "G-QA13: gmp_sop_test" "cargo test -p sqlrustgo-gmp --test gmp_sop_test 2>&1" "G-QA13"
+check "G-QA14: QA Enhancement Suite" "GATE_STAGE=ga bash scripts/gate/check_qa_enhancement.sh" "G-QA14"
 
 # ============================================================
 # 第四部分: 稳定性测试 Gate (G-S1 ~ G-S20)

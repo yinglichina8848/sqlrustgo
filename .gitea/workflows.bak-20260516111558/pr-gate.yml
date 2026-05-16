@@ -1,0 +1,54 @@
+name: PR Gate Pipeline
+run-name: PR-Gate - ${{ gitea.ref_name }}
+
+on:
+  pull_request:
+    branches:
+      - develop/v3.1.0
+      - develop/v3.0.0
+      - develop/v2.9.0
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  pr-gate:
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          git clone --depth=1 "${{ gitea.repository_url }}" repo
+          cd repo
+          git fetch --depth=1 origin "${{ gitea_sha }}"
+          git checkout "${{ gitea_sha }}"
+
+      - name: PR Gate L0
+        run: |
+          cd repo
+          bash scripts/test/local/l0_smoke.sh
+
+      - name: PR Gate L1
+        run: |
+          cd repo
+          bash scripts/test/local/l1_unit.sh
+
+      - name: Coverage Check
+        run: |
+          cd repo
+          cargo llvm-cov --all-features --json --codecov Upload
+
+  pr-gate-integration:
+    runs-on: [hp-z6g4]
+    needs: pr-gate
+    steps:
+      - name: Checkout
+        run: |
+          git clone --depth=1 "${{ gitea.repository_url }}" repo
+          cd repo
+          git fetch --depth=1 origin "${{ gitea_sha }}"
+          git checkout "${{ gitea_sha }}"
+
+      - name: PR Gate L2
+        run: |
+          cd repo
+          bash scripts/test/local/l2_integration.sh
