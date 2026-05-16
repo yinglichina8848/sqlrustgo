@@ -3,6 +3,7 @@
 //! Supports mysql_native_password auth + TLS (mariadb-connector-c 3.4+ compatible)
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use crossbeam_channel::{bounded, Sender};
 use rcgen::{CertificateParams, KeyPair};
 use sha1::{Digest, Sha1};
 use sqlrustgo::execution_engine::EngineConfig;
@@ -17,6 +18,7 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 
 const SERVER_VERSION: &str = "8.0.33-SQLRustGo";
+const DEFAULT_THREAD_POOL_SIZE: usize = 200;
 #[allow(dead_code)]
 const AUTH_PLUGIN: &str = "mysql_native_password";
 const SCRAMBLE_LENGTH: usize = 20;
@@ -805,6 +807,7 @@ impl Packet {
     }
 }
 
+#[inline]
 fn write_lenenc_int<W: Write>(w: &mut W, v: u64) -> MySqlResult<()> {
     if v < 251 {
         w.write_u8(v as u8)?;
@@ -821,6 +824,7 @@ fn write_lenenc_int<W: Write>(w: &mut W, v: u64) -> MySqlResult<()> {
     Ok(())
 }
 
+#[inline]
 fn read_lenenc_int<R: Read>(r: &mut R) -> MySqlResult<u64> {
     let first = r.read_u8()?;
     match first {
@@ -833,6 +837,7 @@ fn read_lenenc_int<R: Read>(r: &mut R) -> MySqlResult<u64> {
     }
 }
 
+#[inline]
 fn write_lenenc_string<W: Write>(w: &mut W, s: &[u8]) -> MySqlResult<()> {
     write_lenenc_int(w, s.len() as u64)?;
     w.write_all(s)?;
@@ -866,6 +871,7 @@ fn make_handshake_packet(seq: u8, scramble: &[u8; SCRAMBLE_LENGTH]) -> Packet {
     }
 }
 
+#[inline]
 pub fn make_ok_packet(seq: u8, affected: u64, last_id: u64, status: u16, warnings: u16) -> Packet {
     let mut p = Vec::new();
     p.push(0x00);
@@ -1054,6 +1060,7 @@ mod col_type {
     pub const BLOB: u8 = 0xfc;
 }
 
+#[inline]
 fn col_type_from_string(t: &str) -> u8 {
     let u = t.to_uppercase();
     if u.contains("BIGINT") {
@@ -1079,6 +1086,7 @@ fn col_type_from_string(t: &str) -> u8 {
     }
 }
 
+#[inline]
 fn col_len_from_type(t: &str) -> u32 {
     let u = t.to_uppercase();
     if u.contains("INT(1)") {
@@ -1111,6 +1119,7 @@ fn value_to_string(v: &Value) -> String {
     }
 }
 
+#[inline]
 fn write_text_row<W: Write>(w: &mut W, row: &[Value]) -> MySqlResult<()> {
     for v in row {
         match v {
@@ -1148,6 +1157,7 @@ fn build_column_def_packet(name: &str, sql_type: &str, seq: u8) -> Packet {
     }
 }
 
+#[inline]
 fn send_result_set<W: Write>(
     w: &mut W,
     cols: &[String],
@@ -1156,15 +1166,9 @@ fn send_result_set<W: Write>(
     mut seq: u8,
     cap: u32,
 ) -> MySqlResult<u8> {
-    tracing::info!(
-        "send_result_set: {} cols, {} rows, start_seq={}",
-        cols.len(),
-        rows.len(),
-        seq
-    );
-
     // Batch all packets for efficient writing
-    let mut packets: Vec<Packet> = Vec::with_capacity(2 + cols.len() + rows.len());
+    let num_packets = 2 + cols.len() + rows.len() + 1; // +1 for final EOF/OK
+    let mut packets: Vec<Packet> = Vec::with_capacity(num_packets);
 
     // Column count packet
     {
@@ -1219,7 +1223,6 @@ fn send_result_set<W: Write>(
     Packet::write_all_to(&packets, w)?;
     seq = seq.wrapping_add(1);
 
-    tracing::info!("send_result_set done: final_seq={}", seq);
     Ok(seq)
 }
 
@@ -1705,6 +1708,7 @@ fn infer_column_types(
     cols.iter().map(|_| "VARCHAR(255)".to_string()).collect()
 }
 
+#[inline]
 #[allow(clippy::type_complexity)]
 fn execute_select(
     sql: &str,
@@ -1725,6 +1729,7 @@ fn execute_select(
     Ok((cols, ctypes, r.rows))
 }
 
+#[inline]
 fn execute_write(
     sql: &str,
     engine: &mut MemoryExecutionEngine,
@@ -1762,6 +1767,7 @@ fn execute_select_statement(
     Ok((cols, ctypes, r.rows))
 }
 
+#[inline]
 fn is_select(sql: &str) -> bool {
     let trimmed = sql.trim();
     // Fast path: check first char to avoid allocation in common case
@@ -1921,6 +1927,60 @@ fn make_tls_config() -> rustls::ServerConfig {
         .unwrap()
 }
 
+#[allow(dead_code)]
+struct ConnectionTask {
+    stream: TcpStream,
+    addr: SocketAddr,
+    storage: Arc<RwLock<MemoryStorage>>,
+    tls_config: Arc<rustls::ServerConfig>,
+    user_store: Arc<UserStore>,
+}
+
+#[allow(dead_code)]
+struct ConnectionThreadPool {
+    sender: Sender<ConnectionTask>,
+    handles: Vec<thread::JoinHandle<()>>,
+}
+
+#[allow(dead_code)]
+impl ConnectionThreadPool {
+    fn new(pool_size: usize) -> Self {
+        let (sender, receiver) = bounded::<ConnectionTask>(pool_size * 2);
+        let handles: Vec<_> = (0..pool_size)
+            .map(|worker_id| {
+                let receiver = receiver.clone();
+                thread::spawn(move || {
+                    tracing::debug!("Worker thread {} started", worker_id);
+                    while let Ok(task) = receiver.recv() {
+                        handle_connection(
+                            task.stream,
+                            task.addr,
+                            task.storage,
+                            task.tls_config,
+                            task.user_store,
+                        );
+                    }
+                    tracing::debug!("Worker thread {} stopped", worker_id);
+                })
+            })
+            .collect();
+        Self { sender, handles }
+    }
+
+    fn spawn(&self, task: ConnectionTask) {
+        if self.sender.send(task).is_err() {
+            tracing::error!("Failed to send task to thread pool");
+        }
+    }
+
+    fn shutdown(mut self) {
+        drop(self.sender);
+        for handle in self.handles.drain(..) {
+            let _ = handle.join();
+        }
+    }
+}
+
 #[allow(unused_assignments, clippy::too_many_arguments)]
 fn do_command_loop<S: Read + Write>(
     stream: &mut S,
@@ -1959,7 +2019,7 @@ fn do_command_loop<S: Read + Write>(
                     .trim_end_matches('\0')
                     .trim()
                     .to_string();
-                tracing::info!("Query [{}]: {}", addr, q);
+                tracing::debug!("Query [{}]: {}", addr, q);
                 if q.is_empty() {
                     make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
                     seq = seq.wrapping_add(1);
@@ -2367,8 +2427,9 @@ fn handle_connection(
     addr: SocketAddr,
     storage: Arc<RwLock<MemoryStorage>>,
     tls_config: Arc<rustls::ServerConfig>,
-    user_store: UserStore,
+    user_store: Arc<UserStore>,
 ) {
+    let user_store = (*user_store).clone();
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(600)))
         .ok();
@@ -2547,8 +2608,13 @@ fn handle_connection(
 }
 
 pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
+    run_server_with_pool(host, port, DEFAULT_THREAD_POOL_SIZE)
+}
+
+pub fn run_server_with_pool(host: &str, port: u16, pool_size: usize) -> MySqlResult<()> {
     let addr = format!("{}:{}", host, port);
     let listener = TcpListener::bind(&addr)?;
+    listener.set_nonblocking(true)?;
     tracing::info!("MySQL server listening on {}", addr);
     let tls_config = Arc::new(make_tls_config());
     tracing::info!("TLS ready (self-signed cert)");
@@ -2565,27 +2631,26 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
         }
     }
 
-    // TODO: Event Scheduler Integration
-    // - Requires global Catalog with Event storage
-    // - Requires Catalog-backed MemoryExecutionEngine
-    // - EventSchedulerService should be spawned as async task
-    // - See crates/server/src/event_scheduler.rs for EventSchedulerService
-    tracing::info!("Event scheduler: requires global Catalog integration");
+    tracing::info!("Connection thread pool size: {}", pool_size);
+    let user_store = Arc::new(UserStore::new());
+    let pool = ConnectionThreadPool::new(pool_size);
 
-    let user_store = UserStore::new();
-    for s in listener.incoming() {
-        match s {
-            Ok(stream) => {
-                let addr = stream
-                    .peer_addr()
-                    .unwrap_or(SocketAddr::from(([0, 0, 0, 0], 0)));
-                let st = storage.clone();
-                let tc = tls_config.clone();
-                let us = user_store.clone();
-                thread::spawn(move || handle_connection(stream, addr, st, tc, us));
+    loop {
+        match listener.accept() {
+            Ok((stream, addr)) => {
+                let task = ConnectionTask {
+                    stream,
+                    addr,
+                    storage: storage.clone(),
+                    tls_config: tls_config.clone(),
+                    user_store: user_store.clone(),
+                };
+                pool.spawn(task);
+            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(std::time::Duration::from_micros(100));
             }
             Err(e) => tracing::error!("Accept: {}", e),
         }
     }
-    Ok(())
 }

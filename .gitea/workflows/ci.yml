@@ -7,6 +7,7 @@ run-name: ${{ gitea.ref_name }} - ${{ gitea.sha }}
       - develop/v2.9.0
       - develop/v2.8.0
       - develop/v3.0.0
+      - develop/v3.2.0
       - alpha/v2.9.0
       - beta/v2.8.0
       - beta/v2.9.0
@@ -25,6 +26,7 @@ run-name: ${{ gitea.ref_name }} - ${{ gitea.sha }}
       - develop/v2.9.0
       - develop/v2.8.0
       - develop/v3.0.0
+      - develop/v3.2.0
       - alpha/v2.9.0
       - beta/v2.8.0
       - beta/v2.9.0
@@ -39,17 +41,7 @@ run-name: ${{ gitea.ref_name }} - ${{ gitea.sha }}
       - ARCHITECTURE_RULES.md
       - CHANGELOG.md
       - RELEASE_NOTES.md
-  workflow_dispatch:
-    inputs:
-      profile:
-        description: 'Tarpaulin profile (full or quick)'
-        required: true
-        default: 'quick'
-        type: choice
-        options:
-          - quick
-          - full
-
+  
 env:
   CARGO_TERM_COLOR: always
 

@@ -64,6 +64,24 @@ pub enum Statement {
     CreateEvent(CreateEventStatement),
     DropEvent(DropEventStatement),
     AlterEvent(AlterEventStatement),
+    // GMP Electronic Signature statements
+    SignRecord(SignRecordStatement),
+    CreateApprovalPolicy(CreateApprovalPolicyStatement),
+    // GMP Workflow statements
+    StartWorkflow(StartWorkflowStatement),
+    ApproveWorkflow(ApproveWorkflowStatement),
+    RejectWorkflow(RejectWorkflowStatement),
+    // GMP Mobile statements
+    RegisterDevice(RegisterDeviceStatement),
+    DeviceHeartbeat(DeviceHeartbeatStatement),
+    CollectData(CollectDataStatement),
+    // GMP SOP statements
+    CreateSOP(CreateSOPStatement),
+    RecordTraining(RecordTrainingStatement),
+    BindSOP(BindSOPStatement),
+    // GMP Calibration statements
+    RegisterCalibrationDevice(RegisterCalibrationDeviceStatement),
+    RecordCalibration(RecordCalibrationStatement),
 }
 
 /// UNION statement
@@ -233,6 +251,119 @@ pub struct AlterEventStatement {
     pub body: Option<String>,
     pub enable: Option<bool>,
     pub comment: Option<String>,
+}
+
+/// SIGN RECORD statement for electronic signatures
+/// Syntax: SIGN RECORD FOR table_name (column = value, ...) REASON 'reason'
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignRecordStatement {
+    pub table_name: String,
+    pub record_id: Option<String>,
+    pub columns: Vec<(String, String)>,
+    pub reason: String,
+}
+
+/// CREATE APPROVAL POLICY statement for four-eyes principle
+/// Syntax: CREATE APPROVAL POLICY policy_name (required_signatures = N, required_roles = ('role1', 'role2'), sequential = TRUE)
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateApprovalPolicyStatement {
+    pub name: String,
+    pub required_signatures: i32,
+    pub required_roles: Vec<String>,
+    pub sequential: bool,
+    pub timeout_hours: Option<i32>,
+    pub description: Option<String>,
+}
+
+/// START WORKFLOW statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct StartWorkflowStatement {
+    pub workflow_name: String,
+    pub context: Vec<(String, String)>,
+}
+
+/// APPROVE WORKFLOW statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApproveWorkflowStatement {
+    pub instance_id: String,
+    pub stage: String,
+    pub approver_id: String,
+    pub signature: String,
+    pub comment: Option<String>,
+}
+
+/// REJECT WORKFLOW statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct RejectWorkflowStatement {
+    pub instance_id: String,
+    pub reason: String,
+}
+
+/// REGISTER DEVICE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct RegisterDeviceStatement {
+    pub device_id: String,
+    pub device_name: String,
+    pub device_type: String,
+    pub certificate_fingerprint: Option<String>,
+}
+
+/// DEVICE HEARTBEAT statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeviceHeartbeatStatement {
+    pub device_id: String,
+    pub status: String,
+}
+
+/// COLLECT DATA statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CollectDataStatement {
+    pub device_id: String,
+    pub collection_type: String,
+    pub data: Vec<(String, String)>,
+}
+
+/// CREATE SOP statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateSOPStatement {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub qualification_requirements: Vec<String>,
+}
+
+/// RECORD TRAINING statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecordTrainingStatement {
+    pub sop_id: String,
+    pub user_id: String,
+    pub training_date: i64,
+    pub status: String,
+}
+
+/// BIND SOP statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct BindSOPStatement {
+    pub workflow_name: String,
+    pub step_name: String,
+    pub sop_id: String,
+}
+
+/// REGISTER CALIBRATION DEVICE statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct RegisterCalibrationDeviceStatement {
+    pub device_id: String,
+    pub device_type: String,
+    pub interval_days: i32,
+}
+
+/// RECORD CALIBRATION statement
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecordCalibrationStatement {
+    pub device_id: String,
+    pub result: String,
+    pub measured_value: f64,
+    pub tolerance: f64,
 }
 
 /// Common Table Expression (CTE)
@@ -1086,14 +1217,55 @@ impl Parser {
             | Some(Token::Commit)
             | Some(Token::Rollback)
             | Some(Token::Set)
-            | Some(Token::Start)
             | Some(Token::Savepoint)
             | Some(Token::Release) => self.parse_transaction(),
+            Some(Token::Start) => {
+                let next_is_workflow = matches!(self.peek(), Some(Token::Workflow));
+                if next_is_workflow {
+                    self.parse_start_workflow()
+                } else {
+                    self.parse_transaction()
+                }
+            }
+            Some(Token::Approve) | Some(Token::Reject) => {
+                let next_is_workflow = matches!(self.peek(), Some(Token::Workflow));
+                if next_is_workflow {
+                    match self.current() {
+                        Some(Token::Approve) => self.parse_approve_workflow(),
+                        Some(Token::Reject) => self.parse_reject_workflow(),
+                        _ => Err("Unexpected token".to_string()),
+                    }
+                } else {
+                    Err("Expected WORKFLOW after APPROVE/REJECT".to_string())
+                }
+            }
             Some(Token::Grant) => self.parse_grant(),
             Some(Token::Revoke) => self.parse_revoke(),
             Some(Token::Show) => self.parse_show(),
             Some(Token::Describe) | Some(Token::Desc) => self.parse_describe(),
             Some(Token::Explain) => self.parse_explain(),
+            Some(Token::Sign) => self.parse_sign_record(),
+            Some(Token::Register) => self.parse_register_device(),
+            Some(Token::Device) => self.parse_device_statement(),
+            Some(Token::SOP) => self.parse_create_sop(),
+            Some(Token::Training) => self.parse_record_training(),
+            Some(Token::Bind) => self.parse_bind_sop(),
+            Some(Token::Calibration) => self.parse_register_calibration_device(),
+            Some(Token::Record) => {
+                self.next(); // consume RECORD
+                match self.current() {
+                    Some(Token::Training) => self.parse_record_training(),
+                    Some(Token::Calibration) => {
+                        self.next(); // consume CALIBRATION
+                        self.parse_record_calibration_inner()
+                    }
+                    Some(t) => Err(format!(
+                        "Expected TRAINING or CALIBRATION after RECORD, got {:?}",
+                        t
+                    )),
+                    None => Err("Expected TRAINING or CALIBRATION after RECORD".to_string()),
+                }
+            }
             Some(t) => Err(format!("Unexpected token: {:?}", t)),
             None => Err("Empty input".to_string()),
         }
@@ -1373,6 +1545,8 @@ impl Parser {
             Some(Token::Role) => self.parse_create_role(),
             Some(Token::View) => self.parse_create_view(),
             Some(Token::Event) => self.parse_create_event(),
+            Some(Token::Approval) => self.parse_create_approval_policy(),
+            Some(Token::SOP) => self.parse_create_sop(),
             Some(t) => Err(format!(
                 "Expected TABLE, INDEX, PROCEDURE, TRIGGER, ROLE, VIEW, or EVENT after CREATE, got {:?}",
                 t
@@ -1741,6 +1915,645 @@ impl Parser {
             enable,
             comment,
         }))
+    }
+
+    fn parse_sign_record(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Sign)?;
+        self.expect(Token::Record)?;
+
+        let table_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(name)) => name,
+            Some(Token::For) => {
+                let name = match self.next() {
+                    Some(Token::Identifier(name)) => name,
+                    Some(Token::StringLiteral(name)) => name,
+                    Some(t) => return Err(format!("Expected table name after FOR, got {:?}", t)),
+                    None => return Err("Expected table name".to_string()),
+                };
+                name
+            }
+            Some(t) => {
+                return Err(format!(
+                    "Expected FOR or table name after SIGN RECORD, got {:?}",
+                    t
+                ))
+            }
+            None => return Err("Expected FOR or table name after SIGN RECORD".to_string()),
+        };
+
+        let mut columns = Vec::new();
+
+        if matches!(self.current(), Some(Token::LParen)) {
+            self.next();
+            loop {
+                match self.current() {
+                    Some(Token::Identifier(name)) => {
+                        let col_name = name.clone();
+                        self.next();
+                        self.expect(Token::Equal)?;
+                        let value = match self.next() {
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            Some(Token::NumberLiteral(n)) => n,
+                            Some(t) => return Err(format!("Expected value, got {:?}", t)),
+                            None => return Err("Expected value".to_string()),
+                        };
+                        columns.push((col_name, value));
+                    }
+                    Some(Token::Comma) => {
+                        self.next();
+                    }
+                    Some(Token::RParen) => {
+                        self.next();
+                        break;
+                    }
+                    _ => return Err("Expected column name or )".to_string()),
+                }
+            }
+        }
+
+        self.expect(Token::Reason)?;
+        let reason = match self.next() {
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected reason string, got {:?}", t)),
+            None => return Err("Expected reason string".to_string()),
+        };
+
+        Ok(Statement::SignRecord(SignRecordStatement {
+            table_name,
+            record_id: None,
+            columns,
+            reason,
+        }))
+    }
+
+    fn parse_create_approval_policy(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Approval)?;
+        self.expect(Token::Policy)?;
+
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected policy name, got {:?}", t)),
+            None => return Err("Expected policy name".to_string()),
+        };
+
+        self.expect(Token::LParen)?;
+
+        let mut required_signatures = 1;
+        let mut required_roles = Vec::new();
+        let mut sequential = true;
+        let mut timeout_hours = None;
+        let mut description = None;
+
+        loop {
+            match self.current() {
+                Some(Token::Identifier(ref name)) => {
+                    let key = name.to_uppercase();
+                    self.next();
+                    self.expect(Token::Equal)?;
+                    match key.as_str() {
+                        "REQUIRED_SIGNATURES" => {
+                            required_signatures = match self.current() {
+                                Some(Token::NumberLiteral(n)) => n.parse().unwrap_or(1),
+                                Some(Token::Identifier(n)) => n.parse().unwrap_or(1),
+                                t => {
+                                    return Err(format!(
+                                        "Expected number for required_signatures, got {:?}",
+                                        t
+                                    ))
+                                }
+                            };
+                            self.next();
+                        }
+                        "REQUIRED_ROLES" => {
+                            required_roles = self.parse_string_array()?;
+                        }
+                        "SEQUENTIAL" => {
+                            sequential = match self.current() {
+                                Some(Token::True) => {
+                                    self.next();
+                                    true
+                                }
+                                Some(Token::False) => {
+                                    self.next();
+                                    false
+                                }
+                                Some(Token::BooleanLiteral(true)) => {
+                                    self.next();
+                                    true
+                                }
+                                Some(Token::BooleanLiteral(false)) => {
+                                    self.next();
+                                    false
+                                }
+                                Some(Token::Identifier(ref s)) => {
+                                    let val = s.to_uppercase();
+                                    self.next();
+                                    val == "TRUE"
+                                }
+                                t => {
+                                    return Err(format!(
+                                        "Expected TRUE or FALSE for sequential, got {:?}",
+                                        t
+                                    ))
+                                }
+                            };
+                        }
+                        "TIMEOUT_HOURS" => {
+                            timeout_hours = Some(match self.current() {
+                                Some(Token::NumberLiteral(n)) => n.parse().unwrap_or(72),
+                                Some(Token::Identifier(n)) => n.parse().unwrap_or(72),
+                                t => {
+                                    return Err(format!(
+                                        "Expected number for timeout_hours, got {:?}",
+                                        t
+                                    ))
+                                }
+                            });
+                            self.next();
+                        }
+                        "DESCRIPTION" => {
+                            description = Some(match self.current() {
+                                Some(Token::StringLiteral(s)) => s.clone(),
+                                t => {
+                                    return Err(format!(
+                                        "Expected string for description, got {:?}",
+                                        t
+                                    ))
+                                }
+                            });
+                            self.next();
+                        }
+                        _ => return Err(format!("Unknown policy option: {}", key)),
+                    }
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                Some(Token::End) => {
+                    break;
+                }
+                t => return Err(format!("Expected option name or ), got {:?}", t)),
+            }
+        }
+
+        Ok(Statement::CreateApprovalPolicy(
+            CreateApprovalPolicyStatement {
+                name,
+                required_signatures,
+                required_roles,
+                sequential,
+                timeout_hours,
+                description,
+            },
+        ))
+    }
+
+    fn parse_register_device(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Register)?;
+        self.expect(Token::Device)?;
+
+        let device_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device ID, got {:?}", t)),
+            None => return Err("Expected device ID".to_string()),
+        };
+
+        let device_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device name, got {:?}", t)),
+            None => return Err("Expected device name".to_string()),
+        };
+
+        let device_type = match self.next() {
+            Some(Token::Identifier(t)) => t,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device type, got {:?}", t)),
+            None => return Err("Expected device type".to_string()),
+        };
+
+        let mut certificate_fingerprint = None;
+        if matches!(self.current(), Some(Token::Certificate)) {
+            self.next();
+            self.expect(Token::Fingerprint)?;
+            certificate_fingerprint = Some(match self.next() {
+                Some(Token::Identifier(s)) => s,
+                Some(Token::StringLiteral(s)) => s,
+                Some(t) => return Err(format!("Expected fingerprint value, got {:?}", t)),
+                None => return Err("Expected fingerprint value".to_string()),
+            });
+        }
+
+        Ok(Statement::RegisterDevice(RegisterDeviceStatement {
+            device_id,
+            device_name,
+            device_type,
+            certificate_fingerprint,
+        }))
+    }
+
+    fn parse_device_statement(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Device)?;
+        match self.current() {
+            Some(Token::Heartbeat) => {
+                self.next();
+                let device_id = match self.next() {
+                    Some(Token::Identifier(id)) => id,
+                    Some(Token::StringLiteral(s)) => s,
+                    Some(t) => return Err(format!("Expected device ID, got {:?}", t)),
+                    None => return Err("Expected device ID".to_string()),
+                };
+                Ok(Statement::DeviceHeartbeat(DeviceHeartbeatStatement {
+                    device_id,
+                    status: "ACTIVE".to_string(),
+                }))
+            }
+            Some(Token::Collect) => {
+                self.next();
+                self.expect(Token::Data)?;
+                let device_id = match self.next() {
+                    Some(Token::Identifier(id)) => id,
+                    Some(Token::StringLiteral(s)) => s,
+                    Some(t) => return Err(format!("Expected device ID, got {:?}", t)),
+                    None => return Err("Expected device ID".to_string()),
+                };
+                let collection_type = match self.next() {
+                    Some(Token::Identifier(t)) => t,
+                    Some(Token::StringLiteral(s)) => s,
+                    Some(t) => return Err(format!("Expected collection type, got {:?}", t)),
+                    None => return Err("Expected collection type".to_string()),
+                };
+                Ok(Statement::CollectData(CollectDataStatement {
+                    device_id,
+                    collection_type,
+                    data: Vec::new(),
+                }))
+            }
+            Some(t) => Err(format!(
+                "Expected HEARTBEAT or COLLECT after DEVICE, got {:?}",
+                t
+            )),
+            None => Err("Expected HEARTBEAT or COLLECT after DEVICE".to_string()),
+        }
+    }
+
+    fn parse_create_sop(&mut self) -> Result<Statement, String> {
+        self.expect(Token::SOP)?;
+
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected SOP name, got {:?}", t)),
+            None => return Err("Expected SOP name".to_string()),
+        };
+
+        let version = match self.next() {
+            Some(Token::Identifier(v)) => v,
+            Some(Token::StringLiteral(s)) => s,
+            Some(Token::Version) => {
+                self.next();
+                match self.next() {
+                    Some(Token::Identifier(v)) => v,
+                    Some(Token::StringLiteral(s)) => s,
+                    Some(t) => return Err(format!("Expected version, got {:?}", t)),
+                    None => return Err("Expected version".to_string()),
+                }
+            }
+            Some(t) => return Err(format!("Expected version, got {:?}", t)),
+            None => return Err("Expected version".to_string()),
+        };
+
+        let description = match self.next() {
+            Some(Token::Identifier(d)) => d,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected description, got {:?}", t)),
+            None => String::new(),
+        };
+
+        Ok(Statement::CreateSOP(CreateSOPStatement {
+            name,
+            version,
+            description,
+            qualification_requirements: Vec::new(),
+        }))
+    }
+
+    fn parse_record_training(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Training)?;
+
+        let sop_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected SOP ID, got {:?}", t)),
+            None => return Err("Expected SOP ID".to_string()),
+        };
+
+        let user_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected user ID, got {:?}", t)),
+            None => return Err("Expected user ID".to_string()),
+        };
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+
+        Ok(Statement::RecordTraining(RecordTrainingStatement {
+            sop_id,
+            user_id,
+            training_date: timestamp,
+            status: "VALID".to_string(),
+        }))
+    }
+
+    fn parse_bind_sop(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Bind)?;
+        self.expect(Token::SOP)?;
+
+        let workflow_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected workflow name, got {:?}", t)),
+            None => return Err("Expected workflow name".to_string()),
+        };
+
+        let step_name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected step name, got {:?}", t)),
+            None => return Err("Expected step name".to_string()),
+        };
+
+        let sop_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected SOP ID, got {:?}", t)),
+            None => return Err("Expected SOP ID".to_string()),
+        };
+
+        Ok(Statement::BindSOP(BindSOPStatement {
+            workflow_name,
+            step_name,
+            sop_id,
+        }))
+    }
+
+    fn parse_register_calibration_device(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Calibration)?;
+        self.expect(Token::Device)?;
+
+        let device_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device ID, got {:?}", t)),
+            None => return Err("Expected device ID".to_string()),
+        };
+
+        let device_type = match self.next() {
+            Some(Token::Identifier(t)) => t,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device type, got {:?}", t)),
+            None => return Err("Expected device type".to_string()),
+        };
+
+        let interval_days = if matches!(self.current(), Some(Token::Interval)) {
+            self.next();
+            match self.next() {
+                Some(Token::NumberLiteral(n)) => n.parse().unwrap_or(365),
+                Some(Token::Identifier(n)) => n.parse().unwrap_or(365),
+                Some(t) => return Err(format!("Expected interval value, got {:?}", t)),
+                None => 365,
+            }
+        } else {
+            365
+        };
+
+        Ok(Statement::RegisterCalibrationDevice(
+            RegisterCalibrationDeviceStatement {
+                device_id,
+                device_type,
+                interval_days,
+            },
+        ))
+    }
+
+    fn parse_record_calibration_inner(&mut self) -> Result<Statement, String> {
+        let device_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected device ID, got {:?}", t)),
+            None => return Err("Expected device ID".to_string()),
+        };
+
+        let result = match self.next() {
+            Some(Token::Pass) => "PASS".to_string(),
+            Some(Token::Fail) => "FAIL".to_string(),
+            Some(Token::Identifier(s)) => s,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected result (PASS/FAIL), got {:?}", t)),
+            None => return Err("Expected result".to_string()),
+        };
+
+        Ok(Statement::RecordCalibration(RecordCalibrationStatement {
+            device_id,
+            result,
+            measured_value: 0.0,
+            tolerance: 0.01,
+        }))
+    }
+
+    fn parse_start_workflow(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Workflow)?;
+        let name = match self.next() {
+            Some(Token::Identifier(name)) => name,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected workflow name, got {:?}", t)),
+            None => return Err("Expected workflow name".to_string()),
+        };
+
+        let mut context = Vec::new();
+        if let Some(Token::For) = self.current() {
+            self.next();
+            while let Some(Token::Identifier(key)) = self.current() {
+                let key_name = key.clone();
+                self.next();
+                self.expect(Token::Equal)?;
+                match self.next() {
+                    Some(Token::NumberLiteral(n)) => {
+                        context.push((key_name, n.clone()));
+                    }
+                    Some(Token::StringLiteral(s)) => {
+                        context.push((key_name, format!("'{}'", s)));
+                    }
+                    Some(Token::Identifier(id)) => {
+                        context.push((key_name, id.clone()));
+                    }
+                    t => return Err(format!("Expected value, got {:?}", t)),
+                }
+                if let Some(Token::Comma) = self.current() {
+                    self.next();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        Ok(Statement::StartWorkflow(StartWorkflowStatement {
+            workflow_name: name,
+            context,
+        }))
+    }
+
+    fn parse_approve_workflow(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Workflow)?;
+        let instance_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected instance_id, got {:?}", t)),
+            None => return Err("Expected instance_id".to_string()),
+        };
+
+        self.expect(Token::Identifier("WITH".to_string()))?;
+        let mut stage = String::new();
+        let mut approver_id = String::new();
+        let mut signature = String::new();
+        let mut comment = None;
+
+        loop {
+            let key_opt = match self.current().cloned() {
+                Some(Token::Identifier(ref key)) => Some(key.clone()),
+                _ => None,
+            };
+
+            if let Some(key) = key_opt {
+                self.next();
+                self.expect(Token::Equal)?;
+                match key.to_uppercase().as_str() {
+                    "STAGE" => {
+                        stage = match self.next() {
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            t => return Err(format!("Expected stage value, got {:?}", t)),
+                        };
+                    }
+                    "APPROVER_ID" => {
+                        approver_id = match self.next() {
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            t => return Err(format!("Expected approver_id value, got {:?}", t)),
+                        };
+                    }
+                    "SIGNATURE" => {
+                        signature = match self.next() {
+                            Some(Token::StringLiteral(s)) => s,
+                            Some(Token::Identifier(s)) => s,
+                            t => return Err(format!("Expected signature value, got {:?}", t)),
+                        };
+                    }
+                    "COMMENT" => {
+                        comment = match self.next() {
+                            Some(Token::StringLiteral(s)) => Some(s),
+                            t => return Err(format!("Expected comment value, got {:?}", t)),
+                        };
+                    }
+                    _ => return Err(format!("Unknown parameter: {}", key)),
+                }
+            } else if let Some(Token::Comma) = self.current() {
+                self.next();
+            } else {
+                break;
+            }
+
+            if self.current().is_none() {
+                break;
+            }
+        }
+
+        Ok(Statement::ApproveWorkflow(ApproveWorkflowStatement {
+            instance_id,
+            stage,
+            approver_id,
+            signature,
+            comment,
+        }))
+    }
+
+    fn parse_reject_workflow(&mut self) -> Result<Statement, String> {
+        self.expect(Token::Workflow)?;
+        let instance_id = match self.next() {
+            Some(Token::Identifier(id)) => id,
+            Some(Token::StringLiteral(s)) => s,
+            Some(t) => return Err(format!("Expected instance_id, got {:?}", t)),
+            None => return Err("Expected instance_id".to_string()),
+        };
+
+        self.expect(Token::Identifier("WITH".to_string()))?;
+        let mut reason = String::new();
+
+        loop {
+            let key_opt = match self.current().cloned() {
+                Some(Token::Identifier(ref key)) => Some(key.clone()),
+                _ => None,
+            };
+
+            if let Some(key) = key_opt {
+                let key_upper = key.to_uppercase();
+                if key_upper == "REASON" {
+                    self.next();
+                    self.expect(Token::Equal)?;
+                    reason = match self.next() {
+                        Some(Token::StringLiteral(s)) => s,
+                        Some(Token::Identifier(s)) => s,
+                        t => return Err(format!("Expected reason value, got {:?}", t)),
+                    };
+                    break;
+                }
+            } else if let Some(Token::Comma) = self.current() {
+                self.next();
+            } else {
+                break;
+            }
+            if self.current().is_none() {
+                break;
+            }
+        }
+
+        Ok(Statement::RejectWorkflow(RejectWorkflowStatement {
+            instance_id,
+            reason,
+        }))
+    }
+
+    fn parse_string_array(&mut self) -> Result<Vec<String>, String> {
+        self.expect(Token::LParen)?;
+        let mut items = Vec::new();
+        loop {
+            match self.current() {
+                Some(Token::StringLiteral(s)) => {
+                    items.push(s.clone());
+                    self.next();
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
+                Some(Token::RParen) => {
+                    self.next();
+                    break;
+                }
+                _ => return Err("Expected string in array".to_string()),
+            }
+        }
+        Ok(items)
     }
 
     fn parse_drop_view(&mut self) -> Result<Statement, String> {
@@ -2350,7 +3163,27 @@ impl Parser {
                                 })),
                             });
                         } else {
+                            let mut agg_expr = Expression::Aggregate(agg.clone());
                             aggregates.push(agg);
+
+                            while matches!(self.current(), Some(Token::Star))
+                                || matches!(self.current(), Some(Token::Slash))
+                                || matches!(self.current(), Some(Token::Percent))
+                            {
+                                let op = match self.current() {
+                                    Some(Token::Star) => "*",
+                                    Some(Token::Slash) => "/",
+                                    Some(Token::Percent) => "%",
+                                    _ => break,
+                                };
+                                self.next();
+                                let right = self.parse_or_expression()?;
+                                agg_expr = Expression::BinaryOp(
+                                    Box::new(agg_expr),
+                                    op.to_string(),
+                                    Box::new(right),
+                                );
+                            }
 
                             let alias = if matches!(self.current(), Some(Token::As)) {
                                 self.next();
@@ -2360,7 +3193,7 @@ impl Parser {
                                         self.next();
                                         Some(alias_name)
                                     }
-                                    _ => return Err("Expected alias name".to_string()),
+                                    _ => None,
                                 }
                             } else {
                                 None
@@ -2369,7 +3202,7 @@ impl Parser {
                             columns.push(SelectColumn {
                                 name: format!("__agg_{}", aggregates.len()),
                                 alias,
-                                expression: None,
+                                expression: Some(agg_expr),
                             });
                         }
                     } else {
@@ -2549,32 +3382,76 @@ impl Parser {
                             expression: Some(expr),
                         });
                     } else {
+                        let lit_name = n.to_string();
+                        let lit_expr = Expression::Literal(n.to_string());
+                        let has_alias = matches!(self.current(), Some(Token::As));
+                        let alias = if has_alias {
+                            self.next();
+                            match self.current() {
+                                Some(Token::Identifier(name)) => {
+                                    let alias_name = name.clone();
+                                    self.next();
+                                    Some(alias_name)
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        };
                         columns.push(SelectColumn {
-                            name: n.to_string(),
-                            alias: None,
-                            expression: Some(Expression::Literal(n.to_string())),
+                            name: lit_name,
+                            alias,
+                            expression: Some(lit_expr),
                         });
-                        self.next();
+                        if !has_alias {
+                            self.next();
+                        }
                     }
                 }
                 // Handle StringLiteral in SELECT (e.g., SELECT 'hello')
                 Some(Token::StringLiteral(s)) => {
+                    let lit_str = format!("'{}'", s);
+                    let has_alias = matches!(self.current(), Some(Token::As));
+                    let alias = if has_alias {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
                     columns.push(SelectColumn {
-                        name: format!("'{}'", s),
-                        alias: None,
-                        expression: Some(Expression::Literal(format!("'{}'", s))),
+                        name: lit_str.clone(),
+                        alias,
+                        expression: Some(Expression::Literal(lit_str)),
                     });
-                    self.next();
                 }
                 // Handle BooleanLiteral in SELECT (e.g., SELECT TRUE, FALSE)
                 Some(Token::BooleanLiteral(b)) => {
                     let val = if *b { "TRUE" } else { "FALSE" };
+                    let alias = if matches!(self.current(), Some(Token::As)) {
+                        self.next();
+                        match self.current() {
+                            Some(Token::Identifier(name)) => {
+                                let alias_name = name.clone();
+                                self.next();
+                                Some(alias_name)
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
                     columns.push(SelectColumn {
                         name: val.to_string(),
-                        alias: None,
+                        alias,
                         expression: Some(Expression::Literal(val.to_string())),
                     });
-                    self.next();
                 }
                 Some(Token::Identifier(_)) => {
                     let start_position = self.position;
@@ -3294,37 +4171,12 @@ impl Parser {
             self.next();
         } else if !matches!(self.current(), Some(Token::RParen)) {
             loop {
-                match self.current() {
-                    Some(Token::Identifier(name)) => {
-                        let name = name.clone();
-                        let expr = if matches!(self.peek(), Some(Token::Dot)) {
-                            let table = name.clone();
-                            self.next();
-                            self.expect(Token::Dot)?;
-                            match self.current().cloned() {
-                                Some(Token::Identifier(col)) => {
-                                    self.next();
-                                    Expression::Identifier(format!("{}.{}", table, col))
-                                }
-                                Some(t) => {
-                                    return Err(format!("Expected column name, got {:?}", t))
-                                }
-                                None => return Err("Expected column name".to_string()),
-                            }
-                        } else {
-                            self.next();
-                            Expression::Identifier(name)
-                        };
-                        args.push(expr);
-                    }
-                    Some(Token::NumberLiteral(n)) => {
-                        args.push(Expression::Literal(n.clone()));
-                        self.next();
-                    }
-                    Some(Token::Comma) => {
-                        self.next();
-                    }
-                    _ => break,
+                let expr = self.parse_expression()?;
+                args.push(expr);
+                if matches!(self.current(), Some(Token::Comma)) {
+                    self.next();
+                } else {
+                    break;
                 }
             }
         }
@@ -7160,446 +8012,6 @@ mod tests {
                 assert_eq!(s.aggregates[1].func, AggregateFunction::Max);
             }
             _ => panic!("Expected SELECT statement"),
-        }
-    }
-}
-
-#[test]
-fn test_debug_having() {
-    let sql =
-        "SELECT region, SUM(amount) FROM sales_summary GROUP BY region HAVING SUM(amount) > 150";
-    match parse(sql) {
-        Ok(stmt) => {
-            println!("OK: {:#?}", stmt);
-            if let Statement::Select(s) = stmt {
-                println!("having = {:?}", s.having);
-            }
-        }
-        Err(e) => {
-            println!("ERROR: {}", e);
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_subtraction() {
-        let result = parse("SELECT price - discount FROM orders");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_multiplication() {
-        let result = parse("SELECT quantity * price FROM orders");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_division() {
-        let result = parse("SELECT total / cnt FROM stats");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_modulo() {
-        let result = parse("SELECT total % discount FROM orders");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_not_equal() {
-        let result = parse("SELECT a != b FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_less_equal() {
-        let result = parse("SELECT a <= b FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_greater_equal() {
-        let result = parse("SELECT a >= b FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_complex() {
-        let result = parse("SELECT a + b * c - d / e FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_with_literal() {
-        let result = parse("SELECT id + 1 FROM users");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_multiple_columns() {
-        let result = parse("SELECT a + b, c - d, e * f FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 3);
-                assert!(s.columns[0].expression.is_some());
-                assert!(s.columns[1].expression.is_some());
-                assert!(s.columns[2].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_mixed_with_identifier() {
-        let result = parse("SELECT a + b, name, c * d FROM t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 3);
-                assert!(s.columns[0].expression.is_some());
-                assert!(s.columns[1].expression.is_none());
-                assert!(s.columns[2].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_expression_with_table_prefix() {
-        let result = parse("SELECT t.a + t.b FROM table_name t");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Select(s) => {
-                assert_eq!(s.columns.len(), 1);
-                assert!(s.columns[0].expression.is_some());
-            }
-            _ => panic!("Expected SELECT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_create_trigger() {
-        let sql = "CREATE TRIGGER test_trigger BEFORE INSERT ON users FOR EACH ROW BEGIN SET NEW.name = 'triggered'; END";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::CreateTrigger(t) => {
-                assert_eq!(t.name, "test_trigger");
-                assert_eq!(t.timing, "BEFORE");
-                assert_eq!(t.table, "users");
-                assert_eq!(t.events.len(), 1);
-                assert_eq!(t.events[0], "INSERT");
-                assert!(t.body.contains("SET NEW.name"));
-            }
-            _ => panic!("Expected CREATE TRIGGER statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_create_trigger_after_update() {
-        let sql = "CREATE TRIGGER update_trigger AFTER UPDATE ON orders FOR EACH ROW BEGIN DELETE FROM log; END";
-        let result = parse(sql);
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::CreateTrigger(t) => {
-                assert_eq!(t.name, "update_trigger");
-                assert_eq!(t.timing, "AFTER");
-                assert_eq!(t.table, "orders");
-                assert_eq!(t.events.len(), 1);
-                assert_eq!(t.events[0], "UPDATE");
-            }
-            _ => panic!("Expected CREATE TRIGGER statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin() {
-        let result = parse("BEGIN");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(!work);
-                assert!(isolation_level.is_none());
-            }
-            _ => panic!("Expected BEGIN statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_work() {
-        let result = parse("BEGIN WORK");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(work);
-                assert!(isolation_level.is_none());
-            }
-            _ => panic!("Expected BEGIN WORK statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_serializable() {
-        let result = parse("BEGIN SERIALIZABLE");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(!work);
-                assert_eq!(isolation_level, Some(IsolationLevel::Serializable));
-            }
-            _ => panic!("Expected BEGIN SERIALIZABLE statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_isolation_level() {
-        let result = parse("BEGIN ISOLATION LEVEL SERIALIZABLE");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(!work);
-                assert_eq!(isolation_level, Some(IsolationLevel::Serializable));
-            }
-            _ => panic!("Expected BEGIN ISOLATION LEVEL SERIALIZABLE statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_commit() {
-        let result = parse("COMMIT");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Commit { work }) => {
-                assert!(!work);
-            }
-            _ => panic!("Expected COMMIT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_commit_work() {
-        let result = parse("COMMIT WORK");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Commit { work }) => {
-                assert!(work);
-            }
-            _ => panic!("Expected COMMIT WORK statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_rollback() {
-        let result = parse("ROLLBACK");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Rollback { work }) => {
-                assert!(!work);
-            }
-            _ => panic!("Expected ROLLBACK statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_rollback_work() {
-        let result = parse("ROLLBACK WORK");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Rollback { work }) => {
-                assert!(work);
-            }
-            _ => panic!("Expected ROLLBACK WORK statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_start_transaction() {
-        let result = parse("START TRANSACTION");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::StartTransaction { isolation_level }) => {
-                assert!(isolation_level.is_none());
-            }
-            _ => panic!("Expected START TRANSACTION statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_start_transaction_serializable() {
-        let result = parse("START TRANSACTION ISOLATION LEVEL SERIALIZABLE");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::StartTransaction { isolation_level }) => {
-                assert_eq!(isolation_level, Some(IsolationLevel::Serializable));
-            }
-            _ => panic!("Expected START TRANSACTION ISOLATION LEVEL SERIALIZABLE statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_set_transaction() {
-        let result = parse("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::SetTransaction { isolation_level }) => {
-                assert_eq!(isolation_level, IsolationLevel::Serializable);
-            }
-            _ => panic!("Expected SET TRANSACTION statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_set_transaction_read_committed() {
-        let result = parse("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::SetTransaction { isolation_level }) => {
-                assert_eq!(isolation_level, IsolationLevel::ReadCommitted);
-            }
-            _ => panic!("Expected SET TRANSACTION ISOLATION LEVEL READ COMMITTED statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_set_transaction_read_uncommitted() {
-        let result = parse("SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::SetTransaction { isolation_level }) => {
-                assert_eq!(isolation_level, IsolationLevel::ReadUncommitted);
-            }
-            _ => panic!("Expected SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_read_committed() {
-        let result = parse("BEGIN ISOLATION LEVEL READ COMMITTED");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(!work);
-                assert_eq!(isolation_level, Some(IsolationLevel::ReadCommitted));
-            }
-            _ => panic!("Expected BEGIN ISOLATION LEVEL READ COMMITTED statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_repeatable_read() {
-        let result = parse("BEGIN ISOLATION LEVEL REPEATABLE READ");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::Begin {
-                work,
-                isolation_level,
-            }) => {
-                assert!(!work);
-                assert_eq!(isolation_level, Some(IsolationLevel::SnapshotIsolation));
-            }
-            _ => panic!("Expected BEGIN ISOLATION LEVEL REPEATABLE READ statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_idempotent() {
-        let result = parse("BEGIN IDEMPOTENT 'txn-123'");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::BeginIdempotent { key }) => {
-                assert_eq!(key, "txn-123");
-            }
-            _ => panic!("Expected BEGIN IDEMPOTENT statement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_begin_idempotent_key() {
-        let result = parse("BEGIN IDEMPOTENCY KEY 'txn-456'");
-        assert!(result.is_ok(), "Parse failed: {:?}", result);
-        match result.unwrap() {
-            Statement::Transaction(TransactionStatement::BeginIdempotent { key }) => {
-                assert_eq!(key, "txn-456");
-            }
-            _ => panic!("Expected BEGIN IDEMPOTENCY KEY statement"),
         }
     }
 }

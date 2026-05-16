@@ -171,7 +171,6 @@ fn import_table(
     batch_size: usize,
 ) -> Result<usize, String> {
     use sqlrustgo_storage::engine::{ColumnDefinition, TableInfo};
-    use sqlrustgo_types::Value;
 
     let table_path = data_path.join(format!("{}.tbl", schema.name));
     if !table_path.exists() {
@@ -395,6 +394,7 @@ pub fn run(args: TpchBenchArgs) -> Result<(), String> {
         for iter in 0..args.iterations {
             let iter_start = Instant::now();
             let storage = Arc::new(RwLock::new(storage.clone()));
+            #[allow(deprecated)]
             let mut engine = ExecutionEngine::new(storage);
             let result = engine.execute(sql);
             let elapsed = iter_start.elapsed().as_secs_f64() * 1000.0; // ms

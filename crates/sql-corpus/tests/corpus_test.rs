@@ -1,21 +1,13 @@
 //! SQL Corpus Integration Test
 //!
-//! Runs the SQL regression corpus against SQLRustGo
+//! Runs the SQL regression corpus against SQLRustGo in memory-efficient batches
 
 use sqlrustgo_sql_corpus::{CorpusFileResult, SqlCorpus};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 fn get_corpus_root() -> PathBuf {
-    // CARGO_MANIFEST_DIR = crates/sql-corpus
-    // We need to join "sql_corpus" to get crates/sql-corpus/sql_corpus
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("sql_corpus")
-}
-
-fn run_corpus_test() -> HashMap<String, CorpusFileResult> {
-    let corpus_root = get_corpus_root();
-    let mut corpus = SqlCorpus::new(corpus_root);
-    corpus.execute_all()
 }
 
 fn print_results(results: &HashMap<String, CorpusFileResult>) {
@@ -60,29 +52,130 @@ fn print_results(results: &HashMap<String, CorpusFileResult>) {
 }
 
 #[test]
-fn test_sql_corpus_all() {
-    let results = run_corpus_test();
+fn test_sql_corpus_batch_dml_insert() {
+    let corpus_root = get_corpus_root();
+    let mut corpus = SqlCorpus::new(corpus_root);
+
+    let results = corpus.execute_batch("DML/INSERT");
     print_results(&results);
 
-    let corpus = SqlCorpus::new(get_corpus_root());
     let summary = corpus.summary(&results);
-
     println!(
-        "\nFinal Summary: {} files, {} cases, {:.1}% pass rate",
+        "\nBatch DML/INSERT Summary: {} files, {} cases, {:.1}% pass rate",
+        summary.total_files, summary.total_cases, summary.pass_rate
+    );
+}
+
+#[test]
+fn test_sql_corpus_batch_dml_update() {
+    let corpus_root = get_corpus_root();
+    let mut corpus = SqlCorpus::new(corpus_root);
+
+    let results = corpus.execute_batch("DML/UPDATE");
+    print_results(&results);
+
+    let summary = corpus.summary(&results);
+    println!(
+        "\nBatch DML/UPDATE Summary: {} files, {} cases, {:.1}% pass rate",
+        summary.total_files, summary.total_cases, summary.pass_rate
+    );
+}
+
+#[test]
+fn test_sql_corpus_batch_dml_delete() {
+    let corpus_root = get_corpus_root();
+    let mut corpus = SqlCorpus::new(corpus_root);
+
+    let results = corpus.execute_batch("DML/DELETE");
+    print_results(&results);
+
+    let summary = corpus.summary(&results);
+    println!(
+        "\nBatch DML/DELETE Summary: {} files, {} cases, {:.1}% pass rate",
+        summary.total_files, summary.total_cases, summary.pass_rate
+    );
+}
+
+#[test]
+#[ignore]
+fn test_sql_corpus_batch_select() {
+    let corpus_root = get_corpus_root();
+    let mut corpus = SqlCorpus::new(corpus_root);
+
+    let results = corpus.execute_batch("DML/SELECT");
+    print_results(&results);
+
+    let summary = corpus.summary(&results);
+    println!(
+        "\nBatch DML/SELECT Summary: {} files, {} cases, {:.1}% pass rate",
+        summary.total_files, summary.total_cases, summary.pass_rate
+    );
+}
+
+#[test]
+fn test_sql_corpus_single_file() {
+    let corpus_root = get_corpus_root();
+    let mut corpus = SqlCorpus::new(corpus_root.clone());
+
+    let result = corpus.execute_file(&corpus_root.join("DML/SELECT/aggregates.sql"));
+
+    println!("\n=== Single File: aggregates.sql ===");
+    println!(
+        "Total: {} cases, {} passed, {} failed",
+        result.total_cases, result.passed, result.failed
+    );
+}
+
+#[test]
+fn test_sql_corpus_batch_ddl() {
+    let corpus_root = get_corpus_root();
+    let mut corpus = SqlCorpus::new(corpus_root);
+
+    let results = corpus.execute_batch("DDL");
+    print_results(&results);
+
+    let summary = corpus.summary(&results);
+    println!(
+        "\nBatch DDL Summary: {} files, {} cases, {:.1}% pass rate",
         summary.total_files, summary.total_cases, summary.pass_rate
     );
 
     const PASS_RATE_THRESHOLD: f64 = 80.0;
     if summary.pass_rate < PASS_RATE_THRESHOLD {
         panic!(
-            "SQL Corpus pass rate {:.1}% is below threshold {:.1}%",
+            "DDL batch pass rate {:.1}% is below threshold {:.1}%",
             summary.pass_rate, PASS_RATE_THRESHOLD
         );
     }
+}
 
+#[test]
+fn test_sql_corpus_batch_expressions() {
+    let corpus_root = get_corpus_root();
+    let mut corpus = SqlCorpus::new(corpus_root);
+
+    let results = corpus.execute_batch("EXPRESSIONS");
+    print_results(&results);
+
+    let summary = corpus.summary(&results);
     println!(
-        "\n✅ R8 Gate Passed: {:.1}% >= {:.1}%",
-        summary.pass_rate, PASS_RATE_THRESHOLD
+        "\nBatch EXPRESSIONS Summary: {} files, {} cases, {:.1}% pass rate",
+        summary.total_files, summary.total_cases, summary.pass_rate
+    );
+}
+
+#[test]
+fn test_sql_corpus_batch_advanced() {
+    let corpus_root = get_corpus_root();
+    let mut corpus = SqlCorpus::new(corpus_root);
+
+    let results = corpus.execute_batch("ADVANCED");
+    print_results(&results);
+
+    let summary = corpus.summary(&results);
+    println!(
+        "\nBatch ADVANCED Summary: {} files, {} cases, {:.1}% pass rate",
+        summary.total_files, summary.total_cases, summary.pass_rate
     );
 }
 

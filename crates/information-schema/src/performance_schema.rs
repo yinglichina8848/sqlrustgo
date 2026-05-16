@@ -1,6 +1,75 @@
 use sqlrustgo_observability::observability_state::OBSERVABILITY;
+use std::sync::RwLock;
 
 pub struct PerformanceSchema;
+
+lazy_static::lazy_static! {
+    static ref PS_STATE: RwLock<PsState> = RwLock::new(PsState::new());
+}
+
+#[allow(dead_code)]
+struct PsState {
+    setup_actors: Vec<SetupActorsRow>,
+    setup_instruments: Vec<SetupInstrumentsRow>,
+    events_statements_current: Vec<EventsStatementsRow>,
+    events_statements_history: Vec<EventsStatementsRow>,
+    events_waits_current: Vec<EventsWaitsRow>,
+    events_waits_history: Vec<EventsWaitsRow>,
+}
+
+impl PsState {
+    fn new() -> Self {
+        let setup_actors = vec![SetupActorsRow {
+            mid: 0,
+            name: "%".to_string(),
+            enabled: "YES".to_string(),
+            history: "YES".to_string(),
+            properties: "PROPERTIES".to_string(),
+        }];
+
+        let setup_instruments = vec![
+            SetupInstrumentsRow {
+                name: "statement/sql/select".to_string(),
+                enabled: "YES".to_string(),
+                timed: "YES".to_string(),
+                properties: "PROPERTIES".to_string(),
+            },
+            SetupInstrumentsRow {
+                name: "statement/sql/insert".to_string(),
+                enabled: "YES".to_string(),
+                timed: "YES".to_string(),
+                properties: "PROPERTIES".to_string(),
+            },
+            SetupInstrumentsRow {
+                name: "statement/sql/update".to_string(),
+                enabled: "YES".to_string(),
+                timed: "YES".to_string(),
+                properties: "PROPERTIES".to_string(),
+            },
+            SetupInstrumentsRow {
+                name: "statement/sql/delete".to_string(),
+                enabled: "YES".to_string(),
+                timed: "YES".to_string(),
+                properties: "PROPERTIES".to_string(),
+            },
+            SetupInstrumentsRow {
+                name: "wait/io/socket".to_string(),
+                enabled: "YES".to_string(),
+                timed: "YES".to_string(),
+                properties: "PROPERTIES".to_string(),
+            },
+        ];
+
+        Self {
+            setup_actors,
+            setup_instruments,
+            events_statements_current: Vec::new(),
+            events_statements_history: Vec::new(),
+            events_waits_current: Vec::new(),
+            events_waits_history: Vec::new(),
+        }
+    }
+}
 
 impl PerformanceSchema {
     pub fn get_transaction_history_rows(limit: Option<usize>) -> Vec<TransactionHistoryRow> {
@@ -70,6 +139,108 @@ impl PerformanceSchema {
         let graph = OBSERVABILITY.lock_wait_graph.read().unwrap();
         graph.detect_deadlock()
     }
+
+    pub fn get_setup_actors_rows() -> Vec<SetupActorsRow> {
+        PS_STATE.read().unwrap().setup_actors.clone()
+    }
+
+    pub fn get_setup_instruments_rows() -> Vec<SetupInstrumentsRow> {
+        PS_STATE.read().unwrap().setup_instruments.clone()
+    }
+
+    pub fn get_events_statements_current_rows() -> Vec<EventsStatementsRow> {
+        OBSERVABILITY
+            .events_statements
+            .read()
+            .unwrap()
+            .get_current()
+            .map(|e| EventsStatementsRow {
+                thread_id: e.thread_id,
+                event_id: e.event_id,
+                event_name: e.command_type.clone(),
+                sql_text: e.sql_text,
+                digest: e.digest,
+                digest_text: None,
+                timer_start: e.timer_start,
+                timer_end: e.timer_end,
+                timer_wait: e.timer_wait,
+                lock_time: e.lock_time,
+                rows_examined: e.rows_examined,
+                rows_sent: e.rows_sent,
+                rows_affected: e.rows_affected,
+                created_tmp_disk_tables: e.created_tmp_disk_tables,
+                created_tmp_tables: e.created_tmp_tables,
+            })
+            .map(|row| vec![row])
+            .unwrap_or_default()
+    }
+
+    pub fn get_events_statements_history_rows() -> Vec<EventsStatementsRow> {
+        OBSERVABILITY
+            .events_statements
+            .read()
+            .unwrap()
+            .get_history(None)
+            .into_iter()
+            .map(|e| EventsStatementsRow {
+                thread_id: e.thread_id,
+                event_id: e.event_id,
+                event_name: e.command_type,
+                sql_text: e.sql_text,
+                digest: e.digest,
+                digest_text: None,
+                timer_start: e.timer_start,
+                timer_end: e.timer_end,
+                timer_wait: e.timer_wait,
+                lock_time: e.lock_time,
+                rows_examined: e.rows_examined,
+                rows_sent: e.rows_sent,
+                rows_affected: e.rows_affected,
+                created_tmp_disk_tables: e.created_tmp_disk_tables,
+                created_tmp_tables: e.created_tmp_tables,
+            })
+            .collect()
+    }
+
+    pub fn get_events_waits_current_rows() -> Vec<EventsWaitsRow> {
+        PS_STATE.read().unwrap().events_waits_current.clone()
+    }
+
+    pub fn get_events_waits_history_rows() -> Vec<EventsWaitsRow> {
+        PS_STATE.read().unwrap().events_waits_history.clone()
+    }
+
+    pub fn get_global_events_rows() -> Vec<GlobalEventsRow> {
+        Vec::new()
+    }
+
+    pub fn begin_statement(sql: String, command: String) -> u64 {
+        OBSERVABILITY
+            .events_statements
+            .write()
+            .unwrap()
+            .begin_statement(sql, command)
+    }
+
+    pub fn end_statement(
+        event_id: u64,
+        rows_examined: u64,
+        rows_sent: u64,
+        rows_affected: u64,
+        error_count: u64,
+    ) {
+        OBSERVABILITY
+            .events_statements
+            .write()
+            .unwrap()
+            .end_statement(
+                event_id,
+                rows_examined,
+                rows_sent,
+                rows_affected,
+                error_count,
+            );
+    }
 }
 
 pub struct TransactionHistoryRow {
@@ -108,4 +279,263 @@ pub struct WalStatsRow {
     pub replay_time_ms: u64,
     pub last_flush_lsn: u64,
     pub current_lsn: u64,
+}
+
+#[derive(Clone)]
+pub struct SetupActorsRow {
+    pub mid: u32,
+    pub name: String,
+    pub enabled: String,
+    pub history: String,
+    pub properties: String,
+}
+
+#[derive(Clone)]
+pub struct SetupInstrumentsRow {
+    pub name: String,
+    pub enabled: String,
+    pub timed: String,
+    pub properties: String,
+}
+
+#[derive(Clone)]
+pub struct EventsStatementsRow {
+    pub thread_id: u64,
+    pub event_id: u64,
+    pub event_name: String,
+    pub sql_text: String,
+    pub digest: Option<String>,
+    pub digest_text: Option<String>,
+    pub timer_start: u64,
+    pub timer_end: u64,
+    pub timer_wait: u64,
+    pub lock_time: u64,
+    pub rows_examined: u64,
+    pub rows_sent: u64,
+    pub rows_affected: u64,
+    pub created_tmp_disk_tables: u64,
+    pub created_tmp_tables: u64,
+}
+
+#[derive(Clone)]
+pub struct EventsWaitsRow {
+    pub thread_id: u64,
+    pub event_id: u64,
+    pub event_name: String,
+    pub source: String,
+    pub timer_start: u64,
+    pub timer_end: u64,
+    pub timer_wait: u64,
+    pub operation: String,
+    pub object_schema: Option<String>,
+    pub object_name: Option<String>,
+    pub object_instance_address: u64,
+}
+
+#[derive(Clone)]
+pub struct EventsStatementsSummaryByDigestRow {
+    pub schema_name: String,
+    pub digest: String,
+    pub digest_text: String,
+    pub count_star: u64,
+    pub sum_timer_wait: u64,
+    pub min_timer_wait: u64,
+    pub max_timer_wait: u64,
+    pub avg_timer_wait: u64,
+    pub sum_lock_time: u64,
+    pub sum_rows_examined: u64,
+    pub sum_rows_sent: u64,
+    pub sum_rows_affected: u64,
+    pub sum_created_tmp_disk_tables: u64,
+    pub sum_created_tmp_tables: u64,
+    pub first_seen: u64,
+    pub last_seen: u64,
+    pub quantile_95: u64,
+    pub quantile_99: u64,
+    pub quantile_999: u64,
+}
+
+#[derive(Clone)]
+pub struct GlobalEventsRow {
+    pub event_name: String,
+    pub count_star: u64,
+    pub sum_timer_wait: u64,
+    pub min_timer_wait: u64,
+    pub max_timer_wait: u64,
+    pub avg_timer_wait: u64,
+    pub sum_lock_time: u64,
+    pub count_read: u64,
+    pub sum_bytes_received: u64,
+    pub count_write: u64,
+    pub sum_bytes_sent: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ps_setup_actors() {
+        let rows = PerformanceSchema::get_setup_actors_rows();
+        assert!(!rows.is_empty());
+        let row = &rows[0];
+        assert_eq!(row.name, "%");
+        assert_eq!(row.enabled, "YES");
+        assert_eq!(row.history, "YES");
+    }
+
+    #[test]
+    fn test_ps_setup_instruments() {
+        let rows = PerformanceSchema::get_setup_instruments_rows();
+        assert!(!rows.is_empty());
+        assert!(rows.len() >= 5);
+        let row = &rows[0];
+        assert!(
+            row.name.contains("statement/sql/select")
+                || row.name.contains("statement/sql/insert")
+                || row.name.contains("wait/io")
+        );
+        assert_eq!(row.enabled, "YES");
+    }
+
+    #[test]
+    fn test_ps_events_statements() {
+        OBSERVABILITY.events_statements.write().unwrap().reset();
+        let current = PerformanceSchema::get_events_statements_current_rows();
+        let history = PerformanceSchema::get_events_statements_history_rows();
+        assert!(current.is_empty());
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn test_ps_events_waits() {
+        let current = PerformanceSchema::get_events_waits_current_rows();
+        let history = PerformanceSchema::get_events_waits_history_rows();
+        assert!(current.is_empty());
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn test_ps_global_events() {
+        let rows = PerformanceSchema::get_global_events_rows();
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn test_setup_actors_row_clone() {
+        let row = SetupActorsRow {
+            mid: 1,
+            name: "test".to_string(),
+            enabled: "YES".to_string(),
+            history: "YES".to_string(),
+            properties: "PROPERTIES".to_string(),
+        };
+        let cloned = row.clone();
+        assert_eq!(cloned.mid, row.mid);
+        assert_eq!(cloned.name, row.name);
+    }
+
+    #[test]
+    fn test_setup_instruments_row_clone() {
+        let row = SetupInstrumentsRow {
+            name: "test".to_string(),
+            enabled: "YES".to_string(),
+            timed: "YES".to_string(),
+            properties: "PROPERTIES".to_string(),
+        };
+        let cloned = row.clone();
+        assert_eq!(cloned.name, row.name);
+    }
+
+    #[test]
+    fn test_events_statements_row_clone() {
+        let row = EventsStatementsRow {
+            thread_id: 1,
+            event_id: 1,
+            event_name: "test".to_string(),
+            sql_text: "SELECT 1".to_string(),
+            digest: None,
+            digest_text: None,
+            timer_start: 0,
+            timer_end: 100,
+            timer_wait: 100,
+            lock_time: 10,
+            rows_examined: 0,
+            rows_sent: 1,
+            rows_affected: 0,
+            created_tmp_disk_tables: 0,
+            created_tmp_tables: 0,
+        };
+        let cloned = row.clone();
+        assert_eq!(cloned.thread_id, row.thread_id);
+        assert_eq!(cloned.sql_text, row.sql_text);
+    }
+
+    #[test]
+    fn test_events_waits_row_clone() {
+        let row = EventsWaitsRow {
+            thread_id: 1,
+            event_id: 1,
+            event_name: "wait/io".to_string(),
+            source: "test.rs".to_string(),
+            timer_start: 0,
+            timer_end: 100,
+            timer_wait: 100,
+            operation: "read".to_string(),
+            object_schema: None,
+            object_name: None,
+            object_instance_address: 0,
+        };
+        let cloned = row.clone();
+        assert_eq!(cloned.thread_id, row.thread_id);
+        assert_eq!(cloned.operation, row.operation);
+    }
+
+    #[test]
+    fn test_events_statements_summary_by_digest_row_clone() {
+        let row = EventsStatementsSummaryByDigestRow {
+            schema_name: "test".to_string(),
+            digest: "abc123".to_string(),
+            digest_text: "SELECT 1".to_string(),
+            count_star: 10,
+            sum_timer_wait: 1000,
+            min_timer_wait: 50,
+            max_timer_wait: 200,
+            avg_timer_wait: 100,
+            sum_lock_time: 100,
+            sum_rows_examined: 100,
+            sum_rows_sent: 10,
+            sum_rows_affected: 0,
+            sum_created_tmp_disk_tables: 0,
+            sum_created_tmp_tables: 0,
+            first_seen: 0,
+            last_seen: 1000,
+            quantile_95: 180,
+            quantile_99: 195,
+            quantile_999: 199,
+        };
+        let cloned = row.clone();
+        assert_eq!(cloned.schema_name, row.schema_name);
+        assert_eq!(cloned.count_star, row.count_star);
+    }
+
+    #[test]
+    fn test_global_events_row_clone() {
+        let row = GlobalEventsRow {
+            event_name: "test".to_string(),
+            count_star: 10,
+            sum_timer_wait: 1000,
+            min_timer_wait: 50,
+            max_timer_wait: 200,
+            avg_timer_wait: 100,
+            sum_lock_time: 100,
+            count_read: 5,
+            sum_bytes_received: 1000,
+            count_write: 5,
+            sum_bytes_sent: 500,
+        };
+        let cloned = row.clone();
+        assert_eq!(cloned.event_name, row.event_name);
+        assert_eq!(cloned.count_star, row.count_star);
+    }
 }

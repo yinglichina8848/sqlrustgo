@@ -899,6 +899,7 @@ impl SimpleExecutor {
         }
     }
 
+    #[allow(dead_code)]
     fn execute_with_select(&mut self, with_select: &WithSelect) -> Result<(), String> {
         if let Some(ref with_clause) = with_select.with_clause {
             for cte in &with_clause.ctes {
@@ -974,12 +975,70 @@ impl SqlCorpus {
         self.executor.reset();
     }
 
+    /// Execute all SQL files recursively (legacy method - may use high memory)
+    #[deprecated(note = "Use execute_batched() for memory-constrained environments")]
     pub fn execute_all(&mut self) -> HashMap<String, CorpusFileResult> {
         let mut results = HashMap::new();
         self.execute_directory(&mut results);
         results
     }
 
+    /// Execute a single subdirectory batch (memory-efficient)
+    #[allow(deprecated)]
+    pub fn execute_batch(&mut self, subdir: &str) -> HashMap<String, CorpusFileResult> {
+        let mut results = HashMap::new();
+        let batch_root = self.corpus_root.join(subdir);
+
+        if !batch_root.is_dir() {
+            return results;
+        }
+
+        for entry in fs::read_dir(&batch_root).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+
+            if path.is_dir() {
+                // Recursively process subdirectories within the batch
+                let mut sub_corpus = SqlCorpus::new(path.clone());
+                let sub_results = sub_corpus.execute_all();
+                results.extend(sub_results);
+            } else if path.extension().is_some_and(|e| e == "sql") {
+                let file_result = self.execute_file(&path);
+                let relative_path = path
+                    .strip_prefix(&self.corpus_root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .to_string();
+                results.insert(relative_path, file_result);
+            }
+        }
+
+        // Release memory by clearing executor state after batch
+        self.reset();
+        results
+    }
+
+    /// List all top-level subdirectories (for batch processing)
+    pub fn list_batches(&self) -> Vec<String> {
+        let mut batches = Vec::new();
+        if !self.corpus_root.is_dir() {
+            return batches;
+        }
+
+        for entry in fs::read_dir(&self.corpus_root).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    batches.push(name.to_string());
+                }
+            }
+        }
+        batches.sort();
+        batches
+    }
+
+    #[allow(deprecated)]
     fn execute_directory(&mut self, results: &mut HashMap<String, CorpusFileResult>) {
         if !self.corpus_root.is_dir() {
             return;
@@ -1075,12 +1134,12 @@ impl SqlCorpus {
                         }
                     }
                 }
-            } else if current_case.is_some() {
+            } else if let Some(ref mut current_case) = current_case {
                 if !trimmed.is_empty() && !trimmed.starts_with("--") {
-                    if !current_case.as_ref().unwrap().sql.is_empty() {
-                        current_case.as_mut().unwrap().sql.push('\n');
+                    if !current_case.sql.is_empty() {
+                        current_case.sql.push('\n');
                     }
-                    current_case.as_mut().unwrap().sql.push_str(trimmed);
+                    current_case.sql.push_str(trimmed);
                 }
             } else if !trimmed.is_empty() && !trimmed.starts_with("--") {
                 if !setup_sql.is_empty() {

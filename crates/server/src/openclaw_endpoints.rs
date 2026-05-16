@@ -20,6 +20,7 @@ use sqlrustgo_storage::engine::{StorageEngine, TriggerEvent, TriggerInfo, Trigge
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
+use md5;
 
 // ============================================================================
 // Request/Response Types
@@ -2446,6 +2447,308 @@ fn execute_sql(
             Ok(SqlExecResult {
                 columns: vec![],
                 rows: vec![],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::SignRecord(sign) => {
+            let table_name = &sign.table_name;
+            if !storage.has_table(table_name) {
+                return Err(format!("Table '{}' not found", table_name));
+            }
+
+            let reason = &sign.reason;
+            let user_id = "CURRENT_USER";
+            let session_id = None;
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+
+            let record_id = if let Some(ref rid) = sign.record_id {
+                rid.clone()
+            } else {
+                format!("{}_{}", table_name, timestamp)
+            };
+
+            let signature_data = format!(
+                "SIGN RECORD: table={}, record={}, reason={}, user={}, timestamp={}",
+                table_name, record_id, reason, user_id, timestamp
+            );
+
+            let signature_hex = format!("{:x}", md5::compute(signature_data.as_bytes()));
+
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(record_id),
+                sqlrustgo_storage::engine::Value::Text(user_id.to_string()),
+                sqlrustgo_storage::engine::Value::Text(reason.clone()),
+                sqlrustgo_storage::engine::Value::Text(signature_hex),
+                sqlrustgo_storage::engine::Value::Integer(timestamp),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "record_id".to_string(),
+                    "user_id".to_string(),
+                    "reason".to_string(),
+                    "signature".to_string(),
+                    "timestamp".to_string(),
+                ],
+                rows: vec![result_row],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::CreateApprovalPolicy(policy) => {
+            let policy_name = &policy.name;
+            let required_sigs = policy.required_signatures;
+            let sequential = policy.sequential;
+            let timeout = policy.timeout_hours.unwrap_or(72);
+            let description = policy.description.clone().unwrap_or_default();
+
+            let roles_str = policy.required_roles.join(", ");
+
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(policy_name.clone()),
+                sqlrustgo_storage::engine::Value::Integer(required_sigs),
+                sqlrustgo_storage::engine::Value::Text(roles_str),
+                sqlrustgo_storage::engine::Value::Boolean(sequential),
+                sqlrustgo_storage::engine::Value::Integer(timeout),
+                sqlrustgo_storage::engine::Value::Text(description),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "policy_name".to_string(),
+                    "required_signatures".to_string(),
+                    "required_roles".to_string(),
+                    "sequential".to_string(),
+                    "timeout_hours".to_string(),
+                    "description".to_string(),
+                ],
+                rows: vec![result_row],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::RegisterDevice(device) => {
+            let device_id = &device.device_id;
+            let device_name = &device.device_name;
+            let device_type = &device.device_type;
+            let fingerprint = device.certificate_fingerprint.clone();
+
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+
+            let status = "REGISTERED";
+
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(device_id.clone()),
+                sqlrustgo_storage::engine::Value::Text(device_name.clone()),
+                sqlrustgo_storage::engine::Value::Text(device_type.clone()),
+                sqlrustgo_storage::engine::Value::Text(status.to_string()),
+                sqlrustgo_storage::engine::Value::Integer(timestamp),
+                sqlrustgo_storage::engine::Value::Text(fingerprint.unwrap_or_default()),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "device_id".to_string(),
+                    "device_name".to_string(),
+                    "device_type".to_string(),
+                    "status".to_string(),
+                    "registered_at".to_string(),
+                    "certificate_fingerprint".to_string(),
+                ],
+                rows: vec![result_row],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::DeviceHeartbeat(heartbeat) => {
+            let device_id = &heartbeat.device_id;
+            let status = &heartbeat.status;
+
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(device_id.clone()),
+                sqlrustgo_storage::engine::Value::Text(status.clone()),
+                sqlrustgo_storage::engine::Value::Integer(timestamp),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "device_id".to_string(),
+                    "status".to_string(),
+                    "last_heartbeat".to_string(),
+                ],
+                rows: vec![result_row],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::CollectData(collect) => {
+            let device_id = &collect.device_id;
+            let collection_type = &collect.collection_type;
+
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+
+            let collection_id = format!("{}_{}", device_id, timestamp);
+
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(collection_id),
+                sqlrustgo_storage::engine::Value::Text(device_id.clone()),
+                sqlrustgo_storage::engine::Value::Text(collection_type.clone()),
+                sqlrustgo_storage::engine::Value::Integer(timestamp),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "collection_id".to_string(),
+                    "device_id".to_string(),
+                    "collection_type".to_string(),
+                    "collected_at".to_string(),
+                ],
+                rows: vec![result_row],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::CreateSOP(sop) => {
+            let sop_id = format!("{}_{}", sop.name, sop.version);
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(sop_id),
+                sqlrustgo_storage::engine::Value::Text(sop.name),
+                sqlrustgo_storage::engine::Value::Text(sop.version),
+                sqlrustgo_storage::engine::Value::Text(sop.description),
+                sqlrustgo_storage::engine::Value::Integer(timestamp),
+                sqlrustgo_storage::engine::Value::Text("ACTIVE".to_string()),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "sop_id".to_string(),
+                    "name".to_string(),
+                    "version".to_string(),
+                    "description".to_string(),
+                    "created_at".to_string(),
+                    "status".to_string(),
+                ],
+                rows: vec![result_row],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::RecordTraining(training) => {
+            let record_id = format!("{}_{}", training.sop_id, training.training_date);
+
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(record_id),
+                sqlrustgo_storage::engine::Value::Text(training.sop_id),
+                sqlrustgo_storage::engine::Value::Text(training.user_id),
+                sqlrustgo_storage::engine::Value::Integer(training.training_date),
+                sqlrustgo_storage::engine::Value::Text(training.status.clone()),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "record_id".to_string(),
+                    "sop_id".to_string(),
+                    "user_id".to_string(),
+                    "training_date".to_string(),
+                    "status".to_string(),
+                ],
+                rows: vec![result_row],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::BindSOP(binding) => {
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(binding.workflow_name),
+                sqlrustgo_storage::engine::Value::Text(binding.step_name),
+                sqlrustgo_storage::engine::Value::Text(binding.sop_id),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "workflow_name".to_string(),
+                    "step_name".to_string(),
+                    "sop_id".to_string(),
+                ],
+                rows: vec![result_row],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::RegisterCalibrationDevice(device) => {
+            let device_id = &device.device_id;
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(device_id.clone()),
+                sqlrustgo_storage::engine::Value::Text(device.device_type.clone()),
+                sqlrustgo_storage::engine::Value::Integer(device.interval_days as i64),
+                sqlrustgo_storage::engine::Value::Integer(timestamp),
+                sqlrustgo_storage::engine::Value::Text("CURRENT".to_string()),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "device_id".to_string(),
+                    "device_type".to_string(),
+                    "interval_days".to_string(),
+                    "last_calibration".to_string(),
+                    "status".to_string(),
+                ],
+                rows: vec![result_row],
+                affected_rows: 0,
+            })
+        }
+
+        sqlrustgo_parser::Statement::RecordCalibration(calibration) => {
+            let record_id = format!("{}_{}", calibration.device_id, chrono::Utc::now().timestamp_millis());
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+
+            let result_row = vec![
+                sqlrustgo_storage::engine::Value::Text(record_id),
+                sqlrustgo_storage::engine::Value::Text(calibration.device_id.clone()),
+                sqlrustgo_storage::engine::Value::Integer(timestamp),
+                sqlrustgo_storage::engine::Value::Text(calibration.result.clone()),
+                sqlrustgo_storage::engine::Value::Float(calibration.measured_value),
+                sqlrustgo_storage::engine::Value::Float(calibration.tolerance),
+            ];
+
+            Ok(SqlExecResult {
+                columns: vec![
+                    "record_id".to_string(),
+                    "device_id".to_string(),
+                    "calibration_date".to_string(),
+                    "result".to_string(),
+                    "measured_value".to_string(),
+                    "tolerance".to_string(),
+                ],
+                rows: vec![result_row],
                 affected_rows: 0,
             })
         }

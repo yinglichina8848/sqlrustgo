@@ -50,21 +50,32 @@ impl Tokenizer for SimpleTokenizer {
     }
 }
 
-/// Chinese tokenizer with unigram and bigram support
+/// Chinese tokenizer with N-gram (bigram + trigram) support
+/// Optimized for full-text search - produces fewer but more meaningful tokens
 #[derive(Clone)]
-pub struct ChineseTokenizer;
+pub struct ChineseTokenizer {
+    /// Minimum token length to keep
+    min_token_len: usize,
+}
 
 impl ChineseTokenizer {
     pub fn new() -> Self {
-        Self
+        Self { min_token_len: 2 }
+    }
+
+    /// Configure minimum token length
+    pub fn with_min_token_len(mut self, min_len: usize) -> Self {
+        self.min_token_len = min_len;
+        self
     }
 
     pub fn tokenize(&self, text: &str) -> Vec<String> {
         let mut tokens = Vec::new();
         let chars: Vec<char> = text.chars().collect();
         let len = chars.len();
-        let mut i = 0;
 
+        // Collect segments of continuous non-ASCII characters
+        let mut i = 0;
         while i < len {
             let c = chars[i];
 
@@ -76,7 +87,7 @@ impl ChineseTokenizer {
                 }
                 let word: String = chars[i..j].iter().collect();
                 let lower = word.to_lowercase();
-                if lower.len() > 1 {
+                if lower.len() >= self.min_token_len {
                     tokens.push(lower);
                 }
                 i = j;
@@ -84,22 +95,52 @@ impl ChineseTokenizer {
                 // Skip punctuation and whitespace
                 i += 1;
             } else {
-                // Chinese character: create unigram and bigram
-                tokens.push(c.to_string());
-                // Bigram with next Chinese character
-                if i + 1 < len
-                    && !chars[i + 1].is_ascii_alphanumeric()
-                    && !chars[i + 1].is_whitespace()
-                    && chars[i + 1] != '　'
+                // Chinese/Unicode character - use N-gram approach
+                // Collect consecutive Chinese characters
+                let start = i;
+                let mut end = i + 1;
+                while end < len
+                    && !chars[end].is_ascii_alphanumeric()
+                    && !chars[end].is_whitespace()
+                    && chars[end] != '　'
+                    && !chars[end].is_ascii_punctuation()
                 {
-                    let mut bigram = c.to_string();
-                    bigram.push(chars[i + 1]);
-                    tokens.push(bigram);
+                    end += 1;
                 }
-                i += 1;
+
+                let chinese_segment: String = chars[start..end].iter().collect();
+                let seg_len = chinese_segment.chars().count();
+
+                if seg_len >= 2 {
+                    // For 2+ character segments: generate bigrams and trigrams
+                    // This reduces noise compared to unigram + bigram
+                    let chars_in_seg: Vec<char> = chinese_segment.chars().collect();
+
+                    // Generate bigrams
+                    for j in 0..seg_len - 1 {
+                        let bigram: String = chars_in_seg[j..=j + 1].iter().collect();
+                        tokens.push(bigram);
+                    }
+
+                    // Generate trigrams for segments >= 3
+                    if seg_len >= 3 {
+                        for j in 0..seg_len - 2 {
+                            let trigram: String = chars_in_seg[j..=j + 2].iter().collect();
+                            tokens.push(trigram);
+                        }
+                    }
+                } else if seg_len == 1 {
+                    // Single Chinese character - keep as unigram for search flexibility
+                    tokens.push(c.to_string());
+                }
+
+                i = end;
             }
         }
 
+        // Deduplicate while preserving order
+        let mut seen = std::collections::HashSet::new();
+        tokens.retain(|t| seen.insert(t.clone()));
         tokens
     }
 }

@@ -1,21 +1,38 @@
 #!/usr/bin/env bash
-# Parallel Coverage Script - 使用 cargo llvm-cov 并行测试
+# Parallel Coverage Script - uses cargo llvm-cov for parallel testing
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OUTPUT_DIR="$PROJECT_ROOT/artifacts/coverage"
 
-PARALLEL=4
+detect_parallelism() {
+    local memory_gb
+    if [[ "$(uname)" == "Darwin" ]]; then
+        memory_gb=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 8589934592) / 1024 / 1024 / 1024 ))
+    else
+        memory_gb=$(( $(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}') / 1024 / 1024 ))
+    fi
+
+    if [[ "$memory_gb" -lt 8 ]]; then
+        echo 1
+    elif [[ "$memory_gb" -lt 16 ]]; then
+        echo 2
+    elif [[ "$memory_gb" -lt 32 ]]; then
+        echo 4
+    else
+        echo 6
+    fi
+}
+
+PARALLEL=$(detect_parallelism)
 WAVE="all"
 TIMEOUT=300
 
-# macOS 兼容：检测 timeout 命令
 if ! command -v timeout &>/dev/null; then
     if command -v gtimeout &>/dev/null; then
         timeout() { gtimeout "$@"; }
     else
-        # 使用 perl 实现 timeout
         timeout() {
             local secs="$1"
             shift
@@ -29,7 +46,7 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Options:
-    --parallel N    并行度 (default: 4)
+    --parallel N    Parallelism (auto-detected: $PARALLEL based on system memory)
     --wave N        运行哪一波 (1,2,3,4,all; default: all)
     --timeout N     单模块超时秒数 (default: 300)
     --help          显示帮助

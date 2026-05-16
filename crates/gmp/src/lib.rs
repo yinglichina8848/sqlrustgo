@@ -50,15 +50,31 @@ pub mod audit;
 pub mod audit_chain;
 pub mod audit_chain_tamper;
 pub mod audit_chain_wal;
+pub mod calibration;
 pub mod compliance;
+pub mod correction;
+pub mod correction_chain;
 pub mod document;
+pub mod electronic_signature;
 pub mod embedding;
+pub mod evidence;
+pub mod evidence_api;
+pub mod evidence_storage;
+pub mod evidence_verification;
+pub mod hsm;
+pub mod immutable_record;
+pub mod mobile;
 pub mod persist_sqlite;
+pub mod provenance;
+pub mod provenance_lineage;
 pub mod report;
 pub mod scenarios;
 pub mod semantic_embedding;
+pub mod signature;
+pub mod sop;
 pub mod sql_api;
 pub mod vector_search;
+pub mod workflow;
 
 // Re-export commonly used types
 pub use audit::{
@@ -81,11 +97,24 @@ pub use audit_chain_tamper::{
     RecoveryAction, TamperAlert, TamperViolation, VerificationResult,
 };
 
+pub use correction_chain::{
+    CorrectionChain, CorrectionEntry, CorrectionError, CorrectionReason, RecordCorrectionChain,
+};
+
 pub use compliance::{
     check_batch_compliance, check_document_compliance, get_compliance_summary,
     ComplianceCheckRequest, ComplianceResult, ComplianceRule, ComplianceSummary, Severity,
     Violation,
 };
+
+pub use correction::{CorrectionRecord, CREATE_CORRECTION_RECORDS_TABLE, TABLE_CORRECTION_RECORDS};
+
+pub use provenance::{
+    OperationType, ProvenanceRecord, SourceType, CREATE_PROVENANCE_RECORDS_TABLE,
+    TABLE_PROVENANCE_RECORDS,
+};
+
+pub use provenance_lineage::{LineageGraph, LineageNode};
 
 pub use document::{
     create_gmp_tables, get_content, get_keywords, insert_document, insert_document_content,
@@ -114,4 +143,66 @@ pub use semantic_embedding::{
     EmbeddingProvider, EmbeddingProviderConfig, HashConfig, OllamaConfig, OpenAIConfig,
     ProviderFactory,
 };
+
+pub use electronic_signature::{
+    sql as e_signature_sql, ApprovalPolicy, ApprovalPolicyEvaluator, ElectronicSignature,
+    ElectronicSignatureProvider, PolicyEvaluation, PolicyStatus, SignatureError, SignatureRequest,
+    SystemTimeProvider, TrustedTimestampProvider, CREATE_APPROVAL_POLICIES_TABLE,
+    CREATE_ELECTRONIC_SIGNATURES_TABLE, CREATE_SIGNATURE_REQUESTS_TABLE,
+};
+
+pub use signature::{
+    keys::{Certificate, PrivateKey, PublicKey},
+    SignatureAlgorithm, SignatureError as DigiSignatureError, SignatureVerifier, Signer,
+};
+
+pub use hsm::{HsmConfig, HsmError, HsmProvider, HsmProviderType};
+
+pub use hsm::software_tpm::SoftwareTpmProvider;
+
+pub use hsm::software_tpm::create_provider;
+
+pub use evidence::{
+    EvidenceChain, EvidenceChainBuilder, EvidenceChainSummary, EvidenceMetadata, EvidenceNode,
+    SearchEvidence,
+};
+
+pub use evidence_storage::{
+    create_evidence_tables, get_evidence_by_chain_id, get_evidence_by_time_range,
+    save_evidence_chain, TABLE_EVIDENCE_RECORDS,
+};
+
+pub use evidence_verification::{
+    evidence_incremental_verify, verify_cross_chain, verify_evidence_chain,
+};
+
+pub use immutable_record::{ImmutableRecord, ImmutableRecordBuilder, VerificationReport};
+
+pub use evidence_api::{
+    create_evidence, create_signed_evidence, get_evidence, list_evidence, verify_evidence,
+};
+
+pub use workflow::{
+    ApprovalAction, ApprovalChain, ApprovalRecord, TimeoutChecker, WorkflowDefinition,
+    WorkflowEngine, WorkflowInstance, WorkflowState, WorkflowTransition,
+};
+
 pub use sql_api::{sql, GmpExecutor};
+
+pub use mobile::{
+    verify_device_signature, verify_device_trust, CollectionStatus, DeviceStatus, MobileCollection,
+    MobileCollectionRecord, MobileDevice, MobileTrustedCollection, TrustVerificationResult,
+    TABLE_MOBILE_COLLECTIONS, TABLE_MOBILE_DEVICES,
+};
+
+pub use sop::{
+    BindingStatus, GmpOperation, SOPBinding, SopStatus, SopTrainingBinding,
+    StandardOperatingProcedure, TrainingRecord, TrainingStatus, TrainingVerificationResult,
+    TABLE_SOP, TABLE_SOP_BINDINGS, TABLE_TRAINING_RECORDS,
+};
+
+pub use calibration::{
+    CalibrationDevice, CalibrationInterval, CalibrationMeasurement, CalibrationRecord,
+    CalibrationResult, CalibrationStatus, DeviceCalibrationManager, TABLE_CALIBRATION_DEVICES,
+    TABLE_CALIBRATION_RECORDS,
+};

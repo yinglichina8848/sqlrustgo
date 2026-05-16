@@ -440,15 +440,62 @@ impl StoredProcExecutor {
         }
 
         match result {
-            Ok(_) => Ok(ExecutorResult::new(
-                vec![vec![Value::Text(format!(
-                    "Procedure '{}' executed successfully",
-                    name
-                ))]],
-                1,
-            )),
+            Ok(_) => {
+                let result_json = ctx
+                    .get_session_var("__last_select_result")
+                    .and_then(|v| {
+                        if let Value::Text(s) = &v {
+                            serde_json::from_str(s).ok()
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_default();
+                let found_rows = ctx
+                    .get_session_var("__found_rows")
+                    .and_then(|v| {
+                        if let Value::Integer(i) = v {
+                            Some(*i as usize)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(0);
+                Ok(ExecutorResult::new(result_json, found_rows))
+            }
             Err(e) => Err(e),
         }
+    }
+
+    /// Execute a statement with CTE support (public method for ExecutionEngine)
+    pub fn execute_with_cte(
+        &self,
+        statement: &sqlrustgo_parser::Statement,
+    ) -> Result<ExecutorResult, String> {
+        let mut ctx = ProcedureContext::new();
+        self.execute_statement_storage(statement, &mut ctx)?;
+
+        let result_json = ctx
+            .get_session_var("__last_select_result")
+            .and_then(|v| {
+                if let Value::Text(s) = &v {
+                    serde_json::from_str(s).ok()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
+        let found_rows = ctx
+            .get_session_var("__found_rows")
+            .and_then(|v| {
+                if let Value::Integer(i) = v {
+                    Some(*i as usize)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0);
+        Ok(ExecutorResult::new(result_json, found_rows))
     }
 
     /// Execute a list of procedure statements
@@ -860,7 +907,7 @@ impl StoredProcExecutor {
     }
 
     /// Execute a parsed statement using storage engine
-    fn execute_statement_storage(
+    pub fn execute_statement_storage(
         &self,
         statement: &sqlrustgo_parser::Statement,
         ctx: &mut ProcedureContext,
@@ -869,7 +916,24 @@ impl StoredProcExecutor {
             sqlrustgo_parser::Statement::WithSelect(with_select) => {
                 if let Some(ref with_clause) = with_select.with_clause {
                     for cte in &with_clause.ctes {
-                        let cte_records = self.execute_cte_subquery(&cte.subquery, ctx)?;
+                        let cte_records = if with_clause.recursive {
+                            if let sqlrustgo_parser::Statement::Union(union_stmt) = &*cte.subquery {
+                                if union_stmt.union_all {
+                                    self.execute_recursive_cte(
+                                        &union_stmt.left,
+                                        &union_stmt.right,
+                                        &cte.name,
+                                        ctx,
+                                    )?
+                                } else {
+                                    self.execute_cte_subquery(&cte.subquery, ctx)?
+                                }
+                            } else {
+                                self.execute_cte_subquery(&cte.subquery, ctx)?
+                            }
+                        } else {
+                            self.execute_cte_subquery(&cte.subquery, ctx)?
+                        };
                         ctx.cte_tables.insert(cte.name.clone(), cte_records);
                     }
                 }
@@ -1525,12 +1589,18 @@ impl StoredProcExecutor {
                 let right_records = self.execute_cte_subquery(&intersect_stmt.right, ctx)?;
                 let right_set: std::collections::HashSet<_> = right_records.iter().collect();
                 let result: Vec<_> = if intersect_stmt.intersect_all {
-                    left_records.into_iter().filter(|r| right_set.contains(r)).collect()
+                    left_records
+                        .into_iter()
+                        .filter(|r| right_set.contains(r))
+                        .collect()
                 } else {
                     let mut left_unique: Vec<_> = left_records;
                     left_unique.sort();
                     left_unique.dedup();
-                    left_unique.into_iter().filter(|r| right_set.contains(r)).collect()
+                    left_unique
+                        .into_iter()
+                        .filter(|r| right_set.contains(r))
+                        .collect()
                 };
                 Ok(result)
             }
@@ -1539,12 +1609,18 @@ impl StoredProcExecutor {
                 let right_records = self.execute_cte_subquery(&except_stmt.right, ctx)?;
                 let right_set: std::collections::HashSet<_> = right_records.iter().collect();
                 let result: Vec<_> = if except_stmt.except_all {
-                    left_records.into_iter().filter(|r| !right_set.contains(r)).collect()
+                    left_records
+                        .into_iter()
+                        .filter(|r| !right_set.contains(r))
+                        .collect()
                 } else {
                     let mut left_unique: Vec<_> = left_records;
                     left_unique.sort();
                     left_unique.dedup();
-                    left_unique.into_iter().filter(|r| !right_set.contains(r)).collect()
+                    left_unique
+                        .into_iter()
+                        .filter(|r| !right_set.contains(r))
+                        .collect()
                 };
                 Ok(result)
             }
@@ -1552,6 +1628,553 @@ impl StoredProcExecutor {
                 "Unsupported statement type in CTE: {:?}",
                 statement
             )),
+        }
+    }
+
+    /// Execute a recursive CTE with iterative evaluation
+    /// Anchor member executes once, then recursive member iterates until no new rows
+    fn execute_recursive_cte(
+        &self,
+        anchor: &sqlrustgo_parser::Statement,
+        recursive: &sqlrustgo_parser::Statement,
+        cte_name: &str,
+        ctx: &mut ProcedureContext,
+    ) -> Result<Vec<Vec<Value>>, String> {
+        let mut all_rows: Vec<Vec<Value>> = Vec::new();
+        let mut cte_table: Vec<Vec<Value>> = Vec::new();
+        let max_iterations = 1000;
+
+        let anchor_columns = self.extract_select_columns(anchor);
+        let anchor_rows = self.execute_cte_anchor(anchor, ctx)?;
+        cte_table.extend(anchor_rows.clone());
+        all_rows.extend(anchor_rows);
+
+        for _iteration in 0..max_iterations {
+            ctx.cte_tables
+                .insert(cte_name.to_string(), cte_table.clone());
+
+            let recursive_rows = self.execute_cte_recursive(recursive, ctx, &anchor_columns)?;
+
+            if recursive_rows.is_empty() {
+                break;
+            }
+
+            let new_rows: Vec<Vec<Value>> = recursive_rows
+                .into_iter()
+                .filter(|row| !cte_table.contains(row))
+                .collect();
+
+            if new_rows.is_empty() {
+                break;
+            }
+
+            cte_table.extend(new_rows.clone());
+            all_rows.extend(new_rows);
+        }
+
+        ctx.cte_tables.insert(cte_name.to_string(), cte_table);
+        Ok(all_rows)
+    }
+
+    /// Extract column names from a SELECT statement
+    /// Uses alias if present, otherwise falls back to name
+    /// For ambiguous cases (e.g., "1" as alias for "n"), returns all non-expression names
+    fn extract_select_columns(&self, statement: &sqlrustgo_parser::Statement) -> Vec<String> {
+        if let sqlrustgo_parser::Statement::Select(select) = statement {
+            let cols: Vec<String> = select
+                .columns
+                .iter()
+                .filter_map(|col| {
+                    if col.expression.is_none() {
+                        return Some(col.name.clone());
+                    }
+                    match col.expression.as_ref().unwrap() {
+                        sqlrustgo_parser::Expression::Literal(_) => {
+                            if col.alias.is_some() {
+                                Some(col.alias.clone().unwrap())
+                            } else {
+                                Some(col.name.clone())
+                            }
+                        }
+                        sqlrustgo_parser::Expression::Identifier(_) => {
+                            if col.alias.is_some() {
+                                Some(col.alias.clone().unwrap())
+                            } else {
+                                None
+                            }
+                        }
+                        _ => Some(col.alias.clone().unwrap_or_else(|| col.name.clone())),
+                    }
+                })
+                .collect();
+            cols
+        } else {
+            vec![]
+        }
+    }
+
+    /// Execute the anchor member of a recursive CTE (non-recursive SELECT)
+    fn execute_cte_anchor(
+        &self,
+        statement: &sqlrustgo_parser::Statement,
+        ctx: &mut ProcedureContext,
+    ) -> Result<Vec<Vec<Value>>, String> {
+        match statement {
+            sqlrustgo_parser::Statement::Select(select) => {
+                let table_name = select.first_table();
+
+                if table_name.is_empty() || table_name == "empty" {
+                    let row_ctx = ctx.clone();
+                    let projected_row: Vec<Value> = select
+                        .columns
+                        .iter()
+                        .filter_map(|col| {
+                            col.expression
+                                .as_ref()
+                                .map(|expr| self.expression_to_value_with_context(expr, &row_ctx))
+                        })
+                        .collect();
+                    return Ok(vec![projected_row]);
+                }
+
+                let raw_records: Vec<Vec<Value>> = if ctx.cte_tables.contains_key(&table_name) {
+                    ctx.cte_tables.get(&table_name).cloned().unwrap_or_default()
+                } else {
+                    let storage = self.storage.read().unwrap();
+                    storage
+                        .scan(&table_name)
+                        .map_err(|e| format!("Failed to scan anchor table: {}", e))?
+                };
+
+                let bound_ctx = ctx.clone();
+                let columns: Vec<String> = select.columns.iter().map(|c| c.name.clone()).collect();
+                let projected: Vec<Vec<Value>> = raw_records
+                    .iter()
+                    .filter_map(|row| {
+                        let row_ctx = self.bind_row_to_context(bound_ctx.clone(), &columns, row);
+
+                        if let Some(ref where_expr) = select.where_clause {
+                            let where_val =
+                                self.expression_to_value_with_context(where_expr, &row_ctx);
+                            if !self.value_is_true(&where_val) {
+                                return None;
+                            }
+                        }
+
+                        let projected_row: Vec<Value> = select
+                            .columns
+                            .iter()
+                            .filter_map(|col| {
+                                col.expression.as_ref().map(|expr| {
+                                    self.expression_to_value_with_context(expr, &row_ctx)
+                                })
+                            })
+                            .collect();
+
+                        if projected_row.is_empty() {
+                            Some(row.clone())
+                        } else {
+                            Some(projected_row)
+                        }
+                    })
+                    .collect();
+
+                Ok(projected)
+            }
+            _ => Err(format!(
+                "Unsupported anchor statement type: {:?}",
+                statement
+            )),
+        }
+    }
+
+    /// Execute the recursive member of a recursive CTE
+    /// Handles column binding from the CTE table and projection
+    fn execute_cte_recursive(
+        &self,
+        statement: &sqlrustgo_parser::Statement,
+        ctx: &mut ProcedureContext,
+        _cte_columns: &[String],
+    ) -> Result<Vec<Vec<Value>>, String> {
+        match statement {
+            sqlrustgo_parser::Statement::Select(select) => {
+                let table_name = &select.first_table();
+                let records = if ctx.cte_tables.contains_key(table_name) {
+                    ctx.cte_tables.get(table_name).cloned().unwrap_or_default()
+                } else {
+                    let storage = self.storage.read().unwrap();
+                    storage
+                        .scan(table_name)
+                        .map_err(|e| format!("Failed to scan recursive table: {}", e))?
+                };
+
+                let column_bindings = self.extract_column_binding(select);
+                eprintln!("DEBUG recursive: column_bindings = {:?}", column_bindings);
+
+                let projected: Vec<Vec<Value>> = records
+                    .iter()
+                    .filter_map(|row| {
+                        eprintln!("DEBUG recursive: row = {:?}", row);
+                        if let Some(ref where_expr) = select.where_clause {
+                            let where_val = self.evaluate_expression_with_binding(
+                                where_expr,
+                                row,
+                                &column_bindings,
+                            );
+                            eprintln!(
+                                "DEBUG recursive: where_expr = {:?}, where_val = {:?}",
+                                where_expr, where_val
+                            );
+                            if !self.value_is_true(&where_val) {
+                                return None;
+                            }
+                        }
+
+                        let projected_row: Vec<Value> = select
+                            .columns
+                            .iter()
+                            .filter_map(|col| {
+                                col.expression.as_ref().map(|expr| {
+                                    let val = self.evaluate_expression_with_binding(
+                                        expr,
+                                        row,
+                                        &column_bindings,
+                                    );
+                                    eprintln!(
+                                        "DEBUG recursive: expr = {:?}, val = {:?}",
+                                        expr, val
+                                    );
+                                    val
+                                })
+                            })
+                            .collect();
+
+                        if projected_row.is_empty() {
+                            Some(row.clone())
+                        } else {
+                            Some(projected_row)
+                        }
+                    })
+                    .collect();
+                eprintln!("DEBUG recursive: projected = {:?}", projected);
+                Ok(projected)
+            }
+            _ => Err(format!(
+                "Unsupported recursive statement type: {:?}",
+                statement
+            )),
+        }
+    }
+
+    /// Evaluate expression using row values directly (bypasses context binding issues)
+    fn evaluate_expression_with_row(
+        &self,
+        expr: &sqlrustgo_parser::Expression,
+        row: &[Value],
+    ) -> Value {
+        match expr {
+            sqlrustgo_parser::Expression::Identifier(name) => {
+                if let Some(stripped) = name.strip_prefix('@') {
+                    return Value::Text(stripped.to_string());
+                }
+                if let Ok(n) = name.parse::<i64>() {
+                    if n as usize >= row.len() {
+                        return Value::Null;
+                    }
+                    return row.get(n as usize).cloned().unwrap_or(Value::Null);
+                }
+                if let Ok(idx) = name.parse::<usize>() {
+                    if idx >= row.len() {
+                        return Value::Null;
+                    }
+                    return row.get(idx).cloned().unwrap_or(Value::Null);
+                }
+                Value::Text(name.to_string())
+            }
+            sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+                let left_val = self.evaluate_expression_with_row(left, row);
+                let right_val = self.evaluate_expression_with_row(right, row);
+                self.evaluate_binary_op(&left_val, &right_val, op)
+            }
+            sqlrustgo_parser::Expression::Literal(s) => {
+                let s = s.trim();
+                if s.eq_ignore_ascii_case("NULL") {
+                    Value::Null
+                } else if let Ok(n) = s.parse::<i64>() {
+                    Value::Integer(n)
+                } else if let Ok(f) = s.parse::<f64>() {
+                    Value::Float(f)
+                } else if s.starts_with('\'') && s.ends_with('\'') {
+                    Value::Text(s[1..s.len() - 1].to_string())
+                } else {
+                    Value::Text(s.to_string())
+                }
+            }
+            sqlrustgo_parser::Expression::UnaryOp(op, inner) => {
+                let val = self.evaluate_expression_with_row(inner, row);
+                match op.to_uppercase().as_str() {
+                    "-" => {
+                        if let Value::Integer(n) = val {
+                            Value::Integer(-n)
+                        } else if let Value::Float(f) = val {
+                            Value::Float(-f)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    "NOT" | "!" => {
+                        if let Value::Boolean(b) = val {
+                            Value::Boolean(!b)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    _ => Value::Null,
+                }
+            }
+            _ => Value::Null,
+        }
+    }
+
+    /// Extract column names and their positions from SELECT columns for binding
+    fn extract_column_binding(
+        &self,
+        select: &sqlrustgo_parser::SelectStatement,
+    ) -> Vec<(String, usize)> {
+        let mut bindings = Vec::new();
+        for (idx, col) in select.columns.iter().enumerate() {
+            if let Some(ref expr) = col.expression {
+                let identifiers = self.extract_identifiers_from_expr(expr);
+                for name in identifiers {
+                    if !name.starts_with('@') && name.parse::<i64>().is_err() {
+                        bindings.push((name, idx));
+                        break;
+                    }
+                }
+            }
+        }
+        bindings
+    }
+
+    /// Recursively extract identifier names from an expression
+    fn extract_identifiers_from_expr(&self, expr: &sqlrustgo_parser::Expression) -> Vec<String> {
+        let mut ids = Vec::new();
+        match expr {
+            sqlrustgo_parser::Expression::Identifier(name) => {
+                ids.push(name.clone());
+            }
+            sqlrustgo_parser::Expression::BinaryOp(left, _, right) => {
+                ids.extend(self.extract_identifiers_from_expr(left));
+                ids.extend(self.extract_identifiers_from_expr(right));
+            }
+            sqlrustgo_parser::Expression::UnaryOp(_, inner) => {
+                ids.extend(self.extract_identifiers_from_expr(inner));
+            }
+            sqlrustgo_parser::Expression::IsNull(inner) => {
+                ids.extend(self.extract_identifiers_from_expr(inner));
+            }
+            sqlrustgo_parser::Expression::IsNotNull(inner) => {
+                ids.extend(self.extract_identifiers_from_expr(inner));
+            }
+            sqlrustgo_parser::Expression::Like(left, pattern, _) => {
+                ids.extend(self.extract_identifiers_from_expr(left));
+                ids.extend(self.extract_identifiers_from_expr(pattern));
+            }
+            sqlrustgo_parser::Expression::NotLike(left, pattern, _) => {
+                ids.extend(self.extract_identifiers_from_expr(left));
+                ids.extend(self.extract_identifiers_from_expr(pattern));
+            }
+            sqlrustgo_parser::Expression::Between(expr, low, high) => {
+                ids.extend(self.extract_identifiers_from_expr(expr));
+                ids.extend(self.extract_identifiers_from_expr(low));
+                ids.extend(self.extract_identifiers_from_expr(high));
+            }
+            sqlrustgo_parser::Expression::NotBetween(expr, low, high) => {
+                ids.extend(self.extract_identifiers_from_expr(expr));
+                ids.extend(self.extract_identifiers_from_expr(low));
+                ids.extend(self.extract_identifiers_from_expr(high));
+            }
+            sqlrustgo_parser::Expression::InList(left, values) => {
+                ids.extend(self.extract_identifiers_from_expr(left));
+                for v in values {
+                    ids.extend(self.extract_identifiers_from_expr(v));
+                }
+            }
+            sqlrustgo_parser::Expression::CaseWhen(when_clauses, else_expr) => {
+                for clause in when_clauses {
+                    ids.extend(self.extract_identifiers_from_expr(&clause.condition));
+                    ids.extend(self.extract_identifiers_from_expr(&clause.result));
+                }
+                if let Some(else_e) = else_expr {
+                    ids.extend(self.extract_identifiers_from_expr(else_e));
+                }
+            }
+            _ => {}
+        }
+        ids
+    }
+
+    /// Evaluate expression with column binding (for recursive CTE)
+    fn evaluate_expression_with_binding(
+        &self,
+        expr: &sqlrustgo_parser::Expression,
+        row: &[Value],
+        column_bindings: &[(String, usize)],
+    ) -> Value {
+        match expr {
+            sqlrustgo_parser::Expression::Identifier(name) => {
+                if let Some(stripped) = name.strip_prefix('@') {
+                    return Value::Text(stripped.to_string());
+                }
+                for (col_name, col_idx) in column_bindings {
+                    if col_name == name {
+                        if *col_idx < row.len() {
+                            return row[*col_idx].clone();
+                        }
+                        return Value::Null;
+                    }
+                }
+                if let Ok(n) = name.parse::<i64>() {
+                    if n as usize >= row.len() {
+                        return Value::Null;
+                    }
+                    return row.get(n as usize).cloned().unwrap_or(Value::Null);
+                }
+                Value::Text(name.to_string())
+            }
+            sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+                let left_val = self.evaluate_expression_with_binding(left, row, column_bindings);
+                let right_val = self.evaluate_expression_with_binding(right, row, column_bindings);
+                self.evaluate_binary_op(&left_val, &right_val, op)
+            }
+            sqlrustgo_parser::Expression::Literal(s) => {
+                let s = s.trim();
+                if s.eq_ignore_ascii_case("NULL") {
+                    Value::Null
+                } else if let Ok(n) = s.parse::<i64>() {
+                    Value::Integer(n)
+                } else if let Ok(f) = s.parse::<f64>() {
+                    Value::Float(f)
+                } else if s.starts_with('\'') && s.ends_with('\'') {
+                    Value::Text(s[1..s.len() - 1].to_string())
+                } else {
+                    Value::Text(s.to_string())
+                }
+            }
+            sqlrustgo_parser::Expression::UnaryOp(op, inner) => {
+                let val = self.evaluate_expression_with_binding(inner, row, column_bindings);
+                match op.to_uppercase().as_str() {
+                    "-" => {
+                        if let Value::Integer(n) = val {
+                            Value::Integer(-n)
+                        } else if let Value::Float(f) = val {
+                            Value::Float(-f)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    "NOT" | "!" => {
+                        if let Value::Boolean(b) = val {
+                            Value::Boolean(!b)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    _ => Value::Null,
+                }
+            }
+            _ => self.evaluate_expression_with_row(expr, row),
+        }
+    }
+
+    /// Bind row values to column names in a cloned context
+    fn bind_row_to_context(
+        &self,
+        mut ctx: ProcedureContext,
+        columns: &[String],
+        row: &[Value],
+    ) -> ProcedureContext {
+        for (i, col_name) in columns.iter().enumerate() {
+            if i < row.len() {
+                ctx.set_var(col_name, row[i].clone());
+            }
+        }
+        ctx
+    }
+
+    /// Check if a Value is true (for WHERE evaluation)
+    fn value_is_true(&self, val: &Value) -> bool {
+        match val {
+            Value::Boolean(b) => *b,
+            Value::Null => false,
+            _ => true,
+        }
+    }
+
+    /// Evaluate expression with context (allows column bindings from CTE)
+    fn expression_to_value_with_context(
+        &self,
+        expr: &sqlrustgo_parser::Expression,
+        ctx: &ProcedureContext,
+    ) -> Value {
+        match expr {
+            sqlrustgo_parser::Expression::Identifier(name) => {
+                if let Some(stripped) = name.strip_prefix('@') {
+                    ctx.get_var(stripped).cloned().unwrap_or(Value::Null)
+                } else {
+                    ctx.get_var(name).cloned().unwrap_or_else(|| {
+                        if let Ok(n) = name.parse::<i64>() {
+                            Value::Integer(n)
+                        } else if let Ok(f) = name.parse::<f64>() {
+                            Value::Float(f)
+                        } else {
+                            Value::Text(name.to_string())
+                        }
+                    })
+                }
+            }
+            sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+                let left_val = self.expression_to_value_with_context(left, ctx);
+                let right_val = self.expression_to_value_with_context(right, ctx);
+                self.evaluate_binary_op(&left_val, &right_val, op)
+            }
+            sqlrustgo_parser::Expression::Literal(s) => {
+                let s = s.trim();
+                if s.eq_ignore_ascii_case("NULL") {
+                    Value::Null
+                } else if let Ok(n) = s.parse::<i64>() {
+                    Value::Integer(n)
+                } else if let Ok(f) = s.parse::<f64>() {
+                    Value::Float(f)
+                } else if s.starts_with('\'') && s.ends_with('\'') {
+                    Value::Text(s[1..s.len() - 1].to_string())
+                } else {
+                    Value::Text(s.to_string())
+                }
+            }
+            sqlrustgo_parser::Expression::UnaryOp(op, inner) => {
+                let val = self.expression_to_value_with_context(inner, ctx);
+                match op.to_uppercase().as_str() {
+                    "-" => {
+                        if let Value::Integer(n) = val {
+                            Value::Integer(-n)
+                        } else if let Value::Float(f) = val {
+                            Value::Float(-f)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    "NOT" | "!" => {
+                        if let Value::Boolean(b) = val {
+                            Value::Boolean(!b)
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    _ => Value::Null,
+                }
+            }
+            _ => self.expression_to_value(expr, ctx),
         }
     }
 
@@ -1865,6 +2488,74 @@ impl StoredProcExecutor {
                     }
                 } else {
                     Value::Boolean(false)
+                }
+            }
+            "+" => {
+                if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                    Value::Integer(l.wrapping_add(*r))
+                } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                    Value::Float(l + r)
+                } else if let (Value::Integer(l), Value::Float(r)) = (left, right) {
+                    Value::Float(*l as f64 + r)
+                } else if let (Value::Float(l), Value::Integer(r)) = (left, right) {
+                    Value::Float(l + *r as f64)
+                } else {
+                    Value::Null
+                }
+            }
+            "-" => {
+                if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                    Value::Integer(l.wrapping_sub(*r))
+                } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                    Value::Float(l - r)
+                } else if let (Value::Integer(l), Value::Float(r)) = (left, right) {
+                    Value::Float(*l as f64 - r)
+                } else if let (Value::Float(l), Value::Integer(r)) = (left, right) {
+                    Value::Float(l - *r as f64)
+                } else {
+                    Value::Null
+                }
+            }
+            "*" => {
+                if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                    Value::Integer(l.wrapping_mul(*r))
+                } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                    Value::Float(l * r)
+                } else if let (Value::Integer(l), Value::Float(r)) = (left, right) {
+                    Value::Float(*l as f64 * r)
+                } else if let (Value::Float(l), Value::Integer(r)) = (left, right) {
+                    Value::Float(l * *r as f64)
+                } else {
+                    Value::Null
+                }
+            }
+            "/" => {
+                if let (Value::Integer(l), Value::Integer(r)) = (left, right) {
+                    if *r == 0 {
+                        Value::Null // Division by zero
+                    } else {
+                        Value::Integer(l / r)
+                    }
+                } else if let (Value::Float(l), Value::Float(r)) = (left, right) {
+                    if *r == 0.0 {
+                        Value::Null // Division by zero
+                    } else {
+                        Value::Float(l / r)
+                    }
+                } else if let (Value::Integer(l), Value::Float(r)) = (left, right) {
+                    if *r == 0.0 {
+                        Value::Null
+                    } else {
+                        Value::Float(*l as f64 / r)
+                    }
+                } else if let (Value::Float(l), Value::Integer(r)) = (left, right) {
+                    if *r == 0 {
+                        Value::Null
+                    } else {
+                        Value::Float(l / *r as f64)
+                    }
+                } else {
+                    Value::Null
                 }
             }
             _ => Value::Null,

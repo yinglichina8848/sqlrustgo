@@ -22,13 +22,24 @@ bytemuck = "1.20"
 dirs = "6.0"
 parking_lot = "0.12"
 sha2.workspace = true
+hex.workspace = true
+ed25519-dalek = "2.1"
+rand.workspace = true
 async-trait = "0.1"
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
+k256 = "0.14.0-rc.9"
+ring = "0.17"
+clap = { version = "4.0", features = ["derive"] }
 
 [[bin]]
 name = "sqlrustgo-gmp-cli"
 path = "src/cli.rs"
+doc = false
+
+[[bin]]
+name = "audit-chain-verify"
+path = "src/cli/audit_chain_verify_main.rs"
 doc = false
 
 [dev-dependencies]

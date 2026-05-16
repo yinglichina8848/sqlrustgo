@@ -251,7 +251,7 @@ pub fn detect_tamper(chain: &AuditChain) -> Option<TamperAlert> {
         if first.seq != 1 || first.prev_hash != GENESIS_PREV_HASH {
             return Some(TamperAlert::new(1, TamperViolation::GenesisTampered));
         }
-    } else if chain.len() > 0 {
+    } else if !chain.is_empty() {
         return Some(TamperAlert::new(1, TamperViolation::EntryNotFound(1)));
     }
 

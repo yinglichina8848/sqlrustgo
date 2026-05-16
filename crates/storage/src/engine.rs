@@ -1,9 +1,11 @@
 //! Storage Engine trait - abstraction for storage backends
 //! Supports multiple storage implementations (File, Memory, etc.)
 
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 pub use sqlrustgo_types::{SqlError, SqlResult, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// Referential action for foreign key constraints
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -718,7 +720,7 @@ pub struct MemoryStorage {
     views: HashSet<String>,
     /// Column indexes: map from "table:column" to (column_index, HashIndex)
     /// HashIndex maps key value -> row indices
-    indexes: HashMap<String, (usize, HashMap<i64, Vec<usize>>)>,
+    indexes: FxHashMap<String, (usize, FxHashMap<i64, Vec<usize>>)>,
     /// Cache for parsed predicates: (table_name, predicate_str) -> (columns, parsed_predicate)
     predicate_cache: HashMap<String, (Vec<String>, Predicate)>,
     /// Auto-increment counters: table_name -> next auto-increment value
@@ -732,7 +734,7 @@ impl MemoryStorage {
             table_infos: HashMap::new(),
             triggers: HashMap::new(),
             views: HashSet::new(),
-            indexes: HashMap::new(),
+            indexes: FxHashMap::default(),
             predicate_cache: HashMap::new(),
             auto_increment_counters: HashMap::new(),
         }
@@ -910,7 +912,7 @@ impl StorageEngine for MemoryStorage {
                 // Use table:column as index key, build index from existing data
                 let index_key = format!("{}:{}", info.name, col.name);
                 if let Some(records) = self.tables.get(&info.name) {
-                    let mut index_data: HashMap<i64, Vec<usize>> = HashMap::new();
+                    let mut index_data: FxHashMap<i64, Vec<usize>> = FxHashMap::default();
                     for (row_idx, row) in records.iter().enumerate() {
                         if let Some(Value::Integer(key)) = row.get(col_idx) {
                             index_data.entry(*key).or_default().push(row_idx);
@@ -1047,7 +1049,7 @@ impl StorageEngine for MemoryStorage {
         };
 
         let index_key = format!("{}:{}", table, column);
-        let mut index_data: HashMap<i64, Vec<usize>> = HashMap::new();
+        let mut index_data: FxHashMap<i64, Vec<usize>> = FxHashMap::default();
 
         for (row_idx, row) in records.iter().enumerate() {
             if let Some(Value::Integer(key)) = row.get(column_index) {

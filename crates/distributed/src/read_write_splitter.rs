@@ -163,6 +163,19 @@ impl ReadWriteSplitter {
             sqlrustgo_parser::Statement::ShowRoles => QueryClass::Read,
             sqlrustgo_parser::Statement::ShowGrantsFor(_) => QueryClass::Read,
             sqlrustgo_parser::Statement::Merge(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::SignRecord(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::CreateApprovalPolicy(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::StartWorkflow(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::ApproveWorkflow(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::RejectWorkflow(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::RegisterDevice(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::DeviceHeartbeat(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::CollectData(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::CreateSOP(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::RecordTraining(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::BindSOP(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::RegisterCalibrationDevice(_) => QueryClass::Write,
+            sqlrustgo_parser::Statement::RecordCalibration(_) => QueryClass::Write,
         }
     }
 

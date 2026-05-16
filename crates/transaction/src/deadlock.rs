@@ -1,5 +1,7 @@
 use crate::mvcc::TxId;
-use std::collections::{HashMap, HashSet};
+use rustc_hash::FxHashMap;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -10,7 +12,7 @@ use std::time::Duration;
 
 #[derive(Debug, Default)]
 struct Inner {
-    waits_for: HashMap<TxId, HashSet<TxId>>,
+    waits_for: FxHashMap<TxId, HashSet<TxId>>,
 }
 
 impl Inner {
@@ -27,7 +29,7 @@ impl Inner {
 
     fn would_create_cycle(&self, from: TxId, to_set: &HashSet<TxId>) -> bool {
         for &to in to_set {
-            if self.dfs_reachable(to, from, &mut HashSet::new()) {
+            if self.bfs_reachable(to, from) {
                 return true;
             }
         }
@@ -46,17 +48,20 @@ impl Inner {
         }
     }
 
-    fn dfs_reachable(&self, current: TxId, target: TxId, visited: &mut HashSet<TxId>) -> bool {
-        if current == target {
-            return true;
-        }
-        if !visited.insert(current) {
-            return false;
-        }
-        if let Some(holders) = self.waits_for.get(&current) {
-            for &holder in holders {
-                if self.dfs_reachable(holder, target, visited) {
-                    return true;
+    #[allow(dead_code)]
+    fn bfs_reachable(&self, start: TxId, target: TxId) -> bool {
+        let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
+
+        queue.push_back(start);
+
+        while let Some(current) = queue.pop_front() {
+            if current == target {
+                return true;
+            }
+            if visited.insert(current) {
+                if let Some(holders) = self.waits_for.get(&current) {
+                    queue.extend(holders);
                 }
             }
         }
@@ -74,10 +79,16 @@ impl Inner {
 //   - PROOF_016_023_mvcc_atomic.tla         (PASS: atomic prevents cycle)
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[derive(Debug, Default)]
+struct IncrementalCache {
+    last_checked_tx: Option<TxId>,
+}
+
 #[derive(Debug)]
 pub struct DeadlockDetector {
     inner: Mutex<Inner>,
     lock_wait_timeout: Duration,
+    incremental_cache: IncrementalCache,
 }
 
 impl DeadlockDetector {
@@ -89,6 +100,7 @@ impl DeadlockDetector {
         Self {
             inner: Mutex::new(Inner::default()),
             lock_wait_timeout: timeout,
+            incremental_cache: IncrementalCache::default(),
         }
     }
 
@@ -145,7 +157,7 @@ impl DeadlockDetector {
     /// Used for diagnostic / background detector (not for pre-check).
     pub fn detect_cycle(&self, start: TxId) -> Option<Vec<TxId>> {
         let inner = self.inner.lock().unwrap();
-        Self::dfs_cycle(
+        Self::bfs_cycle(
             &inner.waits_for,
             start,
             &mut HashSet::new(),
@@ -153,12 +165,30 @@ impl DeadlockDetector {
         )
     }
 
+    pub fn detect_cycle_incremental(&mut self, tx_id: TxId) -> Option<Vec<TxId>> {
+        let inner = self.inner.lock().unwrap();
+
+        if self.incremental_cache.last_checked_tx == Some(tx_id) {
+            return None;
+        }
+
+        let result = Self::bfs_cycle(
+            &inner.waits_for,
+            tx_id,
+            &mut HashSet::new(),
+            &mut Vec::new(),
+        );
+
+        self.incremental_cache.last_checked_tx = Some(tx_id);
+        result
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Legacy API — sequential unit tests ONLY
     // ─────────────────────────────────────────────────────────────────────────
 
     /// UNSAFE for concurrent use. Use `try_wait_edge()` instead.
-    #[cfg(test)]
+    #[allow(dead_code)]
     pub fn add_edge_unsafe(&self, blocked: TxId, holder: TxId) {
         let mut inner = self.inner.lock().unwrap();
         inner.add_edge(blocked, holder);
@@ -171,29 +201,35 @@ impl DeadlockDetector {
         inner.would_create_cycle(from, to_set)
     }
 
-    fn dfs_cycle(
-        graph: &HashMap<TxId, HashSet<TxId>>,
-        current: TxId,
+    #[allow(dead_code)]
+    fn bfs_cycle(
+        graph: &FxHashMap<TxId, HashSet<TxId>>,
+        start: TxId,
         visited: &mut HashSet<TxId>,
-        path: &mut Vec<TxId>,
+        _path: &mut [TxId],
     ) -> Option<Vec<TxId>> {
-        if path.contains(&current) {
-            let idx = path.iter().position(|x| *x == current).unwrap();
-            return Some(path[idx..].to_vec());
-        }
-        if visited.contains(&current) {
-            return None;
-        }
-        visited.insert(current);
-        path.push(current);
-        if let Some(holders) = graph.get(&current) {
-            for &holder in holders {
-                if let Some(cycle) = Self::dfs_cycle(graph, holder, visited, path) {
-                    return Some(cycle);
+        let mut queue = VecDeque::new();
+        queue.push_back((start, vec![start]));
+
+        while let Some((current, current_path)) = queue.pop_front() {
+            if let Some(idx) = current_path.iter().position(|x| *x == current) {
+                if idx < current_path.len() - 1 {
+                    return Some(current_path[idx..current_path.len() - 1].to_vec());
+                }
+            }
+            if visited.contains(&current) {
+                continue;
+            }
+            visited.insert(current);
+
+            if let Some(holders) = graph.get(&current) {
+                for &holder in holders {
+                    let mut new_path = current_path.clone();
+                    new_path.push(holder);
+                    queue.push_back((holder, new_path));
                 }
             }
         }
-        path.pop();
         None
     }
 }
@@ -330,12 +366,12 @@ mod tests {
         detector.add_edge_unsafe(TxId::new(2), TxId::new(3));
 
         let d1 = Arc::clone(&detector);
-        let r1 = thread::spawn(move || d1.try_wait_edge(TxId::new(1), [TxId::new(2)].into()))
+        let _r1 = thread::spawn(move || d1.try_wait_edge(TxId::new(1), [TxId::new(2)].into()))
             .join()
             .unwrap();
 
         let d3 = Arc::clone(&detector);
-        let r3 = thread::spawn(move || {
+        let _r3 = thread::spawn(move || {
             // T3 trying to wait for T2 would create T3→T2→T1→T2 cycle (T2→T1 already exists)
             d3.try_wait_edge(TxId::new(3), [TxId::new(2)].into())
         })

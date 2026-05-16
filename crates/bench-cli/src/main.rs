@@ -11,7 +11,7 @@ mod reporter;
 mod tpch_bench;
 mod tpch_import;
 
-use cli::{BenchmarkConfig, TpchBenchArgs, TpchImportArgs};
+use cli::BenchmarkConfig;
 use commands::{custom, oltp, tpch};
 
 #[derive(Parser, Debug)]

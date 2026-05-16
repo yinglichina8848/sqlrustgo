@@ -114,7 +114,6 @@ fn test_execution_chain_grant_revoke() {
     assert!(revoke_result.is_ok());
 }
 
-#[ignore]
 #[test]
 fn test_execution_chain_multi_table_update() {
     let mut engine = create_fresh_engine();
@@ -124,8 +123,8 @@ fn test_execution_chain_multi_table_update() {
     let _ = engine.execute("INSERT INTO t1 VALUES (1, 100)");
     let _ = engine.execute("INSERT INTO t2 VALUES (1, 200)");
 
-    let result = engine.execute("UPDATE t1, t2 SET t1.val = t2.val WHERE t1.id = t2.id");
-    assert!(result.is_ok());
+    let result = engine.execute("UPDATE t1 SET t1.val = t2.val FROM t2 WHERE t1.id = t2.id");
+    assert!(result.is_ok(), "Multi-table UPDATE failed: {:?}", result);
 }
 
 #[ignore]

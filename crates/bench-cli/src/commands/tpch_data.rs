@@ -85,8 +85,8 @@ pub fn generate_tpch_data(scale_factor: f64) -> Arc<MemoryStorage> {
         let l_orderkey = i % order_count + 1;
         let l_partkey = i % part_count + 1;
         let l_suppkey = i % supplier_count + 1;
-        let l_linenumber = (i % 4) as i64 + 1;
-        let l_quantity = (i % 50) as i64 + 1;
+        let l_linenumber = (i % 4) + 1;
+        let l_quantity = (i % 50) + 1;
         let l_extendedprice = ((i % 100000) as f64) / 100.0 + 100.0;
         let l_discount = ((i % 10) as f64) / 100.0;
         let l_tax = ((i % 8) as f64) / 100.0;
@@ -135,7 +135,7 @@ pub fn generate_tpch_data(scale_factor: f64) -> Arc<MemoryStorage> {
             4 => "MEDIUM BURNISHED STEEL",
             _ => "SMALL POLISHED STEEL",
         };
-        let p_size = (i % 50) as i64 + 1;
+        let p_size = (i % 50) + 1;
         let p_container = match i % 10 {
             0 => "SM CASE",
             1 => "SM BOX",
@@ -189,7 +189,7 @@ pub fn generate_tpch_data(scale_factor: f64) -> Arc<MemoryStorage> {
     for i in 0..partsupp_count {
         let ps_partkey = i % part_count + 1;
         let ps_suppkey = i % supplier_count + 1;
-        let ps_availqty = (i % 9999) as i64 + 1;
+        let ps_availqty = (i % 9999) + 1;
         let ps_supplycost = ((i % 10000) as f64) / 100.0 + 1.0;
         let ps_comment = format!("Partsupp comment {}", i);
 

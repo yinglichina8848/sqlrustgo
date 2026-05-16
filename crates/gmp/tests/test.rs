@@ -10,7 +10,6 @@ use std::sync::{Arc, RwLock};
 
 #[test]
 fn test_full_document_lifecycle() {
-    // Setup
     let storage = Arc::new(RwLock::new(MemoryStorage::new()));
     {
         let mut s = storage.write().unwrap();
@@ -20,7 +19,6 @@ fn test_full_document_lifecycle() {
 
     let executor = GmpExecutor::new(storage.clone());
 
-    // Import documents
     let rust_doc_id = executor
         .import_document(
             "The Rust Programming Language",
@@ -30,7 +28,7 @@ fn test_full_document_lifecycle() {
         )
         .unwrap();
 
-    let python_doc_id = executor
+    let _python_doc_id = executor
         .import_document(
             "Python for Data Science",
             "COURSE",
@@ -39,7 +37,7 @@ fn test_full_document_lifecycle() {
         )
         .unwrap();
 
-    let db_doc_id = executor
+    let _db_doc_id = executor
         .import_document(
             "Database Design Handbook",
             "HANDBOOK",
@@ -48,7 +46,6 @@ fn test_full_document_lifecycle() {
         )
         .unwrap();
 
-    // Verify documents were created
     let docs = {
         let s = storage.read().unwrap();
         query_by_type(&*s, "BOOK").unwrap()
@@ -56,10 +53,8 @@ fn test_full_document_lifecycle() {
     assert_eq!(docs.len(), 1);
     assert_eq!(docs[0].title, "The Rust Programming Language");
 
-    // Verify search works
     let results = executor.search("Rust memory safety", 5).unwrap();
     assert!(!results.is_empty());
-    // Hash embeddings may not perfectly rank, just verify we get results with positive similarity
     let rust_found = results
         .iter()
         .any(|r| r.doc_id == rust_doc_id && r.similarity > 0.0);
@@ -68,29 +63,24 @@ fn test_full_document_lifecycle() {
         "search should return relevant results"
     );
 
-    // Verify hybrid search works
     let hybrid_results = executor.hybrid_search("Rust Book", 5).unwrap();
     assert!(!hybrid_results.is_empty());
     let hybrid_rust_found = hybrid_results.iter().any(|r| r.doc_id == rust_doc_id);
     assert!(hybrid_rust_found || hybrid_results[0].similarity > 0.0);
 
-    // Verify embedding generation
     let emb = generate_embedding("test text");
     assert_eq!(emb.len(), 256);
 }
 
 #[test]
 fn test_cosine_similarity_properties() {
-    // Same vector should have similarity 1.0
     let v = vec![0.5f32, 0.5, 0.5, 0.5];
     assert!((cosine_similarity(&v, &v) - 1.0).abs() < 0.001);
 
-    // Orthogonal vectors should be ~0
     let a = vec![1.0, 0.0, 0.0];
     let b = vec![0.0, 1.0, 0.0];
     assert!(cosine_similarity(&a, &b).abs() < 0.001);
 
-    // Opposite vectors should be -1
     let a = vec![1.0, 0.0];
     let b = vec![-1.0, 0.0];
     assert!((cosine_similarity(&a, &b) + 1.0).abs() < 0.001);
@@ -129,7 +119,6 @@ fn test_document_status_filtering() {
         .import_document("Active Doc", "TYPE", "Active content", &["active"])
         .unwrap();
 
-    // Query by status - should find the active document
     let active_docs = {
         let s = storage.read().unwrap();
         query_by_status(&*s, &DocStatus::Active).unwrap()
@@ -156,7 +145,6 @@ fn test_multiple_sections_per_document() {
         )
         .unwrap();
 
-    // Add another section
     {
         let mut s = storage.write().unwrap();
         sqlrustgo_gmp::insert_document_content(
@@ -168,7 +156,6 @@ fn test_multiple_sections_per_document() {
         .unwrap();
     }
 
-    // Verify we can still search
     let results = executor.search("appendix content", 5).unwrap();
     assert!(!results.is_empty());
 }
@@ -179,7 +166,6 @@ fn test_search_relevance() {
     let executor = GmpExecutor::new(storage.clone());
     executor.init().unwrap();
 
-    // Insert documents about different topics
     executor
         .import_document(
             "Cooking Recipes",
@@ -207,13 +193,10 @@ fn test_search_relevance() {
         )
         .unwrap();
 
-    // ML query should return ML doc (or relevant results)
     let ml_results = executor.search("neural networks deep learning", 3).unwrap();
     assert!(!ml_results.is_empty(), "ML search should return results");
-    // Hash embeddings: just verify we get some results back
     assert_eq!(ml_results.len(), 3, "should return up to 3 results");
 
-    // Web query should return web dev doc (or relevant results)
     let web_results = executor.search("javascript web development", 3).unwrap();
     assert!(!web_results.is_empty(), "web search should return results");
     assert_eq!(web_results.len(), 3, "should return up to 3 results");
@@ -251,10 +234,8 @@ fn test_hybrid_search_text_boost() {
         )
         .unwrap();
 
-    // Query contains "book" which matches the title - hybrid should boost this
     let results = executor.hybrid_search("book about programming", 5).unwrap();
     assert!(!results.is_empty());
-    // The document with "book" in title should rank high
     assert!(results
         .iter()
         .any(|r| r.title.contains("Programming in Rust")));
