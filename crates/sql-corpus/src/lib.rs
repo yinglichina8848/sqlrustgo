@@ -152,16 +152,18 @@ impl SimpleExecutor {
                 Ok(ExecutorResult::new(vec![], count))
             }
             Statement::WithSelect(ref ws) => {
-                match &ws.select {
-                    sqlrustgo_parser::parser::SelectStatement { table, .. } if table.is_empty() => {
+                // ws.select is Box<Statement>, need to unbox to match
+                if let Statement::Select(ref select) = *ws.select {
+                    if select.table.is_empty() {
                         // Recursive CTE or empty CTE → can't execute without CTE defs
                         Ok(ExecutorResult::new(vec![], 0))
-                    }
-                    _ => {
+                    } else {
                         // Execute the inner SELECT directly
-                        let inner_sql = format!("SELECT * FROM {}", ws.select.table);
+                        let inner_sql = format!("SELECT * FROM {}", select.table);
                         self.execute(&inner_sql)
                     }
+                } else {
+                    Err(format!("Expected SELECT in WITH, got {:?}", ws.select))
                 }
             }
             Statement::Update(update) => {
@@ -946,7 +948,12 @@ impl SimpleExecutor {
                 }
             }
         }
-        self.execute_select(&with_select.select)?;
+        // with_select.select is Box<Statement>, unbox it to get SelectStatement
+        if let Statement::Select(ref select) = *with_select.select {
+            self.execute_select(select)?;
+        } else {
+            return Err(format!("Expected SELECT in WITH, got {:?}", with_select.select));
+        }
         Ok(())
     }
 
