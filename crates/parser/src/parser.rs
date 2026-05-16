@@ -385,7 +385,7 @@ pub struct WithClause {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WithSelect {
     pub with_clause: Option<WithClause>,
-    pub select: SelectStatement,
+    pub select: Box<Statement>,
 }
 
 /// ANALYZE statement for collecting statistics
@@ -2770,11 +2770,11 @@ impl Parser {
             return self.parse_insert_with_clause(with_clause);
         }
 
-        let select = self.parse_select_statement()?;
+        let select = self.parse_select_or_union()?;
 
         Ok(Statement::WithSelect(WithSelect {
             with_clause: Some(WithClause { recursive, ctes }),
-            select,
+            select: Box::new(select),
         }))
     }
 

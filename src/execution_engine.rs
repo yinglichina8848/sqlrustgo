@@ -549,7 +549,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 }
                 tables
             }
-            Statement::WithSelect(ws) => vec![ws.select.table.clone()],
+            Statement::WithSelect(ws) => {
+                if let Statement::Select(s) = ws.select.as_ref() {
+                    vec![s.table.clone()]
+                } else {
+                    vec![]
+                }
+            }
             _ => vec![],
         }
     }
@@ -746,7 +752,15 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::AlterTable(ref alter) => self.execute_alter_table(alter),
             Statement::Explain(ref explain) => self.execute_explain(explain),
             Statement::WithSelect(ref ws) => match &ws.with_clause {
-                None => self.execute_select(&ws.select),
+                None => {
+                    if let Statement::Select(s) = ws.select.as_ref() {
+                        self.execute_select(s)
+                    } else {
+                        Err(SqlError::ExecutionError(
+                            "WithSelect without with_clause must have SELECT".to_string(),
+                        ))
+                    }
+                }
                 Some(wc) if wc.recursive => {
                     let catalog = if let Some(ref catalog_guard) = self.catalog {
                         catalog_guard.read().unwrap().clone()
@@ -758,7 +772,24 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         .execute_with_cte(&sqlrustgo_parser::Statement::WithSelect(ws.clone()))
                         .map_err(SqlError::ExecutionError)
                 }
-                Some(wc) => self.execute_non_recursive_cte(ws),
+                Some(wc) => {
+                    let has_recursive = wc.ctes.iter().any(|c| {
+                        matches!(c.subquery.as_ref(), Statement::Union(_))
+                    });
+                    if has_recursive {
+                        let catalog = if let Some(ref catalog_guard) = self.catalog {
+                            catalog_guard.read().unwrap().clone()
+                        } else {
+                            sqlrustgo_catalog::Catalog::new("cte_catalog".to_string())
+                        };
+                        let executor = StoredProcExecutor::new(Arc::new(catalog), self.storage.clone());
+                        executor
+                            .execute_with_cte(&sqlrustgo_parser::Statement::WithSelect(ws.clone()))
+                            .map_err(SqlError::ExecutionError)
+                    } else {
+                        self.execute_non_recursive_cte(ws)
+                    }
+                }
             },
             Statement::Check(ref check) => self.execute_check(check),
             Statement::Optimize(ref opt) => self.execute_optimize(opt),
@@ -1109,27 +1140,93 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             cte_context.temp_tables.push(temp_table_name);
         }
 
-        let mut select_with_cte_names = ws.select.clone();
-        for cte in &with_clause.ctes {
-            if let Some(temp_name) = cte_context.cte_tables.get(&cte.name) {
-                if select_with_cte_names.table == cte.name {
-                    select_with_cte_names.table = temp_name.clone();
-                }
-                if let Some(ref mut from) = select_with_cte_names.from {
-                    for table in &mut from.tables {
-                        if table.name == cte.name {
-                            table.name = temp_name.clone();
+        match ws.select.as_ref() {
+            Statement::Select(select) => {
+                let mut select_with_cte_names = select.clone();
+                for cte in &with_clause.ctes {
+                    if let Some(temp_name) = cte_context.cte_tables.get(&cte.name) {
+                        if select_with_cte_names.table == cte.name {
+                            select_with_cte_names.table = temp_name.clone();
+                        }
+                        if let Some(ref mut from) = select_with_cte_names.from {
+                            for table in &mut from.tables {
+                                if table.name == cte.name {
+                                    table.name = temp_name.clone();
+                                }
+                            }
                         }
                     }
                 }
+                let result = self.execute_select(&select_with_cte_names);
+                self.cleanup_cte_tables(&cte_context);
+                result
             }
+            Statement::Union(u) => {
+                let left_result = if let Statement::Select(left_select) = u.left.as_ref() {
+                    let mut select_with_cte_names = left_select.clone();
+                    for cte in &with_clause.ctes {
+                        if let Some(temp_name) = cte_context.cte_tables.get(&cte.name) {
+                            if select_with_cte_names.table == cte.name {
+                                select_with_cte_names.table = temp_name.clone();
+                            }
+                            if let Some(ref mut from) = select_with_cte_names.from {
+                                for table in &mut from.tables {
+                                    if table.name == cte.name {
+                                        table.name = temp_name.clone();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    self.execute_select(&select_with_cte_names)?
+                } else {
+                    return Err(SqlError::ExecutionError(
+                        "Union left side must be SELECT".to_string(),
+                    ));
+                };
+
+                let right_result = if let Statement::Select(right_select) = u.right.as_ref() {
+                    let mut select_with_cte_names = right_select.clone();
+                    for cte in &with_clause.ctes {
+                        if let Some(temp_name) = cte_context.cte_tables.get(&cte.name) {
+                            if select_with_cte_names.table == cte.name {
+                                select_with_cte_names.table = temp_name.clone();
+                            }
+                            if let Some(ref mut from) = select_with_cte_names.from {
+                                for table in &mut from.tables {
+                                    if table.name == cte.name {
+                                        table.name = temp_name.clone();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    self.execute_select(&select_with_cte_names)?
+                } else {
+                    return Err(SqlError::ExecutionError(
+                        "Union right side must be SELECT".to_string(),
+                    ));
+                };
+
+                let combined = if u.union_all {
+                    let mut rows = left_result.rows;
+                    rows.extend(right_result.rows);
+                    rows
+                } else {
+                    let mut rows = left_result.rows;
+                    rows.extend(right_result.rows);
+                    rows.sort();
+                    rows.dedup();
+                    rows
+                };
+
+                self.cleanup_cte_tables(&cte_context);
+                Ok(ExecutorResult::new(combined.clone(), combined.len()))
+            }
+            _ => Err(SqlError::ExecutionError(
+                "CTE main select must be SELECT or UNION".to_string(),
+            )),
         }
-
-        let result = self.execute_select(&select_with_cte_names);
-
-        self.cleanup_cte_tables(&cte_context);
-
-        result
     }
 
     /// Execute recursive CTE using iterative approach
