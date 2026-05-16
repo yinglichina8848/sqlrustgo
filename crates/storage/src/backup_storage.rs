@@ -7,6 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 use sqlrustgo_types::{SqlError, SqlResult};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
@@ -147,24 +148,102 @@ impl RemoteBackupStorage {
             key
         )
     }
+
+    fn sign_request(&self, method: &str, path: &str, body: &[u8]) -> HashMap<String, String> {
+        use sha2::{Digest, Sha256};
+        use hmac::{Hmac, Mac};
+
+        let date = chrono::Utc::now().format("%Y%m%d").to_string();
+        let datetime = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+
+        let credential = format!(
+            "{}/{}/{}/s3/aws4_request",
+            self.config.access_key, date, self.config.region
+        );
+
+        let signed_headers = "host;x-amz-content-sha256;x-amz-date";
+
+        let canonical_request = format!(
+            "{}\n{}\n{}\nhost\nx-amz-content-sha256:{}\nx-amz-date:{}\n\n{}\n{}",
+            method,
+            path,
+            "",
+            hex::encode(Sha256::digest(body)),
+            datetime,
+            signed_headers,
+            hex::encode(Sha256::digest(body))
+        );
+
+        let canonical_hash = hex::encode(Sha256::digest(canonical_request.as_bytes()));
+        let string_to_sign = format!(
+            "AWS4-HMAC-SHA256\n{}\n{}/{}/s3/aws4_request\n{}",
+            datetime, date, self.config.region, canonical_hash
+        );
+
+        let signature = self.calculate_signature(&string_to_sign, &date);
+
+        let mut headers = HashMap::new();
+        headers.insert("x-amz-date".to_string(), datetime);
+        headers.insert(
+            "x-amz-content-sha256".to_string(),
+            hex::encode(Sha256::digest(body)),
+        );
+        headers.insert(
+            "Authorization".to_string(),
+            format!(
+                "AWS4-HMAC-SHA256 Credential={}, SignedHeaders={}, Signature={}",
+                credential, signed_headers, signature
+            ),
+        );
+
+        headers
+    }
+
+    fn calculate_signature(&self, string_to_sign: &str, date: &str) -> String {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+
+        type HmacSha256 = Hmac<Sha256>;
+
+        let k_date = self.sign_sha256(b"AWS4", date.as_bytes());
+        let k_region = self.sign_sha256(&k_date, self.config.region.as_bytes());
+        let k_service = self.sign_sha256(&k_region, b"s3");
+        let k_signing = self.sign_sha256(&k_service, b"aws4_request");
+
+        let mut mac = HmacSha256::new_from_slice(&k_signing).expect("HMAC can take key of any size");
+        mac.update(string_to_sign.as_bytes());
+        let result = mac.finalize().into_bytes();
+
+        hex::encode(result)
+    }
+
+    fn sign_sha256(&self, key: &[u8], data: &[u8]) -> Vec<u8> {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+
+        type HmacSha256 = Hmac<Sha256>;
+        let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
+        mac.update(data);
+        mac.finalize().into_bytes().to_vec()
+    }
 }
 
 impl BackupStorage for RemoteBackupStorage {
     fn save(&self, key: &str, data: &[u8]) -> SqlResult<()> {
         let url = self.object_url(key);
+        let path = format!("/{}/{}", self.config.bucket, key);
 
-        let response = self
-            .client
-            .put(&url)
-            .header("Content-Type", "application/octet-stream")
-            .header("x-amz-acl", "private")
-            .header(
-                "Authorization",
-                format!(
-                    "AWS4-HMAC-SHA256 Credential={}/{{}}",
-                    self.config.access_key
-                ),
-            )
+        let signed_headers = self.sign_request("PUT", &path, data);
+
+        let mut request = self.client.put(&url);
+        request = request.header("Content-Type", "application/octet-stream");
+        request = request.header("x-amz-acl", "private");
+
+        for (key, value) in signed_headers {
+            request = request.header(&key, &value);
+        }
+
+        let response = request
             .body(data.to_vec())
             .send()
             .map_err(|e| SqlError::IoError(e.to_string()))?;
@@ -181,10 +260,15 @@ impl BackupStorage for RemoteBackupStorage {
 
     fn load(&self, key: &str) -> SqlResult<Vec<u8>> {
         let url = self.object_url(key);
+        let path = format!("/{}/{}", self.config.bucket, key);
+        let signed_headers = self.sign_request("GET", &path, &[]);
 
-        let response = self
-            .client
-            .get(&url)
+        let mut request = self.client.get(&url);
+        for (k, v) in signed_headers {
+            request = request.header(&k, &v);
+        }
+
+        let response = request
             .send()
             .map_err(|e| SqlError::IoError(e.to_string()))?;
 
@@ -203,10 +287,15 @@ impl BackupStorage for RemoteBackupStorage {
 
     fn delete(&self, key: &str) -> SqlResult<()> {
         let url = self.object_url(key);
+        let path = format!("/{}/{}", self.config.bucket, key);
+        let signed_headers = self.sign_request("DELETE", &path, &[]);
 
-        let response = self
-            .client
-            .delete(&url)
+        let mut request = self.client.delete(&url);
+        for (k, v) in signed_headers {
+            request = request.header(&k, &v);
+        }
+
+        let response = request
             .send()
             .map_err(|e| SqlError::IoError(e.to_string()))?;
 
@@ -222,10 +311,15 @@ impl BackupStorage for RemoteBackupStorage {
 
     fn exists(&self, key: &str) -> SqlResult<bool> {
         let url = self.object_url(key);
+        let path = format!("/{}/{}", self.config.bucket, key);
+        let signed_headers = self.sign_request("HEAD", &path, &[]);
 
-        let response = self
-            .client
-            .head(&url)
+        let mut request = self.client.head(&url);
+        for (k, v) in signed_headers {
+            request = request.header(&k, &v);
+        }
+
+        let response = request
             .send()
             .map_err(|e| SqlError::IoError(e.to_string()))?;
 
@@ -239,10 +333,15 @@ impl BackupStorage for RemoteBackupStorage {
             self.config.bucket,
             prefix
         );
+        let path = format!("/{}/?list-type=2&prefix={}", self.config.bucket, prefix);
+        let signed_headers = self.sign_request("GET", &path, &[]);
 
-        let response = self
-            .client
-            .get(&url)
+        let mut request = self.client.get(&url);
+        for (k, v) in signed_headers {
+            request = request.header(&k, &v);
+        }
+
+        let response = request
             .send()
             .map_err(|e| SqlError::IoError(e.to_string()))?;
 

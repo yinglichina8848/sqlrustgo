@@ -24,6 +24,8 @@ arrow.workspace = true
 aes-gcm = "0.10"
 rand.workspace = true
 sha2.workspace = true
+hmac.workspace = true
+hex.workspace = true
 rustc-hash = { workspace = true }
 smol_str.workspace = true
 
