@@ -41,7 +41,9 @@ cd "$PROJECT_ROOT"
 detect_version() {
     local branch
     branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
-    if [[ "$branch" =~ "develop/v3" ]] || [[ "$branch" =~ "v3.0" ]]; then
+    if [[ "$branch" =~ "develop/v3.2" ]]; then
+        echo "v3.2.0"
+    elif [[ "$branch" =~ "develop/v3" ]] || [[ "$branch" =~ "v3.0" ]]; then
         echo "v3.0.0"
     elif [[ "$branch" =~ "develop/v2.9" ]] || [[ "$branch" =~ "v2.9" ]]; then
         echo "v2.9.0"
