@@ -1,0 +1,80 @@
+# TPC-H Performance Gate — v3.1.0
+# Runs TPC-H SF=0.1 queries and validates ≥18/22 pass.
+# Blocking on develop/v3.1.0 PRs.
+
+name: TPC-H Gate
+
+on:
+  push:
+    branches:
+      - develop/v3.1.0
+      - beta/v3.1.0
+  pull_request:
+    branches:
+      - develop/v3.1.0
+      - beta/v3.1.0
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  TPCH_DATA_DIR: /tmp/sqlrustgo-tpch
+  TPCH_TOOLS_DIR: /tmp/tpch-tools
+
+jobs:
+  tpch-gate:
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
+
+      - name: Setup TPC-H Tools
+        run: |
+          cd repo
+          # Clone TPC-H dbgen tool
+          git clone --depth=1 https://github.com/electrum/tpch.git "$TPCH_TOOLS_DIR" 2>/dev/null || true
+          if [ ! -f "$TPCH_TOOLS_DIR/dbgen/Makefile" ]; then
+            # Try alternative source
+            curl -sL "https://raw.githubusercontent.com/AdmTal/TPC-H-dbgen/master/tpch-dbgen.zip" -o /tmp/tpch.zip 2>/dev/null || true
+          fi
+          # If Makefile exists, build it
+          if [ -f "$TPCH_TOOLS_DIR/dbgen/Makefile" ]; then
+            cd "$TPCH_TOOLS_DIR/dbgen"
+            make -j$(nproc) 2>/dev/null || true
+          fi
+
+      - name: Generate TPC-H Data
+        run: |
+          mkdir -p "$TPCH_DATA_DIR"
+          if [ -f "$TPCH_TOOLS_DIR/dbgen/dbgen" ]; then
+            cd "$TPCH_TOOLS_DIR/dbgen"
+            for table in region nation customer orders part partsupp supplier lineitem; do
+              ./dbgen -f -s 1 -b "$TPCH_DATA_DIR/$table.tbl" 2>/dev/null || true
+            done
+          else
+            echo "TPC-H tools not available, using existing data or skipping"
+          fi
+
+      - name: Build bench-cli
+        run: |
+          cd repo
+          cargo build -p sqlrustgo-bench-cli --quiet 2>&1 | tail -3
+
+      - name: Run TPC-H SF=1
+        run: |
+          cd repo
+          TPCH_DATA_DIR="$TPCH_DATA_DIR" bash scripts/gate/check_tpch.sh --sf1 2>&1 | tee tpch_report.txt
+
+      - name: Gate Decision
+        run: |
+          cd repo
+          if grep -q 'PASSED' tpch_report.txt; then
+            echo "TPC-H Gate: PASS"
+          else
+            echo "TPC-H Gate: FAIL"
+            exit 1
+          fi
