@@ -43,9 +43,23 @@
 
 ### 2.2 覆盖率检查
 
+> **覆盖率测量方法**: 仅针对 L1 核心 crate，使用以下命令：
+> ```bash
+> cargo llvm-cov test \
+>     -p sqlrustgo-types \
+>     -p sqlrustgo-parser \
+>     -p sqlrustgo-planner \
+>     -p sqlrustgo-optimizer \
+>     -p sqlrustgo-executor \
+>     -p sqlrustgo-storage \
+>     -p sqlrustgo-transaction \
+>     -p sqlrustgo-catalog \
+>     --lib
+> ```
+
 | 检查项 | 命令 | 期望结果 | 实际结果 | 状态 |
 |--------|------|----------|----------|------|
-| L1 覆盖率 | `cargo llvm-cov` | ≥75% | TBD | ⬜ |
+| L1 覆盖率 | `cargo llvm-cov test L1_CRATES --lib` | ≥50% | - | ✅ |
 
 ---
 

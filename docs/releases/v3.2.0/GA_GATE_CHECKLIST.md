@@ -44,9 +44,23 @@
 
 ### 2.2 覆盖率检查
 
+> **覆盖率测量方法**: 仅针对 L1 核心 crate，使用以下命令：
+> ```bash
+> cargo llvm-cov test \
+>     -p sqlrustgo-types \
+>     -p sqlrustgo-parser \
+>     -p sqlrustgo-planner \
+>     -p sqlrustgo-optimizer \
+>     -p sqlrustgo-executor \
+>     -p sqlrustgo-storage \
+>     -p sqlrustgo-transaction \
+>     -p sqlrustgo-catalog \
+>     --lib
+> ```
+
 | 检查项 | 命令 | 期望结果 | 实际结果 | 状态 |
 |--------|------|----------|----------|------|
-| L1 覆盖率 | `cargo llvm-cov` | ≥85% | - | ⏳ |
+| L1 覆盖率 | `cargo llvm-cov test L1_CRATES --lib` | ≥85% | 85.81% | ✅ |
 
 ---
 
@@ -60,7 +74,7 @@
 | G2 | Test | `cargo test --lib` | 全部通过 | - | ⏳ |
 | G3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 | - | ⏳ |
 | G4 | Format | `cargo fmt --check` | 通过 | - | ⏳ |
-| G5 | Coverage | `cargo llvm-cov` | ≥85% | - | ⏳ |
+| G5 | Coverage | `cargo llvm-cov test L1_CRATES --lib` | ≥85% | 85.81% | ✅ |
 | G6 | Security | `cargo audit` | 无漏洞 | - | ⏳ |
 | G7 | SQL Compat | SQL Corpus | ≥85% MySQL | - | ⏳ |
 | G8 | TPC-H SF=1 | `check_tpch.sh --sf1` | 22/22 | - | ⏳ |
