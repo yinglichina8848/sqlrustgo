@@ -44,29 +44,6 @@ impl RemoteConfig {
     }
 }
 
-use hmac::{Hmac, Mac};
-use sha2::Digest;
-
-fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
-    type HmacSha256 = Hmac<sha2::Sha256>;
-    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
-    mac.update(data);
-    mac.finalize().into_bytes().to_vec()
-}
-
-fn sha256_hex(data: &[u8]) -> String {
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(data);
-    format!("{:x}", hasher.finalize())
-}
-
-fn hex_to_bytes(hex: &str) -> Vec<u8> {
-    (0..hex.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
-        .collect()
-}
-
 pub trait BackupStorage: Send + Sync {
     fn save(&self, key: &str, data: &[u8]) -> SqlResult<()>;
     fn load(&self, key: &str) -> SqlResult<Vec<u8>>;
@@ -172,7 +149,7 @@ impl RemoteBackupStorage {
         )
     }
 
-fn sign_request(&self, method: &str, path: &str, body: &[u8]) -> HashMap<String, String> {
+    fn sign_request(&self, method: &str, path: &str, body: &[u8]) -> HashMap<String, String> {
         use sha2::{Digest, Sha256};
 
         let date = chrono::Utc::now().format("%Y%m%d").to_string();
@@ -232,7 +209,8 @@ fn sign_request(&self, method: &str, path: &str, body: &[u8]) -> HashMap<String,
         let k_service = self.sign_sha256(&k_region, b"s3");
         let k_signing = self.sign_sha256(&k_service, b"aws4_request");
 
-        let mut mac = HmacSha256::new_from_slice(&k_signing).expect("HMAC can take key of any size");
+        let mut mac =
+            HmacSha256::new_from_slice(&k_signing).expect("HMAC can take key of any size");
         mac.update(string_to_sign.as_bytes());
         let result = mac.finalize().into_bytes();
 

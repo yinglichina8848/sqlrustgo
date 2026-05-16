@@ -1,6 +1,6 @@
 use sqlrustgo_types::SqlResult;
-use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageTier {
@@ -94,7 +94,9 @@ impl StorageTierManager {
         let tier = self.metadata.read().unwrap().get(key).copied();
 
         match tier {
-            Some(StorageTier::Hot) | None => self.hot.exists(key).or_else(|_| self.cold.exists(key)),
+            Some(StorageTier::Hot) | None => {
+                self.hot.exists(key).or_else(|_| self.cold.exists(key))
+            }
             Some(StorageTier::Cold) => self.cold.exists(key),
         }
     }
@@ -107,10 +109,16 @@ impl StorageTierManager {
         let mut migrated = 0;
 
         for (key, age_days, size_gb, access_count) in items {
-            if self.policy.should_tier_to_cold(*age_days, *size_gb, *access_count) {
+            if self
+                .policy
+                .should_tier_to_cold(*age_days, *size_gb, *access_count)
+            {
                 if let Ok(data) = self.hot.load(key) {
                     if self.cold.save(key, &data).is_ok() {
-                        self.metadata.write().unwrap().insert(key.clone(), StorageTier::Cold);
+                        self.metadata
+                            .write()
+                            .unwrap()
+                            .insert(key.clone(), StorageTier::Cold);
                         migrated += 1;
                     }
                 }
@@ -142,7 +150,10 @@ mod tests {
 
     impl BackupStorage for MockStorage {
         fn save(&self, key: &str, data: &[u8]) -> SqlResult<()> {
-            self.data.write().unwrap().insert(key.to_string(), data.to_vec());
+            self.data
+                .write()
+                .unwrap()
+                .insert(key.to_string(), data.to_vec());
             Ok(())
         }
 
@@ -198,7 +209,9 @@ mod tests {
         let cold = Arc::new(MockStorage::new());
         let manager = StorageTierManager::new(hot.clone(), cold.clone(), TieringPolicy::default());
 
-        manager.save("test_key", b"test_data", StorageTier::Hot).unwrap();
+        manager
+            .save("test_key", b"test_data", StorageTier::Hot)
+            .unwrap();
 
         assert_eq!(manager.load("test_key").unwrap(), b"test_data");
         assert_eq!(manager.get_tier("test_key"), Some(StorageTier::Hot));
@@ -210,7 +223,9 @@ mod tests {
         let cold = Arc::new(MockStorage::new());
         let manager = StorageTierManager::new(hot.clone(), cold.clone(), TieringPolicy::default());
 
-        manager.save("cold_key", b"cold_data", StorageTier::Cold).unwrap();
+        manager
+            .save("cold_key", b"cold_data", StorageTier::Cold)
+            .unwrap();
 
         assert_eq!(manager.load("cold_key").unwrap(), b"cold_data");
         assert_eq!(manager.get_tier("cold_key"), Some(StorageTier::Cold));
@@ -222,7 +237,9 @@ mod tests {
         let cold = Arc::new(MockStorage::new());
         let manager = StorageTierManager::new(hot.clone(), cold.clone(), TieringPolicy::default());
 
-        manager.save("delete_key", b"delete_data", StorageTier::Hot).unwrap();
+        manager
+            .save("delete_key", b"delete_data", StorageTier::Hot)
+            .unwrap();
         assert!(manager.exists("delete_key").unwrap());
 
         manager.delete("delete_key").unwrap();
