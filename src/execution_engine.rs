@@ -2698,7 +2698,11 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         self.execute_insert(&insert)
     }
 
-    fn find_param_index(&self, expr: &sqlrustgo_parser::Expression, _param_count: usize) -> Option<usize> {
+    fn find_param_index(
+        &self,
+        expr: &sqlrustgo_parser::Expression,
+        _param_count: usize,
+    ) -> Option<usize> {
         match expr {
             sqlrustgo_parser::Expression::Literal(s) => {
                 s.strip_prefix('$').and_then(|v| v.parse().ok())

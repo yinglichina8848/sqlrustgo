@@ -96,7 +96,10 @@ fn test_audit_chain_incremental_verify_wrong_seq() {
 
     let result = incremental_verify(&chain, &entry2);
     assert!(result.is_ok());
-    assert!(!result.unwrap().passed, "Entry with wrong seq should fail incremental verify");
+    assert!(
+        !result.unwrap().passed,
+        "Entry with wrong seq should fail incremental verify"
+    );
 }
 
 // ============================================================================
@@ -108,7 +111,10 @@ fn test_verify_entry_checksum_valid() {
     let entry = create_valid_entry(1, GENESIS_PREV_HASH);
     let result = verify_entry_checksum(&entry);
     assert!(result.is_ok());
-    assert!(result.unwrap(), "Valid entry should pass checksum verification");
+    assert!(
+        result.unwrap(),
+        "Valid entry should pass checksum verification"
+    );
 }
 
 #[test]
