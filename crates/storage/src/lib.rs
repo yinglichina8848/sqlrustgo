@@ -25,7 +25,6 @@ pub mod predicate;
 pub mod read_write_split;
 pub mod recovery;
 pub mod row_format;
-pub mod storage_tier;
 pub mod wal;
 
 pub use binary_format::BinaryFormat;
