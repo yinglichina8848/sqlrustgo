@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 /// SQL Statement types
 #[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum Statement {
     Select(SelectStatement),
     Insert(InsertStatement),

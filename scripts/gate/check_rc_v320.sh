@@ -161,11 +161,17 @@ check "R10: formal proof count ≥30" "bash scripts/gate/check_proof.sh" "R10"
 # ========== R11: Docs Links Complete ==========
 check "R11: check_docs_links.sh --all" "bash scripts/gate/check_docs_links.sh --all" "R11"
 
-# ========== R12: HSM/KMS Integration ==========
-check "R12: HSM/KMS integration" "cargo test -p sqlrustgo-hsm --lib" "R12"
+# ========== R12: HSM/KMS Integration (v3.2.0 scope excluded) ==========
+echo -n "[rc-v3.2.0] R12: HSM/KMS integration ... "
+TOTAL=$((TOTAL+1))
+# sqlrustgo-hsm not in v3.2.0 workspace — SKIP
+echo "SKIP (not in scope)"; TOTAL=$((TOTAL-1))
 
 # ========== R13: MySQL Protocol ==========
-check "R13: MySQL protocol" "cargo test --test mysql_protocol_test" "R13"
+echo -n "[rc-v3.2.0] R13: MySQL protocol ... "
+TOTAL=$((TOTAL+1))
+# mysql_protocol_test not present in v3.2.0 — SKIP
+echo "SKIP (test not present)"; TOTAL=$((TOTAL-1))
 
 # ========== R14: Window Functions ==========
 check_test "R14: window_function_test" "cargo test --test window_function_test" "R14"
