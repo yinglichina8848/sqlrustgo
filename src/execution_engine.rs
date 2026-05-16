@@ -773,16 +773,18 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         .map_err(SqlError::ExecutionError)
                 }
                 Some(wc) => {
-                    let has_recursive = wc.ctes.iter().any(|c| {
-                        matches!(c.subquery.as_ref(), Statement::Union(_))
-                    });
+                    let has_recursive = wc
+                        .ctes
+                        .iter()
+                        .any(|c| matches!(c.subquery.as_ref(), Statement::Union(_)));
                     if has_recursive {
                         let catalog = if let Some(ref catalog_guard) = self.catalog {
                             catalog_guard.read().unwrap().clone()
                         } else {
                             sqlrustgo_catalog::Catalog::new("cte_catalog".to_string())
                         };
-                        let executor = StoredProcExecutor::new(Arc::new(catalog), self.storage.clone());
+                        let executor =
+                            StoredProcExecutor::new(Arc::new(catalog), self.storage.clone());
                         executor
                             .execute_with_cte(&sqlrustgo_parser::Statement::WithSelect(ws.clone()))
                             .map_err(SqlError::ExecutionError)
