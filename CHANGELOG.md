@@ -5,6 +5,52 @@ SQLRustGo 的所有显着更改都将记录在此文件中。
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-05-18 (RC → GA)
+
+### 目标
+
+Trust Convergence（可信收敛）版本，聚焦 GMP 工业标准验证，确保：
+- MySQL 协议完整兼容
+- 性能稳定无回归
+- 审计链完整性验证
+- Crash Recovery 验证
+- GMP Long-Run 稳定性
+
+### 核心原则
+
+> **禁止架构扩散，聚焦可信收敛**
+
+### 已完成
+
+| 功能 | PR | 状态 |
+|------|-----|------|
+| UPDATE/DELETE WHERE 子句修复 | #1174 | ✅ |
+| 性能回归调查（无回归发现） | #1174 | ✅ |
+| Audit Chain Validator 增强 | #1180 | ✅ |
+| WAL Crash Recovery 测试 | #1168 | ✅ |
+| Crash Recovery 验证 | #1166 | ✅ |
+| GMP Timestamp 验证 | #1171 | ✅ |
+
+### 性能数据
+
+| 操作 | v3.2.0 实测 | v3.0.0 基线 | 提升 |
+|------|------------|------------|------|
+| UPDATE | 109,988 QPS | 43,121 QPS | +155% |
+| DELETE | 134,312 QPS | 64,896 QPS | +107% |
+| INSERT | 73,261 QPS | 28,698 QPS | +155% |
+
+### GMP 审计链增强
+
+- `verify_chain()` 新增时间戳单调递增验证
+- `verify_chain()` 新增事务 ID 追踪（孤立条目检测）
+- `AuditChainError` 新增 5 个变体：`TimestampNotMonotonic`, `SignatureInvalid`, `OrphanEntry`, `WorkflowLinkBroken`, `ProvenanceIncomplete`
+- CLI `audit-chain-verify` 处理所有新错误类型
+
+### Bug 修复
+
+- **UPDATE WHERE 子句被忽略**: `expression_to_value()` 不支持行上下文，导致 WHERE 条件无法求值。添加 `evaluate_row_expression()` 方法支持行上下文和列名→索引映射。
+- **DELETE WHERE 子句被忽略**: 同上，使用 `get_table_records_mut()` + 索引收集实现正确的条件过滤。
+
 ## [2.8.0] - 2026-05-01 (GA)
 
 ### 目标
