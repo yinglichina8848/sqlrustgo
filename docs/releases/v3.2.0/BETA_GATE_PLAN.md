@@ -213,9 +213,9 @@ bash scripts/gate/check_beta_v320.sh
 
 ### 9.1 相关文档
 
-- [Alpha Gate 状态](https://gitea.oshwi.icu/openclaw/sqlrustgo/issues/973)
-- [Beta Gate 状态](https://gitea.oshwi.icu/openclaw/sqlrustgo/issues/974)
-- [总控Issue](https://gitea.oshwi.icu/openclaw/sqlrustgo/issues/972)
+- [Alpha Gate 状态](http://192.168.0.252:3000/openclaw/sqlrustgo/issues/973)
+- [Beta Gate 状态](http://192.168.0.252:3000/openclaw/sqlrustgo/issues/974)
+- [总控Issue](http://192.168.0.252:3000/openclaw/sqlrustgo/issues/972)
 
 ### 9.2 OpenSpec 设计文档
 
