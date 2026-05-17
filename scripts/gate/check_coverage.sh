@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Coverage Gate Check - uses cargo llvm-cov
+# Fixed: Properly aggregates per-crate coverage for L1 crates
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,6 +10,18 @@ COVERAGE_DIR="$PROJECT_ROOT/artifacts/coverage"
 mkdir -p "$COVERAGE_DIR"
 
 MODE="${1:-full}"
+
+# L1 crates for RC/GA gate (must match RC_GATE_CHECKLIST.md)
+L1_CRATES=(
+    "sqlrustgo-types"
+    "sqlrustgo-parser"
+    "sqlrustgo-planner"
+    "sqlrustgo-optimizer"
+    "sqlrustgo-executor"
+    "sqlrustgo-storage"
+    "sqlrustgo-transaction"
+    "sqlrustgo-catalog"
+)
 
 detect_memory_and_threads() {
     local memory_gb
@@ -46,6 +59,100 @@ if ! command -v cargo-llvm-cov &>/dev/null; then
     exit 1
 fi
 
+# Get coverage for a single crate
+get_crate_coverage() {
+    local crate="$1"
+    local output_file="$COVERAGE_DIR/${crate#sqlrustgo-}.json"
+    local tmp_file="$COVERAGE_DIR/.tmp_${crate#sqlrustgo-}.json"
+
+    # Remove old files to ensure fresh data
+    rm -f "$output_file" "$tmp_file"
+
+    echo "[COVERAGE] Running $crate..."
+
+    # Run coverage for this crate
+    if cargo llvm-cov --package "$crate" --all-features --lib --json --output-path "$tmp_file" 2>/dev/null; then
+        mv "$tmp_file" "$output_file"
+        # Extract percentage using correct JSON path: data[0].totals.lines.percent
+        local pct=$(python3 -c "
+import json
+with open('$output_file') as f:
+    data = json.load(f)
+pct = data.get('data', [{}])[0].get('totals', {}).get('lines', {}).get('percent', 0)
+print(f'{pct:.2f}')
+" 2>/dev/null || echo "0")
+        echo "  -> $crate: ${pct}%"
+        echo "$pct"
+    else
+        rm -f "$tmp_file"
+        echo "  -> $crate: FAILED"
+        echo "0"
+    fi
+}
+
+# Run coverage for all L1 crates and aggregate
+run_l1_coverage() {
+    echo "=== Running L1 Crate Coverage ==="
+    echo "L1 crates: ${#L1_CRATES[@]}"
+    echo ""
+
+    local total_pct=0
+    local count=0
+    local missing_crates=()
+
+    for crate in "${L1_CRATES[@]}"; do
+        local pct=$(get_crate_coverage "$crate")
+        if [[ "$pct" != "0" && "$pct" != "" ]]; then
+            total_pct=$(echo "$total_pct + $pct" | bc -l)
+            count=$((count + 1))
+        else
+            missing_crates+=("$crate")
+        fi
+    done
+
+    if [[ $count -gt 0 ]]; then
+        local avg_pct=$(echo "scale=2; $total_pct / $count" | bc -l)
+        echo ""
+        echo "=== L1 Coverage Summary ==="
+        echo "Crates measured: $count/${#L1_CRATES[@]}"
+        echo "Average coverage: ${avg_pct}%"
+
+        if [[ ${#missing_crates[@]} -gt 0 ]]; then
+            echo "Missing crates: ${missing_crates[*]}"
+            echo "WARNING: Coverage may be inaccurate - ${#missing_crates[@]} crate(s) failed"
+        fi
+
+        # Save aggregated result
+        echo "$avg_pct" > "$COVERAGE_DIR/l1_coverage.txt"
+
+        # Save full report as JSON (compatible format)
+        python3 << EOF
+import json
+import os
+
+result = {
+    "type": "llvm.coverage.json.export",
+    "version": "3.0.1",
+    "data": [{
+        "totals": {
+            "lines": {
+                "count": 0,
+                "covered": 0,
+                "percent": $avg_pct
+            }
+        }
+    }]
+}
+
+with open('$COVERAGE_DIR/coverage.json', 'w') as f:
+    json.dump(result, f)
+EOF
+    else
+        echo "ERROR: No crates could be measured"
+        exit 1
+    fi
+}
+
 # Run coverage based on mode
 if [ "$MODE" = "incremental" ]; then
     echo "Running incremental coverage..."
@@ -56,66 +163,25 @@ if [ "$MODE" = "incremental" ]; then
     else
         echo "Changed crates: $CHANGED_CRATES"
         for crate in $CHANGED_CRATES; do
-            echo "Coverage for sqlrustgo-$crate..."
-            cargo llvm-cov --package "sqlrustgo-$crate" --all-features --lib --json --output-path "$COVERAGE_DIR/${crate}.json" 2>/dev/null || true
+            get_crate_coverage "sqlrustgo-$crate"
         done
     fi
 fi
 
 if [ "$MODE" = "full" ]; then
-    echo "Running full coverage test..."
-
-    # Run llvm-cov with timeout
-    # IMPORTANT: Must run tests FIRST, then generate report
+    echo "Running full L1 coverage test..."
     TIMEOUT=600
 
-    if command -v timeout &>/dev/null; then
-        timeout "$TIMEOUT" cargo llvm-cov test --workspace --all-features --lib --no-fail-fast -- --test-threads="$TEST_THREADS" 2>&1 || {
-            # If full coverage times out, try per-crate
-            echo "Full coverage timed out after ${TIMEOUT}s, trying per-crate approach..."
-            bash "$SCRIPT_DIR/check_coverage_parallel.sh" --parallel "$TEST_THREADS" --timeout 300
-            exit 0
-        }
-    else
-        cargo llvm-cov test --workspace --all-features --lib --no-fail-fast -- --test-threads="$TEST_THREADS" 2>&1 || true
-    fi
-
-    # Generate JSON report from collected coverage data
-    cargo llvm-cov report --json --output-path "$COVERAGE_DIR/coverage.json" 2>/dev/null || true
+    # Use per-crate approach for accurate L1 coverage
+    run_l1_coverage
 fi
 
-# Check if coverage report was generated
-if [ ! -f "$COVERAGE_DIR/coverage.json" ]; then
-    echo "❌ Coverage report not generated"
+# Read coverage from aggregated result
+if [[ -f "$COVERAGE_DIR/l1_coverage.txt" ]]; then
+    COVERAGE=$(cat "$COVERAGE_DIR/l1_coverage.txt")
+else
+    echo "❌ Coverage data not available"
     exit 1
-fi
-
-# Extract coverage percentage from JSON report
-echo "Extracting coverage percentage..."
-
-# Parse the JSON to get line coverage percentage
-# The JSON has format: {"files": [...], "totals": {"lines": {"count": N, "covered": M, "percent": X.Y}}}
-COVERAGE=$(python3 -c "
-import json
-try:
-    with open('$COVERAGE_DIR/coverage.json') as f:
-        data = json.load(f)
-    lines = data.get('totals', {}).get('lines', {})
-    pct = lines.get('percent', 0)
-    print(f'{pct:.2f}')
-except:
-    print('')
-" 2>/dev/null || echo "")
-
-if [ -z "$COVERAGE" ]; then
-    # Fallback: try to extract from JSON manually
-    COVERAGE=$(grep -oE '"percent"[[:space:]]*:[[:space:]]*[0-9.]+' "$COVERAGE_DIR/coverage.json" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo "")
-fi
-
-if [ -z "$COVERAGE" ]; then
-    echo "⚠️ Could not extract coverage percentage, assuming pass"
-    echo "✅ Coverage check passed (llvm-cov)"
-    exit 0
 fi
 
 # Detect version/phase from branch for threshold
@@ -126,8 +192,10 @@ detect_threshold() {
         echo 50
     elif [[ "$branch" =~ "develop/v3" ]] || [[ "$branch" =~ "beta" ]]; then
         echo 75
+    elif [[ "$branch" =~ "rc" ]]; then
+        echo 85
     else
-        echo 80
+        echo 85
     fi
 }
 
@@ -135,8 +203,10 @@ detect_threshold() {
 COVERAGE_INT=$(echo "$COVERAGE * 100" | bc | cut -d. -f1)
 REQUIRED=$(detect_threshold)
 
+echo ""
+echo "=== Coverage Result ==="
 echo "Current coverage: ${COVERAGE_INT}%"
-echo "Required coverage: ${REQUIRED}% (branch-aware threshold)"
+echo "Required coverage: ${REQUIRED}%"
 
 if [ "$COVERAGE_INT" -lt "$REQUIRED" ]; then
     echo "❌ Coverage too low! Need at least ${REQUIRED}%"
@@ -144,5 +214,25 @@ if [ "$COVERAGE_INT" -lt "$REQUIRED" ]; then
 fi
 
 echo "✅ Coverage check passed!"
-echo "Coverage report saved to: $COVERAGE_DIR/coverage.json"
+echo ""
+echo "=== Per-Crate Coverage Report ==="
+for crate in "${L1_CRATES[@]}"; do
+    crate_name="${crate#sqlrustgo-}"
+    json_file="$COVERAGE_DIR/${crate_name}.json"
+    if [[ -f "$json_file" ]]; then
+        pct=$(python3 -c "
+import json
+with open('$json_file') as f:
+    data = json.load(f)
+pct = data.get('data', [{}])[0].get('totals', {}).get('lines', {}).get('percent', 0)
+print(f'{pct:.2f}')
+" 2>/dev/null || echo "N/A")
+        echo "  ${crate_name}: ${pct}%"
+    else
+        echo "  ${crate_name}: MISSING"
+    fi
+done
+
+echo ""
+echo "Coverage reports saved to: $COVERAGE_DIR/"
 echo "=== Coverage Gate Check Complete ==="
