@@ -36,12 +36,16 @@ cd "$PROJECT_ROOT"
 detect_version() {
     local branch
     branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
-    if [[ "$branch" =~ "develop/v3" ]] || [[ "$branch" =~ "v3.0" ]]; then
+    if [[ "$branch" =~ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+        echo "v${BASH_REMATCH[1]}"
+    elif [[ "$branch" =~ develop/v([0-9]+\.[0-9]+) ]]; then
+        echo "v${BASH_REMATCH[1]}.0"
+    elif [[ "$branch" =~ \"v3.0\" ]]; then
         echo "v3.0.0"
-    elif [[ "$branch" =~ "develop/v2.9" ]] || [[ "$branch" =~ "v2.9" ]]; then
+    elif [[ "$branch" =~ \"v2.9\" ]]; then
         echo "v2.9.0"
     else
-        echo "v2.9.0"  # default fallback
+        echo "v3.2.0"  # default fallback
     fi
 }
 

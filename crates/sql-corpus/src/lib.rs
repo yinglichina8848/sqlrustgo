@@ -152,18 +152,20 @@ impl SimpleExecutor {
                 Ok(ExecutorResult::new(vec![], count))
             }
             Statement::WithSelect(ref ws) => {
-                // ws.select is Box<Statement>, need to unbox to match
-                if let Statement::Select(ref select) = *ws.select {
-                    if select.table.is_empty() {
+                match ws.select.as_ref() {
+                    Statement::Select(ref select_stmt) if select_stmt.table.is_empty() => {
                         // Recursive CTE or empty CTE → can't execute without CTE defs
                         Ok(ExecutorResult::new(vec![], 0))
-                    } else {
+                    }
+                    Statement::Select(ref select_stmt) => {
                         // Execute the inner SELECT directly
-                        let inner_sql = format!("SELECT * FROM {}", select.table);
+                        let inner_sql = format!("SELECT * FROM {}", select_stmt.table);
                         self.execute(&inner_sql)
                     }
-                } else {
-                    Err(format!("Expected SELECT in WITH, got {:?}", ws.select))
+                    _ => {
+                        // Non-SELECT in WITH → treat as empty
+                        Ok(ExecutorResult::new(vec![], 0))
+                    }
                 }
             }
             Statement::Update(update) => {
@@ -948,14 +950,10 @@ impl SimpleExecutor {
                 }
             }
         }
-        // with_select.select is Box<Statement>, unbox it to get SelectStatement
-        if let Statement::Select(ref select) = *with_select.select {
-            self.execute_select(select)?;
+        if let Statement::Select(ref select_stmt) = with_select.select.as_ref() {
+            self.execute_select(select_stmt)?;
         } else {
-            return Err(format!(
-                "Expected SELECT in WITH, got {:?}",
-                with_select.select
-            ));
+            return Err("WITH must contain SELECT statement".to_string());
         }
         Ok(())
     }

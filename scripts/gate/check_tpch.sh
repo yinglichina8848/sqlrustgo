@@ -33,8 +33,22 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TPCH_DIR="$PROJECT_ROOT/scripts/tpch"
-BASELINE_FILE="$PROJECT_ROOT/perf_baselines/v3.0.0/tpch_baseline.json"
-RESULT_FILE="$PROJECT_ROOT/perf_baselines/v3.0.0/tpch_current.json"
+
+# Auto-detect version from branch name
+detect_version() {
+    local branch
+    branch=$(git -C "$PROJECT_ROOT" symbolic-ref --short HEAD 2>/dev/null || echo "develop/v3.2.0")
+    if [[ "$branch" =~ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]}"
+    elif [[ "$branch" =~ develop/v([0-9]+\.[0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]}.0"
+    else
+        echo "3.2.0"
+    fi
+}
+VERSION=$(detect_version)
+BASELINE_FILE="$PROJECT_ROOT/perf_baselines/v${VERSION}/tpch_baseline.json"
+RESULT_FILE="$PROJECT_ROOT/perf_baselines/v${VERSION}/tpch_current.json"
 
 # Default TPC-H data location
 DATA_DIR_DEFAULT="$HOME/sqlrustgo-tpch/data"

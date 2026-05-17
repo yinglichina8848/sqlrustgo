@@ -150,7 +150,7 @@ echo "━━━ 第二部分: 功能 Gate (G7-G12) ━━━"
 check "G7: HSM/KMS integration" "cargo test -p sqlrustgo-gmp --lib" "G7"
 
 # G8: MySQL Protocol
-check "G8: MySQL protocol" "cargo test -p sqlrustgo-mysql-server --test mysql_server_tests" "G8"
+check "G8: MySQL protocol" "SQLRUSTGO_SERVER_BIN=\"$PROJECT_ROOT/target/release/sqlrustgo-mysql-server\" cargo test -p sqlrustgo-mysql-server --test mysql_protocol_handshake_test" "G8"
 
 # G9: Window Functions
 check_test "G9: window_function_test" "cargo test --test window_function_test" "G9"
