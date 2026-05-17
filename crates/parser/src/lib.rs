@@ -52,3 +52,8 @@ mod coverage_tests_v6 {
 mod coverage_tests_v7 {
     include!("tests_preprocessed/coverage_increase_v7.rs");
 }
+
+#[cfg(test)]
+mod coverage_tests_v8 {
+    include!("tests_preprocessed/coverage_increase_v8.rs");
+}
