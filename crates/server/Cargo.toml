@@ -27,3 +27,8 @@ actix-web = "4"
 
 [dev-dependencies]
 tempfile.workspace = true
+
+[[bin]]
+name = "crash-worker"
+path = "src/bin/crash_worker.rs"
+doc = false
