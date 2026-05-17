@@ -1161,3 +1161,119 @@ impl StoredProcExecutor {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn executor() -> StoredProcExecutor {
+        let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+        StoredProcExecutor::new_for_test(catalog)
+    }
+
+    #[test]
+    fn test_execute_body_leave_early() {
+        let ex = executor();
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("x", Value::Integer(1));
+        let body = vec![
+            StoredProcStatement::Set {
+                variable: "x".into(),
+                value: "2".into(),
+            },
+            StoredProcStatement::Leave {
+                label: "block".into(),
+            },
+            StoredProcStatement::Set {
+                variable: "x".into(),
+                value: "3".into(),
+            },
+        ];
+        let result = ex.execute_body(&body, &mut ctx);
+        assert!(result.is_ok());
+        assert_eq!(ctx.get_var("x"), Some(&Value::Integer(2)));
+    }
+
+    #[test]
+    fn test_execute_body_return_early() {
+        let ex = executor();
+        let mut ctx = ProcedureContext::new();
+        let body = vec![
+            StoredProcStatement::Return { value: "42".into() },
+            StoredProcStatement::Set {
+                variable: "x".into(),
+                value: "99".into(),
+            },
+        ];
+        let result = ex.execute_body(&body, &mut ctx);
+        assert!(result.is_ok());
+        assert_eq!(ctx.get_return(), Some(Value::Integer(42)));
+    }
+
+    #[test]
+    fn test_execute_body_iterate_resets() {
+        let ex = executor();
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("i", Value::Integer(0));
+        let body = vec![
+            StoredProcStatement::Iterate {
+                label: "loop".into(),
+            },
+            StoredProcStatement::Set {
+                variable: "i".into(),
+                value: "99".into(),
+            },
+        ];
+        let result = ex.execute_body(&body, &mut ctx);
+        assert!(result.is_ok());
+        assert!(!ctx.should_iterate());
+    }
+
+    #[test]
+    fn test_extract_column_binding() {
+        let ex = executor();
+        use sqlrustgo_parser::{Expression, SelectColumn, SelectStatement};
+        let select = SelectStatement {
+            columns: vec![
+                SelectColumn {
+                    name: "a".into(),
+                    expression: Some(Expression::Identifier("col1".into())),
+                    alias: None,
+                },
+                SelectColumn {
+                    name: "b".into(),
+                    expression: Some(Expression::Identifier("col2".into())),
+                    alias: None,
+                },
+            ],
+            table: "t".into(),
+            from: None,
+            where_clause: None,
+            join_clause: None,
+            aggregates: vec![],
+            group_by: vec![],
+            having: None,
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            distinct: false,
+            for_update: false,
+        };
+        let binding = ex.extract_column_binding(&select);
+        assert_eq!(binding.len(), 2);
+        assert_eq!(binding[0], ("col1".into(), 0));
+        assert_eq!(binding[1], ("col2".into(), 1));
+    }
+
+    #[test]
+    fn test_bind_row_to_context() {
+        let ex = executor();
+        let mut ctx = ProcedureContext::new();
+        let columns = vec!["a".into(), "b".into()];
+        let row = vec![Value::Integer(10), Value::Text("hello".into())];
+        ctx = ex.bind_row_to_context(ctx, &columns, &row);
+        assert_eq!(ctx.get_var("a"), Some(&Value::Integer(10)));
+        assert_eq!(ctx.get_var("b"), Some(&Value::Text("hello".into())));
+    }
+}
