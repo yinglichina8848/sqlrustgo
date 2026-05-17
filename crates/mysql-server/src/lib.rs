@@ -4,11 +4,6 @@
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crossbeam_channel::{bounded, Sender};
-use mio::net::{TcpListener, TcpStream};
-use mio::Events;
-use mio::Interest;
-use mio::Poll;
-use mio::Token;
 use rcgen::{CertificateParams, KeyPair};
 use sha1::Digest;
 use sqlrustgo::execution_engine::EngineConfig;
@@ -18,8 +13,7 @@ use sqlrustgo_storage::{MemoryStorage, StorageEngine};
 use sqlrustgo_types::{SqlError, Value};
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
@@ -2617,7 +2611,7 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
 
 pub fn run_server_with_pool(host: &str, port: u16, pool_size: usize) -> MySqlResult<()> {
     let addr: std::net::SocketAddr = format!("{}:{}", host, port).parse()?;
-    let mut listener = TcpListener::bind(addr)?;
+    let listener = TcpListener::bind(addr)?;
     tracing::info!("MySQL server listening on {}", addr);
     let tls_config = Arc::new(make_tls_config());
     tracing::info!("TLS ready (self-signed cert)");
@@ -2638,49 +2632,28 @@ pub fn run_server_with_pool(host: &str, port: u16, pool_size: usize) -> MySqlRes
     let user_store = Arc::new(UserStore::new());
     let pool = ConnectionThreadPool::new(pool_size);
 
-    let mut poll = Poll::new()?;
-    const LISTENER: Token = Token(0);
-    poll.registry()
-        .register(&mut listener, LISTENER, Interest::READABLE)
-        .map_err(|e| std::io::Error::other(format!("poll register: {}", e)))?;
+    tracing::info!("Accept loop using simple blocking I/O");
 
-    tracing::info!("Accept loop using mio (token={:?})", LISTENER);
-
-    let mut events = Events::with_capacity(1024);
     loop {
-        match poll.poll(&mut events, None) {
-            Ok(_) => {}
+        match listener.accept() {
+            Ok((stream, addr)) => {
+                let task = ConnectionTask {
+                    stream,
+                    addr,
+                    storage: storage.clone(),
+                    tls_config: tls_config.clone(),
+                    user_store: user_store.clone(),
+                };
+                pool.spawn(task);
+            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                continue;
+            }
             Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(e) => {
-                let err: std::io::Error = e;
-                tracing::error!("Poll error: {}", err);
+                tracing::error!("Accept error: {}", e);
                 break;
-            }
-        }
-
-        for event in &events {
-            if event.token() == LISTENER {
-                match listener.accept() {
-                    Ok((stream, addr)) => {
-                        let task = ConnectionTask {
-                            stream,
-                            addr,
-                            storage: storage.clone(),
-                            tls_config: tls_config.clone(),
-                            user_store: user_store.clone(),
-                        };
-                        pool.spawn(task);
-                        let _ =
-                            poll.registry()
-                                .reregister(&mut listener, LISTENER, Interest::READABLE);
-                    }
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        let _ =
-                            poll.registry()
-                                .reregister(&mut listener, LISTENER, Interest::READABLE);
-                    }
-                    Err(e) => tracing::error!("Accept: {}", e),
-                }
             }
         }
     }

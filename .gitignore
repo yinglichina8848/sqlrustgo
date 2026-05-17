@@ -5,7 +5,8 @@ test_report.json
 test_report.log
 __pycache__/
 *.pyc
-*.profraw
+# Coverage intermediate files
+**/*.profraw
 target/
 # TPC-H test data (never commit these)
 data/tpch-*/

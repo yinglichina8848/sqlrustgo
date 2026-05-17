@@ -254,15 +254,7 @@ fn test_explain_analyze_actual_rows_output() {
     let scan = create_test_seq_scan("users");
     let output = explain_analyze(&scan);
 
-    let line = &output.lines[0];
-
-    if let Some(rows) = line.actual_rows {
-        assert!(rows >= 0, "actual_rows should be non-negative");
-    }
-
-    if let Some(time_us) = line.execution_time_us {
-        assert!(time_us >= 0, "execution_time_us should be non-negative");
-    }
+    // actual_rows and execution_time_us are unsigned types; no lower-bound check needed
 }
 
 #[test]

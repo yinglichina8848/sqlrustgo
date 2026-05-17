@@ -42,6 +42,43 @@ pub struct VerificationResults {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry_results: Option<Vec<EntryVerificationResult>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp_order_violations: Option<Vec<TimestampViolation>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orphan_entries: Option<Vec<OrphanInfo>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workflow_gaps: Option<Vec<WorkflowGap>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provenance_gaps: Option<Vec<ProvenanceGap>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimestampViolation {
+    pub seq: u64,
+    pub timestamp: i64,
+    pub prev_timestamp: i64,
+    pub violation_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrphanInfo {
+    pub seq: u64,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowGap {
+    pub seq: u64,
+    pub from_state: Option<String>,
+    pub to_state: Option<String>,
+    pub gap_description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProvenanceGap {
+    pub seq: u64,
+    pub missing_field: String,
+    pub gap_type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,15 +155,10 @@ pub fn violation_to_json(violation: &TamperViolation) -> serde_json::Value {
             })
         }
         TamperViolation::GenesisTampered => {
-            serde_json::json!({
-                "type": "GenesisTampered"
-            })
+            serde_json::json!({"type": "GenesisTampered"})
         }
         TamperViolation::EntryNotFound(seq) => {
-            serde_json::json!({
-                "type": "EntryNotFound",
-                "seq": seq
-            })
+            serde_json::json!({"type": "EntryNotFound", "seq": seq})
         }
     }
 }
@@ -144,35 +176,49 @@ pub fn recovery_action_to_string(
     }
 }
 
-fn run_quick_verify(chain: &AuditChain) -> VerificationResults {
-    let passed = quick_verify(chain);
+fn minimal_results(
+    passed: bool,
+    entries_verified: u64,
+    error: Option<String>,
+) -> VerificationResults {
     VerificationResults {
         passed,
-        entries_verified: if passed { chain.len() } else { 0 },
+        entries_verified,
         first_failure: None,
-        error: if passed {
+        error,
+        entry_results: None,
+        timestamp_order_violations: None,
+        orphan_entries: None,
+        workflow_gaps: None,
+        provenance_gaps: None,
+    }
+}
+
+fn run_quick_verify(chain: &AuditChain) -> VerificationResults {
+    let passed = quick_verify(chain);
+    minimal_results(
+        passed,
+        if passed { chain.len() } else { 0 },
+        if passed {
             None
         } else {
             Some("Quick verify failed".to_string())
         },
-        entry_results: None,
-    }
+    )
 }
 
-fn run_full_verify(chain: &AuditChain) -> VerificationResults {
-    match chain.verify_chain() {
-        Ok(valid) => VerificationResults {
-            passed: valid,
-            entries_verified: chain.len(),
-            first_failure: None,
-            error: None,
-            entry_results: None,
-        },
+fn run_full_verify_extended(chain: &AuditChain) -> VerificationResults {
+    // Empty chain is valid
+    if chain.is_empty() {
+        return minimal_results(true, 0, None);
+    }
+
+    // Step 1: Core chain verification
+    let chain_valid = match chain.verify_chain() {
+        Ok(v) => v,
         Err(e) => {
             let (first_failure, error_msg) = match &e {
-                AuditChainError::SeqMismatch {
-                    expected, actual, ..
-                } => (
+                AuditChainError::SeqMismatch { expected, actual } => (
                     Some(*actual),
                     format!("SeqMismatch: expected {}, got {}", expected, actual),
                 ),
@@ -183,16 +229,164 @@ fn run_full_verify(chain: &AuditChain) -> VerificationResults {
                     (Some(*seq), format!("ChecksumInvalid at seq {}", seq))
                 }
                 AuditChainError::EmptyChain => (None, "EmptyChain".to_string()),
+                AuditChainError::TimestampNotMonotonic { seq, .. } => {
+                    (Some(*seq), format!("TimestampNotMonotonic at seq {}", seq))
+                }
+                AuditChainError::SignatureInvalid { seq } => {
+                    (Some(*seq), format!("SignatureInvalid at seq {}", seq))
+                }
+                AuditChainError::OrphanEntry { seq, .. } => {
+                    (Some(*seq), format!("OrphanEntry at seq {}", seq))
+                }
+                AuditChainError::WorkflowLinkBroken { seq, .. } => {
+                    (Some(*seq), format!("WorkflowLinkBroken at seq {}", seq))
+                }
+                AuditChainError::ProvenanceIncomplete { seq, .. } => {
+                    (Some(*seq), format!("ProvenanceIncomplete at seq {}", seq))
+                }
             };
-            VerificationResults {
+            return VerificationResults {
                 passed: false,
                 entries_verified: 0,
                 first_failure,
                 error: Some(error_msg),
                 entry_results: None,
-            }
+                timestamp_order_violations: None,
+                orphan_entries: None,
+                workflow_gaps: None,
+                provenance_gaps: None,
+            };
+        }
+    };
+
+    if !chain_valid {
+        return minimal_results(
+            false,
+            chain.len(),
+            Some("Chain verification returned false".to_string()),
+        );
+    }
+
+    // Step 2: Timestamp ordering (monotonically non-decreasing)
+    let entries = chain.entries();
+    let mut timestamp_violations = Vec::new();
+    for i in 1..entries.len() {
+        let curr = &entries[i];
+        let prev = &entries[i - 1];
+        if curr.timestamp < prev.timestamp {
+            timestamp_violations.push(TimestampViolation {
+                seq: curr.seq,
+                timestamp: curr.timestamp,
+                prev_timestamp: prev.timestamp,
+                violation_type: "TimestampDecrease".to_string(),
+            });
         }
     }
+
+    // Step 3: Orphan detection (sequence gaps)
+    let mut orphan_entries = Vec::new();
+    for i in 0..entries.len() {
+        let entry = &entries[i];
+        let expected_seq = (i + 1) as u64;
+        if entry.seq != expected_seq {
+            orphan_entries.push(OrphanInfo {
+                seq: entry.seq,
+                reason: format!(
+                    "Sequence gap: expected seq {} at position {}, found seq {}",
+                    expected_seq, i, entry.seq
+                ),
+            });
+        }
+    }
+
+    // Step 4: Workflow gap detection
+    let mut workflow_gaps = Vec::new();
+    let mut last_action: Option<(String, String)> = None;
+    for entry in entries {
+        if let Some((prev_table, prev_action)) = last_action {
+            let transition_key = format!("{}->{}", prev_action, entry.action);
+            if transition_key == "DELETE->CREATE" && prev_table == entry.table_name {
+                workflow_gaps.push(WorkflowGap {
+                    seq: entry.seq,
+                    from_state: Some(prev_action),
+                    to_state: Some(entry.action.clone()),
+                    gap_description: format!(
+                        "Suspicious transition DELETE->CREATE on same table '{}'",
+                        entry.table_name
+                    ),
+                });
+            }
+        }
+        last_action = Some((entry.table_name.clone(), entry.action.clone()));
+    }
+
+    // Step 5: Provenance completeness
+    let mut provenance_gaps = Vec::new();
+    for entry in entries {
+        if entry.user_id.is_empty() || entry.user_id == "<unknown>" {
+            provenance_gaps.push(ProvenanceGap {
+                seq: entry.seq,
+                missing_field: "user_id".to_string(),
+                gap_type: "EmptyUserId".to_string(),
+            });
+        }
+        if entry.table_name.is_empty() {
+            provenance_gaps.push(ProvenanceGap {
+                seq: entry.seq,
+                missing_field: "table_name".to_string(),
+                gap_type: "EmptyTableName".to_string(),
+            });
+        }
+        if entry.checksum == [0u8; 32] {
+            provenance_gaps.push(ProvenanceGap {
+                seq: entry.seq,
+                missing_field: "checksum".to_string(),
+                gap_type: "ZeroChecksum".to_string(),
+            });
+        }
+    }
+
+    let passed = chain_valid
+        && timestamp_violations.is_empty()
+        && orphan_entries.is_empty()
+        && workflow_gaps.is_empty()
+        && provenance_gaps.is_empty();
+
+    VerificationResults {
+        passed,
+        entries_verified: chain.len(),
+        first_failure: None,
+        error: if passed {
+            None
+        } else {
+            Some("Extended verification found issues".to_string())
+        },
+        entry_results: None,
+        timestamp_order_violations: if timestamp_violations.is_empty() {
+            None
+        } else {
+            Some(timestamp_violations)
+        },
+        orphan_entries: if orphan_entries.is_empty() {
+            None
+        } else {
+            Some(orphan_entries)
+        },
+        workflow_gaps: if workflow_gaps.is_empty() {
+            None
+        } else {
+            Some(workflow_gaps)
+        },
+        provenance_gaps: if provenance_gaps.is_empty() {
+            None
+        } else {
+            Some(provenance_gaps)
+        },
+    }
+}
+
+fn run_full_verify(chain: &AuditChain) -> VerificationResults {
+    run_full_verify_extended(chain)
 }
 
 fn run_entry_verify(chain: &AuditChain, seq: u64) -> VerificationResults {
@@ -229,6 +423,10 @@ fn run_entry_verify(chain: &AuditChain, seq: u64) -> VerificationResults {
                 },
                 error: None,
                 entry_results: Some(entry_results),
+                timestamp_order_violations: None,
+                orphan_entries: None,
+                workflow_gaps: None,
+                provenance_gaps: None,
             }
         }
         None => VerificationResults {
@@ -237,6 +435,10 @@ fn run_entry_verify(chain: &AuditChain, seq: u64) -> VerificationResults {
             first_failure: Some(seq),
             error: Some(format!("Entry {} not found", seq)),
             entry_results: None,
+            timestamp_order_violations: None,
+            orphan_entries: None,
+            workflow_gaps: None,
+            provenance_gaps: None,
         },
     }
 }
@@ -271,8 +473,32 @@ fn build_chain_stats(chain: &AuditChain) -> ChainStatistics {
     }
 }
 
-pub fn load_chain_from_path(_path: &PathBuf) -> Result<AuditChain, String> {
-    Ok(AuditChain::new())
+pub fn load_chain_from_path(path: &PathBuf) -> Result<AuditChain, String> {
+    use sqlrustgo_gmp::audit_chain_wal::AuditChainWalManager;
+
+    let wal_path = if path.is_dir() {
+        path.join("audit_chain.wal")
+    } else {
+        path.clone()
+    };
+
+    if !wal_path.exists() {
+        return Ok(AuditChain::new());
+    }
+
+    let manager = AuditChainWalManager::new(wal_path);
+    let (entries, _state) = manager
+        .recover()
+        .map_err(|e| format!("Failed to recover from WAL: {}", e))?;
+
+    let mut chain = AuditChain::new();
+    for entry in entries {
+        chain
+            .append(entry)
+            .map_err(|e| format!("Failed to append entry: {:?}", e))?;
+    }
+
+    Ok(chain)
 }
 
 pub fn run_verification(
@@ -367,15 +593,55 @@ mod tests {
 
     #[test]
     fn test_verification_results_serialization() {
-        let results = VerificationResults {
-            passed: true,
-            entries_verified: 10,
-            first_failure: None,
-            error: None,
-            entry_results: None,
-        };
+        let results = minimal_results(true, 10, None);
         let json = serde_json::to_string(&results).unwrap();
         assert!(json.contains("\"passed\":true"));
         assert!(json.contains("\"entries_verified\":10"));
+    }
+
+    #[test]
+    fn test_full_verify_empty_chain() {
+        let chain = AuditChain::new();
+        let results = run_full_verify(&chain);
+        assert!(results.passed, "Empty chain should pass verification");
+        assert_eq!(results.entries_verified, 0);
+    }
+
+    #[test]
+    fn test_load_chain_from_nonexistent_path() {
+        let path = PathBuf::from("/tmp/nonexistent_audit_chain_12345.wal");
+        let chain = load_chain_from_path(&path).unwrap();
+        assert_eq!(chain.len(), 0);
+    }
+
+    #[test]
+    fn test_extended_results_json_has_violation_fields() {
+        let results = VerificationResults {
+            passed: true,
+            entries_verified: 5,
+            first_failure: None,
+            error: None,
+            entry_results: None,
+            timestamp_order_violations: Some(vec![TimestampViolation {
+                seq: 2,
+                timestamp: 900,
+                prev_timestamp: 1000,
+                violation_type: "TimestampDecrease".to_string(),
+            }]),
+            orphan_entries: None,
+            workflow_gaps: None,
+            provenance_gaps: None,
+        };
+        let json = serde_json::to_string(&results).unwrap();
+        assert!(json.contains("TimestampDecrease"));
+        assert!(json.contains("\"seq\":2"));
+    }
+
+    #[test]
+    fn test_quick_verify_empty_chain() {
+        let chain = AuditChain::new();
+        let results = run_quick_verify(&chain);
+        assert!(results.passed);
+        assert_eq!(results.entries_verified, 0);
     }
 }

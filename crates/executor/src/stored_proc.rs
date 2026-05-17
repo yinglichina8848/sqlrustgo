@@ -1237,23 +1237,63 @@ impl StoredProcExecutor {
                 }
 
                 let table_info = storage.get_table_info(table_name).ok();
-                let mut updates: Vec<(usize, Value)> = Vec::new();
 
-                for (col_name, expr) in &update.set_clauses {
-                    if let Some(ref info) = table_info {
-                        if let Some(col_idx) = info
-                            .columns
+                // Build column name -> index map for row expression evaluation
+                let col_index_map: std::collections::HashMap<String, usize> = table_info
+                    .as_ref()
+                    .map(|info| {
+                        info.columns
                             .iter()
-                            .position(|c| c.name.eq_ignore_ascii_case(col_name))
-                        {
-                            updates.push((col_idx, self.expression_to_value(expr, ctx)));
+                            .enumerate()
+                            .map(|(i, c)| (c.name.to_lowercase(), i))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                // Get mutable records for in-place update
+                let records = match storage.get_table_records_mut(table_name) {
+                    Ok(r) => r,
+                    Err(e) => return Err(format!("Failed to get table records: {}", e)),
+                };
+
+                // Build update assignments with evaluated values (need row context for expressions)
+                // First pass: collect SET expressions per row
+                let mut count = 0;
+                let where_expr = update.where_clause.clone();
+
+                for row in records.iter_mut() {
+                    // Evaluate WHERE clause with row context
+                    let matches = if let Some(ref where_clz) = where_expr {
+                        let result =
+                            self.evaluate_row_expression(where_clz, row, &col_index_map, ctx);
+                        if let Value::Boolean(b) = result {
+                            b
+                        } else {
+                            result != Value::Null
                         }
+                    } else {
+                        true // No WHERE = update all rows
+                    };
+
+                    if matches {
+                        // Apply SET clauses
+                        for (col_name, expr) in &update.set_clauses {
+                            if let Some(col_idx) = col_index_map.get(&col_name.to_lowercase()) {
+                                if *col_idx < row.len() {
+                                    // Evaluate expression with row context
+                                    let new_val = self.evaluate_row_expression(
+                                        expr,
+                                        row,
+                                        &col_index_map,
+                                        ctx,
+                                    );
+                                    row[*col_idx] = new_val;
+                                }
+                            }
+                        }
+                        count += 1;
                     }
                 }
-
-                let count = storage
-                    .update(table_name, &[], &updates)
-                    .map_err(|e| format!("Failed to update: {}", e))?;
 
                 ctx.set_session_var("__last_update_count", Value::Integer(count as i64));
                 Ok(())
@@ -1266,11 +1306,54 @@ impl StoredProcExecutor {
                     return Err(format!("Table '{}' not found", table_name));
                 }
 
-                let count = storage
-                    .delete(table_name, &[])
-                    .map_err(|e| format!("Failed to delete: {}", e))?;
+                let table_info = storage.get_table_info(table_name).ok();
 
-                ctx.set_session_var("__last_delete_count", Value::Integer(count as i64));
+                // Build column name -> index map
+                let col_index_map: std::collections::HashMap<String, usize> = table_info
+                    .as_ref()
+                    .map(|info| {
+                        info.columns
+                            .iter()
+                            .enumerate()
+                            .map(|(i, c)| (c.name.to_lowercase(), i))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                // Get mutable records
+                let records = match storage.get_table_records_mut(table_name) {
+                    Ok(r) => r,
+                    Err(e) => return Err(format!("Failed to get table records: {}", e)),
+                };
+
+                let where_expr = delete.where_clause.clone();
+
+                // Collect indices to delete (iterate in reverse to maintain correct indices)
+                let mut indices_to_delete: Vec<usize> = Vec::new();
+                for (idx, row) in records.iter().enumerate() {
+                    let matches = if let Some(ref where_clz) = where_expr {
+                        let result =
+                            self.evaluate_row_expression(where_clz, row, &col_index_map, ctx);
+                        if let Value::Boolean(b) = result {
+                            b
+                        } else {
+                            result != Value::Null
+                        }
+                    } else {
+                        true // No WHERE = delete all rows
+                    };
+                    if matches {
+                        indices_to_delete.push(idx);
+                    }
+                }
+
+                // Delete in reverse order to maintain correct indices
+                let deleted_count = indices_to_delete.len();
+                for idx in indices_to_delete.into_iter().rev() {
+                    records.remove(idx);
+                }
+
+                ctx.set_session_var("__last_delete_count", Value::Integer(deleted_count as i64));
                 Ok(())
             }
             sqlrustgo_parser::Statement::AlterTable(alter_table) => {
@@ -1565,6 +1648,235 @@ impl StoredProcExecutor {
                 // FTS not supported in stored procedures - return NULL
                 Value::Null
             }
+        }
+    }
+
+    /// Evaluate an expression with row context (for UPDATE/DELETE WHERE clauses and SET expressions)
+    ///
+    /// `row` - the current row being evaluated
+    /// `col_index_map` - maps column names to their indices in the row
+    fn evaluate_row_expression(
+        &self,
+        expr: &sqlrustgo_parser::Expression,
+        row: &[Value],
+        col_index_map: &std::collections::HashMap<String, usize>,
+        ctx: &ProcedureContext,
+    ) -> Value {
+        match expr {
+            sqlrustgo_parser::Expression::Literal(s) => {
+                let s = s.trim();
+                if s.eq_ignore_ascii_case("NULL") {
+                    Value::Null
+                } else if let Ok(n) = s.parse::<i64>() {
+                    Value::Integer(n)
+                } else if let Ok(f) = s.parse::<f64>() {
+                    Value::Float(f)
+                } else if s.starts_with('\'') && s.ends_with('\'') {
+                    Value::Text(s[1..s.len() - 1].to_string())
+                } else {
+                    Value::Text(s.to_string())
+                }
+            }
+            sqlrustgo_parser::Expression::Identifier(name) => {
+                if let Some(stripped) = name.strip_prefix('@') {
+                    // Session variable
+                    ctx.get_var(stripped).cloned().unwrap_or(Value::Null)
+                } else if let Some(&col_idx) = col_index_map.get(&name.to_lowercase()) {
+                    // Column reference - look up by name
+                    if col_idx < row.len() {
+                        row[col_idx].clone()
+                    } else {
+                        Value::Null
+                    }
+                } else {
+                    Value::Null
+                }
+            }
+            sqlrustgo_parser::Expression::BinaryOp(left, op, right) => {
+                let left_val = self.evaluate_row_expression(left, row, col_index_map, ctx);
+                let right_val = self.evaluate_row_expression(right, row, col_index_map, ctx);
+                self.evaluate_binary_op(&left_val, &right_val, op)
+            }
+            sqlrustgo_parser::Expression::UnaryOp(op, inner) => {
+                let val = self.evaluate_row_expression(inner, row, col_index_map, ctx);
+                match op.as_str() {
+                    "NOT" => {
+                        if let Value::Boolean(b) = val {
+                            Value::Boolean(!b)
+                        } else {
+                            Value::Boolean(false)
+                        }
+                    }
+                    _ => Value::Null,
+                }
+            }
+            sqlrustgo_parser::Expression::IsNull(inner) => {
+                let val = self.evaluate_row_expression(inner, row, col_index_map, ctx);
+                Value::Boolean(matches!(val, Value::Null))
+            }
+            sqlrustgo_parser::Expression::IsNotNull(inner) => {
+                let val = self.evaluate_row_expression(inner, row, col_index_map, ctx);
+                Value::Boolean(!matches!(val, Value::Null))
+            }
+            sqlrustgo_parser::Expression::Like(left, pattern, _) => {
+                let left_val = self.evaluate_row_expression(left, row, col_index_map, ctx);
+                let pattern_val = self.evaluate_row_expression(pattern, row, col_index_map, ctx);
+                Value::Boolean(self.like_match(&left_val, &pattern_val))
+            }
+            sqlrustgo_parser::Expression::NotLike(left, pattern, _) => {
+                let left_val = self.evaluate_row_expression(left, row, col_index_map, ctx);
+                let pattern_val = self.evaluate_row_expression(pattern, row, col_index_map, ctx);
+                let like_result = self.like_match(&left_val, &pattern_val);
+                Value::Boolean(!like_result)
+            }
+            sqlrustgo_parser::Expression::Between(left, low, high) => {
+                let left_val = self.evaluate_row_expression(left, row, col_index_map, ctx);
+                let low_val = self.evaluate_row_expression(low, row, col_index_map, ctx);
+                let high_val = self.evaluate_row_expression(high, row, col_index_map, ctx);
+                Value::Boolean(self.between_match(&left_val, &low_val, &high_val))
+            }
+            sqlrustgo_parser::Expression::NotBetween(left, low, high) => {
+                let left_val = self.evaluate_row_expression(left, row, col_index_map, ctx);
+                let low_val = self.evaluate_row_expression(low, row, col_index_map, ctx);
+                let high_val = self.evaluate_row_expression(high, row, col_index_map, ctx);
+                Value::Boolean(!self.between_match(&left_val, &low_val, &high_val))
+            }
+            sqlrustgo_parser::Expression::In(left, select) => {
+                let left_val = self.evaluate_row_expression(left, row, col_index_map, ctx);
+                let rows = self.execute_subquery(select);
+                let in_result = rows
+                    .iter()
+                    .any(|r| r.first().map(|v| v == &left_val).unwrap_or(false));
+                Value::Boolean(in_result)
+            }
+            sqlrustgo_parser::Expression::NotIn(left, select) => {
+                let left_val = self.evaluate_row_expression(left, row, col_index_map, ctx);
+                let rows = self.execute_subquery(select);
+                let in_result = rows
+                    .iter()
+                    .any(|r| r.first().map(|v| v == &left_val).unwrap_or(false));
+                Value::Boolean(!in_result)
+            }
+            sqlrustgo_parser::Expression::InList(left, values) => {
+                let left_val = self.evaluate_row_expression(left, row, col_index_map, ctx);
+                let value_list: Vec<Value> = values
+                    .iter()
+                    .map(|v| self.evaluate_row_expression(v, row, col_index_map, ctx))
+                    .collect();
+                Value::Boolean(value_list.contains(&left_val))
+            }
+            sqlrustgo_parser::Expression::NotInList(left, values) => {
+                let left_val = self.evaluate_row_expression(left, row, col_index_map, ctx);
+                let value_list: Vec<Value> = values
+                    .iter()
+                    .map(|v| self.evaluate_row_expression(v, row, col_index_map, ctx))
+                    .collect();
+                Value::Boolean(!value_list.contains(&left_val))
+            }
+            sqlrustgo_parser::Expression::CaseWhen(when_clauses, else_expr) => {
+                for clause in when_clauses {
+                    let cond_val =
+                        self.evaluate_row_expression(&clause.condition, row, col_index_map, ctx);
+                    if let Value::Boolean(true) = cond_val {
+                        return self.evaluate_row_expression(
+                            &clause.result,
+                            row,
+                            col_index_map,
+                            ctx,
+                        );
+                    }
+                }
+                if let Some(else_box) = else_expr {
+                    self.evaluate_row_expression(else_box, row, col_index_map, ctx)
+                } else {
+                    Value::Null
+                }
+            }
+            sqlrustgo_parser::Expression::Exists(select) => {
+                let rows = self.execute_subquery(select);
+                Value::Boolean(!rows.is_empty())
+            }
+            sqlrustgo_parser::Expression::NotExists(select) => {
+                let rows = self.execute_subquery(select);
+                Value::Boolean(rows.is_empty())
+            }
+            sqlrustgo_parser::Expression::QuantifiedOp(expr, quantifier, select) => {
+                let expr_val = self.evaluate_row_expression(expr, row, col_index_map, ctx);
+                let rows = self.execute_subquery(select);
+                let all_match = rows
+                    .iter()
+                    .all(|r| r.first().map(|v| v == &expr_val).unwrap_or(false));
+                let any_match = rows
+                    .iter()
+                    .any(|r| r.first().map(|v| v == &expr_val).unwrap_or(false));
+                match quantifier.as_str() {
+                    "ALL" => Value::Boolean(all_match),
+                    "ANY" | "SOME" => Value::Boolean(any_match),
+                    _ => Value::Null,
+                }
+            }
+            sqlrustgo_parser::Expression::Subquery(select) => {
+                let rows = self.execute_subquery(select);
+                if let Some(first_row) = rows.first() {
+                    first_row.first().cloned().unwrap_or(Value::Null)
+                } else {
+                    Value::Null
+                }
+            }
+            sqlrustgo_parser::Expression::FunctionCall(name, args) => {
+                let name_upper = name.to_uppercase();
+                if name_upper == "SUBSTRING" {
+                    if args.is_empty() {
+                        Value::Null
+                    } else {
+                        let str_val =
+                            self.evaluate_row_expression(&args[0], row, col_index_map, ctx);
+                        let start_val = if args.len() > 1 {
+                            self.evaluate_row_expression(&args[1], row, col_index_map, ctx)
+                        } else {
+                            Value::Null
+                        };
+                        let len_val = if args.len() > 2 {
+                            Some(self.evaluate_row_expression(&args[2], row, col_index_map, ctx))
+                        } else {
+                            None
+                        };
+                        match (str_val, start_val) {
+                            (Value::Text(s), Value::Integer(start)) => {
+                                let start_idx = ((start - 1).max(0)) as usize;
+                                let result: String = if let Some(Value::Integer(len)) = len_val {
+                                    s.chars().skip(start_idx).take(len as usize).collect()
+                                } else {
+                                    s.chars().skip(start_idx).collect()
+                                };
+                                Value::Text(result)
+                            }
+                            _ => Value::Null,
+                        }
+                    }
+                } else {
+                    Value::Null
+                }
+            }
+            sqlrustgo_parser::Expression::Extract(field, inner) => {
+                let val = self.evaluate_row_expression(inner, row, col_index_map, ctx);
+                match (field.as_str(), &val) {
+                    ("YEAR", Value::Integer(n)) => Value::Integer(*n / 10000),
+                    ("MONTH", Value::Integer(n)) => Value::Integer((*n / 100) % 100),
+                    ("DAY", Value::Integer(n)) => Value::Integer(*n % 100),
+                    ("YEAR", Value::Text(s)) => {
+                        s[..4].parse().map(Value::Integer).unwrap_or(Value::Null)
+                    }
+                    ("MONTH", Value::Text(s)) if s.len() >= 7 => {
+                        s[5..7].parse().map(Value::Integer).unwrap_or(Value::Null)
+                    }
+                    ("DAY", Value::Text(s)) if s.len() >= 10 => {
+                        s[8..10].parse().map(Value::Integer).unwrap_or(Value::Null)
+                    }
+                    _ => Value::Null,
+                }
+            }
+            _ => Value::Null,
         }
     }
 

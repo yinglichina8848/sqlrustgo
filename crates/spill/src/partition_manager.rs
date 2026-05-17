@@ -16,7 +16,7 @@ struct PartitionFile {
 
 impl PartitionManager {
     pub fn new() -> SpillResult<Self> {
-        let spill_dir = tempfile::tempdir().map_err(|e| SpillError::IoError(e))?;
+        let spill_dir = tempfile::tempdir().map_err(SpillError::IoError)?;
         Ok(Self {
             spill_dir,
             partitions: Vec::new(),
@@ -24,8 +24,8 @@ impl PartitionManager {
     }
 
     pub fn with_dir(path: PathBuf) -> SpillResult<Self> {
-        fs::create_dir_all(&path).map_err(|e| SpillError::IoError(e))?;
-        let spill_dir = TempDir::new_in(&path).map_err(|e| SpillError::IoError(e))?;
+        fs::create_dir_all(&path).map_err(SpillError::IoError)?;
+        let spill_dir = TempDir::new_in(&path).map_err(SpillError::IoError)?;
         Ok(Self {
             spill_dir,
             partitions: Vec::new(),
@@ -39,20 +39,16 @@ impl PartitionManager {
             .path()
             .join(format!("partition_{}.bin", partition_id));
 
-        let file = File::create(&path).map_err(|e| SpillError::IoError(e))?;
+        let file = File::create(&path).map_err(SpillError::IoError)?;
         let mut writer = BufWriter::new(file);
 
         let bytes =
             bincode::serialize(data).map_err(|e| SpillError::PartitionError(e.to_string()))?;
-        writer
-            .write_all(&bytes)
-            .map_err(|e| SpillError::IoError(e))?;
+        writer.write_all(&bytes).map_err(SpillError::IoError)?;
 
-        writer.flush().map_err(|e| SpillError::IoError(e))?;
+        writer.flush().map_err(SpillError::IoError)?;
 
-        let size_bytes = fs::metadata(&path)
-            .map_err(|e| SpillError::IoError(e))?
-            .len();
+        let size_bytes = fs::metadata(&path).map_err(SpillError::IoError)?.len();
 
         let partition = PartitionFile { path, size_bytes };
         self.partitions.push(partition);
@@ -68,7 +64,7 @@ impl PartitionManager {
             SpillError::PartitionError(format!("Invalid partition {}", partition_id))
         })?;
 
-        let bytes = fs::read(&partition.path).map_err(|e| SpillError::IoError(e))?;
+        let bytes = fs::read(&partition.path).map_err(SpillError::IoError)?;
 
         let items: Vec<T> =
             bincode::deserialize(&bytes).map_err(|e| SpillError::PartitionError(e.to_string()))?;

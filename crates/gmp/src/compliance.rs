@@ -19,6 +19,89 @@ pub enum ComplianceRule {
     AuditTrail,
     EffectiveDate,
     DataIntegrity,
+    DualSignatureRequired,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DeclarativeRuleType {
+    DualSignatureRequired,
+    ApprovalWorkflowRequired,
+    AuditTrailPresent,
+    DocumentStatusCheck,
+    VersionControlCheck,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeclarativeRule {
+    pub name: String,
+    pub rule_type: DeclarativeRuleType,
+    pub enabled: bool,
+    pub severity: Severity,
+    pub description: String,
+    pub remediation: String,
+}
+
+impl DeclarativeRule {
+    pub fn new(name: &str, rule_type: DeclarativeRuleType, description: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            rule_type,
+            enabled: true,
+            severity: Severity::High,
+            description: description.to_string(),
+            remediation: String::new(),
+        }
+    }
+
+    pub fn with_remediation(mut self, remediation: &str) -> Self {
+        self.remediation = remediation.to_string();
+        self
+    }
+
+    pub fn with_severity(mut self, severity: Severity) -> Self {
+        self.severity = severity;
+        self
+    }
+}
+
+pub fn default_declarative_rules() -> Vec<DeclarativeRule> {
+    vec![
+        DeclarativeRule::new(
+            "dual_signature_required",
+            DeclarativeRuleType::DualSignatureRequired,
+            "Documents requiring dual signatures (author + reviewer) must have exactly 2 electronic signatures",
+        )
+        .with_remediation("Ensure document is signed by both author and reviewer before approval")
+        .with_severity(Severity::Critical),
+        DeclarativeRule::new(
+            "approval_workflow_required",
+            DeclarativeRuleType::ApprovalWorkflowRequired,
+            "Documents must have gone through an approval workflow",
+        )
+        .with_remediation("Submit document for approval workflow before activation")
+        .with_severity(Severity::High),
+        DeclarativeRule::new(
+            "audit_trail_present",
+            DeclarativeRuleType::AuditTrailPresent,
+            "Active documents must have audit trail entries",
+        )
+        .with_remediation("Ensure all changes are recorded in audit log")
+        .with_severity(Severity::High),
+        DeclarativeRule::new(
+            "document_status_check",
+            DeclarativeRuleType::DocumentStatusCheck,
+            "Documents must have valid status transitions",
+        )
+        .with_remediation("Verify document status follows valid lifecycle")
+        .with_severity(Severity::Medium),
+        DeclarativeRule::new(
+            "version_control_check",
+            DeclarativeRuleType::VersionControlCheck,
+            "Documents must have version >= 1",
+        )
+        .with_remediation("Reset version to 1 or higher")
+        .with_severity(Severity::Medium),
+    ]
 }
 
 /// Violation severity levels
@@ -341,6 +424,234 @@ fn current_timestamp() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+pub fn evaluate_declarative_rule(
+    storage: &dyn StorageEngine,
+    rule: &DeclarativeRule,
+    doc_id: i64,
+) -> SqlResult<Option<Violation>> {
+    if !rule.enabled {
+        return Ok(None);
+    }
+    let now = current_timestamp();
+    let doc = find_document_by_id(storage, doc_id)?;
+    if doc.is_none() {
+        return Ok(Some(Violation {
+            doc_id,
+            rule: rule.name.clone(),
+            severity: Severity::Critical.as_str().to_string(),
+            description: "Document not found".to_string(),
+            detected_at: now,
+            remediation: "Verify document ID or restore from backup".to_string(),
+        }));
+    }
+    let doc = doc.unwrap();
+    match rule.rule_type {
+        DeclarativeRuleType::DualSignatureRequired => {
+            check_dual_signature_rule(storage, doc_id, &doc, rule, now)
+        }
+        DeclarativeRuleType::ApprovalWorkflowRequired => {
+            check_approval_workflow_rule(storage, doc_id, &doc, rule, now)
+        }
+        DeclarativeRuleType::AuditTrailPresent => {
+            check_audit_trail_rule(storage, doc_id, &doc, rule, now)
+        }
+        DeclarativeRuleType::DocumentStatusCheck => {
+            check_document_status_rule(storage, doc_id, &doc, rule, now)
+        }
+        DeclarativeRuleType::VersionControlCheck => {
+            check_version_control_rule(storage, doc_id, &doc, rule, now)
+        }
+    }
+}
+
+fn check_dual_signature_rule(
+    storage: &dyn StorageEngine,
+    doc_id: i64,
+    _doc: &crate::document::Document,
+    rule: &DeclarativeRule,
+    now: i64,
+) -> SqlResult<Option<Violation>> {
+    let sig_count = count_electronic_signatures(storage, doc_id)?;
+    if sig_count < 2 {
+        return Ok(Some(Violation {
+            doc_id,
+            rule: rule.name.clone(),
+            severity: rule.severity.as_str().to_string(),
+            description: format!(
+                "Document requires 2 signatures but only has {} electronic signature(s)",
+                sig_count
+            ),
+            detected_at: now,
+            remediation: rule.remediation.clone(),
+        }));
+    }
+    Ok(None)
+}
+
+fn check_approval_workflow_rule(
+    storage: &dyn StorageEngine,
+    doc_id: i64,
+    doc: &crate::document::Document,
+    rule: &DeclarativeRule,
+    now: i64,
+) -> SqlResult<Option<Violation>> {
+    let _ = storage;
+    if doc.status == crate::document::DocStatus::Draft {
+        return Ok(Some(Violation {
+            doc_id,
+            rule: rule.name.clone(),
+            severity: rule.severity.as_str().to_string(),
+            description: "Document is in DRAFT status without approval workflow".to_string(),
+            detected_at: now,
+            remediation: rule.remediation.clone(),
+        }));
+    }
+    Ok(None)
+}
+
+fn check_audit_trail_rule(
+    storage: &dyn StorageEngine,
+    doc_id: i64,
+    _doc: &crate::document::Document,
+    rule: &DeclarativeRule,
+    now: i64,
+) -> SqlResult<Option<Violation>> {
+    let logs = crate::audit::query_audit_logs(storage, None, None, None, None, None)?;
+    let has_logs = logs.iter().any(|l| {
+        l.record_id
+            .as_ref()
+            .map(|rid| rid == &doc_id.to_string())
+            .unwrap_or(false)
+    });
+    if !has_logs {
+        return Ok(Some(Violation {
+            doc_id,
+            rule: rule.name.clone(),
+            severity: rule.severity.as_str().to_string(),
+            description: "Active document has no audit trail entries".to_string(),
+            detected_at: now,
+            remediation: rule.remediation.clone(),
+        }));
+    }
+    Ok(None)
+}
+
+fn check_document_status_rule(
+    _storage: &dyn StorageEngine,
+    doc_id: i64,
+    doc: &crate::document::Document,
+    rule: &DeclarativeRule,
+    now: i64,
+) -> SqlResult<Option<Violation>> {
+    if doc.status == crate::document::DocStatus::Draft {
+        return Ok(Some(Violation {
+            doc_id,
+            rule: rule.name.clone(),
+            severity: rule.severity.as_str().to_string(),
+            description: "Document is in DRAFT status and not approved".to_string(),
+            detected_at: now,
+            remediation: rule.remediation.clone(),
+        }));
+    }
+    Ok(None)
+}
+
+fn check_version_control_rule(
+    _storage: &dyn StorageEngine,
+    doc_id: i64,
+    doc: &crate::document::Document,
+    rule: &DeclarativeRule,
+    now: i64,
+) -> SqlResult<Option<Violation>> {
+    if doc.version < 1 {
+        return Ok(Some(Violation {
+            doc_id,
+            rule: rule.name.clone(),
+            severity: rule.severity.as_str().to_string(),
+            description: format!("Invalid version number: {}", doc.version),
+            detected_at: now,
+            remediation: rule.remediation.clone(),
+        }));
+    }
+    Ok(None)
+}
+
+fn count_electronic_signatures(storage: &dyn StorageEngine, doc_id: i64) -> SqlResult<usize> {
+    let logs = crate::audit::query_audit_logs(storage, None, None, None, None, None)?;
+    let sig_logs: Vec<_> = logs
+        .into_iter()
+        .filter(|l| {
+            l.record_id
+                .as_ref()
+                .map(|rid| rid == &doc_id.to_string())
+                .unwrap_or(false)
+                && l.action.contains("SIGNATURE")
+        })
+        .collect();
+    Ok(sig_logs.len())
+}
+
+fn find_document_by_id(
+    storage: &dyn StorageEngine,
+    doc_id: i64,
+) -> SqlResult<Option<crate::document::Document>> {
+    use crate::document::{query_by_status, DocStatus};
+    for status in &[
+        DocStatus::Draft,
+        DocStatus::Active,
+        DocStatus::Archived,
+        DocStatus::Superseded,
+    ] {
+        let docs = query_by_status(storage, status)?;
+        if let Some(doc) = docs.into_iter().find(|d| d.id == doc_id) {
+            return Ok(Some(doc));
+        }
+    }
+    Ok(None)
+}
+
+pub fn evaluate_all_rules(
+    storage: &dyn StorageEngine,
+    doc_id: i64,
+    rules: &[DeclarativeRule],
+) -> SqlResult<Vec<Violation>> {
+    let mut violations = Vec::new();
+    for rule in rules {
+        if let Some(violation) = evaluate_declarative_rule(storage, rule, doc_id)? {
+            violations.push(violation);
+        }
+    }
+    Ok(violations)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeclarativeCheckResult {
+    pub doc_id: i64,
+    pub rule_name: String,
+    pub passed: bool,
+    pub violation: Option<Violation>,
+}
+
+impl DeclarativeCheckResult {
+    pub fn pass(doc_id: i64, rule_name: &str) -> Self {
+        Self {
+            doc_id,
+            rule_name: rule_name.to_string(),
+            passed: true,
+            violation: None,
+        }
+    }
+
+    pub fn fail(doc_id: i64, violation: Violation) -> Self {
+        Self {
+            doc_id,
+            rule_name: violation.rule.clone(),
+            passed: false,
+            violation: Some(violation),
+        }
+    }
 }
 
 /// SQL Result type alias
