@@ -1,9 +1,10 @@
 # v3.3.0 Release
 
 > **状态**: Alpha
-> **起点**: develop/v3.2.0 (commit `1b8eeec3`)
-> **分支**: `alpha/v3.3.0`
+> **起点**: develop/v3.2.0 (commit `539f2957`) — GA release point
+> **分支**: `alpha/v3.3.0` / `develop/v3.3.0`
 > **Milestone**: v3.3.0 (id=13)
+> **同步完成**: 2026-05-17 19:50 UTC
 
 ---
 
