@@ -7,6 +7,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlrustgo_storage::{ColumnDefinition, StorageEngine};
 use sqlrustgo_types::{SqlResult, Value};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Atomic counter for audit log ID generation
+/// Replaces O(n) table scan to find max ID
+static AUDIT_LOG_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Audit log action types
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -463,17 +468,8 @@ fn record_audit_log_impl(
     // Ensure audit table exists
     create_system_audit_log_table(storage)?;
 
-    // Get the next ID
-    let rows = storage.scan(SYSTEM_AUDIT_LOG_TABLE)?;
-    let next_id = rows
-        .iter()
-        .filter_map(|r| match &r[0] {
-            Value::Integer(n) => Some(*n),
-            _ => None,
-        })
-        .max()
-        .unwrap_or(0)
-        + 1;
+    // Get the next ID using atomic counter - O(1) instead of O(n) table scan
+    let next_id = AUDIT_LOG_COUNTER.fetch_add(1, Ordering::SeqCst) as i64 + 1;
 
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
