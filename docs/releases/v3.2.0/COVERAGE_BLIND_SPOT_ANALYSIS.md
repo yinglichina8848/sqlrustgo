@@ -22,6 +22,19 @@
 
 通过 GitNexus 对 SQLRustGo 数据库引擎的代码知识图谱分析，发现以下测试覆盖率盲区。
 
+### 1.3 覆盖率数据不一致问题
+
+| 来源 | 覆盖率 | 原因 |
+|------|--------|------|
+| RC Gate 清单 (声称) | 85.81% | CI 完整运行包括 parser |
+| 本地 `cargo llvm-cov report --lib` | 0% | 命令错误，应使用 per-crate |
+| 实际 L1 平均 (7/8 crates) | 83.62% | parser 未测量 (超时) |
+
+**问题根因**:
+1. `cargo llvm-cov report --lib` 在 workspace 级别不工作
+2. 正确命令: `cargo llvm-cov test -p <crate> --lib` (per-crate)
+3. parser 覆盖率缺失因 check_coverage_parallel.sh 超时
+
 ---
 
 ## 二、执行流程分析
@@ -55,19 +68,28 @@ GitNexus 索引显示以下关键路径，但需要进一步测试覆盖：
 
 ## 三、测试盲区识别
 
-### 3.1 核心模块测试覆盖情况
+### 3.1 L1 核心模块覆盖率 (实测)
 
-| 模块 | 测试文件数 | 覆盖优先级 |
-|------|-----------|------------|
-| executor | 20+ 测试文件 | 高 |
-| storage | 10+ 测试文件 | 高 |
-| transaction | 10+ 测试文件 | 高 |
-| parser | 15+ 测试文件 | 高 |
-| planner | 5+ 测试文件 | 中 |
-| optimizer | 3+ 测试文件 | 中 |
-| catalog | 5+ 测试文件 | 中 |
-| network | 3+ 测试文件 | 中 |
-| gmp | 8+ 测试文件 | 高 |
+| 模块 | 覆盖率 | 状态 |
+|------|--------|------|
+| types | 87.65% | ✅ |
+| parser | MISSING | ⏳ 超时 |
+| planner | 89.99% | ✅ |
+| optimizer | 82.41% | ✅ |
+| executor | 70.70% | ✅ |
+| storage | 78.21% | ✅ |
+| transaction | 87.88% | ✅ |
+| catalog | 88.52% | ✅ |
+| **平均 (7/8)** | **83.62%** | ⬜ 缺 parser |
+
+### 3.2 RC Gate 覆盖率要求 vs 实际
+
+| 要求 | 实际 | 状态 |
+|------|------|------|
+| ≥85% (L1 crates) | 83.62% (缺 parser) | ⬜ 差 1.38% |
+| ≥85% (如果 parser 完成) | ~84% (估算) | ⬜ 差 1% |
+
+**注意**: 85.81% 是 CI 完整运行的结果，本地因 parser 覆盖率超时导致测量不完整。
 
 ### 3.2 识别的高优先级盲区
 
@@ -179,6 +201,7 @@ GitNexus 索引显示以下关键路径，但需要进一步测试覆盖：
 
 ### 6.1 当前测试状态
 
+- **L1 覆盖率 (实测 7/8 crates)**: 83.62% ⬜ (缺 parser)
 - **RC Gate 稳定性测试**: 16/16 ✅ (100%)
 - **核心模块测试**: 743+ tests ✅
 - **GMP 合规测试**: 50+ tests ✅
@@ -187,17 +210,26 @@ GitNexus 索引显示以下关键路径，但需要进一步测试覆盖：
 
 | 优先级 | 盲区 | 建议行动 |
 |--------|------|----------|
-| 高 | TPC-H SF=10 | 在大内存机器上运行 |
+| **高** | parser 覆盖率 | 需在 CI 或大内存机器测量 |
+| **高** | TPC-H SF=10 | 在大内存机器上运行 |
 | 高 | XA 分布式事务 | 增加集成测试 |
 | 中 | CBO 优化器 | 增加 cost 模型测试 |
 | 中 | 网络协议 | MySQL 兼容性测试 |
 
 ### 6.3 下一步
 
-1. 在 Z6G4 服务器运行 R13, R14, R15 测试
-2. 补充 XA 两阶段提交测试
-3. 增加 CBO 优化器的 cost 模型测试
-4. 验证 MySQL 协议兼容性
+1. **修复覆盖率测量**: 使用 `cargo llvm-cov test -p <crate> --lib` (per-crate) 而不是 `--workspace`
+2. 在 CI 运行完整 parser 覆盖率测量
+3. 在 Z6G4 服务器运行 R13, R14, R15 测试
+4. 补充 XA 两阶段提交测试
+
+### 6.4 覆盖率数据来源
+
+| 字段 | 值 | 来源 |
+|------|-----|------|
+| 85.81% (声称) | CI 完整运行 | check_coverage.sh (check_coverage_parallel.sh) |
+| 83.62% (实测) | 本地 7/8 crates | artifacts/coverage/*.json |
+| 差异原因 | parser 缺失 | check_coverage_parallel.sh 超时 |
 
 ---
 
