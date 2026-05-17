@@ -5,9 +5,12 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crossbeam_channel::{bounded, Sender};
 use mio::net::{TcpListener, TcpStream};
-use mio::{Events, Poll, PollOpt, Token};
+use mio::Events;
+use mio::Interest;
+use mio::Poll;
+use mio::Token;
 use rcgen::{CertificateParams, KeyPair};
-use sha1::{Digest, Sha1};
+use sha1::Digest;
 use sqlrustgo::execution_engine::EngineConfig;
 use sqlrustgo::MemoryExecutionEngine;
 use sqlrustgo_distributed::{XaCoordinator, XaRecoverRow};
@@ -98,6 +101,11 @@ impl From<std::io::Error> for MySqlError {
         MySqlError::Io(e)
     }
 }
+impl From<std::net::AddrParseError> for MySqlError {
+    fn from(e: std::net::AddrParseError) -> Self {
+        MySqlError::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
+    }
+}
 impl From<SqlError> for MySqlError {
     fn from(e: SqlError) -> Self {
         MySqlError::Sql(e.to_string())
@@ -143,17 +151,17 @@ impl UserStore {
 
 // Compute SHA1(SHA1(password)) - what MySQL stores
 fn compute_double_sha1(data: &[u8]) -> [u8; 20] {
-    let mut hasher = Sha1::new();
+    let mut hasher = sha1::Sha1::new();
     hasher.update(data);
     let first = hasher.finalize();
-    let mut hasher = Sha1::new();
+    let mut hasher = sha1::Sha1::new();
     hasher.update(first);
     hasher.finalize().into()
 }
 
 // Compute SHA1(data)
 fn sha1_simple(data: &[u8]) -> [u8; 20] {
-    let mut hasher = Sha1::new();
+    let mut hasher = sha1::Sha1::new();
     hasher.update(data);
     hasher.finalize().into()
 }
@@ -170,7 +178,7 @@ fn verify_mysql_native_password(
     if auth_response.len() != 20 {
         return false;
     }
-    let mut hasher = Sha1::new();
+    let mut hasher = sha1::Sha1::new();
     hasher.update(scramble);
     hasher.update(stored_password_hash);
     let expected_hash = hasher.finalize();
@@ -2433,13 +2441,6 @@ fn handle_connection(
     user_store: Arc<UserStore>,
 ) {
     let user_store = (*user_store).clone();
-    stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(600)))
-        .ok();
-    stream
-        .set_write_timeout(Some(std::time::Duration::from_secs(60)))
-        .ok();
-    stream.set_nodelay(true).ok();
     tracing::info!("Connection from {}", addr);
 
     let scramble1: [u8; 8] = rand::random();
@@ -2615,9 +2616,8 @@ pub fn run_server(host: &str, port: u16) -> MySqlResult<()> {
 }
 
 pub fn run_server_with_pool(host: &str, port: u16, pool_size: usize) -> MySqlResult<()> {
-    let addr = format!("{}:{}", host, port);
-    let listener = TcpListener::bind(&addr)?;
-    listener.set_nonblocking(true)?;
+    let addr: std::net::SocketAddr = format!("{}:{}", host, port).parse()?;
+    let mut listener = TcpListener::bind(addr)?;
     tracing::info!("MySQL server listening on {}", addr);
     let tls_config = Arc::new(make_tls_config());
     tracing::info!("TLS ready (self-signed cert)");
@@ -2638,13 +2638,11 @@ pub fn run_server_with_pool(host: &str, port: u16, pool_size: usize) -> MySqlRes
     let user_store = Arc::new(UserStore::new());
     let pool = ConnectionThreadPool::new(pool_size);
 
-    let mut poll = Poll::new()
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("poll new: {}", e)))?;
+    let mut poll = Poll::new()?;
     const LISTENER: Token = Token(0);
-    poll.register(&listener, LISTENER, PollOpt::edge() | PollOpt::oneshot())
-        .map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("poll register: {}", e))
-        })?;
+    poll.registry()
+        .register(&mut listener, LISTENER, Interest::READABLE)
+        .map_err(|e| std::io::Error::other(format!("poll register: {}", e)))?;
 
     tracing::info!("Accept loop using mio (token={:?})", LISTENER);
 
@@ -2652,9 +2650,10 @@ pub fn run_server_with_pool(host: &str, port: u16, pool_size: usize) -> MySqlRes
     loop {
         match poll.poll(&mut events, None) {
             Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(e) => {
-                tracing::error!("Poll error: {}", e);
+                let err: std::io::Error = e;
+                tracing::error!("Poll error: {}", err);
                 break;
             }
         }
@@ -2671,18 +2670,14 @@ pub fn run_server_with_pool(host: &str, port: u16, pool_size: usize) -> MySqlRes
                             user_store: user_store.clone(),
                         };
                         pool.spawn(task);
-                        let _ = poll.reregister(
-                            &listener,
-                            LISTENER,
-                            PollOpt::edge() | PollOpt::oneshot(),
-                        );
+                        let _ =
+                            poll.registry()
+                                .reregister(&mut listener, LISTENER, Interest::READABLE);
                     }
                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        let _ = poll.reregister(
-                            &listener,
-                            LISTENER,
-                            PollOpt::edge() | PollOpt::oneshot(),
-                        );
+                        let _ =
+                            poll.registry()
+                                .reregister(&mut listener, LISTENER, Interest::READABLE);
                     }
                     Err(e) => tracing::error!("Accept: {}", e),
                 }
