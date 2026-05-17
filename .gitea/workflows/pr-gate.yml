@@ -4,9 +4,9 @@ run-name: PR-Gate - ${{ gitea.ref_name }}
 on:
   pull_request:
     branches:
+      - develop/v3.2.0
       - develop/v3.1.0
       - develop/v3.0.0
-      - develop/v2.9.0
 
 env:
   CARGO_TERM_COLOR: always

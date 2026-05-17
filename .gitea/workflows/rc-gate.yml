@@ -1,10 +1,10 @@
 name: RC Gate Pipeline
-run-name: R-Gate v3.1.0
+run-name: R-Gate v3.2.0
 
 on:
   push:
     branches:
-      - rc/v3.1.0
+      - rc/v3.2.0
     tags:
       - v*-rc*
   schedule:

@@ -6,9 +6,11 @@ name: Formal Smoke Gitea
 on:
   pull_request:
     branches:
-      - develop/v2.9.0
+      - develop/v3.2.0
+      - develop/v3.1.0
       - develop/v3.0.0
-      - beta/v2.9.0
+      - beta/v3.2.0
+      - beta/v3.1.0
     paths:
       - 'docs/formal/**/*.tla'
       - 'docs/formal/**/*.cfg'
@@ -16,7 +18,8 @@ on:
       - 'scripts/formal/**'
   push:
     branches:
-      - develop/v2.9.0
+      - develop/v3.2.0
+      - develop/v3.1.0
       - develop/v3.0.0
 
 env:

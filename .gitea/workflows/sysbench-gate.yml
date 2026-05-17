@@ -7,12 +7,16 @@ name: Sysbench QPS Gate
 on:
   push:
     branches:
-      - develop/v3.0.0
-      - beta/v3.0.0
+      - develop/v3.2.0
+      - develop/v3.1.0
+      - beta/v3.2.0
+      - beta/v3.1.0
   pull_request:
     branches:
-      - develop/v3.0.0
-      - beta/v3.0.0
+      - develop/v3.2.0
+      - develop/v3.1.0
+      - beta/v3.2.0
+      - beta/v3.1.0
   
 env:
   CARGO_TERM_COLOR: always
