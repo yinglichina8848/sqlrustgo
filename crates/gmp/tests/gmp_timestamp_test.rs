@@ -6,7 +6,7 @@
 //! - Invalid timestamp ranges
 //! - Timestamp vs sequence consistency
 
-use sqlrustgo_gmp::audit_chain::{AuditChain, AuditChainEntry, GENESIS_PREV_HASH};
+use sqlrustgo_gmp::audit_chain::{AuditChain, AuditChainEntry, AuditChainError, GENESIS_PREV_HASH};
 use sqlrustgo_gmp::audit_chain_tamper::{detect_tamper, verify_entry_checksum};
 
 /// Helper to create a test entry with a given timestamp
@@ -151,10 +151,15 @@ fn test_chain_timestamp_decreasing_detected_by_chain_verify() {
     let entry2 = create_entry_with_ts(2, hash1, ts2);
     chain.append(entry2).unwrap();
 
-    // Chain is structurally valid (hash links correct) but tampered in practice
-    assert!(chain.verify_chain().is_ok());
+    // Chain is structurally valid (hash links correct) but timestamp goes backward
+    // This should now be detected by verify_chain() - timestamp monotonicity is required
+    let result = chain.verify_chain();
+    assert!(result.is_err(), "Expected timestamp monotonicity violation to be detected");
+    if let Err(e) = result {
+        assert!(matches!(e, AuditChainError::TimestampNotMonotonic { .. }));
+    }
 
-    // The tamper detector may or may not catch time anomalies depending on config
+    // The tamper detector should also catch this
     let _tamper_result = detect_tamper(&chain);
 }
 
@@ -195,8 +200,12 @@ fn test_timestamp_vs_seq_independence() {
     let entry2 = create_entry_with_ts(2, hash1, 1000i64);
     chain.append(entry2).unwrap();
 
-    // Chain is valid despite timestamp/seq mismatch pattern
-    assert!(chain.verify_chain().is_ok());
+    // Chain is invalid because timestamp must be monotonically increasing
+    let result = chain.verify_chain();
+    assert!(result.is_err(), "Expected timestamp monotonicity violation to be detected");
+    if let Err(e) = result {
+        assert!(matches!(e, AuditChainError::TimestampNotMonotonic { .. }));
+    }
 }
 
 #[test]

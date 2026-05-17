@@ -236,6 +236,21 @@ fn run_full_verify_extended(chain: &AuditChain) -> VerificationResults {
                     format!("ChecksumInvalid at seq {}", seq),
                 ),
                 AuditChainError::EmptyChain => (None, "EmptyChain".to_string()),
+                AuditChainError::TimestampNotMonotonic { seq, .. } => {
+                    (Some(*seq), format!("TimestampNotMonotonic at seq {}", seq))
+                }
+                AuditChainError::SignatureInvalid { seq } => {
+                    (Some(*seq), format!("SignatureInvalid at seq {}", seq))
+                }
+                AuditChainError::OrphanEntry { seq, .. } => {
+                    (Some(*seq), format!("OrphanEntry at seq {}", seq))
+                }
+                AuditChainError::WorkflowLinkBroken { seq, .. } => {
+                    (Some(*seq), format!("WorkflowLinkBroken at seq {}", seq))
+                }
+                AuditChainError::ProvenanceIncomplete { seq, .. } => {
+                    (Some(*seq), format!("ProvenanceIncomplete at seq {}", seq))
+                }
             };
             return VerificationResults {
                 passed: false,
