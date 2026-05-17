@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub struct FallbackManager {
     attempts: AtomicUsize,
     max_attempts: usize,
+    #[allow(dead_code)]
     original_memory_limit: usize,
 }
 

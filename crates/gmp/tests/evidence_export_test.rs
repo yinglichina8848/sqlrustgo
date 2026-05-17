@@ -1,6 +1,5 @@
 use sqlrustgo_gmp::evidence_export::{
-    AuditChainRecord, EvidenceRecord, JsonExporter, PackageBuilder, PdfExporter,
-    SignerEd25519,
+    AuditChainRecord, EvidenceRecord, JsonExporter, PackageBuilder, PdfExporter, SignerEd25519,
 };
 
 #[test]
@@ -28,13 +27,11 @@ fn test_json_exporter_records() {
 
 #[test]
 fn test_json_exporter_evidence() {
-    let evidence = vec![
-        EvidenceRecord {
-            operation: "create_table".to_string(),
-            hash: "hash1".to_string(),
-            timestamp: 1000,
-        },
-    ];
+    let evidence = vec![EvidenceRecord {
+        operation: "create_table".to_string(),
+        hash: "hash1".to_string(),
+        timestamp: 1000,
+    }];
 
     let json = JsonExporter::export_evidence(&evidence).unwrap();
     let json_str = String::from_utf8(json).unwrap();
@@ -94,22 +91,18 @@ fn test_signature_verification_fails_with_wrong_data() {
 
 #[test]
 fn test_pdf_exporter_generates_pdf() {
-    let records = vec![
-        AuditChainRecord {
-            action: "INSERT".to_string(),
-            block_height: 1,
-            hash: "abc123def456789012".to_string(),
-            timestamp: 1000,
-        },
-    ];
+    let records = vec![AuditChainRecord {
+        action: "INSERT".to_string(),
+        block_height: 1,
+        hash: "abc123def456789012".to_string(),
+        timestamp: 1000,
+    }];
 
-    let evidence = vec![
-        EvidenceRecord {
-            operation: "create_table".to_string(),
-            hash: "xyz789abc123456789".to_string(),
-            timestamp: 1000,
-        },
-    ];
+    let evidence = vec![EvidenceRecord {
+        operation: "create_table".to_string(),
+        hash: "xyz789abc123456789".to_string(),
+        timestamp: 1000,
+    }];
 
     let pdf = PdfExporter::generate_compliance_report("Test Report", &records, &evidence).unwrap();
     assert!(!pdf.is_empty());
@@ -121,22 +114,18 @@ fn test_package_builder_build_and_verify() {
     let temp_dir = std::env::temp_dir().join("evidence_package_test");
     let _ = std::fs::remove_dir_all(&temp_dir);
 
-    let records = vec![
-        AuditChainRecord {
-            action: "INSERT".to_string(),
-            block_height: 1,
-            hash: "abc123def456789012".to_string(),
-            timestamp: 1000,
-        },
-    ];
+    let records = vec![AuditChainRecord {
+        action: "INSERT".to_string(),
+        block_height: 1,
+        hash: "abc123def456789012".to_string(),
+        timestamp: 1000,
+    }];
 
-    let evidence = vec![
-        EvidenceRecord {
-            operation: "create_table".to_string(),
-            hash: "def456789abc123456".to_string(),
-            timestamp: 1000,
-        },
-    ];
+    let evidence = vec![EvidenceRecord {
+        operation: "create_table".to_string(),
+        hash: "def456789abc123456".to_string(),
+        timestamp: 1000,
+    }];
 
     let signer = SignerEd25519::new();
 

@@ -3,10 +3,10 @@
 //! Exports GMP audit chains, evidence records, and compliance reports
 //! as a signed JSON + PDF package.
 
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use thiserror::Error;
-use rand::RngCore;
 
 /// 包清单结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,7 +117,9 @@ impl PdfExporter {
         let (doc, page1, layer1) = PdfDocument::new(title, Mm(210.0), Mm(297.0), "Layer 1");
         let current_layer = doc.get_page(page1).get_layer(layer1);
 
-        let font = doc.add_builtin_font(BuiltinFont::Helvetica).map_err(|e| ExportError::PdfError(e.to_string()))?;
+        let font = doc
+            .add_builtin_font(BuiltinFont::Helvetica)
+            .map_err(|e| ExportError::PdfError(e.to_string()))?;
 
         current_layer.use_text(title.to_string(), 24.0, Mm(20.0), Mm(277.0), &font);
 
@@ -126,8 +128,15 @@ impl PdfExporter {
         y_pos -= 10.0;
 
         for record in records.iter().take(20) {
-            if y_pos < 40.0 { break; }
-            let text = format!("- {}: block {} hash={}", record.action, record.block_height, &record.hash[..8]);
+            if y_pos < 40.0 {
+                break;
+            }
+            let text = format!(
+                "- {}: block {} hash={}",
+                record.action,
+                record.block_height,
+                &record.hash[..8]
+            );
             current_layer.use_text(text, 10.0, Mm(25.0), Mm(y_pos), &font);
             y_pos -= 7.0;
         }
@@ -137,7 +146,9 @@ impl PdfExporter {
         y_pos -= 10.0;
 
         for ev in evidence.iter().take(20) {
-            if y_pos < 40.0 { break; }
+            if y_pos < 40.0 {
+                break;
+            }
             let text = format!("- {}: {}", ev.operation, &ev.hash[..8]);
             current_layer.use_text(text, 10.0, Mm(25.0), Mm(y_pos), &font);
             y_pos -= 7.0;
@@ -146,7 +157,8 @@ impl PdfExporter {
         let mut bytes = Vec::new();
         {
             let mut writer = std::io::BufWriter::new(&mut bytes);
-            doc.save(&mut writer).map_err(|e| ExportError::PdfError(e.to_string()))?;
+            doc.save(&mut writer)
+                .map_err(|e| ExportError::PdfError(e.to_string()))?;
         }
         Ok(bytes)
     }
@@ -188,16 +200,30 @@ impl Default for SignerEd25519 {
     }
 }
 
-pub fn verify_signature(data: &[u8], signature: &[u8], public_key: &[u8]) -> Result<bool, ExportError> {
+pub fn verify_signature(
+    data: &[u8],
+    signature: &[u8],
+    public_key: &[u8],
+) -> Result<bool, ExportError> {
     use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
     if signature.len() != 64 {
-        return Err(ExportError::SignatureError("Invalid signature length".to_string()));
+        return Err(ExportError::SignatureError(
+            "Invalid signature length".to_string(),
+        ));
     }
 
-    let signature = Signature::from_bytes(signature.try_into().map_err(|_| ExportError::SignatureError("Signature parse error".to_string()))?);
-    let verifying_key = VerifyingKey::from_bytes(public_key.try_into().map_err(|_| ExportError::SignatureError("Public key parse error".to_string()))?)
-        .map_err(|e| ExportError::SignatureError(e.to_string()))?;
+    let signature = Signature::from_bytes(
+        signature
+            .try_into()
+            .map_err(|_| ExportError::SignatureError("Signature parse error".to_string()))?,
+    );
+    let verifying_key = VerifyingKey::from_bytes(
+        public_key
+            .try_into()
+            .map_err(|_| ExportError::SignatureError("Public key parse error".to_string()))?,
+    )
+    .map_err(|e| ExportError::SignatureError(e.to_string()))?;
 
     Ok(verifying_key.verify(data, &signature).is_ok())
 }
@@ -243,7 +269,7 @@ impl PackageBuilder {
     }
 
     pub fn build(self, output_dir: &Path) -> Result<PackagePath, ExportError> {
-        let signer = self.signer.unwrap_or_else(SignerEd25519::new);
+        let signer = self.signer.unwrap_or_default();
         let public_key = signer.public_key();
 
         std::fs::create_dir_all(output_dir)?;
@@ -251,8 +277,12 @@ impl PackageBuilder {
         let records_json = JsonExporter::export_records(&self.records)?;
         let evidence_json = JsonExporter::export_evidence(&self.evidence)?;
 
-        let report_title = format!("GMP Compliance Report {} - {}", self.from_timestamp, self.to_timestamp);
-        let pdf_bytes = PdfExporter::generate_compliance_report(&report_title, &self.records, &self.evidence)?;
+        let report_title = format!(
+            "GMP Compliance Report {} - {}",
+            self.from_timestamp, self.to_timestamp
+        );
+        let pdf_bytes =
+            PdfExporter::generate_compliance_report(&report_title, &self.records, &self.evidence)?;
 
         let manifest = PackageManifest {
             version: "1.0.0".to_string(),
@@ -261,13 +291,23 @@ impl PackageBuilder {
             to_timestamp: self.to_timestamp,
             algorithm: "Ed25519".to_string(),
             files: vec![
-                FileEntry { filename: "records.json".to_string(), sha256: Self::sha256(&records_json) },
-                FileEntry { filename: "evidence.json".to_string(), sha256: Self::sha256(&evidence_json) },
-                FileEntry { filename: "report.pdf".to_string(), sha256: Self::sha256(&pdf_bytes) },
+                FileEntry {
+                    filename: "records.json".to_string(),
+                    sha256: Self::sha256(&records_json),
+                },
+                FileEntry {
+                    filename: "evidence.json".to_string(),
+                    sha256: Self::sha256(&evidence_json),
+                },
+                FileEntry {
+                    filename: "report.pdf".to_string(),
+                    sha256: Self::sha256(&pdf_bytes),
+                },
             ],
         };
 
-        let manifest_json = serde_json::to_vec_pretty(&manifest).map_err(ExportError::SerializationError)?;
+        let manifest_json =
+            serde_json::to_vec_pretty(&manifest).map_err(ExportError::SerializationError)?;
 
         let mut signed_data = manifest_json.clone();
         signed_data.extend_from_slice(&records_json);
@@ -304,7 +344,8 @@ impl PackageBuilder {
         let signature = std::fs::read(path.join("signature.bin"))?;
         let public_key = std::fs::read(path.join("public_key.bin"))?;
 
-        let manifest: PackageManifest = serde_json::from_slice(&manifest_bytes).map_err(ExportError::SerializationError)?;
+        let manifest: PackageManifest =
+            serde_json::from_slice(&manifest_bytes).map_err(ExportError::SerializationError)?;
 
         let mut signed_data = manifest_bytes.clone();
         signed_data.extend_from_slice(&records_json);
@@ -322,7 +363,11 @@ impl PackageBuilder {
             manifest_valid,
             files_valid: vec![manifest_valid; manifest.files.len()],
             signatures_valid: vec![sig_valid],
-            errors: if sig_valid && manifest_valid { vec![] } else { vec!["Verification failed".to_string()] },
+            errors: if sig_valid && manifest_valid {
+                vec![]
+            } else {
+                vec!["Verification failed".to_string()]
+            },
         })
     }
 }

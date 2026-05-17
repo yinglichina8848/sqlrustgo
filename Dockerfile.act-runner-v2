@@ -1,0 +1,4 @@
+FROM gitea/act_runner:node
+RUN echo "https://mirrors.ustc.edu.cn/alpine/v3.23/main" > /etc/apk/repositories && \
+    apk update && \
+    apk add --no-cache docker-cli
