@@ -28,7 +28,7 @@ fn main() {
     }
 
     // No-index benchmark
-    let engine_no_idx = engine;
+    let mut engine_no_idx = engine;
     let start = Instant::now();
     for i in 0..iterations {
         let _ = engine_no_idx
@@ -64,7 +64,7 @@ fn main() {
     }
 
     // CBO + Index benchmark
-    let engine_idx = engine2;
+    let mut engine_idx = engine2;
     let start = Instant::now();
     for i in 0..iterations {
         let _ = engine_idx

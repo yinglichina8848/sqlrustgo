@@ -520,7 +520,10 @@ fn check_audit_trail_rule(
 ) -> SqlResult<Option<Violation>> {
     let logs = crate::audit::query_audit_logs(storage, None, None, None, None, None)?;
     let has_logs = logs.iter().any(|l| {
-        l.record_id.as_ref().map(|rid| rid == &doc_id.to_string()).unwrap_or(false)
+        l.record_id
+            .as_ref()
+            .map(|rid| rid == &doc_id.to_string())
+            .unwrap_or(false)
     });
     if !has_logs {
         return Ok(Some(Violation {
@@ -580,7 +583,10 @@ fn count_electronic_signatures(storage: &dyn StorageEngine, doc_id: i64) -> SqlR
     let sig_logs: Vec<_> = logs
         .into_iter()
         .filter(|l| {
-            l.record_id.as_ref().map(|rid| rid == &doc_id.to_string()).unwrap_or(false)
+            l.record_id
+                .as_ref()
+                .map(|rid| rid == &doc_id.to_string())
+                .unwrap_or(false)
                 && l.action.contains("SIGNATURE")
         })
         .collect();
