@@ -43,7 +43,7 @@ impl<
             self.spill_build_side()?;
         }
 
-        let entry = self.build_hash.entry(key).or_insert_with(Vec::new);
+        let entry = self.build_hash.entry(key).or_default();
         entry.push(value);
 
         let size = std::mem::size_of::<K>() + std::mem::size_of::<V>();

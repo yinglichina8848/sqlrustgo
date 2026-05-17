@@ -109,7 +109,10 @@ fn test_crash_during_wal_append_killed_before_write() {
     // If no flush happened, recovery might see 0 or partial
     let (total, _, _) = recover_count(&wal_path);
     // Either 0 (nothing flushed) or 5 (all flushed before kill)
-    assert!(total == 0 || total == 5, "Should have 0 or 5 entries after kill");
+    assert!(
+        total == 0 || total == 5,
+        "Should have 0 or 5 entries after kill"
+    );
 }
 
 #[test]
@@ -207,7 +210,10 @@ fn test_kill_during_transaction() {
 
     // Recovery: no committed transactions
     let (total, committed, _) = recover_count(&wal_path);
-    assert_eq!(committed, 0, "No committed transactions after kill during tx");
+    assert_eq!(
+        committed, 0,
+        "No committed transactions after kill during tx"
+    );
     // Total may be 0 (nothing flushed) or up to 5 (if flush happened before kill)
     assert!(total <= 5, "Total entries should be ≤ 5");
 }
@@ -321,7 +327,10 @@ fn test_file_size_after_crash() {
         .strip_prefix("SIZE=")
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
-    assert!(size_val > 0, "WAL file should have non-zero size after writes");
+    assert!(
+        size_val > 0,
+        "WAL file should have non-zero size after writes"
+    );
 }
 
 #[test]
@@ -334,7 +343,10 @@ fn test_recovery_preserves_insert_data() {
     // Use recover-txids to verify committed txs
     let out = run_worker(&wal_path, "recover-txids", &[]);
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("COMMITTED_TXIDS=[1, 2]"), "Should recover TX1 and TX2 as committed");
+    assert!(
+        stdout.contains("COMMITTED_TXIDS=[1, 2]"),
+        "Should recover TX1 and TX2 as committed"
+    );
     assert!(stdout.contains("ROLLED_BACK_TXIDS=[]"), "No rollbacks");
 }
 

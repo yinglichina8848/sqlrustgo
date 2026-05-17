@@ -8,7 +8,6 @@
 
 use sqlrustgo_storage::wal::{WalEntry, WalEntryType, WalManager};
 use std::env;
-use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -98,33 +97,39 @@ fn main() {
 
             for tx in 0..tx_count {
                 let tx_id = tx + 1;
-                writer.append(&WalEntry {
-                    tx_id,
-                    entry_type: WalEntryType::Begin,
-                    table_id: 0,
-                    key: None,
-                    data: None,
-                    lsn: 0,
-                    timestamp: current_timestamp(),
-                }).expect("Failed to append begin");
+                writer
+                    .append(&WalEntry {
+                        tx_id,
+                        entry_type: WalEntryType::Begin,
+                        table_id: 0,
+                        key: None,
+                        data: None,
+                        lsn: 0,
+                        timestamp: current_timestamp(),
+                    })
+                    .expect("Failed to append begin");
 
-                writer.append(&make_entry(
-                    tx_id,
-                    WalEntryType::Insert,
-                    1,
-                    format!("tx{}_key", tx_id).as_bytes(),
-                    format!("tx{}_value", tx_id).as_bytes(),
-                )).expect("Failed to append insert");
+                writer
+                    .append(&make_entry(
+                        tx_id,
+                        WalEntryType::Insert,
+                        1,
+                        format!("tx{}_key", tx_id).as_bytes(),
+                        format!("tx{}_value", tx_id).as_bytes(),
+                    ))
+                    .expect("Failed to append insert");
 
-                writer.append(&WalEntry {
-                    tx_id,
-                    entry_type: WalEntryType::Commit,
-                    table_id: 0,
-                    key: None,
-                    data: None,
-                    lsn: 0,
-                    timestamp: current_timestamp(),
-                }).expect("Failed to append commit");
+                writer
+                    .append(&WalEntry {
+                        tx_id,
+                        entry_type: WalEntryType::Commit,
+                        table_id: 0,
+                        key: None,
+                        data: None,
+                        lsn: 0,
+                        timestamp: current_timestamp(),
+                    })
+                    .expect("Failed to append commit");
             }
             writer.flush().expect("Failed to flush");
             println!("WROTE {} transactions", tx_count);
@@ -143,15 +148,17 @@ fn main() {
                 (2, WalEntryType::Insert, Some("tx2_key"), Some("tx2_value")),
                 (2, WalEntryType::Rollback, None, None),
             ] {
-                writer.append(&WalEntry {
-                    tx_id,
-                    entry_type: et,
-                    table_id: if k.is_some() { 1 } else { 0 },
-                    key: k.map(|s| s.as_bytes().to_vec()),
-                    data: d.map(|s| s.as_bytes().to_vec()),
-                    lsn: 0,
-                    timestamp: current_timestamp(),
-                }).expect("Failed to append");
+                writer
+                    .append(&WalEntry {
+                        tx_id,
+                        entry_type: et,
+                        table_id: if k.is_some() { 1 } else { 0 },
+                        key: k.map(|s| s.as_bytes().to_vec()),
+                        data: d.map(|s| s.as_bytes().to_vec()),
+                        lsn: 0,
+                        timestamp: current_timestamp(),
+                    })
+                    .expect("Failed to append");
             }
             writer.flush().expect("Failed to flush");
             println!("WROTE committed + rolled-back transactions");
@@ -165,46 +172,62 @@ fn main() {
             // TX 1: committed
             for (tx_id, et, k, d) in [
                 (1u64, WalEntryType::Begin, None::<&str>, None::<&str>),
-                (1, WalEntryType::Insert, Some("ckpt_key1"), Some("ckpt_val1")),
+                (
+                    1,
+                    WalEntryType::Insert,
+                    Some("ckpt_key1"),
+                    Some("ckpt_val1"),
+                ),
                 (1, WalEntryType::Commit, None, None),
             ] {
-                writer.append(&WalEntry {
-                    tx_id,
-                    entry_type: et,
-                    table_id: if k.is_some() { 1 } else { 0 },
-                    key: k.map(|s| s.as_bytes().to_vec()),
-                    data: d.map(|s| s.as_bytes().to_vec()),
-                    lsn: 0,
-                    timestamp: current_timestamp(),
-                }).expect("Failed to append");
+                writer
+                    .append(&WalEntry {
+                        tx_id,
+                        entry_type: et,
+                        table_id: if k.is_some() { 1 } else { 0 },
+                        key: k.map(|s| s.as_bytes().to_vec()),
+                        data: d.map(|s| s.as_bytes().to_vec()),
+                        lsn: 0,
+                        timestamp: current_timestamp(),
+                    })
+                    .expect("Failed to append");
             }
 
             // Checkpoint
-            writer.append(&WalEntry {
-                tx_id: 0,
-                entry_type: WalEntryType::Checkpoint,
-                table_id: 0,
-                key: None,
-                data: None,
-                lsn: 0,
-                timestamp: current_timestamp(),
-            }).expect("Failed to append checkpoint");
+            writer
+                .append(&WalEntry {
+                    tx_id: 0,
+                    entry_type: WalEntryType::Checkpoint,
+                    table_id: 0,
+                    key: None,
+                    data: None,
+                    lsn: 0,
+                    timestamp: current_timestamp(),
+                })
+                .expect("Failed to append checkpoint");
 
             // TX 2: committed after checkpoint
             for (tx_id, et, k, d) in [
                 (2u64, WalEntryType::Begin, None::<&str>, None::<&str>),
-                (2, WalEntryType::Insert, Some("ckpt_key2"), Some("ckpt_val2")),
+                (
+                    2,
+                    WalEntryType::Insert,
+                    Some("ckpt_key2"),
+                    Some("ckpt_val2"),
+                ),
                 (2, WalEntryType::Commit, None, None),
             ] {
-                writer.append(&WalEntry {
-                    tx_id,
-                    entry_type: et,
-                    table_id: if k.is_some() { 1 } else { 0 },
-                    key: k.map(|s| s.as_bytes().to_vec()),
-                    data: d.map(|s| s.as_bytes().to_vec()),
-                    lsn: 0,
-                    timestamp: current_timestamp(),
-                }).expect("Failed to append");
+                writer
+                    .append(&WalEntry {
+                        tx_id,
+                        entry_type: et,
+                        table_id: if k.is_some() { 1 } else { 0 },
+                        key: k.map(|s| s.as_bytes().to_vec()),
+                        data: d.map(|s| s.as_bytes().to_vec()),
+                        lsn: 0,
+                        timestamp: current_timestamp(),
+                    })
+                    .expect("Failed to append");
             }
             writer.flush().expect("Failed to flush");
             println!("WROTE 2 transactions + checkpoint");
@@ -217,19 +240,21 @@ fn main() {
             let mut writer = wal.get_writer().expect("Failed to get writer");
 
             for i in 0..count {
-                writer.append(&WalEntry {
-                    tx_id: 1,
-                    entry_type: if i == 0 {
-                        WalEntryType::Begin
-                    } else {
-                        WalEntryType::Insert
-                    },
-                    table_id: 1,
-                    key: Some(format!("uncommitted_key_{}", i).into_bytes()),
-                    data: Some(format!("uncommitted_value_{}", i).into_bytes()),
-                    lsn: 0,
-                    timestamp: current_timestamp(),
-                }).expect("Failed to append");
+                writer
+                    .append(&WalEntry {
+                        tx_id: 1,
+                        entry_type: if i == 0 {
+                            WalEntryType::Begin
+                        } else {
+                            WalEntryType::Insert
+                        },
+                        table_id: 1,
+                        key: Some(format!("uncommitted_key_{}", i).into_bytes()),
+                        data: Some(format!("uncommitted_value_{}", i).into_bytes()),
+                        lsn: 0,
+                        timestamp: current_timestamp(),
+                    })
+                    .expect("Failed to append");
             }
             writer.flush().expect("Failed to flush");
             println!("WROTE {} uncommitted entries (no commit)", count);
@@ -302,10 +327,8 @@ fn main() {
                     println!("INTEGRITY=EMPTY_OR_UNREADABLE");
                 }
                 Ok(_) => {
-                    let magic =
-                        u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
-                    let version =
-                        u16::from_le_bytes([header[4], header[5]]);
+                    let magic = u32::from_le_bytes([header[0], header[1], header[2], header[3]]);
+                    let version = u16::from_le_bytes([header[4], header[5]]);
 
                     if magic == 0x57414C01 {
                         println!("INTEGRITY=VALID magic=0x{:08x} version={}", magic, version);
