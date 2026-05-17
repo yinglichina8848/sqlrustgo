@@ -19,15 +19,30 @@
 //! Uses subprocess crash-worker to write WAL entries, then simulates
 //! crash by killing the worker process at various points.
 
+use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
 
+fn crash_worker_path() -> PathBuf {
+    if let Ok(path) = env::var("CRASH_WORKER_PATH") {
+        return PathBuf::from(path);
+    }
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    PathBuf::from(manifest_dir)
+        .join("../../../target/debug/crash-worker")
+        .canonicalize()
+        .unwrap_or_else(|_| {
+            PathBuf::from(manifest_dir)
+                .join("../../target/debug/crash-worker")
+        })
+}
+
 /// Helper: run crash-worker command
 fn run_worker(wal_path: &PathBuf, mode: &str, args: &[&str]) -> std::process::Output {
-    let mut cmd = Command::new("/home/ai/dev/sqlrustgo/target/debug/crash-worker");
+    let mut cmd = Command::new(crash_worker_path());
     cmd.arg(wal_path).arg(mode);
     for arg in args {
         cmd.arg(arg);
@@ -91,7 +106,7 @@ fn test_crash_during_wal_append_killed_before_write() {
     let (wal_path, _temp_dir) = temp_wal_dir();
 
     // Use background process that we'll kill
-    let mut child = Command::new("/home/ai/dev/sqlrustgo/target/debug/crash-worker")
+    let mut child = Command::new(crash_worker_path())
         .arg(&wal_path)
         .arg("write")
         .arg("5")
@@ -150,9 +165,8 @@ fn test_checkpoint_only_recovery() {
 
     // Write just a checkpoint (no transactions)
     // This is a degenerate case - should handle gracefully
-    let (total, _, _) = recover_count(&wal_path);
+    let _ = recover_count(&wal_path);
     // Empty or checkpoint-only
-    assert!(total >= 0, "Should handle empty checkpoint gracefully");
 }
 
 // ============================================================================
@@ -168,9 +182,9 @@ fn test_committed_transaction_survives_crash() {
     assert!(out.status.success());
 
     // Recovery should show committed=1, rolled_back=1
-    let (total, committed, rolled_back) = recover_count(&wal_path);
+    let (_total, committed, _rolled_back) = recover_count(&wal_path);
     assert_eq!(committed, 1, "TX1 committed should survive");
-    assert_eq!(rolled_back, 1, "TX2 rollback should be tracked");
+    assert_eq!(_rolled_back, 1, "TX2 rollback should be tracked");
 }
 
 #[test]
@@ -182,7 +196,7 @@ fn test_uncommitted_transaction_does_not_survive_crash() {
     assert!(out.status.success());
 
     // Recovery - uncommitted entries are still in WAL but represent uncommitted tx
-    let (total, committed, rolled_back) = recover_count(&wal_path);
+    let (total, committed, _rolled_back) = recover_count(&wal_path);
     assert_eq!(total, 4, "Uncommitted entries still in WAL");
     assert_eq!(committed, 0, "No commits");
     // Rollback count depends on recovery behavior for uncommitted txs
@@ -194,7 +208,7 @@ fn test_kill_during_transaction() {
     let (wal_path, _temp_dir) = temp_wal_dir();
 
     // Start writing a transaction
-    let mut child = Command::new("/home/ai/dev/sqlrustgo/target/debug/crash-worker")
+    let mut child = Command::new(crash_worker_path())
         .arg(&wal_path)
         .arg("write-no-commit")
         .arg("5")
@@ -243,7 +257,7 @@ fn test_concurrent_write_and_kill() {
         assert!(out.status.success());
 
         // Kill a background worker mid-flight
-        let mut child = Command::new("/home/ai/dev/sqlrustgo/target/debug/crash-worker")
+        let mut child = Command::new(crash_worker_path())
             .arg(&wal_path)
             .arg("write")
             .arg("2")
@@ -290,7 +304,7 @@ fn test_recovery_with_mixed_transaction_states() {
     run_worker(&wal_path, "write-tx-rollback", &[]);
 
     // Kill during uncommitted tx
-    let mut child = Command::new("/home/ai/dev/sqlrustgo/target/debug/crash-worker")
+    let mut child = Command::new(crash_worker_path())
         .arg(&wal_path)
         .arg("write-no-commit")
         .arg("3")
@@ -424,7 +438,7 @@ fn test_repeated_crash_recovery_cycles() {
         run_worker(&wal_path, "write", &[&cycle.to_string()]);
 
         // Simulate crash by killing background worker
-        let mut child = Command::new("/home/ai/dev/sqlrustgo/target/debug/crash-worker")
+        let mut child = Command::new(crash_worker_path())
             .arg(&wal_path)
             .arg("write-flush")
             .arg("3")
