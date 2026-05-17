@@ -1,10 +1,10 @@
 name: Beta Gate Pipeline
-run-name: B-Gate v3.1.0
+run-name: B-Gate v3.2.0
 
 on:
   push:
     branches:
-      - beta/v3.1.0
+      - beta/v3.2.0
     tags:
       - v*-beta*
   workflow_dispatch:

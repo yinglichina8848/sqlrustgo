@@ -341,28 +341,209 @@ docs/releases/v3.2.0/oo/
 
 ---
 
-## 八、验收标准
+---
 
-### 8.1 功能验收
+## 九、架构决策记录 (ADR)
 
-- [ ] GMP-1: 数字签名审计链 sign/verify API
-- [ ] GMP-2: 电子签名 21 CFR Part 11 合规
-- [ ] GMP-3: Immutable Record 禁止 DML
-- [ ] GMP-4: Correction Chain 完整修正链
-- [ ] GMP-5: Provenance Tracking 完整溯源
-- [ ] GMP-6: Trusted Timestamp RFC3161
-- [ ] GMP-7: 审计链验证工具
-- [ ] GMP-8: HSM/KMS 集成 (TPM/HSM/KMS)
-- [ ] GMP-9: Workflow Engine ✅
-- [ ] GMP-10: 移动端可信采集 ✅
-- [ ] GMP-11: SOP/培训绑定 ✅
-- [ ] GMP-12: Device Calibration ✅
-- [ ] PERF-1: Point SELECT QPS ≥1M
-- [ ] PERF-2: TPC-H SF=10 22/22
-- [x] SQL-1: RECURSIVE CTE 完整支持 ✅
-- [x] SQL-2: Performance Schema ≥60% ✅
+### 9.1 核心架构决策
 
-### 8.2 质量验收
+| ID | 决策 | 状态 | 日期 |
+|----|------|------|------|
+| ADR-001 | GMP 模块独立为 `sqlrustgo-gmp` crate | ✅ 已采纳 | 2026-04 |
+| ADR-002 | 数字签名使用 k256 ECDSA (P-256) | ✅ 已采纳 | 2026-04 |
+| ADR-003 | 审计链采用 SHA-256 哈希链 | ✅ 已采纳 | 2026-04 |
+| ADR-004 | 冷存储四层架构 (Hot/Warm/Cold/Archive) | ✅ 已采纳 | 2026-05 |
+| ADR-005 | SSI + MVCC 混合并发控制 | ✅ 已采纳 | 2026-03 |
+| ADR-006 | TPC-H Spill Framework 磁盘排序 | ✅ 已采纳 | 2026-05 |
+| ADR-007 | Workflow Engine 状态机 DSL | ✅ 已采纳 | 2026-04 |
+| ADR-008 | HSM 三层抽象 (TPM/HSM/KMS) | ✅ 已采纳 | 2026-04 |
+
+### 9.2 已否决决策
+
+| ID | 决策 | 否决原因 | 日期 |
+|----|------|----------|------|
+| N/A | 使用 ed25519 签名 | 与现有 PKI 不兼容 | 2026-04 |
+| N/A | 纯 MVCC 无 SSI | 写偏序死锁风险 | 2026-03 |
+
+### 9.3 待定决策
+
+| ID | 决策 | 选项 | 状态 |
+|----|------|------|------|
+| ADR-009 | RECURSIVE CTE 执行策略 | 迭代 vs 图遍历 | 进行中 |
+| ADR-010 | 冷存储 S3 签名算法 | v4 vs v4a | 已定 v4 |
+
+---
+
+## 十、API 约定
+
+### 10.1 公开 API 层级
+
+| 层级 | 模块 | 稳定性 |
+|------|------|--------|
+| **Stable** | `executor`, `storage`, `transaction` | 语义版本锁定 |
+| **Beta** | `gmp`, `optimizer`, `planner` | 可能有破坏性变更 |
+| **Alpha** | `vector`, `graph`, `network` | 随时变更 |
+
+### 10.2 GMP API 约定
+
+```rust
+// 数字签名
+pub trait AuditChain {
+    fn sign(&self, record: &AuditRecord) -> Result<Signature, GmpError>;
+    fn verify(&self, record: &AuditRecord) -> Result<bool, GmpError>;
+}
+
+// 电子签名
+pub trait ElectronicSignatureProvider {
+    fn sign(&self, user: &str, data: &[u8], reason: &str) -> Result<SignatureRecord, GmpError>;
+    fn verify(&self, record: &SignatureRecord) -> Result<bool, GmpError>;
+}
+
+// HSM 抽象
+pub trait HSMProvider: Send + Sync {
+    fn sign(&self, key_id: &str, data: &[u8]) -> Result<Vec<u8>, HsmError>;
+    fn verify(&self, key_id: &str, data: &[u8], sig: &[u8]) -> Result<bool, HsmError>;
+}
+```
+
+### 10.3 变更管理
+
+- **Stable API**: 不得破坏，deprecation 需 2 个 minor 版本预告
+- **Beta API**: 可破坏，需在 CHANGELOG 标注
+- **Alpha API**: 随时破坏，不另行通知
+
+---
+
+## 十一、迁移指南 (从 v3.1.0)
+
+### 11.1 破坏性变更
+
+| 变更类型 | 影响 | 迁移操作 |
+|----------|------|----------|
+| GMP 模块重命名 | `sqlrustgo-gmp` crate | `Cargo.toml` 中替换依赖 |
+| `AuditChain` API | `verify()` 返回 `Result<bool>` | 添加错误处理 |
+| `ImmutableRecord` 行为 | DML 默认拒绝 | 检查现有表是否有 IMMUTABLE 标记 |
+
+### 11.2 新增配置项
+
+```toml
+[gmp]
+enable = true                    # 新增，默认 false
+signature_algorithm = "ecdsa"    # 新增
+hsm_provider = "software"       # 新增，支持: software/tpm/pkcs11
+
+[storage]
+tiering_enabled = true          # 新增，冷存储分层
+tier_manager = "storage_tier"   # 新增
+```
+
+### 11.3 数据迁移
+
+```sql
+-- v3.2.0 新增 GMP 系统表（自动创建）
+-- 无需手动迁移
+-- 现有数据完整性不受影响
+```
+
+### 11.4 兼容性矩阵
+
+| 版本组合 | 兼容？ | 说明 |
+|----------|--------|------|
+| v3.1.0 client → v3.2.0 server | ✅ | MySQL 协议兼容 |
+| v3.2.0 client → v3.1.0 server | ⚠️ | GMP 功能不可用 |
+| v3.1.0 数据文件 → v3.2.0 | ✅ | WAL 前向兼容 |
+
+---
+
+## 十二、取消/延期项
+
+### 12.1 已取消 (Cancelled)
+
+| 任务 | 原计划 | 取消原因 | 替代方案 |
+|------|--------|----------|----------|
+| SQL-4 组复制 | v3.2.0 | 复杂度超标，延期至 v3.3.0 | 手动故障转移脚本 |
+| SQL-5 自动故障转移 | v3.2.0 | 依赖组复制，延期至 v3.3.0 | 运维文档 |
+| SQL-6 地理分布 | v3.2.0 | 延期至 v3.4.0 | 规划设计档 |
+
+### 12.2 延期至下一版本
+
+| 任务 | 原计划 | 延期至 | 延期原因 |
+|------|--------|--------|----------|
+| PERF-1 QPS ≥1M | v3.2.0 RC | v3.3.0 | SIMD 优化周期超过预期 |
+| PERF-2 TPC-H SF=10 | v3.2.0 RC | v3.3.0 | Spill Framework 需完善 |
+| SQL-8 FULLTEXT | v3.2.0 | v3.3.0 | 资源有限，优先级调整 |
+| PERF-4 死锁检测 <50ms | v3.2.0 | v3.2.1 | 已达 <100ms，需进一步优化 |
+
+### 12.3 范围缩减 (Scope Reduction)
+
+| 原范围 | 缩减后 | 原因 |
+|--------|--------|------|
+| RECURSIVE CTE 完整支持 | 已完成 | 无缩减 |
+| Performance Schema ≥60% | 已完成 | 无缩减 |
+| DCL 权限链 100% | 已完成 (PR #1090) | 无缩减 |
+
+---
+
+## 十三、延续任务 (从 v3.1.0 继承)
+
+### 13.1 来自 v3.1.0 的未完成任务
+
+| Issue | 任务 | 优先级 | 状态 |
+|-------|------|--------|------|
+| #801 | MVCC GC 优化 | P1 | 进行中 |
+| #802 | WAL 压缩 | P2 | 未开始 |
+| #803 | Buffer Pool LRU 优化 | P1 | 进行中 |
+
+### 13.2 跨版本技术债务
+
+| 债务项 | 影响 | 计划修复版本 |
+|--------|------|--------------|
+| 旧 Query Planner 替换 | 性能 | v3.3.0 |
+| Graph Store v2 API | 功能 | v3.3.0 |
+| Vector Index 内存管理 | 稳定性 | v3.2.1 |
+
+### 13.3 版本间依赖关系
+
+```
+v3.1.0 ─── MVCC GC ──────────────────────┐
+    └── WAL 压缩 ──────────────────────────→ v3.3.0 性能基线
+                                            ↑
+v3.2.0 ─── PERF-1/2 延期 ────────────────┘
+    └── HSM 集成 ✅ ──── GMP 合规 ✅
+```
+
+---
+
+## 十四、验收标准
+
+### 14.1 功能验收（已交付状态）
+
+| 任务 | 计划目标 | CHANGELOG 记录 | 实际状态 |
+|------|----------|----------------|----------|
+| GMP-1 数字签名审计链 | P0 | ✅ PR #1012 | ✅ 已交付 |
+| GMP-2 电子签名 | P0 | ✅ PR #1004/1015/1017/1018 | ✅ 已交付 |
+| GMP-3 Immutable Record | P0 | ✅ PR #1029 | ✅ 已交付 |
+| GMP-4 Correction Chain | P0 | ✅ PR #1027 | ✅ 已交付 |
+| GMP-5 Provenance Tracking | P0 | ✅ PR #1024 | ✅ 已交付 |
+| GMP-6 Trusted Timestamp | P0 | ✅ PR #1017 | ✅ 已交付 |
+| GMP-7 审计链验证工具 | P0 | ✅ PR #1020 | ✅ 已交付 |
+| GMP-8 HSM/KMS 集成 | P0 | ✅ PR #1025 | ✅ 已交付 |
+| GMP-9 Workflow Engine | P1 | ✅ PR #1046 | ✅ 已交付 |
+| GMP-10 移动端可信采集 | P1 | ⚠️ 代码存在 | ⚠️ CHANGELOG 遗漏 |
+| GMP-11 SOP/培训绑定 | P1 | ⚠️ 代码存在 | ⚠️ CHANGELOG 遗漏 |
+| GMP-12 Device Calibration | P1 | ⚠️ 代码存在 | ⚠️ CHANGELOG 遗漏 |
+| PERF-1 QPS ≥1M | P0 | ⚠️ MySQL Flush 优化 | 🔄 延期至 v3.3.0 |
+| PERF-2 TPC-H SF=10 | P0 | ⚠️ Spill Framework | 🔄 延期至 v3.3.0 |
+| PERF-3 200+ 并发 | P1 | ✅ PR #1013 | ✅ 已交付 |
+| PERF-4 死锁检测 <50ms | P1 | ✅ PR #1043 | ⚠️ 达 <100ms |
+| PERF-5 内存优化 -15% | P1 | ✅ PR #1045 | ✅ 已交付 |
+| SQL-1 RECURSIVE CTE | P1 | ✅ PR #1065 | ✅ 已交付 |
+| SQL-2 Performance Schema | P1 | ✅ PR #1071 | ✅ 已交付 |
+| SQL-3 冷存储集成 | P1 | ✅ PR #1091/1093 | ✅ 已交付 |
+| SQL-7 DCL 权限链 | P1 | ✅ PR #1090 | ✅ 已交付 |
+| Multi-Table DML | M6 | ✅ PR #1021 | ✅ 已交付（超范围） |
+
+### 14.2 质量验收
 
 - [ ] GA Gate 23/23 PASS
 - [ ] 测试覆盖率 ≥80%
@@ -370,7 +551,7 @@ docs/releases/v3.2.0/oo/
 - [ ] Formal proofs ≥30 个
 - [ ] GMP 合规验证通过
 
-### 8.3 性能验收
+### 14.3 性能验收
 
 | 指标 | 目标 |
 |------|------|
@@ -383,7 +564,7 @@ docs/releases/v3.2.0/oo/
 | 内存占用 | ≤85% (较 v3.1.0 -15%) |
 | 死锁检测延迟 | <50ms |
 
-### 8.4 MySQL 兼容性目标
+### 14.4 MySQL 兼容性目标
 
 | 维度 | v3.2.0 目标 |
 |------|-------------|

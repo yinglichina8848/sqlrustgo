@@ -102,3 +102,4 @@ mod tests {
         assert_eq!(parse_sql_literal("0"), Value::Integer(0));
     }
 }
+// test final

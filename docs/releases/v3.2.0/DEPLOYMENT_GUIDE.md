@@ -245,7 +245,7 @@ systemctl start sqlrustgo
 
 ## Next Steps
 
-- Configure [PERFORMANCE_BENCHMARK.md](./PERFORMANCE_BENCHMARK.md)
+- Configure [PERFORMANCE_BENCHMARK.md](../v3.1.0/PERFORMANCE_BENCHMARK-zh.md)
 - Review [TEST_PLAN.md](./TEST_PLAN.md)
 - Read [RELEASE_NOTES.md](./RELEASE_NOTES.md)
 

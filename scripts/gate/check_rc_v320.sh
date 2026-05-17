@@ -3,6 +3,8 @@
 # 基于 gate_spec.md + v3.2.0 DEVELOPMENT_PLAN.md
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 PASS=0; TOTAL=0; BLOCKERS=0
 FAIL_REASONS=()
@@ -163,7 +165,7 @@ check "R11: check_docs_links.sh --all" "bash scripts/gate/check_docs_links.sh --
 check "R12: HSM/KMS integration" "cargo test -p sqlrustgo-hsm --lib" "R12"
 
 # ========== R13: MySQL Protocol ==========
-check "R13: MySQL protocol" "cargo test --test mysql_protocol_test" "R13"
+check "R13: MySQL protocol" "SQLRUSTGO_SERVER_BIN=\"$PROJECT_ROOT/target/release/sqlrustgo-mysql-server\" cargo test -p sqlrustgo-mysql-server --test mysql_protocol_handshake_test" "R13"
 
 # ========== R14: Window Functions ==========
 check_test "R14: window_function_test" "cargo test --test window_function_test" "R14"

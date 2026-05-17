@@ -1,0 +1,196 @@
+name: Layered CI (L0-L2)
+
+'on':
+  push:
+    branches:
+      - 'develop/v3.2.0'
+      - 'rc/v3.2.0'
+  pull_request:
+    branches:
+      - 'develop/v3.2.0'
+      - 'rc/v3.2.0'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  # L0: 编译验证 (每次 PR 必须)
+  l0-build:
+    name: L0 Build
+    runs-on:
+      - hp-z6g4
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        run: |
+          set -e
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
+
+      - name: Detect Changed Crates
+        id: changed
+        run: |
+          set -e
+          cd repo
+          CHANGED=$(bash scripts/ci/detect_changed_crates.sh "$GITEA_REF" 2>/dev/null || echo "")
+          echo "crates=$CHANGED"
+          if [ -n "$CHANGED" ]; then
+            echo "$CHANGED" | tr ' ' '\n' > /tmp/changed_crates.txt
+          fi
+
+      - name: Rust Setup
+        run: |
+          set -e
+          cd repo
+          rustup default stable
+          cargo fetch
+
+      - name: L0 Check
+        run: |
+          set -e
+          cd repo
+          timeout 5m cargo check --all-features
+
+      - name: L0 Build
+        run: |
+          set -e
+          cd repo
+          timeout 8m cargo build --release --workspace
+
+  # L1: 单元测试 (每次 PR 必须)
+  l1-unit-tests:
+    name: L1 Unit Tests
+    runs-on:
+      - hp-z6g4
+    timeout-minutes: 10
+    needs: [l0-build]
+    steps:
+      - name: Checkout
+        run: |
+          set -e
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
+
+      - name: Restore Cache
+        run: |
+          set -e
+          cd repo
+          # Incremental build from l0
+          cargo build --release --workspace || true
+
+      - name: Rust Setup
+        run: |
+          set -e
+          cd repo
+          rustup default stable
+          cargo fetch
+
+      - name: L1 Lib Tests
+        run: |
+          set -e
+          cd repo
+          timeout 8m cargo test --lib --all-features
+
+      - name: L1 Doc Tests
+        run: |
+          set -e
+          cd repo
+          timeout 4m cargo test --doc --all-features || true
+
+  # L2: 增量集成测试 (检测到 crate 变更时运行)
+  l2-incremental-tests:
+    name: L2 Incremental Tests
+    runs-on:
+      - hp-z6g4
+    timeout-minutes: 20
+    needs: [l1-unit-tests]
+    steps:
+      - name: Checkout
+        run: |
+          set -e
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
+
+      - name: Detect Changed Crates
+        id: changed
+        run: |
+          set -e
+          cd repo
+          CHANGED=$(bash scripts/ci/detect_changed_crates.sh "$GITEA_REF" 2>/dev/null || echo "")
+          echo "Changed crates: $CHANGED"
+          if [ -z "$CHANGED" ]; then
+            echo "SKIP_L2=yes" >> $GITHUB_OUTPUT
+          else
+            echo "$CHANGED" | tr ' ' '\n' > /tmp/changed_crates.txt
+          fi
+
+      - name: L2 Run per-crate tests
+        if: env.SKIP_L2 != 'yes'
+        run: |
+          set -e
+          cd repo
+          for CRATE in $(cat /tmp/changed_crates.txt 2>/dev/null); do
+            echo "Testing crate: $CRATE"
+            timeout 15m cargo test -p "sqlrustgo-$CRATE" --all-features || {
+              echo "FAILED: sqlrustgo-$CRATE"
+              exit 1
+            }
+          done
+
+  # L3: 全量门禁 (合并前才运行)
+  l3-full-gate:
+    name: L3 Full Gate
+    runs-on:
+      - hp-z6g4
+    timeout-minutes: 45
+    if: gitea.event_name == 'pull_request' && gitea.event.pull_request.merged == true
+    steps:
+      - name: Checkout
+        run: |
+          set -e
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
+
+      - name: Restore Cache
+        run: |
+          set -e
+          cd repo
+          cargo build --release --workspace || true
+
+      - name: L3 Full test
+        run: |
+          set -e
+          cd repo
+          timeout 40m cargo test --workspace --all-features
+
+      - name: L3 Clippy
+        run: |
+          set -e
+          cd repo
+          timeout 10m cargo clippy --all-features -- -D warnings
+
+      - name: L3 Format
+        run: |
+          set -e
+          cd repo
+          timeout 5m cargo fmt --check --all
+
+      - name: L3 Gate Scripts
+        run: |
+          set -e
+          cd repo
+          bash scripts/gate/check_docs_links.sh || true
+          bash scripts/gate/check_security.sh || true

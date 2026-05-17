@@ -150,7 +150,7 @@ echo "━━━ 第二部分: 功能 Gate (G7-G12) ━━━"
 check "G7: HSM/KMS integration" "cargo test -p sqlrustgo-gmp --lib" "G7"
 
 # G8: MySQL Protocol
-check "G8: MySQL protocol" "cargo test -p sqlrustgo-mysql-server --test mysql_server_tests" "G8"
+check "G8: MySQL protocol" "SQLRUSTGO_SERVER_BIN=\"$PROJECT_ROOT/target/release/sqlrustgo-mysql-server\" cargo test -p sqlrustgo-mysql-server --test mysql_protocol_handshake_test" "G8"
 
 # G9: Window Functions
 check_test "G9: window_function_test" "cargo test --test window_function_test" "G9"
@@ -206,7 +206,8 @@ check_test "G-S3: long_run_stability" "cargo test --test long_run_stability_test
 check_test "G-S4: wal_integration" "cargo test --test wal_integration_test 2>&1" "G-S4"
 check_test "G-S5: network_tcp" "cargo test --test network_tcp_smoke_test 2>&1" "G-S5"
 check_test "G-S6: ssi_stress" "cargo test -p sqlrustgo-transaction --test ssi_stress_test 2>&1" "G-S6"
-check_test "G-S7: audit_trail" "cargo test -p sqlrustgo-executor --test audit_trail_test 2>&1" "G-S7"
+check_test "G-S7: audit_trail" "cargo test -p sqlrustgo-gmp --test gmp_audit_chain_verify_test 2>&1" "G-S7"
+check_test "G-S7b: audit_trail_new" "cargo test -p sqlrustgo-gmp --test audit_trail_test 2>&1" "G-S7"
 check_test "G-S8: integration_tests" "bash scripts/test/run_integration.sh --quick 2>&1" "G-S8"
 check_test "G-S9: sysbench" "bash scripts/gate/check_sysbench.sh ga 2>&1" "G-S9"
 check_test "G-S10: regression_check" "bash scripts/gate/check_regression.sh 2>&1" "G-S10"
