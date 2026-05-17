@@ -117,7 +117,6 @@ mod multiple_cte_tests {
     }
 
     #[test]
-    #[ignore = "mixed recursive/non-recursive CTE not yet supported - see Issue #1116"]
     fn test_recursive_and_non_recursive_cte() {
         let mut e = engine();
         e.execute("CREATE TABLE t (id INTEGER)").unwrap();
@@ -136,7 +135,6 @@ mod nested_cte_tests {
     use super::*;
 
     #[test]
-    #[ignore = "nested CTE execution not yet supported - see Issue #1116"]
     fn test_nested_cte_inner_first() {
         let mut e = engine();
         let result = e.execute(
