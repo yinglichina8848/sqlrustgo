@@ -1839,10 +1839,12 @@ fn execute_transaction_queries<S: Read + Write>(
                         _ => 2000,
                     };
                     make_err_packet(seq, code, "42000", &e.to_string()).write_to(stream)?;
+                    stream.flush()?;
                     return Err(e);
                 }
                 Err(_) => {
                     make_err_packet(seq, 2000, "HY000", "Internal error").write_to(stream)?;
+                    stream.flush()?;
                     return Err(MySqlError::Protocol("Internal error".into()));
                 }
             }
@@ -1851,10 +1853,12 @@ fn execute_transaction_queries<S: Read + Write>(
                 Ok((a, last_id)) => {
                     make_ok_packet(seq, a as u64, last_id.unwrap_or(0), status, 0)
                         .write_to(stream)?;
+                    stream.flush()?;
                     seq = seq.wrapping_add(1);
                 }
                 Err(e) => {
                     make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
+                    stream.flush()?;
                     return Err(e);
                 }
             }
@@ -2013,10 +2017,12 @@ fn do_command_loop<S: Read + Write>(
             packet_type::COM_QUIT => break,
             packet_type::COM_PING => {
                 make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
+                stream.flush()?;
                 seq = seq.wrapping_add(1);
             }
             packet_type::COM_INIT_DB => {
                 make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
+                stream.flush()?;
                 seq = seq.wrapping_add(1);
             }
             packet_type::COM_QUERY => {
@@ -2027,6 +2033,7 @@ fn do_command_loop<S: Read + Write>(
                 tracing::debug!("Query [{}]: {}", addr, q);
                 if q.is_empty() {
                     make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
+                    stream.flush()?;
                     seq = seq.wrapping_add(1);
                     continue;
                 }
@@ -2043,6 +2050,7 @@ fn do_command_loop<S: Read + Write>(
                                     &format!("Begin failed: {}", e),
                                 )
                                 .write_to(stream)?;
+                                stream.flush()?;
                                 seq = seq.wrapping_add(1);
                                 continue;
                             }
@@ -2057,6 +2065,7 @@ fn do_command_loop<S: Read + Write>(
                                     &format!("Commit failed: {}", e),
                                 )
                                 .write_to(stream)?;
+                                stream.flush()?;
                                 seq = seq.wrapping_add(1);
                                 continue;
                             }
@@ -2071,6 +2080,7 @@ fn do_command_loop<S: Read + Write>(
                                     &format!("Rollback failed: {}", e),
                                 )
                                 .write_to(stream)?;
+                                stream.flush()?;
                                 seq = seq.wrapping_add(1);
                                 continue;
                             }
@@ -2079,6 +2089,7 @@ fn do_command_loop<S: Read + Write>(
                         TransactionCommand::None => {}
                     }
                     make_ok_packet(seq, 0, 0, 0x0002, 0).write_to(stream)?;
+                    stream.flush()?;
                     seq = seq.wrapping_add(1);
                     continue;
                 }
@@ -2087,6 +2098,7 @@ fn do_command_loop<S: Read + Write>(
                         Ok(coordinator) => match coordinator.xa_recover_mysql_format() {
                             Ok(rows) => {
                                 seq = send_xa_recover_result_set(stream, &rows, seq, cap)?;
+                                stream.flush()?;
                             }
                             Err(e) => {
                                 make_err_packet(
@@ -2096,6 +2108,7 @@ fn do_command_loop<S: Read + Write>(
                                     &format!("XA recover error: {}", e),
                                 )
                                 .write_to(stream)?;
+                                stream.flush()?;
                                 seq = seq.wrapping_add(1);
                             }
                         },
@@ -2128,11 +2141,13 @@ fn do_command_loop<S: Read + Write>(
                                 _ => 2000,
                             };
                             make_err_packet(seq, code, "42000", &e.to_string()).write_to(stream)?;
+                            stream.flush()?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(_) => {
                             make_err_packet(seq, 2000, "HY000", "Internal error")
                                 .write_to(stream)?;
+                            stream.flush()?;
                             seq = seq.wrapping_add(1);
                         }
                     }
@@ -2141,10 +2156,12 @@ fn do_command_loop<S: Read + Write>(
                         Ok((a, last_id)) => {
                             make_ok_packet(seq, a as u64, last_id.unwrap_or(0), 0x0002, 0)
                                 .write_to(stream)?;
+                            stream.flush()?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(e) => {
                             make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
+                            stream.flush()?;
                             seq = seq.wrapping_add(1);
                         }
                     }
@@ -2180,12 +2197,14 @@ fn do_command_loop<S: Read + Write>(
                                 };
                                 make_err_packet(seq, code, "42000", &e.to_string())
                                     .write_to(stream)?;
+                                stream.flush()?;
                                 seq = seq.wrapping_add(1);
                                 break;
                             }
                             Err(_) => {
                                 make_err_packet(seq, 2000, "HY000", "Internal error")
                                     .write_to(stream)?;
+                                stream.flush()?;
                                 seq = seq.wrapping_add(1);
                                 break;
                             }
@@ -2195,11 +2214,13 @@ fn do_command_loop<S: Read + Write>(
                             Ok((a, last_id)) => {
                                 make_ok_packet(seq, a as u64, last_id.unwrap_or(0), 0x0002, 0)
                                     .write_to(stream)?;
+                                stream.flush()?;
                                 seq = seq.wrapping_add(1);
                             }
                             Err(e) => {
                                 make_err_packet(seq, 1064, "42000", &e.to_string())
                                     .write_to(stream)?;
+                                stream.flush()?;
                                 seq = seq.wrapping_add(1);
                                 break;
                             }
@@ -2324,11 +2345,13 @@ fn do_command_loop<S: Read + Write>(
                     param_count,
                     column_count
                 );
+                stream.flush()?;
             }
             packet_type::COM_STMT_EXECUTE => {
                 if payload.len() < 4 {
                     make_err_packet(seq, 1047, "HY000", "Malformed COM_STMT_EXECUTE")
                         .write_to(stream)?;
+                    stream.flush()?;
                     seq = seq.wrapping_add(1);
                     continue;
                 }
@@ -2340,6 +2363,7 @@ fn do_command_loop<S: Read + Write>(
                     None => {
                         make_err_packet(seq, 1243, "HY000", "Unknown statement handler")
                             .write_to(stream)?;
+                        stream.flush()?;
                         seq = seq.wrapping_add(1);
                         continue;
                     }
@@ -2384,11 +2408,13 @@ fn do_command_loop<S: Read + Write>(
                         }
                         Ok(Err(e)) => {
                             make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
+                            stream.flush()?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(_) => {
                             make_err_packet(seq, 2000, "HY000", "Internal error")
                                 .write_to(stream)?;
+                            stream.flush()?;
                             seq = seq.wrapping_add(1);
                         }
                     }
@@ -2402,10 +2428,12 @@ fn do_command_loop<S: Read + Write>(
                         Ok((a, last_id)) => {
                             make_ok_packet(seq, a as u64, last_id.unwrap_or(0), 0x0002, 0)
                                 .write_to(stream)?;
+                            stream.flush()?;
                             seq = seq.wrapping_add(1);
                         }
                         Err(e) => {
                             make_err_packet(seq, 1064, "42000", &e.to_string()).write_to(stream)?;
+                            stream.flush()?;
                             seq = seq.wrapping_add(1);
                         }
                     }
@@ -2420,6 +2448,7 @@ fn do_command_loop<S: Read + Write>(
             }
             _ => {
                 make_err_packet(seq, 1047, "HY000", "Unknown command").write_to(stream)?;
+                stream.flush()?;
                 seq = seq.wrapping_add(1);
             }
         }
@@ -2527,6 +2556,7 @@ fn handle_connection(
             }
             tracing::info!("Auth accepted, sending OK packet, seq=3");
             make_ok_packet(3, 0, 0, 0x0002, 0).write_to(&mut tls).ok();
+            tls.flush().ok();
             tracing::info!("Starting command loop, seq=4");
             let mut ps_manager = PreparedStatementManager::new();
             #[allow(deprecated)]
@@ -2585,6 +2615,7 @@ fn handle_connection(
     make_ok_packet(2, 0, 0, 0x0002, 0)
         .write_to(&mut &stream)
         .ok();
+    stream.flush().ok();
     tracing::info!("Starting command loop, seq=3");
     let mut ps_manager = PreparedStatementManager::new();
     #[allow(deprecated)]
