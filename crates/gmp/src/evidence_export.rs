@@ -171,3 +171,128 @@ pub fn verify_signature(data: &[u8], signature: &[u8], public_key: &[u8]) -> Res
 
     Ok(verifying_key.verify(data, &signature).is_ok())
 }
+
+pub struct PackageBuilder {
+    records: Vec<super::AuditChainRecord>,
+    evidence: Vec<super::EvidenceRecord>,
+    signer: Option<SignerEd25519>,
+    from_timestamp: i64,
+    to_timestamp: i64,
+}
+
+impl PackageBuilder {
+    pub fn new() -> Self {
+        Self {
+            records: Vec::new(),
+            evidence: Vec::new(),
+            signer: None,
+            from_timestamp: 0,
+            to_timestamp: 0,
+        }
+    }
+
+    pub fn with_records(mut self, records: Vec<super::AuditChainRecord>) -> Self {
+        self.records = records;
+        self
+    }
+
+    pub fn with_evidence(mut self, evidence: Vec<super::EvidenceRecord>) -> Self {
+        self.evidence = evidence;
+        self
+    }
+
+    pub fn with_timestamp_range(mut self, from: i64, to: i64) -> Self {
+        self.from_timestamp = from;
+        self.to_timestamp = to;
+        self
+    }
+
+    pub fn with_signer(mut self, signer: SignerEd25519) -> Self {
+        self.signer = Some(signer);
+        self
+    }
+
+    pub fn build(self, output_dir: &Path) -> Result<PackagePath, ExportError> {
+        let signer = self.signer.unwrap_or_else(SignerEd25519::new);
+        let public_key = signer.public_key();
+
+        std::fs::create_dir_all(output_dir)?;
+
+        let records_json = JsonExporter::export_records(&self.records)?;
+        let evidence_json = JsonExporter::export_evidence(&self.evidence)?;
+
+        let report_title = format!("GMP Compliance Report {} - {}", self.from_timestamp, self.to_timestamp);
+        let pdf_bytes = PdfExporter::generate_compliance_report(&report_title, &self.records, &self.evidence)?;
+
+        let manifest = PackageManifest {
+            version: "1.0.0".to_string(),
+            created_at: chrono::Utc::now().timestamp(),
+            from_timestamp: self.from_timestamp,
+            to_timestamp: self.to_timestamp,
+            algorithm: "Ed25519".to_string(),
+            files: vec![
+                FileEntry { filename: "records.json".to_string(), sha256: Self::sha256(&records_json) },
+                FileEntry { filename: "evidence.json".to_string(), sha256: Self::sha256(&evidence_json) },
+                FileEntry { filename: "report.pdf".to_string(), sha256: Self::sha256(&pdf_bytes) },
+            ],
+        };
+
+        let manifest_json = serde_json::to_vec_pretty(&manifest).map_err(ExportError::SerializationError)?;
+
+        let signed_data = [&manifest_json, &records_json, &evidence_json, &pdf_bytes].concat();
+        let signature = signer.sign(&signed_data);
+
+        std::fs::write(output_dir.join("manifest.json"), &manifest_json)?;
+        std::fs::write(output_dir.join("records.json"), &records_json)?;
+        std::fs::write(output_dir.join("evidence.json"), &evidence_json)?;
+        std::fs::write(output_dir.join("report.pdf"), &pdf_bytes)?;
+        std::fs::write(output_dir.join("signature.bin"), &signature)?;
+        std::fs::write(output_dir.join("public_key.bin"), &public_key)?;
+
+        Ok(PackagePath {
+            root: output_dir.to_path_buf(),
+            manifest: output_dir.join("manifest.json"),
+        })
+    }
+
+    fn sha256(data: &[u8]) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        data.hash(&mut hasher);
+        format!("{:016x}", hasher.finish())
+    }
+
+    pub fn verify(path: &Path) -> Result<VerificationReport, ExportError> {
+        let manifest_bytes = std::fs::read(path.join("manifest.json"))?;
+        let records_json = std::fs::read(path.join("records.json"))?;
+        let evidence_json = std::fs::read(path.join("evidence.json"))?;
+        let pdf_bytes = std::fs::read(path.join("report.pdf"))?;
+        let signature = std::fs::read(path.join("signature.bin"))?;
+        let public_key = std::fs::read(path.join("public_key.bin"))?;
+
+        let manifest: PackageManifest = serde_json::from_slice(&manifest_bytes).map_err(ExportError::SerializationError)?;
+
+        let signed_data = [&manifest_bytes, &records_json, &evidence_json, &pdf_bytes].concat();
+        let sig_valid = verify_signature(&signed_data, &signature, &public_key)?;
+
+        let manifest_valid = manifest.files.iter().all(|f| {
+            let file_data = std::fs::read(path.join(&f.filename)).unwrap_or_default();
+            Self::sha256(&file_data) == f.sha256
+        });
+
+        Ok(VerificationReport {
+            is_valid: sig_valid && manifest_valid,
+            manifest_valid,
+            files_valid: vec![manifest_valid; manifest.files.len()],
+            signatures_valid: vec![sig_valid],
+            errors: if sig_valid && manifest_valid { vec![] } else { vec!["Verification failed".to_string()] },
+        })
+    }
+}
+
+impl Default for PackageBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
