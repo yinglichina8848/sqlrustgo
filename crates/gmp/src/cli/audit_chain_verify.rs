@@ -170,15 +170,9 @@ pub fn recovery_action_to_string(
         sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::RecoverFromWal => {
             "RecoverFromWal".to_string()
         }
-        sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::ManualAudit => {
-            "ManualAudit".to_string()
-        }
-        sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::FreezeChain => {
-            "FreezeChain".to_string()
-        }
-        sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::NoRecovery => {
-            "NoRecovery".to_string()
-        }
+        sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::ManualAudit => "ManualAudit".to_string(),
+        sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::FreezeChain => "FreezeChain".to_string(),
+        sqlrustgo_gmp::audit_chain_tamper::RecoveryAction::NoRecovery => "NoRecovery".to_string(),
     }
 }
 
@@ -231,10 +225,9 @@ fn run_full_verify_extended(chain: &AuditChain) -> VerificationResults {
                 AuditChainError::HashMismatch { .. } => {
                     (None, "HashMismatch: chain broken".to_string())
                 }
-                AuditChainError::ChecksumInvalid { seq } => (
-                    Some(*seq),
-                    format!("ChecksumInvalid at seq {}", seq),
-                ),
+                AuditChainError::ChecksumInvalid { seq } => {
+                    (Some(*seq), format!("ChecksumInvalid at seq {}", seq))
+                }
                 AuditChainError::EmptyChain => (None, "EmptyChain".to_string()),
             };
             return VerificationResults {
@@ -285,9 +278,7 @@ fn run_full_verify_extended(chain: &AuditChain) -> VerificationResults {
                 seq: entry.seq,
                 reason: format!(
                     "Sequence gap: expected seq {} at position {}, found seq {}",
-                    expected_seq,
-                    i,
-                    entry.seq
+                    expected_seq, i, entry.seq
                 ),
             });
         }
@@ -487,7 +478,9 @@ pub fn load_chain_from_path(path: &PathBuf) -> Result<AuditChain, String> {
 
     let mut chain = AuditChain::new();
     for entry in entries {
-        chain.append(entry).map_err(|e| format!("Failed to append entry: {:?}", e))?;
+        chain
+            .append(entry)
+            .map_err(|e| format!("Failed to append entry: {:?}", e))?;
     }
 
     Ok(chain)
@@ -549,8 +542,7 @@ pub fn write_report(
 
     match output_path {
         Some(path) => {
-            std::fs::write(path, &json)
-                .map_err(|e| format!("Failed to write report: {}", e))?;
+            std::fs::write(path, &json).map_err(|e| format!("Failed to write report: {}", e))?;
         }
         None => {
             println!("{}", json);

@@ -1352,7 +1352,23 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         columns: &[String],
     ) -> SqlResult<()> {
         let rows = match subquery {
-            Statement::Select(s) => self.execute_select(s)?.rows,
+            Statement::Select(s) => {
+                if s.table.is_empty() {
+                    let row: Vec<Value> = s
+                        .columns
+                        .iter()
+                        .filter_map(|col| col.expression.as_ref())
+                        .map(expression_to_value)
+                        .collect();
+                    if row.is_empty() {
+                        vec![vec![]]
+                    } else {
+                        vec![row]
+                    }
+                } else {
+                    self.execute_select(s)?.rows
+                }
+            }
             Statement::Union(u) => {
                 let left_rows = match u.left.as_ref() {
                     Statement::Select(s) => self.execute_select(s)?.rows,
@@ -1373,6 +1389,50 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 let mut combined = left_rows;
                 combined.extend(right_rows);
                 combined
+            }
+            Statement::WithSelect(ws) => {
+                if let Some(ref with_clause) = ws.with_clause {
+                    let mut inner_context = CteContext::default();
+                    for cte in &with_clause.ctes {
+                        let inner_temp_name = inner_context.temp_table_name(&cte.name);
+                        self.materialize_cte(&cte.subquery, &inner_temp_name, &cte.columns)?;
+                        inner_context
+                            .cte_tables
+                            .insert(cte.name.clone(), inner_temp_name.clone());
+                        inner_context.temp_tables.push(inner_temp_name);
+                    }
+                    match ws.select.as_ref() {
+                        Statement::Select(s) => {
+                            let mut select_with_cte_names = s.clone();
+                            for cte in &with_clause.ctes {
+                                if let Some(temp_name) = inner_context.cte_tables.get(&cte.name) {
+                                    if select_with_cte_names.table == cte.name {
+                                        select_with_cte_names.table = temp_name.clone();
+                                    }
+                                    if let Some(ref mut from) = select_with_cte_names.from {
+                                        for table in &mut from.tables {
+                                            if table.name == cte.name {
+                                                table.name = temp_name.clone();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            let result = self.execute_select(&select_with_cte_names)?;
+                            self.cleanup_cte_tables(&inner_context);
+                            result.rows
+                        }
+                        _ => {
+                            return Err(SqlError::ExecutionError(
+                                "Nested CTE select must be SELECT".to_string(),
+                            ));
+                        }
+                    }
+                } else {
+                    return Err(SqlError::ExecutionError(
+                        "CTE subquery must be SELECT or UNION".to_string(),
+                    ));
+                }
             }
             _ => {
                 return Err(SqlError::ExecutionError(
