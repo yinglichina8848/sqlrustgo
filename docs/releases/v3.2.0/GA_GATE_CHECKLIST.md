@@ -57,10 +57,12 @@
 >     -p sqlrustgo-catalog \
 >     --lib
 > ```
+>
+> **SSOT**: 见 `COVERAGE_SSOT.md` 实测数据
 
 | 检查项 | 命令 | 期望结果 | 实际结果 | 状态 |
 |--------|------|----------|----------|------|
-| L1 覆盖率 | `cargo llvm-cov test L1_CRATES --lib` | ≥85% | 85.81% | ✅ |
+| L1 覆盖率 | `cargo llvm-cov test L1_CRATES --lib` | ≥85% | 68.8% (实测) | ❌ |
 
 ---
 
@@ -144,7 +146,7 @@ G1:  Build ................... ✅ PASS
 G2:  Test .................... ✅ PASS
 G3:  Clippy .................. ✅ PASS
 G4:  Format ................... ✅ PASS
-G5:  Coverage (≥85%) ......... ✅ PASS (85.81%)
+G5:  Coverage (≥85%) ......... ❌ FAIL (68.8%)
 G6:  Security Audit .......... ⏭ SKIP (network)
 G7:  SQL Compat (≥85%) ...... ✅ PASS (100%)
 G8:  TPC-H SF=1 (22/22) ..... ⏳ PENDING (SF=0.1 data)

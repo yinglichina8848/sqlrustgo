@@ -20,7 +20,7 @@ v3.2.0 GA Gate 通过率 41/46 (89.1%)，有 5 项未通过，其中 2 项为 GA
 || 🔴 P0 | #1201 | MySQL Protocol 握手失败 | GA 门禁失败 | v3.3.0 RC |
 | 🟡 P1 | #1198 | TPC-H SF=1 数据缺失 | 无法验证 | v3.3.0 RC |
 | 🟡 P2 | #1198 | 72h 稳定性测试未完成 | 稳定性未确认 | v3.3.0 GA |
-|| 🟡 P3 | #1202 | Coverage 数据矛盾（85.81% vs 68.8%） | 测量标准不统一 | v3.3.0 Alpha |
+|| 🟡 P3 | #1202 | Coverage 数据矛盾（85.81% vs 68.8%） | ✅ 已建立 SSOT (COVERAGE_SSOT.md) | v3.3.0 Alpha |
 
 ---
 
@@ -181,36 +181,42 @@ bash scripts/gate/check_tpch.sh --sf1
 
 ## 四、🟡 P3 遗留项
 
-### 4.1 L-005: Coverage 数据矛盾
+### 4.1 L-005: Coverage 数据矛盾 ✅ 已修复
 
 | 属性 | 值 |
 |------|-----|
-| **Issue** | (待建) |
+| **Issue** | #1202 |
 | **标签** | `P3`, `v3.3.0` |
+| **状态** | ✅ 已建立 SSOT |
 
 #### 问题描述
 
 三个文档对同一测量给出三个不同数字：
 
-| 文档 | 报告数值 | 日期 |
+| 文档 | 原报告数值 | 日期 |
 |------|---------|------|
-| GA_GATE_CHECKLIST.md | 85.81% | 2026-05-18 |
-| RC_TO_GA_FINAL_REPORT.md | 68.8% | 2026-05-17 |
-| GA_READINESS_GAP_ANALYSIS.md | ⏳ 测量中 | 2026-05-17 |
+| GA_GATE_CHECKLIST.md | 85.81% | 2026-05-18 (错误) |
+| RC_TO_GA_FINAL_REPORT.md | 68.8% | 2026-05-17 (正确) |
+| GA_READINESS_GAP_ANALYSIS.md | ⏳ 测量中 | 2026-05-17 (未完成) |
 
 #### 根因
 
-可能的原因：
-1. **测量范围不同**: L1_CRATES vs 全量 crate
-2. **测量时间点不同**: RC Gate vs GA Gate
-3. **llvm-cov 版本差异**: 不同版本结果略有差异
-4. **数据书写错误**: GA_GATE_CHECKLIST.md 填错了数字
+1. GA_GATE_CHECKLIST.md 填入了 CI 声称值而非实测值
+2. GA_READINESS_GAP_ANALYSIS.md 未完成测量
+3. 缺少 SSOT 文档统一测量标准
 
-#### 整改方案
+#### 整改方案 (已实施)
 
-1. 统一覆盖率测量标准（明确 L1_CRATES 定义）
-2. 在 `gate_spec_v320.md` 中明确覆盖率测量命令
-3. 建立覆盖率基准快照（`coverage_baseline_v320.json`）
+1. ✅ 创建 `COVERAGE_SSOT.md` - 统一覆盖率测量标准
+2. ✅ 更新 `GA_GATE_CHECKLIST.md` - 修正为 68.8% 实测值
+3. ✅ 更新 `GA_READINESS_GAP_ANALYSIS.md` - 明确 68.8%
+4. ✅ 更新 `LEGACY_ISSUES.md` - 记录修复状态
+
+#### 验收标准
+
+- [x] 统一测量工具（cargo llvm-cov）- 见 GATE_SPEC_MASTER.md
+- [x] 明确测量范围（L1_CRATES 8个crate）- 见 COVERAGE_SSOT.md
+- [x] SSOT 文档建立，数值与 gate_spec 对齐 - 见 COVERAGE_SSOT.md
 
 ---
 
