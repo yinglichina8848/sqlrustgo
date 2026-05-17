@@ -916,18 +916,16 @@ impl StoredProcExecutor {
             sqlrustgo_parser::Statement::WithSelect(with_select) => {
                 if let Some(ref with_clause) = with_select.with_clause {
                     for cte in &with_clause.ctes {
-                        let cte_records = if with_clause.recursive {
-                            if let sqlrustgo_parser::Statement::Union(union_stmt) = &*cte.subquery {
-                                if union_stmt.union_all {
-                                    self.execute_recursive_cte(
-                                        &union_stmt.left,
-                                        &union_stmt.right,
-                                        &cte.name,
-                                        ctx,
-                                    )?
-                                } else {
-                                    self.execute_cte_subquery(&cte.subquery, ctx)?
-                                }
+                        let cte_records = if let sqlrustgo_parser::Statement::Union(union_stmt) =
+                            &*cte.subquery
+                        {
+                            if union_stmt.union_all {
+                                self.execute_recursive_cte(
+                                    &union_stmt.left,
+                                    &union_stmt.right,
+                                    &cte.name,
+                                    ctx,
+                                )?
                             } else {
                                 self.execute_cte_subquery(&cte.subquery, ctx)?
                             }
@@ -1915,6 +1913,54 @@ impl StoredProcExecutor {
         match statement {
             sqlrustgo_parser::Statement::Select(select) => {
                 let table_name = &select.first_table();
+
+                if table_name.is_empty() {
+                    let row: Vec<Value> = select
+                        .columns
+                        .iter()
+                        .filter_map(|col| col.expression.as_ref())
+                        .map(|expr| self.expression_to_value(expr, ctx))
+                        .collect();
+                    if row.is_empty() {
+                        return Ok(vec![vec![]]);
+                    }
+                    if let Some(ref where_expr) = select.where_clause {
+                        let where_val = self.expression_to_value(where_expr, ctx);
+                        if let Value::Boolean(b) = where_val {
+                            if b {
+                                return Ok(vec![row]);
+                            } else {
+                                return Ok(vec![]);
+                            }
+                        }
+                        if where_val != Value::Null {
+                            return Ok(vec![row]);
+                        }
+                        return Ok(vec![]);
+                    }
+                    return Ok(vec![row]);
+                }
+
+                if let Some(cte_records) = ctx.cte_tables.get(table_name) {
+                    let records = cte_records.clone();
+                    if let Some(ref where_expr) = select.where_clause {
+                        let filtered: Vec<Vec<Value>> = records
+                            .into_iter()
+                            .filter(|_row| {
+                                let where_val = self.expression_to_value(where_expr, ctx);
+                                if let Value::Boolean(b) = where_val {
+                                    b
+                                } else {
+                                    where_val != Value::Null
+                                }
+                            })
+                            .collect();
+                        return Ok(filtered);
+                    } else {
+                        return Ok(records);
+                    }
+                }
+
                 let storage = self.storage.read().unwrap();
                 let records = storage
                     .scan(table_name)
