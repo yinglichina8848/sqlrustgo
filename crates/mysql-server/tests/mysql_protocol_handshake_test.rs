@@ -67,7 +67,9 @@ fn test_mysql_protocol_handshake() {
         .ip_or_hostname(Some("127.0.0.1"))
         .tcp_port(port)
         .user(Some("root"))
-        .pass(Some(""));
+        .pass(Some(""))
+        .prefer_socket(false)
+        .ssl_opts(mysql::SslOpts::default());
 
     let conn_result = mysql::Conn::new(opts);
 
@@ -98,7 +100,9 @@ fn test_mysql_protocol_multiple_queries() {
         .ip_or_hostname(Some("127.0.0.1"))
         .tcp_port(port)
         .user(Some("root"))
-        .pass(Some(""));
+        .pass(Some(""))
+        .prefer_socket(false)
+        .ssl_opts(mysql::SslOpts::default());
 
     let mut conn = mysql::Conn::new(opts).expect("Connection failed");
     let _ = server.kill();
@@ -125,7 +129,9 @@ fn test_mysql_protocol_error_handling() {
         .ip_or_hostname(Some("127.0.0.1"))
         .tcp_port(port)
         .user(Some("root"))
-        .pass(Some(""));
+        .pass(Some(""))
+        .prefer_socket(false)
+        .ssl_opts(mysql::SslOpts::default());
 
     let mut conn = mysql::Conn::new(opts).expect("Connection failed");
     let _ = server.kill();

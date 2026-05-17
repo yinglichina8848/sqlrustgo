@@ -5299,6 +5299,7 @@ dependencies = [
  "byteorder",
  "clap 4.6.1",
  "crossbeam-channel",
+ "mio 0.8.11",
  "mysql",
  "rand 0.8.6",
  "rcgen",
