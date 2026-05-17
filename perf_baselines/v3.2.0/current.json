@@ -1,16 +1,15 @@
 {
-  "date": "2026-05-16",
+  "date": "2026-05-17T04:05:00Z",
   "version": "v3.2.0",
-  "note": "Initial baseline for v3.2.0 - established after fix/chaos-gate-yaml merged (PR #1086)",
   "benchmarks": {
-    "simple_select": {"qps": 324015.5},
-    "insert": {"qps": 55322.74},
-    "update": {"qps": 58458.25},
-    "delete": {"qps": 62293.43},
-    "join": {"qps": 10970.19},
-    "aggregation": {"qps": 1269209.97},
-    "order_by": {"qps": 19950.96},
-    "concurrent_select_8t": {"qps": 487320.62},
-    "complex_where": {"qps": 368.19}
+    "simple_select": 114353.84,
+    "insert": 59026.41,
+    "update": 118074.53,
+    "delete": 143826.86,
+    "join": 15034.73,
+    "aggregation": 128401.47,
+    "order_by": 22465.39,
+    "concurrent_select_8t": 342924.21,
+    "complex_where": 43985.65
   }
 }

@@ -67,6 +67,7 @@ pub struct ExecutionEngine<S: StorageEngine> {
     query_cache: Arc<RwLock<QueryCache>>,
     cache_config: QueryCacheConfig,
     workflow_engine: WorkflowEngine,
+    prepared_inserts: HashMap<String, InsertStatement>,
 }
 
 /// Execution statistics for CBO
@@ -187,6 +188,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: config.cache_config,
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -210,6 +212,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -233,6 +236,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -252,6 +256,7 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -549,7 +554,13 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 }
                 tables
             }
-            Statement::WithSelect(ws) => vec![ws.select.table.clone()],
+            Statement::WithSelect(ws) => {
+                if let Statement::Select(s) = ws.select.as_ref() {
+                    vec![s.table.clone()]
+                } else {
+                    vec![]
+                }
+            }
             _ => vec![],
         }
     }
@@ -746,7 +757,15 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             Statement::AlterTable(ref alter) => self.execute_alter_table(alter),
             Statement::Explain(ref explain) => self.execute_explain(explain),
             Statement::WithSelect(ref ws) => match &ws.with_clause {
-                None => self.execute_select(&ws.select),
+                None => {
+                    if let Statement::Select(s) = ws.select.as_ref() {
+                        self.execute_select(s)
+                    } else {
+                        Err(SqlError::ExecutionError(
+                            "WithSelect without with_clause must have SELECT".to_string(),
+                        ))
+                    }
+                }
                 Some(wc) if wc.recursive => {
                     let catalog = if let Some(ref catalog_guard) = self.catalog {
                         catalog_guard.read().unwrap().clone()
@@ -758,7 +777,26 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                         .execute_with_cte(&sqlrustgo_parser::Statement::WithSelect(ws.clone()))
                         .map_err(SqlError::ExecutionError)
                 }
-                Some(wc) => self.execute_non_recursive_cte(ws),
+                Some(wc) => {
+                    let has_recursive = wc
+                        .ctes
+                        .iter()
+                        .any(|c| matches!(c.subquery.as_ref(), Statement::Union(_)));
+                    if has_recursive {
+                        let catalog = if let Some(ref catalog_guard) = self.catalog {
+                            catalog_guard.read().unwrap().clone()
+                        } else {
+                            sqlrustgo_catalog::Catalog::new("cte_catalog".to_string())
+                        };
+                        let executor =
+                            StoredProcExecutor::new(Arc::new(catalog), self.storage.clone());
+                        executor
+                            .execute_with_cte(&sqlrustgo_parser::Statement::WithSelect(ws.clone()))
+                            .map_err(SqlError::ExecutionError)
+                    } else {
+                        self.execute_non_recursive_cte(ws)
+                    }
+                }
             },
             Statement::Check(ref check) => self.execute_check(check),
             Statement::Optimize(ref opt) => self.execute_optimize(opt),
@@ -1109,27 +1147,93 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
             cte_context.temp_tables.push(temp_table_name);
         }
 
-        let mut select_with_cte_names = ws.select.clone();
-        for cte in &with_clause.ctes {
-            if let Some(temp_name) = cte_context.cte_tables.get(&cte.name) {
-                if select_with_cte_names.table == cte.name {
-                    select_with_cte_names.table = temp_name.clone();
-                }
-                if let Some(ref mut from) = select_with_cte_names.from {
-                    for table in &mut from.tables {
-                        if table.name == cte.name {
-                            table.name = temp_name.clone();
+        match ws.select.as_ref() {
+            Statement::Select(select) => {
+                let mut select_with_cte_names = select.clone();
+                for cte in &with_clause.ctes {
+                    if let Some(temp_name) = cte_context.cte_tables.get(&cte.name) {
+                        if select_with_cte_names.table == cte.name {
+                            select_with_cte_names.table = temp_name.clone();
+                        }
+                        if let Some(ref mut from) = select_with_cte_names.from {
+                            for table in &mut from.tables {
+                                if table.name == cte.name {
+                                    table.name = temp_name.clone();
+                                }
+                            }
                         }
                     }
                 }
+                let result = self.execute_select(&select_with_cte_names);
+                self.cleanup_cte_tables(&cte_context);
+                result
             }
+            Statement::Union(u) => {
+                let left_result = if let Statement::Select(left_select) = u.left.as_ref() {
+                    let mut select_with_cte_names = left_select.clone();
+                    for cte in &with_clause.ctes {
+                        if let Some(temp_name) = cte_context.cte_tables.get(&cte.name) {
+                            if select_with_cte_names.table == cte.name {
+                                select_with_cte_names.table = temp_name.clone();
+                            }
+                            if let Some(ref mut from) = select_with_cte_names.from {
+                                for table in &mut from.tables {
+                                    if table.name == cte.name {
+                                        table.name = temp_name.clone();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    self.execute_select(&select_with_cte_names)?
+                } else {
+                    return Err(SqlError::ExecutionError(
+                        "Union left side must be SELECT".to_string(),
+                    ));
+                };
+
+                let right_result = if let Statement::Select(right_select) = u.right.as_ref() {
+                    let mut select_with_cte_names = right_select.clone();
+                    for cte in &with_clause.ctes {
+                        if let Some(temp_name) = cte_context.cte_tables.get(&cte.name) {
+                            if select_with_cte_names.table == cte.name {
+                                select_with_cte_names.table = temp_name.clone();
+                            }
+                            if let Some(ref mut from) = select_with_cte_names.from {
+                                for table in &mut from.tables {
+                                    if table.name == cte.name {
+                                        table.name = temp_name.clone();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    self.execute_select(&select_with_cte_names)?
+                } else {
+                    return Err(SqlError::ExecutionError(
+                        "Union right side must be SELECT".to_string(),
+                    ));
+                };
+
+                let combined = if u.union_all {
+                    let mut rows = left_result.rows;
+                    rows.extend(right_result.rows);
+                    rows
+                } else {
+                    let mut rows = left_result.rows;
+                    rows.extend(right_result.rows);
+                    rows.sort();
+                    rows.dedup();
+                    rows
+                };
+
+                self.cleanup_cte_tables(&cte_context);
+                Ok(ExecutorResult::new(combined.clone(), combined.len()))
+            }
+            _ => Err(SqlError::ExecutionError(
+                "CTE main select must be SELECT or UNION".to_string(),
+            )),
         }
-
-        let result = self.execute_select(&select_with_cte_names);
-
-        self.cleanup_cte_tables(&cte_context);
-
-        result
     }
 
     /// Execute recursive CTE using iterative approach
@@ -1248,7 +1352,23 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         columns: &[String],
     ) -> SqlResult<()> {
         let rows = match subquery {
-            Statement::Select(s) => self.execute_select(s)?.rows,
+            Statement::Select(s) => {
+                if s.table.is_empty() {
+                    let row: Vec<Value> = s
+                        .columns
+                        .iter()
+                        .filter_map(|col| col.expression.as_ref())
+                        .map(expression_to_value)
+                        .collect();
+                    if row.is_empty() {
+                        vec![vec![]]
+                    } else {
+                        vec![row]
+                    }
+                } else {
+                    self.execute_select(s)?.rows
+                }
+            }
             Statement::Union(u) => {
                 let left_rows = match u.left.as_ref() {
                     Statement::Select(s) => self.execute_select(s)?.rows,
@@ -1269,6 +1389,50 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
                 let mut combined = left_rows;
                 combined.extend(right_rows);
                 combined
+            }
+            Statement::WithSelect(ws) => {
+                if let Some(ref with_clause) = ws.with_clause {
+                    let mut inner_context = CteContext::default();
+                    for cte in &with_clause.ctes {
+                        let inner_temp_name = inner_context.temp_table_name(&cte.name);
+                        self.materialize_cte(&cte.subquery, &inner_temp_name, &cte.columns)?;
+                        inner_context
+                            .cte_tables
+                            .insert(cte.name.clone(), inner_temp_name.clone());
+                        inner_context.temp_tables.push(inner_temp_name);
+                    }
+                    match ws.select.as_ref() {
+                        Statement::Select(s) => {
+                            let mut select_with_cte_names = s.clone();
+                            for cte in &with_clause.ctes {
+                                if let Some(temp_name) = inner_context.cte_tables.get(&cte.name) {
+                                    if select_with_cte_names.table == cte.name {
+                                        select_with_cte_names.table = temp_name.clone();
+                                    }
+                                    if let Some(ref mut from) = select_with_cte_names.from {
+                                        for table in &mut from.tables {
+                                            if table.name == cte.name {
+                                                table.name = temp_name.clone();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            let result = self.execute_select(&select_with_cte_names)?;
+                            self.cleanup_cte_tables(&inner_context);
+                            result.rows
+                        }
+                        _ => {
+                            return Err(SqlError::ExecutionError(
+                                "Nested CTE select must be SELECT".to_string(),
+                            ));
+                        }
+                    }
+                } else {
+                    return Err(SqlError::ExecutionError(
+                        "CTE subquery must be SELECT or UNION".to_string(),
+                    ));
+                }
             }
             _ => {
                 return Err(SqlError::ExecutionError(
@@ -2486,10 +2650,127 @@ impl<S: StorageEngine + 'static> ExecutionEngine<S> {
         Ok(ExecutorResult::new(vec![], affected_rows).with_last_insert_id(first_auto_inc))
     }
 
-    /// Check if a new record matches an existing row based on primary key or unique constraints
-    /// Returns true if the new record matches the existing record on ALL columns of:
-    /// - The primary key, OR
-    /// - Any unique constraint
+    pub fn execute_prepared_insert(
+        &mut self,
+        sql: &str,
+        params: Vec<Value>,
+    ) -> SqlResult<ExecutorResult> {
+        if !self.prepared_inserts.contains_key(sql) {
+            let statement = parse(sql).map_err(|e| SqlError::ParseError(e.to_string()))?;
+            if let Statement::Insert(insert) = statement {
+                self.prepared_inserts.insert(sql.to_string(), insert);
+            } else {
+                return Err("Not an INSERT statement".into());
+            }
+        }
+        let insert = self.prepared_inserts.get(sql).unwrap().clone();
+
+        let can_use_fast = !insert.is_replace
+            && insert.on_duplicate_key_update.is_none()
+            && insert.select.is_none();
+
+        if can_use_fast {
+            let table_name = &insert.table;
+            let columns = if insert.columns.is_empty() {
+                None
+            } else {
+                Some(&insert.columns)
+            };
+            let num_cols = if let Some(cols) = columns {
+                cols.len()
+            } else {
+                0
+            };
+
+            let table_info = {
+                let storage = self.storage.read().unwrap();
+                storage.get_table_info(table_name)?.clone()
+            };
+
+            let actual_num_cols = if num_cols == 0 {
+                table_info.columns.len()
+            } else {
+                num_cols
+            };
+
+            let has_constraints =
+                !table_info.foreign_keys.is_empty() || !table_info.check_constraints.is_empty();
+
+            let trigger_executor = TriggerExecutor::new(self.storage.clone());
+            let has_triggers = !trigger_executor
+                .get_triggers_for_operation(
+                    table_name,
+                    ExecTriggerTiming::Before,
+                    ExecTriggerEvent::Insert,
+                )
+                .is_empty()
+                || !trigger_executor
+                    .get_triggers_for_operation(
+                        table_name,
+                        ExecTriggerTiming::After,
+                        ExecTriggerEvent::Insert,
+                    )
+                    .is_empty();
+
+            if !has_constraints && !has_triggers {
+                let mut records: Vec<Vec<Value>> = Vec::with_capacity(insert.values.len());
+                for row_exprs in &insert.values {
+                    let mut record = Vec::with_capacity(actual_num_cols);
+                    for col_idx in 0..actual_num_cols {
+                        let value_idx = if let Some(cols) = columns {
+                            cols.iter()
+                                .position(|c| {
+                                    table_info.columns.iter().position(|tc| &tc.name == c)
+                                        == Some(col_idx)
+                                })
+                                .unwrap_or(col_idx)
+                        } else {
+                            col_idx
+                        };
+                        if let Some(expr) = row_exprs.get(value_idx) {
+                            if let Some(param_idx) = self.find_param_index(expr, params.len()) {
+                                record.push(params.get(param_idx).cloned().unwrap_or(Value::Null));
+                            } else {
+                                record.push(expression_to_value(expr));
+                            }
+                        } else {
+                            record.push(Value::Null);
+                        }
+                    }
+                    records.push(record);
+                }
+
+                let count = records.len();
+                {
+                    let mut storage = self.storage.write().unwrap();
+                    storage.insert(table_name, records)?;
+                }
+
+                self.query_cache
+                    .write()
+                    .unwrap()
+                    .invalidate_table(table_name);
+
+                return Ok(ExecutorResult::new(vec![], count));
+            }
+        }
+
+        self.execute_insert(&insert)
+    }
+
+    fn find_param_index(
+        &self,
+        expr: &sqlrustgo_parser::Expression,
+        _param_count: usize,
+    ) -> Option<usize> {
+        match expr {
+            sqlrustgo_parser::Expression::Literal(s) => {
+                s.strip_prefix('$').and_then(|v| v.parse().ok())
+            }
+            _ => None,
+        }
+    }
+
     fn record_matches_unique_key(
         &self,
         existing: &[Value],
@@ -4584,6 +4865,7 @@ impl ExecutionEngine<MemoryStorage> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -4603,6 +4885,7 @@ impl ExecutionEngine<MemoryStorage> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 
@@ -4622,6 +4905,7 @@ impl ExecutionEngine<MemoryStorage> {
             query_cache: Arc::new(RwLock::new(QueryCache::new(QueryCacheConfig::default()))),
             cache_config: QueryCacheConfig::default(),
             workflow_engine: WorkflowEngine::new(),
+            prepared_inserts: HashMap::new(),
         }
     }
 }

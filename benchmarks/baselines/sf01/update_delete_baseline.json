@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-05-18T00:00:00+00:00",
+  "version": "3.2.0",
+  "workload": "update_delete_micro",
+  "config": {
+    "rows": 1000,
+    "iterations": 1000,
+    "mode": "release"
+  },
+  "metrics": {
+    "update_indexed_us_per_op": 4.49,
+    "update_all_us_per_op": 11.41,
+    "delete_indexed_us_per_op": 0.04,
+    "delete_all_us_per_op": 0.25,
+    "note": "Storage layer only - no protocol/transaction overhead"
+  },
+  "bounds": {
+    "update_indexed_p99_us": 10.0,
+    "update_all_p99_us": 25.0,
+    "delete_indexed_p99_us": 0.5,
+    "delete_all_p99_us": 1.0,
+    "note": "Regression threshold - 2x baseline triggers alert"
+  }
+}

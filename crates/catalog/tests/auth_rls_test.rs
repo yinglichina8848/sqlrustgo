@@ -22,6 +22,12 @@ fn test_rls_multiple_tables() {
     rls.add_policy(1, "orders", "region = '华北'");
     rls.add_policy(1, "products", "category = '电子产品'");
 
-    assert_eq!(rls.get_predicate(1, "orders"), Some("region = '华北'".to_string()));
-    assert_eq!(rls.get_predicate(1, "products"), Some("category = '电子产品'".to_string()));
+    assert_eq!(
+        rls.get_predicate(1, "orders"),
+        Some("region = '华北'".to_string())
+    );
+    assert_eq!(
+        rls.get_predicate(1, "products"),
+        Some("category = '电子产品'".to_string())
+    );
 }

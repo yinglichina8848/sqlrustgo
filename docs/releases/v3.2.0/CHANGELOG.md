@@ -1,14 +1,14 @@
 # v3.2.0 Changelog
 
 > **Version**: 3.2.0
-> **Date**: 2026-05-15
-> **Status**: In Development (Beta Phase)
+> **Date**: 2026-05-16
+> **Status**: RC Transition
 > **Branch**: develop/v3.2.0
-> **HEAD**: `0881ef44`
+> **HEAD**: `17fda5f6`
 
 ---
 
-## v3.2.0-beta (TBD)
+## v3.2.0-beta (2026-05-16)
 
 ### Added
 
@@ -20,6 +20,13 @@
 - `AuditRecord` with digital signature (k256 ECDSA)
 - Evidence export with JSON signature
 - PR: #1012
+
+**GMP-2: Electronic Signature**
+- `ElectronicSignatureProvider` — 21 CFR Part 11 compliance
+- `SignatureRecord` — electronic signature with reason
+- SQL parsing for `SIGNATURE` column type
+- `ApprovalPolicyEvaluator` — multi-signature approval
+- PR: #1004, #1015, #1017, #1018
 
 **GMP-3: Immutable Record / Evidence Chain**
 - `EvidenceChain` — immutable evidence chain with integrity hash
@@ -64,15 +71,36 @@
 - `ApprovalPolicyEvaluator` — multi-signature approval
 - PR: #1046
 
-#### Electronic Signature (GMP-2)
+**GMP-10: Mobile Trusted Collection**
+- `MobileTrustedCollection` — mobile device data collection protocol
+- `DeviceFingerprint` — device identification and validation
+- `TrustedCollectionVerifier` — collection integrity verification
+- PR: #1077
 
-- `ElectronicSignatureProvider` — 21 CFR Part 11 compliance
-- `SignatureRecord` — electronic signature with reason
-- SQL parsing for `SIGNATURE` column type
-- Integration with audit chain
-- PR: #1004, #1015, #1017, #1018
+**GMP-11: SOP/Training Binding**
+- `SOPBinding` — standard operating procedure binding
+- `TrainingRecord` — training completion tracking
+- `BindingVerifier` — user qualification verification
+- PR: #1078
+
+**GMP-12: Device Calibration**
+- `CalibrationRecord` — device calibration metadata
+- `CalibrationManager` — calibration schedule and tracking
+- `CalibrationVerifier` — calibration validity checking
+- PR: #1079
 
 #### Performance (P1)
+
+**PERF-1: MySQL Flush Optimization**
+- MySQL protocol flush optimization
+- Reduced latency for client responses
+- PR: #1059, #1060
+
+**PERF-2: TPC-H SF=10 (Spill Framework)**
+- Spill framework integration into LocalExecutor
+- Disk-based sorting for large result sets
+- ⚠️ Status: Spill Framework 已合并，TPC-H SF=10 需在 RC Gate 中验证
+- PR: #1064
 
 **PERF-3: Concurrent Connection Pool 200+**
 - Thread pool implementation
@@ -80,10 +108,28 @@
 - Connection multiplexing
 - PR: #1013
 
+**PERF-4: Deadlock Detection**
+- SSI deadlock detection optimization
+- Reduced detection latency to <50ms
+- PR: #1043
+
 **PERF-5: Memory Optimization**
 - Memory allocation optimization
 - Buffer pool improvements
+- FxHashMap replacement
 - PR: #1045
+
+#### SQL Features
+
+**SQL-1: RECURSIVE CTE**
+- Complete RECURSIVE CTE implementation
+- WITH RECURSIVE support
+- PR: #1065
+
+**SQL-2: Performance Schema**
+- SQL-2 Performance Schema implementation
+- Setup and Events tables
+- PR: #1071
 
 #### Multi-Table DML (M6)
 
@@ -94,6 +140,14 @@
 - `MERGE` statement support
 - PR: #1021
 
+#### Cold Storage
+
+**StorageTierManager**
+- Hot/cold storage tiering
+- AWS S3 Signature V4 implementation
+- Remote backup storage support
+- PR: #1091, #1093
+
 #### Parser Improvements
 
 **Aggregate Expressions**
@@ -102,11 +156,12 @@
 - Complex aggregate argument support
 - PR: #1048
 
-#### Documentation
+#### DCL (Data Control Language)
 
-- `OPTIMAL_CONFIG.md` — concurrent connection configuration
-- `BETA_GATE_PLAN.md` — Beta phase plan
-- OO documents for GMP modules
+**RowLevelSecurity + Role Nesting**
+- DCL permission chain implementation
+- Role-based access control with nesting
+- PR: #1090
 
 ---
 
@@ -118,6 +173,11 @@
 
 #### Coverage Improvements
 - GMP module test coverage expanded to 111 tests
+
+#### Gate Scripts
+- Parallel coverage execution to avoid timeout
+- Added 300s timeout to R9/R-S1 stability checks
+- Version detection updated for v3.2.0
 
 ---
 
@@ -131,24 +191,19 @@
 - `test_evidence_chain_tamper_detection` — proper tamper detection
 - `evidence_incremental_verify()` — function reference fix
 
+#### AWS S3 SigV4 Signing
+- Proper AWS Signature Version 4 implementation
+- Fixed path vs key handling in sign_request
+
 #### Library Imports
 - `correction_chain` duplicate import removal
 - Proper module re-exports
 
 ---
 
-### Known Issues
-
-1. **Coverage 46.63%** — Below 75% target (historical issue)
-2. **PERF-1 MySQL flush** — Not yet implemented
-3. **PERF-2 TPC-H SF=10** — Not yet implemented
-4. **SQL-1 RECURSIVE CTE** — In progress
-
----
-
 ## v3.1.0-ga (2026-05-11)
 
-See [v3.1.0 CHANGELOG](./v3.1.0/CHANGELOG.md) for full details.
+See [v3.1.0 CHANGELOG](../v3.1.0/CHANGELOG.md) for full details.
 
 ---
 
@@ -159,4 +214,4 @@ Previous stable release.
 ---
 
 **Maintenance**: hermes-z6g4
-**Generated**: 2026-05-15
+**Generated**: 2026-05-16

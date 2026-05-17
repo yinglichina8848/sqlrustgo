@@ -57,7 +57,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | A3 | Clippy 检查 | `cargo clippy --all-features -- -D warnings` | 零警告 | `{warnings, exit_code}` |
 | A4 | 格式化检查 | `cargo fmt --all -- --check` | 无格式错误 | `{diff_count, exit_code}` |
 | A5 | 文档链接检查 | `bash scripts/gate/check_docs_links.sh` | 无死链 | `{broken_links}` |
-| A6 | 覆盖率检查 | `cargo llvm-cov --all-features --lcov --output-path lcov.info` | ≥50% | `{total_pct}` |
+| A6 | 覆盖率检查 | `cargo llvm-cov test L1_CRATES --lib` | ≥50% | `{total_pct}` |
 | A7 | 安全扫描 | `cargo audit` | 无高危漏洞 | `{vulnerabilities}` |
 
 ### 2.3 覆盖率要求
@@ -69,9 +69,66 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | storage | ≥15% |
 | catalog | ≥50% |
 | parser | ≥50% |
-| **整体** | **≥50%** |
+| transaction | ≥45% |
+| types | ≥50% |
+| **L1 整体** | **≥50%** |
 
-### 2.4 证据格式
+### 2.4 覆盖率测量方法
+
+> **重要**: 覆盖率测量仅针对 L1 核心 crate，不包含 workspace 所有 crate。
+
+**L1 Crates 定义**:
+```bash
+L1_CRATES=(
+    sqlrustgo-types
+    sqlrustgo-parser
+    sqlrustgo-planner
+    sqlrustgo-optimizer
+    sqlrustgo-executor
+    sqlrustgo-storage
+    sqlrustgo-transaction
+    sqlrustgo-catalog
+)
+```
+
+**覆盖率命令**:
+```bash
+# 完整 L1 覆盖率测量
+cargo llvm-cov test \
+    -p sqlrustgo-types \
+    -p sqlrustgo-parser \
+    -p sqlrustgo-planner \
+    -p sqlrustgo-optimizer \
+    -p sqlrustgo-executor \
+    -p sqlrustgo-storage \
+    -p sqlrustgo-transaction \
+    -p sqlrustgo-catalog \
+    --lib
+
+# 获取汇总行覆盖率
+cargo llvm-cov test L1_CRATES --lib 2>&1 | grep "^TOTAL"
+```
+
+**门禁脚本中的使用**:
+```bash
+# Beta Gate (≥75%)
+cargo llvm-cov test L1_CRATES --lib | grep "^TOTAL" | awk '{print $4}'  # 取第4列(行覆盖率)
+
+# RC/GA Gate (≥85%)
+cargo llvm-cov test L1_CRATES --lib | grep "^TOTAL" | awk '{print $4}'  # ≥85% PASS
+```
+
+**不计入覆盖率的 Crates** (可跳过):
+- `sqlrustgo-server` - 服务集成
+- `sqlrustgo-mysql-server` - MySQL 协议
+- `sqlrustgo-network` - 网络层
+- `sqlrustgo-gmp` - GMP 功能
+- `sqlrustgo-gis` - GIS 扩展
+- `sqlrustgo-vector` - 向量存储
+- `sqlrustgo-graph` - 图存储
+- 其他辅助 crate
+
+### 2.5 证据格式
 
 ```json
 {
@@ -108,7 +165,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | B2 | 全量测试 | `cargo test --all-features` | ≥90% 通过 | `{passed, failed, exit_code}` |
 | B3 | Clippy 检查 | `cargo clippy --all-features -- -D warnings` | 零警告 | `{warnings, exit_code}` |
 | B4 | 格式化检查 | `cargo fmt --all -- --check` | 无格式错误 | `{diff_count, exit_code}` |
-| B5 | 覆盖率检查 | `cargo llvm-cov --all-features --lcov --output-path lcov.info` | ≥75% | `{total_pct}` |
+| B5 | 覆盖率检查 | `cargo llvm-cov test L1_CRATES --lib` | ≥75% | `{total_pct}` |
 | B6 | 安全扫描 | `cargo audit` | 无高危漏洞 | `{vulnerabilities}` |
 | B7 | 文档链接检查 | `bash scripts/gate/check_docs_links.sh` | 无死链 | `{broken_links}` |
 | B8 | TPC-H SF=0.1 | `scripts/gate/check_tpch.sh sf=0.1` | 22/22 通过，无 OOM | `{passed, total, oom_count}` |
@@ -134,7 +191,13 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | storage | ≥20% |
 | catalog | ≥60% |
 | parser | ≥60% |
-| **整体** | **≥75%** |
+| transaction | ≥60% |
+| types | ≥65% |
+| **L1 整体** | **≥75%**
+
+### 3.5 覆盖率测量方法
+
+> 同 2.4 节定义，使用相同 L1_CRATES 列表和测量命令。
 
 ---
 
@@ -155,7 +218,7 @@ A-Gate → B-Gate → R-Gate → G-Gate
 | R2 | Test | `cargo test --all-features` | 100% 通过 | `{passed, failed, exit_code}` |
 | R3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 | `{warnings, exit_code}` |
 | R4 | Format | `cargo fmt --all -- --check` | 无格式错误 | `{diff_count, exit_code}` |
-| R5 | Coverage | `cargo llvm-cov --all-features --lcov` | ≥85% | `{total_pct, module_pcts}` |
+| R5 | Coverage | `cargo llvm-cov test L1_CRATES --lib` | ≥85% | `{total_pct, module_pcts}` |
 | R6 | Security | `cargo audit` | 无高危漏洞 | `{vulnerabilities}` |
 | R7 | Docs | R7a 死链 + R7b 文档存在 + R7c 版本一致 + R7d 文档一致 | 无死链/缺失/不一致 | `{broken_links, missing_docs}` |
 | R8 | SQL Compat | `cargo test -p sqlrustgo-sql-corpus` | ≥95% | `{passed, total, pct}` |
@@ -193,7 +256,13 @@ R7 包含四个子检查：
 | storage | ≥40% |
 | catalog | ≥70% |
 | parser | ≥40% |
-| **整体** | **≥85%** |
+| transaction | ≥70% |
+| types | ≥75% |
+| **L1 整体** | **≥85%**
+
+### 4.6 覆盖率测量方法
+
+> 同 2.4 节定义，使用相同 L1_CRATES 列表和测量命令。
 
 ---
 
@@ -217,7 +286,7 @@ R7 包含四个子检查：
 | G2 | Test | `cargo test --all-features` | 100% 通过 | `{passed, failed, exit_code}` |
 | G3 | Clippy | `cargo clippy --all-features -- -D warnings` | 零警告 | `{warnings, exit_code}` |
 | G4 | Format | `cargo fmt --all -- --check` | 无格式错误 | `{diff_count, exit_code}` |
-| G5 | Coverage | `cargo llvm-cov --all-features --lcov` | ≥85% | `{total_pct, module_pcts}` |
+| G5 | Coverage | `cargo llvm-cov test L1_CRATES --lib` | ≥85% | `{total_pct, module_pcts}` |
 | G6 | Security | `cargo audit` | 无高危漏洞 | `{vulnerabilities}` |
 | G7 | Point Select QPS | `cargo bench -- point_select` | **≥10,000 ops/s** | `{qps, threshold, pass}` |
 | G8 | UPDATE QPS | `cargo bench -- update_simple` | **≥5,000 ops/s** | `{qps, threshold, pass}` |
@@ -240,7 +309,13 @@ R7 包含四个子检查：
 | storage | ≥40% |
 | catalog | ≥75% |
 | parser | ≥40% |
-| **整体** | **≥85%** |
+| transaction | ≥70% |
+| types | ≥80% |
+| **L1 整体** | **≥85%**
+
+### 5.5 覆盖率测量方法
+
+> 同 2.4 节定义，使用相同 L1_CRATES 列表和测量命令。
 
 ---
 

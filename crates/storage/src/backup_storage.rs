@@ -151,7 +151,6 @@ impl RemoteBackupStorage {
 
     fn sign_request(&self, method: &str, path: &str, body: &[u8]) -> HashMap<String, String> {
         use sha2::{Digest, Sha256};
-        
 
         let date = chrono::Utc::now().format("%Y%m%d").to_string();
         let datetime = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
@@ -210,7 +209,8 @@ impl RemoteBackupStorage {
         let k_service = self.sign_sha256(&k_region, b"s3");
         let k_signing = self.sign_sha256(&k_service, b"aws4_request");
 
-        let mut mac = HmacSha256::new_from_slice(&k_signing).expect("HMAC can take key of any size");
+        let mut mac =
+            HmacSha256::new_from_slice(&k_signing).expect("HMAC can take key of any size");
         mac.update(string_to_sign.as_bytes());
         let result = mac.finalize().into_bytes();
 
@@ -239,8 +239,8 @@ impl BackupStorage for RemoteBackupStorage {
         request = request.header("Content-Type", "application/octet-stream");
         request = request.header("x-amz-acl", "private");
 
-        for (key, value) in signed_headers {
-            request = request.header(&key, &value);
+        for (k, v) in signed_headers {
+            request = request.header(&k, &v);
         }
 
         let response = request

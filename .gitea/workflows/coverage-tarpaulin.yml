@@ -17,14 +17,18 @@ on:
   push:
     branches:
       - beta/v2.9.0
+      - beta/v3.2.0
       - beta/v2.8.0
       - alpha/v2.9.0
+      - alpha/v3.2.0
       - alpha/v2.8.0
   pull_request:
     branches:
       - beta/v2.9.0
+      - beta/v3.2.0
       - beta/v2.8.0
       - alpha/v2.9.0
+      - alpha/v3.2.0
       - alpha/v2.8.0
   
 env:

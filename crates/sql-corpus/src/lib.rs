@@ -152,15 +152,19 @@ impl SimpleExecutor {
                 Ok(ExecutorResult::new(vec![], count))
             }
             Statement::WithSelect(ref ws) => {
-                match &ws.select {
-                    sqlrustgo_parser::parser::SelectStatement { table, .. } if table.is_empty() => {
+                match ws.select.as_ref() {
+                    Statement::Select(ref select_stmt) if select_stmt.table.is_empty() => {
                         // Recursive CTE or empty CTE → can't execute without CTE defs
                         Ok(ExecutorResult::new(vec![], 0))
                     }
-                    _ => {
+                    Statement::Select(ref select_stmt) => {
                         // Execute the inner SELECT directly
-                        let inner_sql = format!("SELECT * FROM {}", ws.select.table);
+                        let inner_sql = format!("SELECT * FROM {}", select_stmt.table);
                         self.execute(&inner_sql)
+                    }
+                    _ => {
+                        // Non-SELECT in WITH → treat as empty
+                        Ok(ExecutorResult::new(vec![], 0))
                     }
                 }
             }
@@ -946,7 +950,11 @@ impl SimpleExecutor {
                 }
             }
         }
-        self.execute_select(&with_select.select)?;
+        if let Statement::Select(ref select_stmt) = with_select.select.as_ref() {
+            self.execute_select(select_stmt)?;
+        } else {
+            return Err("WITH must contain SELECT statement".to_string());
+        }
         Ok(())
     }
 

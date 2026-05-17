@@ -1,8 +1,8 @@
 # v3.2.0 README
 
 > **Version**: 3.2.0
-> **Date**: 2026-05-15
-> **Status**: Beta Phase
+> **Date**: 2026-05-16
+> **Status**: Beta → RC Transition
 
 ---
 
@@ -16,10 +16,10 @@ SQLRustGo v3.2.0 是 GMP (Good Manufacturing Practice) Native 可信数据平台
 
 | 特性 | 说明 |
 |------|------|
-| **GMP Framework** | 完整 GMP 合规支持 |
+| **GMP Framework** | 完整 GMP 合规支持 (9 模块) |
 | **电子签名** | 21 CFR Part 11 合规 |
 | **审计链** | 数字签名 + 哈希链 |
-| **Immutable Record** | 不可篡改记录 |
+| **Immutable Record** | 不可篡改记录 (EBR) |
 | **Correction Chain** | 纠错追溯链 |
 | **Provenance Tracking** | 数据溯源 |
 | **Trusted Timestamp** | RFC 3161 可信时间戳 |
@@ -60,21 +60,33 @@ cargo test --all-features
 
 ## 门禁状态
 
-| Gate | 状态 |
-|------|------|
-| Alpha Gate | 🟡 条件性通过 |
-| Beta Gate | ⏸️ 进行中 |
-| RC Gate | ⏸️ 等待 |
-| GA Gate | ⏸️ 等待 |
+| Gate | 状态 | 日期 |
+|------|------|------|
+| Alpha Gate | ✅ 通过 | 2026-05-15 |
+| Beta Gate | ✅ 通过 (18/18) | 2026-05-16 |
+| RC Gate | ⏸️ 进行中 | - |
+| GA Gate | ⏸️ 等待 | - |
+
+---
+
+## 已完成 PR (2026-05-16)
+
+| PR | 功能 |
+|----|------|
+| #1094 | sync: rc/v3.2.0 <- develop/v3.2.0 |
+| #1093 | fix(storage): AWS S3 SigV4 signing |
+| #1092 | chore: refresh reports, gate scripts |
+| #1091 | feat(storage): 冷存储完善 (S3签名 + StorageTierManager) |
+| #1090 | feat(catalog): DCL 权限链 (RowLevelSecurity + 角色嵌套) |
 
 ---
 
 ## 里程碑
 
 ```
-v3.2.0 ─── Alpha ✅ ─── Beta 🔄 ─── RC 🔄 ─── GA
-             │          │
-          M1-M4 ✅    M5-M8 🔄
+v3.2.0 ─── Alpha ✅ ─── Beta ✅ ─── RC 🔄 ─── GA
+             │          │          │
+          M1-M4 ✅    M5-M8 ✅   R1-R16 🔄
 ```
 
 详见 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md)
@@ -90,4 +102,4 @@ v3.2.0 ─── Alpha ✅ ─── Beta 🔄 ─── RC 🔄 ─── GA
 ---
 
 **维护人**: hermes-z6g4
-**生成日期**: 2026-05-15
+**生成日期**: 2026-05-16

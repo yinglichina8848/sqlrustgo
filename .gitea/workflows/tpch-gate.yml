@@ -7,11 +7,16 @@ name: TPC-H Gate
 on:
   push:
     branches:
+      - develop/v3.2.0
       - develop/v3.1.0
+      - beta/v3.2.0
       - beta/v3.1.0
+      - rc/v3.2.0
   pull_request:
     branches:
+      - develop/v3.2.0
       - develop/v3.1.0
+      - beta/v3.2.0
       - beta/v3.1.0
   workflow_dispatch:
 

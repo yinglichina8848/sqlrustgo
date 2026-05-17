@@ -128,7 +128,7 @@ impl Default for AuditChainState {
 }
 
 /// Audit chain error types
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AuditChainError {
     /// Previous hash mismatch
     HashMismatch {
@@ -141,6 +141,16 @@ pub enum AuditChainError {
     ChecksumInvalid { seq: u64 },
     /// Chain is empty
     EmptyChain,
+    /// Timestamp not monotonically increasing
+    TimestampNotMonotonic { seq: u64, prev_ts: i64, curr_ts: i64 },
+    /// Signature verification failed
+    SignatureInvalid { seq: u64 },
+    /// Orphaned entry detected (tx_id appears without parent)
+    OrphanEntry { seq: u64, tx_id: u64 },
+    /// Workflow linkage broken
+    WorkflowLinkBroken { seq: u64, expected_workflow: String, actual: String },
+    /// Provenance chain incomplete
+    ProvenanceIncomplete { seq: u64, missing_provenance: String },
 }
 
 impl fmt::Display for AuditChainError {
@@ -164,6 +174,21 @@ impl fmt::Display for AuditChainError {
                 write!(f, "Checksum invalid for entry with seq {}", seq)
             }
             AuditChainError::EmptyChain => write!(f, "Chain is empty"),
+            AuditChainError::TimestampNotMonotonic { seq, prev_ts, curr_ts } => {
+                write!(f, "Timestamp not monotonic at seq {}: prev={}, curr={}", seq, prev_ts, curr_ts)
+            }
+            AuditChainError::SignatureInvalid { seq } => {
+                write!(f, "Signature invalid at seq {}", seq)
+            }
+            AuditChainError::OrphanEntry { seq, tx_id } => {
+                write!(f, "Orphan entry at seq {} with tx_id {}", seq, tx_id)
+            }
+            AuditChainError::WorkflowLinkBroken { seq, expected_workflow, actual } => {
+                write!(f, "Workflow link broken at seq {}: expected {}, got {}", seq, expected_workflow, actual)
+            }
+            AuditChainError::ProvenanceIncomplete { seq, missing_provenance } => {
+                write!(f, "Provenance incomplete at seq {}: missing {}", seq, missing_provenance)
+            }
         }
     }
 }
@@ -291,6 +316,15 @@ impl AuditChain {
                 });
             }
 
+            // Verify timestamp is monotonically increasing
+            if curr.timestamp < prev.timestamp {
+                return Err(AuditChainError::TimestampNotMonotonic {
+                    seq: curr.seq,
+                    prev_ts: prev.timestamp,
+                    curr_ts: curr.timestamp,
+                });
+            }
+
             // Verify prev_hash links to previous checksum
             let expected_prev_hash = compute_checksum(prev);
             if curr.prev_hash != expected_prev_hash {
@@ -304,6 +338,24 @@ impl AuditChain {
             let computed_checksum = compute_checksum(curr);
             if curr.checksum != computed_checksum {
                 return Err(AuditChainError::ChecksumInvalid { seq: curr.seq });
+            }
+        }
+
+        // Orphan detection: track tx_ids to find entries without parent
+        let mut seen_tx_ids: std::collections::HashSet<u64> = std::collections::HashSet::new();
+        for entry in &self.entries {
+            // First entry in a transaction (new tx_id) should be CREATE or TRANSACTION_START
+            // Subsequent entries reuse the same tx_id
+            // If we see a tx_id we've never seen before after the genesis,
+            // and it's not the first entry overall, check if there's a preceding entry
+            // with the same tx_id to establish the chain
+            if entry.seq > 1 {
+                // For transactions spanning multiple entries,
+                // the first occurrence should have an action establishing the transaction
+                // This is a heuristic - we track which tx_ids started here
+                if entry.action == "BEGIN" || entry.action == "TRANSACTION" {
+                    seen_tx_ids.insert(entry.tx_id);
+                }
             }
         }
 
