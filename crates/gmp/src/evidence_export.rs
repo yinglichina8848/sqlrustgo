@@ -56,3 +56,23 @@ pub struct VerificationReport {
     pub signatures_valid: Vec<bool>,
     pub errors: Vec<String>,
 }
+
+/// JSON Exporter
+pub struct JsonExporter;
+
+impl JsonExporter {
+    /// Export audit chain records to JSON bytes
+    pub fn export_records(records: &[super::AuditChainRecord]) -> Result<Vec<u8>, ExportError> {
+        serde_json::to_vec_pretty(records).map_err(ExportError::SerializationError)
+    }
+
+    /// Export evidence records to JSON bytes
+    pub fn export_evidence(evidence: &[super::EvidenceRecord]) -> Result<Vec<u8>, ExportError> {
+        serde_json::to_vec_pretty(evidence).map_err(ExportError::SerializationError)
+    }
+
+    /// Export proof to JSON bytes
+    pub fn export_proof(proof: &super::types::Proof) -> Result<Vec<u8>, ExportError> {
+        serde_json::to_vec_pretty(proof).map_err(ExportError::SerializationError)
+    }
+}
