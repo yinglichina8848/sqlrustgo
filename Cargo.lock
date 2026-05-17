@@ -5453,6 +5453,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlrustgo-qa"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "sqlrustgo-qmd-bridge"
 version = "0.1.0"
 dependencies = [
