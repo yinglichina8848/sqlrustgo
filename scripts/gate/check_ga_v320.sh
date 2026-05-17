@@ -186,9 +186,13 @@ check_test "G-QA4: merge_execution_test" "cargo test --test merge_execution_test
 check_test "G-QA5: set_operation_test" "cargo test --test set_operation_test 2>&1" "G-QA5"
 check_test "G-QA6: explain_analyze_test" "cargo test --test explain_analyze_test 2>&1" "G-QA6"
 check_test "G-QA7: ddl_statement_test" "cargo test --test ddl_statement_test 2>&1" "G-QA7"
-check_test "G-QA8: gmp_digital_signature_test" "cargo test --test gmp_digital_signature_test 2>&1" "G-QA8"
-check_test "G-QA9: gmp_electronic_signature_test" "cargo test --test gmp_electronic_signature_test 2>&1" "G-QA9"
-check "G-QA10: QA Enhancement Suite" "GATE_STAGE=ga bash scripts/gate/check_qa_enhancement.sh" "G-QA10"
+check_test "G-QA8: gmp_digital_signature_test" "cargo test -p sqlrustgo-gmp --test gmp_digital_signature_test 2>&1" "G-QA8"
+check_test "G-QA9: gmp_electronic_signature_test" "cargo test -p sqlrustgo-gmp --test gmp_electronic_signature_test 2>&1" "G-QA9"
+check_test "G-QA10: gmp_signature_algorithms_test" "cargo test -p sqlrustgo-gmp --test gmp_signature_algorithms_test 2>&1" "G-QA10"
+check_test "G-QA11: gmp_signature_chain_test" "cargo test -p sqlrustgo-gmp --test gmp_signature_chain_test 2>&1" "G-QA11"
+check_test "G-QA12: gmp_audit_chain_verify_test" "cargo test -p sqlrustgo-gmp --test gmp_audit_chain_verify_test 2>&1" "G-QA12"
+check_test "G-QA13: gmp_sop_test" "cargo test -p sqlrustgo-gmp --test gmp_sop_test 2>&1" "G-QA13"
+check "G-QA14: QA Enhancement Suite" "GATE_STAGE=ga bash scripts/gate/check_qa_enhancement.sh" "G-QA14"
 
 # ============================================================
 # 第四部分: 稳定性测试 Gate (G-S1 ~ G-S20)
@@ -202,7 +206,8 @@ check_test "G-S3: long_run_stability" "cargo test --test long_run_stability_test
 check_test "G-S4: wal_integration" "cargo test --test wal_integration_test 2>&1" "G-S4"
 check_test "G-S5: network_tcp" "cargo test --test network_tcp_smoke_test 2>&1" "G-S5"
 check_test "G-S6: ssi_stress" "cargo test -p sqlrustgo-transaction --test ssi_stress_test 2>&1" "G-S6"
-check_test "G-S7: audit_trail" "cargo test -p sqlrustgo-executor --test audit_trail_test 2>&1" "G-S7"
+check_test "G-S7: audit_trail" "cargo test -p sqlrustgo-gmp --test gmp_audit_chain_verify_test 2>&1" "G-S7"
+check_test "G-S7b: audit_trail_new" "cargo test -p sqlrustgo-gmp --test audit_trail_test 2>&1" "G-S7"
 check_test "G-S8: integration_tests" "bash scripts/test/run_integration.sh --quick 2>&1" "G-S8"
 check_test "G-S9: sysbench" "bash scripts/gate/check_sysbench.sh ga 2>&1" "G-S9"
 check_test "G-S10: regression_check" "bash scripts/gate/check_regression.sh 2>&1" "G-S10"

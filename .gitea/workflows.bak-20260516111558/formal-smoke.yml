@@ -1,0 +1,57 @@
+# Formal Smoke (PR Gate) — Gitea Actions Compatible
+# Mirrors .github/workflows/formal-smoke-pr.yml for Gitea CI
+
+name: Formal Smoke Gitea
+
+on:
+  pull_request:
+    branches:
+      - develop/v2.9.0
+      - develop/v3.0.0
+      - beta/v2.9.0
+    paths:
+      - 'docs/formal/**/*.tla'
+      - 'docs/formal/**/*.cfg'
+      - 'crates/transaction/**/*.rs'
+      - 'scripts/formal/**'
+  push:
+    branches:
+      - develop/v2.9.0
+      - develop/v3.0.0
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  formal-smoke:
+    name: Formal Smoke Test
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=1 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          git fetch --depth=1 origin "$GITEA_SHA"
+          git checkout "$GITEA_SHA"
+
+      - name: Check TLA+ tools
+        run: |
+          if [ ! -f "/tmp/tla2tools.jar" ]; then
+            echo "Downloading TLA+ tools..."
+            curl -sL -o /tmp/tla2tools.jar \
+              "https://github.com/tlaplus/tlaplus/releases/download/v1.7.0/tla2tools.jar"
+          fi
+          echo "TLA+ tools: $(ls -lh /tmp/tla2tools.jar)"
+
+      - name: Run Formal Smoke
+        run: |
+          cd repo
+          bash scripts/formal/formal_smoke.sh
+
+      - name: Run Transaction Tests
+        run: |
+          cd repo
+          cargo test -p sqlrustgo-transaction deadlock -- --nocapture 2>&1 | tail -5
+          cargo test -p sqlrustgo-transaction mvcc -- --nocapture 2>&1 | tail -5 || true
+          cargo test -p sqlrustgo-transaction ssi -- --nocapture 2>&1 | tail -5 || true

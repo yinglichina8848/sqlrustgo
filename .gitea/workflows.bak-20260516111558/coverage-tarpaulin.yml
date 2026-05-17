@@ -1,0 +1,196 @@
+# =============================================================================
+# SQLRustGo Coverage Pipeline (Tarpaulin) — Gitea Actions
+# =============================================================================
+# Tool: cargo-tarpaulin (line coverage only)
+# Pros: Fast, pre-installed on nomad-runner
+# Cons: No branch coverage, no path coverage, integration test data gaps
+#
+# L1: Nightly (informational) — 02:00 UTC
+# L2: Stage Gate (blocking, 75% threshold) — beta/alpha branches
+# L3: Manual (informational) — workflow_dispatch any branch
+
+name: Coverage (Tarpaulin)
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  push:
+    branches:
+      - beta/v2.9.0
+      - beta/v2.8.0
+      - alpha/v2.9.0
+      - alpha/v2.8.0
+  pull_request:
+    branches:
+      - beta/v2.9.0
+      - beta/v2.8.0
+      - alpha/v2.9.0
+      - alpha/v2.8.0
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Profile (quick/full)"
+        required: true
+        default: "quick"
+        type: choice
+        options:
+          - quick
+          - full
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # L1 / L3: Tarpaulin — quick or full line coverage
+  # ---------------------------------------------------------------------------
+  tarpaulin-coverage:
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=50 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          if [ -n "$GITEA_SHA" ]; then
+            git fetch --depth=1 origin "$GITEA_SHA"
+            git checkout "$GITEA_SHA"
+          else
+            git checkout "$GITEA_REF_NAME"
+          fi
+
+      - name: Build
+        run: |
+          cd repo
+          cargo build --all-features 2>&1 | tail -3
+
+      - name: Quick Coverage (L1 nightly / L3 quick)
+        if: github.event.inputs.profile == 'quick' || github.event_name == 'schedule'
+        run: |
+          cd repo
+          echo "=== Tarpaulin quick coverage ==="
+          cargo tarpaulin --all-features \
+            --out Json \
+            --out-dir ./coverage \
+            --timeout 300 \
+            2>&1 | tail -10
+
+      - name: Full Coverage (L3 full)
+        if: github.event.inputs.profile == 'full'
+        run: |
+          cd repo
+          echo "=== Tarpaulin full coverage ==="
+          cargo tarpaulin --all-features \
+            --out Json \
+            --out Html \
+            --out-dir ./coverage \
+            --timeout 600 \
+            --hidden \
+            2>&1 | tail -15
+
+      - name: Parse Coverage Report
+        run: |
+          cd repo
+          if [ -f coverage/tarpaulin_report.json ]; then
+            python3 - <<'PYEOF'
+            import json
+            with open('coverage/tarpaulin_report.json') as f:
+                d = json.load(f)
+            cov = d.get('coverage', 0)
+            line_cov = d.get('line_coverage', 0)
+            files_c = d.get('files_covered', 0)
+            files_t = d.get('files_total', 0)
+            print(f"Coverage: {cov:.2f}%")
+            print(f"Line Coverage: {line_cov:.2f}%")
+            print(f"Files: {files_c}/{files_t}")
+            threshold = 75.0
+            status = "PASS" if cov >= threshold else "FAIL"
+            print(f"Threshold: {threshold}% => {status}")
+            PYEOF
+          else
+            echo "No coverage report found"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # L2: Stage Gate — blocking, 75% threshold, emits gate_report.json
+  # ---------------------------------------------------------------------------
+  stage-gate-tarpaulin:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: [hp-z6g4]
+    steps:
+      - name: Checkout
+        run: |
+          REPO="openclaw/sqlrustgo"
+          git clone --depth=50 "http://192.168.0.252:3000/$REPO" repo
+          cd repo
+          if [ -n "$GITEA_SHA" ]; then
+            git fetch --depth=1 origin "$GITEA_SHA"
+            git checkout "$GITEA_SHA"
+          else
+            git checkout "$GITEA_REF_NAME"
+          fi
+
+      - name: Build
+        run: |
+          cd repo
+          cargo build --all-features 2>&1 | tail -3
+
+      - name: Tarpaulin Stage Coverage
+        run: |
+          cd repo
+          echo "=== Tarpaulin Stage Gate Coverage (L2) ==="
+          cargo tarpaulin --all-features \
+            --out Json \
+            --out Html \
+            --out-dir ./coverage \
+            --timeout 600 \
+            --hidden \
+            2>&1 | tail -15
+
+      - name: Generate Gate Report
+        run: |
+          cd repo
+          python3 - <<'PYEOF'
+          import json, datetime, os
+
+          cov_pct = 0.0
+          try:
+              with open('coverage/tarpaulin_report.json') as f:
+                  d = json.load(f)
+              cov_pct = float(d.get('coverage', 0))
+          except:
+              pass
+
+          commit = os.environ.get('GITEA_SHA', 'unknown')[:12]
+          branch = os.environ.get('GITEA_REF_NAME', 'unknown')
+          THRESHOLD = 75.0
+          status = "PASS" if cov_pct >= THRESHOLD else "FAIL"
+
+          report = {
+              "tool": "tarpaulin",
+              "gate": "L2-STAGE-COVERAGE",
+              "version": "v2.9.0",
+              "commit": commit,
+              "branch": branch,
+              "status": status,
+              "coverage": cov_pct,
+              "threshold": THRESHOLD,
+              "timestamp": datetime.datetime.utcnow().isoformat() + 'Z',
+              "tier": "L2_STAGE_GATE",
+              "blocking": True
+          }
+          with open('tarpaulin_gate_report.json', 'w') as f:
+              json.dump(report, f, indent=2)
+          print(json.dumps(report, indent=2))
+          PYEOF
+
+      - name: Stage Gate Decision
+        if: github.event_name == 'push'
+        run: |
+          cd repo
+          STATUS=$(python3 -c "import json; d=json.load(open('tarpaulin_gate_report.json')); print(d.get('status','ERROR'))" 2>/dev/null || echo 'ERROR')
+          if [ "$STATUS" == "FAIL" ]; then
+            echo "STAGE GATE FAILED: Tarpaulin coverage {cov_pct:.2f}% < {THRESHOLD}%"
+            exit 1
+          fi
+          echo "Tarpaulin stage gate: PASS"

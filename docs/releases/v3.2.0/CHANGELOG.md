@@ -185,7 +185,7 @@
 
 ## v3.1.0-ga (2026-05-11)
 
-See [v3.1.0 CHANGELOG](./v3.1.0/CHANGELOG.md) for full details.
+See [v3.1.0 CHANGELOG](../v3.1.0/CHANGELOG.md) for full details.
 
 ---
 
