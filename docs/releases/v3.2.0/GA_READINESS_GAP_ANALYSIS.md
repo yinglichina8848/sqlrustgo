@@ -28,7 +28,7 @@
 | G2 | Test (all-features) | 100% | ⚠️ 核心✅ MySQL 集成3fail | 🔴 G13 |
 | G3 | Clippy | 零警告 | ✅ PASS | — |
 | G4 | Format | 无错误 | ✅ PASS | — |
-| G5 | Coverage L1 | ≥85% | ⏳ 测量中 | 🟡 |
+| G5 | Coverage L1 | ≥85% | ❌ 68.8% (实测) | 🔴 |
 | G6 | Security | 无高危漏洞 | ⏳ GitHub不可达 | 🟡 |
 | G7 | Point Select QPS | ≥10,000 | ⚠️ baseline 324K，待刷新 | 🟡 |
 | G8 | UPDATE QPS | ≥5,000 | ⚠️ baseline 58K，待刷新 | 🟡 |
@@ -83,6 +83,6 @@
 3个阻塞项必须解决:
 1. G13 MySQL 协议握手 — 代码 bug，需 debug 修复
 2. G10 TPC-H 数据 — 需生成数据文件
-3. G5 覆盖率 — 等待测量完成
+3. G5 覆盖率 — 68.8% < 85%，需提升 16.2%
 
 性能基准、安全审计可在修复阻塞项的同时并行完成。
