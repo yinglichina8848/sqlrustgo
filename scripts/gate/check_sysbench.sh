@@ -31,7 +31,21 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-RESULT_FILE="$PROJECT_ROOT/perf_baselines/v3.0.0/sysbench_current.json"
+
+# Auto-detect version
+detect_version() {
+    local branch
+    branch=$(git -C "$PROJECT_ROOT" symbolic-ref --short HEAD 2>/dev/null || echo "develop/v3.2.0")
+    if [[ "$branch" =~ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+        echo "v${BASH_REMATCH[1]}"
+    elif [[ "$branch" =~ develop/v([0-9]+\.[0-9]+) ]]; then
+        echo "v${BASH_REMATCH[1]}.0"
+    else
+        echo "v3.2.0"
+    fi
+}
+VERSION=$(detect_version)
+RESULT_FILE="$PROJECT_ROOT/perf_baselines/$VERSION/sysbench_current.json"
 
 cd "$PROJECT_ROOT"
 
