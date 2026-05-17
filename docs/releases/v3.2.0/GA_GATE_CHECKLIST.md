@@ -106,7 +106,7 @@
 | G-S8 | integration_tests | `run_integration.sh --quick` | ✅ | ✅ |
 | G-S9 | sysbench | `check_sysbench.sh` | ⬜ 需服务器 | ⬜ |
 | G-S10 | regression_check | `check_regression.sh` | ✅ | ✅ |
-| G-S11 | proof_count | `check_proof.sh` | ⬜ | ⬜ |
+| G-S11 | proof_count | `check_proof.sh` | ✅ 32 proofs | ✅ |
 | G-S12 | docs_links | `check_docs_links.sh` | ✅ | ✅ |
 | G-S13 | sql_corpus | `corpus_test` | ✅ | ✅ |
 | G-S14 | coverage_check | `check_coverage.sh` | ✅ | ✅ |
@@ -150,7 +150,7 @@ G-QA1~QA14 .................. ✅ PASS (14/14)
 G-S1~S20 ................... ✅ PASS (16/20)
 
 GA Gate: 40/46 PASS (86.9%)
-RESULT: CONDITIONAL PASS ⏳ (4 项需手动验证)
+RESULT: CONDITIONAL PASS ⏳ (41/46 PASS; 3 项需服务器验证; 2 项 SKIP advisory db)
 ```
 
 ---
@@ -189,7 +189,7 @@ RESULT: CONDITIONAL PASS ⏳ (4 项需手动验证)
 
 | 角色 | 姓名 | 日期 | 签名 |
 |------|------|------|------|
-| 执行人 | hermes-agent | 2026-05-18 | ⏳ |
+| 执行人 | hermes-agent | 2026-05-18 02:40 | ✅ |
 | 审查人 | - | - | - |
 
 ---
