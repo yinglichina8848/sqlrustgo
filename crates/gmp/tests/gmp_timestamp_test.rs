@@ -154,7 +154,10 @@ fn test_chain_timestamp_decreasing_detected_by_chain_verify() {
     // Chain is structurally valid (hash links correct) but timestamp goes backward
     // This should now be detected by verify_chain() - timestamp monotonicity is required
     let result = chain.verify_chain();
-    assert!(result.is_err(), "Expected timestamp monotonicity violation to be detected");
+    assert!(
+        result.is_err(),
+        "Expected timestamp monotonicity violation to be detected"
+    );
     if let Err(e) = result {
         assert!(matches!(e, AuditChainError::TimestampNotMonotonic { .. }));
     }
@@ -202,7 +205,10 @@ fn test_timestamp_vs_seq_independence() {
 
     // Chain is invalid because timestamp must be monotonically increasing
     let result = chain.verify_chain();
-    assert!(result.is_err(), "Expected timestamp monotonicity violation to be detected");
+    assert!(
+        result.is_err(),
+        "Expected timestamp monotonicity violation to be detected"
+    );
     if let Err(e) = result {
         assert!(matches!(e, AuditChainError::TimestampNotMonotonic { .. }));
     }

@@ -1262,12 +1262,8 @@ impl StoredProcExecutor {
                 for row in records.iter_mut() {
                     // Evaluate WHERE clause with row context
                     let matches = if let Some(ref where_clz) = where_expr {
-                        let result = self.evaluate_row_expression(
-                            where_clz,
-                            row,
-                            &col_index_map,
-                            ctx,
-                        );
+                        let result =
+                            self.evaluate_row_expression(where_clz, row, &col_index_map, ctx);
                         if let Value::Boolean(b) = result {
                             b
                         } else {
@@ -1334,12 +1330,8 @@ impl StoredProcExecutor {
                 let mut indices_to_delete: Vec<usize> = Vec::new();
                 for (idx, row) in records.iter().enumerate() {
                     let matches = if let Some(ref where_clz) = where_expr {
-                        let result = self.evaluate_row_expression(
-                            where_clz,
-                            row,
-                            &col_index_map,
-                            ctx,
-                        );
+                        let result =
+                            self.evaluate_row_expression(where_clz, row, &col_index_map, ctx);
                         if let Value::Boolean(b) = result {
                             b
                         } else {
@@ -1781,9 +1773,15 @@ impl StoredProcExecutor {
             }
             sqlrustgo_parser::Expression::CaseWhen(when_clauses, else_expr) => {
                 for clause in when_clauses {
-                    let cond_val = self.evaluate_row_expression(&clause.condition, row, col_index_map, ctx);
+                    let cond_val =
+                        self.evaluate_row_expression(&clause.condition, row, col_index_map, ctx);
                     if let Value::Boolean(true) = cond_val {
-                        return self.evaluate_row_expression(&clause.result, row, col_index_map, ctx);
+                        return self.evaluate_row_expression(
+                            &clause.result,
+                            row,
+                            col_index_map,
+                            ctx,
+                        );
                     }
                 }
                 if let Some(else_box) = else_expr {
@@ -1829,7 +1827,8 @@ impl StoredProcExecutor {
                     if args.is_empty() {
                         Value::Null
                     } else {
-                        let str_val = self.evaluate_row_expression(&args[0], row, col_index_map, ctx);
+                        let str_val =
+                            self.evaluate_row_expression(&args[0], row, col_index_map, ctx);
                         let start_val = if args.len() > 1 {
                             self.evaluate_row_expression(&args[1], row, col_index_map, ctx)
                         } else {
@@ -1863,7 +1862,9 @@ impl StoredProcExecutor {
                     ("YEAR", Value::Integer(n)) => Value::Integer(*n / 10000),
                     ("MONTH", Value::Integer(n)) => Value::Integer((*n / 100) % 100),
                     ("DAY", Value::Integer(n)) => Value::Integer(*n % 100),
-                    ("YEAR", Value::Text(s)) => s[..4].parse().map(Value::Integer).unwrap_or(Value::Null),
+                    ("YEAR", Value::Text(s)) => {
+                        s[..4].parse().map(Value::Integer).unwrap_or(Value::Null)
+                    }
                     ("MONTH", Value::Text(s)) if s.len() >= 7 => {
                         s[5..7].parse().map(Value::Integer).unwrap_or(Value::Null)
                     }

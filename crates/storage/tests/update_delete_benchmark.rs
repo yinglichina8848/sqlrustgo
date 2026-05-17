@@ -5,23 +5,32 @@
 //!
 //! Run: cargo test -p sqlrustgo-storage --test update_delete_benchmark -- --nocapture
 
-use std::time::Instant;
 use sqlrustgo_storage::engine::{ColumnDefinition, StorageEngine, TableInfo};
 use sqlrustgo_storage::MemoryStorage;
 use sqlrustgo_types::Value;
+use std::time::Instant;
 
 fn setup_table(storage: &mut dyn StorageEngine, name: &str, rows: usize) -> Result<(), String> {
-    storage.create_table(&TableInfo {
-        name: name.to_string(),
-        columns: vec![
-            ColumnDefinition::new("id", "INTEGER"),
-            ColumnDefinition::new("val", "INTEGER"),
-        ],
-        ..Default::default()
-    }).map_err(|e| format!("create_table: {}", e))?;
+    storage
+        .create_table(&TableInfo {
+            name: name.to_string(),
+            columns: vec![
+                ColumnDefinition::new("id", "INTEGER"),
+                ColumnDefinition::new("val", "INTEGER"),
+            ],
+            ..Default::default()
+        })
+        .map_err(|e| format!("create_table: {}", e))?;
 
     for i in 0..rows {
-        storage.insert(name, vec![vec![Value::Integer(i as i64), Value::Integer(i as i64 * 10)]])
+        storage
+            .insert(
+                name,
+                vec![vec![
+                    Value::Integer(i as i64),
+                    Value::Integer(i as i64 * 10),
+                ]],
+            )
             .map_err(|e| format!("insert failed: {}", e))?;
     }
     Ok(())
@@ -38,7 +47,13 @@ fn benchmark_update_indexed_column_1k() {
     // Benchmark
     let start = Instant::now();
     for i in 0..1000 {
-        storage.update("t", &[Value::Integer(i as i64)], &[(1, Value::Integer(i as i64 * 10))]).unwrap();
+        storage
+            .update(
+                "t",
+                &[Value::Integer(i as i64)],
+                &[(1, Value::Integer(i as i64 * 10))],
+            )
+            .unwrap();
     }
     let elapsed = start.elapsed();
 
@@ -57,7 +72,9 @@ fn benchmark_update_all_rows_1k() {
     // UPDATE ALL rows (no WHERE)
     let start = Instant::now();
     for _ in 0..100 {
-        storage.update("t", &[], &[(1, Value::Integer(42))]).unwrap();
+        storage
+            .update("t", &[], &[(1, Value::Integer(42))])
+            .unwrap();
     }
     let elapsed = start.elapsed();
 

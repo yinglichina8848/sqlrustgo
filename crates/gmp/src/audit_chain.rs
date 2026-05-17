@@ -142,15 +142,26 @@ pub enum AuditChainError {
     /// Chain is empty
     EmptyChain,
     /// Timestamp not monotonically increasing
-    TimestampNotMonotonic { seq: u64, prev_ts: i64, curr_ts: i64 },
+    TimestampNotMonotonic {
+        seq: u64,
+        prev_ts: i64,
+        curr_ts: i64,
+    },
     /// Signature verification failed
     SignatureInvalid { seq: u64 },
     /// Orphaned entry detected (tx_id appears without parent)
     OrphanEntry { seq: u64, tx_id: u64 },
     /// Workflow linkage broken
-    WorkflowLinkBroken { seq: u64, expected_workflow: String, actual: String },
+    WorkflowLinkBroken {
+        seq: u64,
+        expected_workflow: String,
+        actual: String,
+    },
     /// Provenance chain incomplete
-    ProvenanceIncomplete { seq: u64, missing_provenance: String },
+    ProvenanceIncomplete {
+        seq: u64,
+        missing_provenance: String,
+    },
 }
 
 impl fmt::Display for AuditChainError {
@@ -174,8 +185,16 @@ impl fmt::Display for AuditChainError {
                 write!(f, "Checksum invalid for entry with seq {}", seq)
             }
             AuditChainError::EmptyChain => write!(f, "Chain is empty"),
-            AuditChainError::TimestampNotMonotonic { seq, prev_ts, curr_ts } => {
-                write!(f, "Timestamp not monotonic at seq {}: prev={}, curr={}", seq, prev_ts, curr_ts)
+            AuditChainError::TimestampNotMonotonic {
+                seq,
+                prev_ts,
+                curr_ts,
+            } => {
+                write!(
+                    f,
+                    "Timestamp not monotonic at seq {}: prev={}, curr={}",
+                    seq, prev_ts, curr_ts
+                )
             }
             AuditChainError::SignatureInvalid { seq } => {
                 write!(f, "Signature invalid at seq {}", seq)
@@ -183,11 +202,26 @@ impl fmt::Display for AuditChainError {
             AuditChainError::OrphanEntry { seq, tx_id } => {
                 write!(f, "Orphan entry at seq {} with tx_id {}", seq, tx_id)
             }
-            AuditChainError::WorkflowLinkBroken { seq, expected_workflow, actual } => {
-                write!(f, "Workflow link broken at seq {}: expected {}, got {}", seq, expected_workflow, actual)
+            AuditChainError::WorkflowLinkBroken {
+                seq,
+                expected_workflow,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "Workflow link broken at seq {}: expected {}, got {}",
+                    seq, expected_workflow, actual
+                )
             }
-            AuditChainError::ProvenanceIncomplete { seq, missing_provenance } => {
-                write!(f, "Provenance incomplete at seq {}: missing {}", seq, missing_provenance)
+            AuditChainError::ProvenanceIncomplete {
+                seq,
+                missing_provenance,
+            } => {
+                write!(
+                    f,
+                    "Provenance incomplete at seq {}: missing {}",
+                    seq, missing_provenance
+                )
             }
         }
     }
