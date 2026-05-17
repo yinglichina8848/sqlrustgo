@@ -265,7 +265,7 @@ bash scripts/gate/check_ga_v320.sh 2>&1 | grep -E "PASS|FAIL"
 ## 七、相关文档
 
 - [核验报告](./VERIFICATION_REPORT.md)
-- [门禁规范](../../docs/governance/GATE_SPEC_MASTER.md)
+- [门禁规范](../../governance/GATE_SPEC_MASTER.md)
 - [测试计划](./TEST_PLAN.md)
 
 ---

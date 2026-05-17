@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use sqlrustgo_gmp::immutable_record::{ImmutableRecord, ImmutableRecordBuilder, VerificationReport};
+    use sqlrustgo_gmp::immutable_record::{
+        ImmutableRecord, ImmutableRecordBuilder, VerificationReport,
+    };
 
     #[test]
     fn test_immutable_record_creation() {

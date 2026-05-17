@@ -27,10 +27,13 @@ mod tests {
     #[test]
     fn test_recursive_cte_with_table_reference() {
         let mut e = engine();
-        e.execute("CREATE TABLE org(id INTEGER, name TEXT, manager_id INTEGER)").unwrap();
-        e.execute("INSERT INTO org VALUES (1, 'CEO', NULL)").unwrap();
+        e.execute("CREATE TABLE org(id INTEGER, name TEXT, manager_id INTEGER)")
+            .unwrap();
+        e.execute("INSERT INTO org VALUES (1, 'CEO', NULL)")
+            .unwrap();
         e.execute("INSERT INTO org VALUES (2, 'VP', 1)").unwrap();
-        e.execute("INSERT INTO org VALUES (3, 'Director', 2)").unwrap();
+        e.execute("INSERT INTO org VALUES (3, 'Director', 2)")
+            .unwrap();
 
         let result = e.execute(
             "WITH RECURSIVE subordinates AS (SELECT id, name, manager_id FROM org WHERE manager_id = 1 UNION ALL SELECT o.id, o.name, o.manager_id FROM org o JOIN subordinates s ON o.manager_id = s.id) SELECT COUNT(*) FROM subordinates"

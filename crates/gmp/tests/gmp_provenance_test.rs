@@ -30,7 +30,7 @@ mod tests {
     #[test]
     fn test_lineage_graph_add_record() {
         let mut graph = LineageGraph::new();
-        
+
         let record = ProvenanceRecord::new(
             "record001".to_string(),
             SourceType::Insert,
@@ -40,7 +40,7 @@ mod tests {
             OperationType::Create,
             vec![],
         );
-        
+
         graph.add_record(&record);
         assert!(!graph.is_empty());
         assert_eq!(graph.len(), 1);
@@ -49,7 +49,7 @@ mod tests {
     #[test]
     fn test_lineage_graph_verify_integrity() {
         let mut graph = LineageGraph::new();
-        
+
         let record = ProvenanceRecord::new(
             "record001".to_string(),
             SourceType::Insert,
@@ -59,7 +59,7 @@ mod tests {
             OperationType::Create,
             vec![],
         );
-        
+
         graph.add_record(&record);
         assert!(graph.verify_integrity());
     }
