@@ -34,10 +34,7 @@ fn crash_worker_path() -> PathBuf {
     PathBuf::from(manifest_dir)
         .join("../../../target/debug/crash-worker")
         .canonicalize()
-        .unwrap_or_else(|_| {
-            PathBuf::from(manifest_dir)
-                .join("../../target/debug/crash-worker")
-        })
+        .unwrap_or_else(|_| PathBuf::from(manifest_dir).join("../../target/debug/crash-worker"))
 }
 
 /// Helper: run crash-worker command

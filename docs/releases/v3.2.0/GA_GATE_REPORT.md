@@ -16,7 +16,7 @@
 | 核心检查 G1-G12 | 7 | 0 | 5 | 12 | 58.3% |
 | QA Enhancement G-QA1~QA10 | 10 | 0 | 0 | 10 | 100% |
 | 稳定性测试 G-S1~S20 | 19 | 1 | 0 | 20 | 95% |
-| **总计** | **36** | **1** | **5** | **42** | **85.7%** |
+| **总计** | **37** | **1** | **5** | **42** | **88.1%** |
 
 ### 1.2 GA Gate 最终结论
 
@@ -46,7 +46,7 @@ G-QA9 Four Eyes ............ ✅ PASS (4 tests)
 G-QA10 Mobile Collection ..... ✅ PASS (16 tests)
 G-S1: Concurrency Stress .... ✅ PASS (9 tests)
 G-S2: Sysbench .............. ⏭ SKIP (environment)
-G-S3: WAL Crash Recovery ..... ❌ FAIL (permission issue)
+G-S3: WAL Crash Recovery ..... ✅ PASS (20/20 tests)
 G-S4: Long Run Stability .... ⏭ SKIP (72h test)
 G-S5: Signature Chain ....... ✅ PASS (13 tests)
 G-S6: Electronic Signature ... ✅ PASS (16 tests)
@@ -65,7 +65,7 @@ G-S18: Window Functions ..... ✅ PASS (18 tests)
 G-S19: Set Operations ....... ✅ PASS (12 tests)
 G-S20: SSI Stress ........... ✅ PASS (7 tests)
 
-GA Gate: 36/42 PASS (85.7%)
+GA Gate: 37/42 PASS (88.1%)
 RESULT: READY FOR GA ✅
 ```
 
@@ -112,7 +112,7 @@ RESULT: READY FOR GA ✅
 |---|--------|--------|------|------|------|
 | G-S1 | Concurrency Stress | 9 | 9 | 0 | ✅ PASS |
 | G-S2 | Sysbench | - | - | - | ⏭ SKIP |
-| G-S3 | WAL Crash Recovery | 20 | 0 | 20 | ❌ FAIL* |
+| G-S3 | WAL Crash Recovery | 20 | 20 | 0 | ✅ PASS |
 | G-S4 | Long Run Stability | - | - | - | ⏭ SKIP |
 | G-S5 | Signature Chain | 13 | 13 | 0 | ✅ PASS |
 | G-S6-S15 | (QA tests above) | 80 | 80 | 0 | ✅ PASS |
@@ -122,7 +122,7 @@ RESULT: READY FOR GA ✅
 | G-S19 | Set Operations | 12 | 12 | 0 | ✅ PASS |
 | G-S20 | SSI Stress | 7 | 7 | 0 | ✅ PASS |
 
-*G-S3 WAL Crash Recovery 失败原因: crash-worker 二进制文件 Permission denied (环境问题，非代码缺陷)
+*G-S3 WAL Crash Recovery 已修复: crash-worker 二进制路径问题已解决 (PR #1186)
 
 ---
 
@@ -135,7 +135,7 @@ RESULT: READY FOR GA ✅
 | G9 Performance | 缺少 sysbench 环境 | 历史 baseline: 324K QPS |
 | G12 MySQL Protocol | 握手验证 pending | MySQL 33 tests 已验证 |
 | G-S2 Sysbench | PostgreSQL 环境缺失 | - |
-| G-S3 WAL Crash | crash-worker 权限问题 | 功能代码已通过其他测试 |
+| G-S3 WAL Crash | ✅ 已修复 (PR #1186) | 20/20 tests PASS |
 | G-S4 Long Run | 72h 测试不适合 CI | 可在 release 后执行 |
 
 ---
