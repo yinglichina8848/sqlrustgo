@@ -364,3 +364,186 @@ impl StoredProcExecutor {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlrustgo_parser::{parser::UnionStatement, Expression, SelectColumn, SelectStatement};
+    use std::sync::Arc;
+
+    fn executor() -> StoredProcExecutor {
+        let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+        StoredProcExecutor::new_for_test(catalog)
+    }
+
+    #[test]
+    fn test_extract_select_columns_simple() {
+        let ex = executor();
+        let select = SelectStatement {
+            columns: vec![
+                SelectColumn {
+                    name: "id".into(),
+                    expression: Some(Expression::Identifier("id".into())),
+                    alias: Some("id_alias".into()),
+                },
+                SelectColumn {
+                    name: "name".into(),
+                    expression: Some(Expression::Identifier("name".into())),
+                    alias: Some("name_alias".into()),
+                },
+            ],
+            table: "users".into(),
+            from: None,
+            where_clause: None,
+            join_clause: None,
+            aggregates: vec![],
+            group_by: vec![],
+            having: None,
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            distinct: false,
+            for_update: false,
+        };
+        let cols = ex.extract_select_columns(&sqlrustgo_parser::Statement::Select(select));
+        assert_eq!(cols, vec!["id_alias", "name_alias"]);
+    }
+
+    #[test]
+    fn test_extract_select_columns_with_alias() {
+        let ex = executor();
+        let select = SelectStatement {
+            columns: vec![SelectColumn {
+                name: "id".into(),
+                expression: Some(Expression::Literal("1".into())),
+                alias: Some("one".into()),
+            }],
+            table: "".into(),
+            from: None,
+            where_clause: None,
+            join_clause: None,
+            aggregates: vec![],
+            group_by: vec![],
+            having: None,
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            distinct: false,
+            for_update: false,
+        };
+        let cols = ex.extract_select_columns(&sqlrustgo_parser::Statement::Select(select));
+        assert_eq!(cols, vec!["one"]);
+    }
+
+    #[test]
+    fn test_extract_select_columns_literal_no_alias() {
+        let ex = executor();
+        let select = SelectStatement {
+            columns: vec![SelectColumn {
+                name: "1".into(),
+                expression: Some(Expression::Literal("1".into())),
+                alias: None,
+            }],
+            table: "".into(),
+            from: None,
+            where_clause: None,
+            join_clause: None,
+            aggregates: vec![],
+            group_by: vec![],
+            having: None,
+            order_by: vec![],
+            limit: None,
+            offset: None,
+            distinct: false,
+            for_update: false,
+        };
+        let cols = ex.extract_select_columns(&sqlrustgo_parser::Statement::Select(select));
+        assert_eq!(cols, vec!["1"]);
+    }
+
+    #[test]
+    fn test_extract_select_columns_union() {
+        let ex = executor();
+        let cols = ex.extract_select_columns(&sqlrustgo_parser::Statement::Union(UnionStatement {
+            left: Box::new(sqlrustgo_parser::Statement::Select(SelectStatement {
+                columns: vec![SelectColumn {
+                    name: "a".into(),
+                    expression: Some(Expression::Identifier("a".into())),
+                    alias: None,
+                }],
+                table: "t1".into(),
+                from: None,
+                where_clause: None,
+                join_clause: None,
+                aggregates: vec![],
+                group_by: vec![],
+                having: None,
+                order_by: vec![],
+                limit: None,
+                offset: None,
+                distinct: false,
+                for_update: false,
+            })),
+            right: Box::new(sqlrustgo_parser::Statement::Select(SelectStatement {
+                columns: vec![SelectColumn {
+                    name: "b".into(),
+                    expression: Some(Expression::Identifier("b".into())),
+                    alias: None,
+                }],
+                table: "t2".into(),
+                from: None,
+                where_clause: None,
+                join_clause: None,
+                aggregates: vec![],
+                group_by: vec![],
+                having: None,
+                order_by: vec![],
+                limit: None,
+                offset: None,
+                distinct: false,
+                for_update: false,
+            })),
+            union_all: false,
+        }));
+        assert!(cols.is_empty());
+    }
+
+    #[test]
+    fn test_execute_cte_subquery_non_select() {
+        let ex = executor();
+        let mut ctx = ProcedureContext::new();
+        let result = ex.execute_cte_subquery(
+            &sqlrustgo_parser::Statement::Insert(sqlrustgo_parser::InsertStatement {
+                table: "t".into(),
+                columns: vec![],
+                values: vec![],
+                select: None,
+                is_replace: false,
+                on_duplicate_key_update: None,
+                on_conflict: None,
+                with_clause: None,
+            }),
+            &mut ctx,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_execute_recursive_cte_unsupported_statement() {
+        let ex = executor();
+        let mut ctx = ProcedureContext::new();
+        let result = ex.execute_recursive_cte(
+            &sqlrustgo_parser::Statement::Delete(sqlrustgo_parser::DeleteStatement {
+                table: "t".into(),
+                where_clause: None,
+            }),
+            &sqlrustgo_parser::Statement::Delete(sqlrustgo_parser::DeleteStatement {
+                table: "t".into(),
+                where_clause: None,
+            }),
+            "cte",
+            &mut ctx,
+        );
+        assert!(result.is_err());
+    }
+}

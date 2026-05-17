@@ -1232,3 +1232,377 @@ impl StoredProcExecutor {
         ids
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlrustgo_parser::Expression;
+    use std::sync::Arc;
+
+    fn executor() -> StoredProcExecutor {
+        let catalog = Arc::new(sqlrustgo_catalog::Catalog::new("test"));
+        StoredProcExecutor::new_for_test(catalog)
+    }
+
+    fn ctx_with_vars() -> ProcedureContext {
+        let mut ctx = ProcedureContext::new();
+        ctx.set_var("x", Value::Integer(10));
+        ctx.set_var("y", Value::Text("hello".into()));
+        ctx.set_var("flag", Value::Boolean(true));
+        ctx
+    }
+
+    #[test]
+    fn test_extract_identifiers_from_expr_simple() {
+        let ex = executor();
+        let expr = Expression::Identifier("col1".into());
+        let ids = ex.extract_identifiers_from_expr(&expr);
+        assert_eq!(ids, vec!["col1"]);
+    }
+
+    #[test]
+    fn test_extract_identifiers_from_expr_binary() {
+        let ex = executor();
+        let expr = Expression::BinaryOp(
+            Box::new(Expression::Identifier("a".into())),
+            "+".into(),
+            Box::new(Expression::Identifier("b".into())),
+        );
+        let ids = ex.extract_identifiers_from_expr(&expr);
+        assert_eq!(ids, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn test_extract_identifiers_from_expr_case_when() {
+        use sqlrustgo_parser::parser::WhenClause;
+        let ex = executor();
+        let expr = Expression::CaseWhen(
+            vec![WhenClause {
+                condition: Expression::Identifier("x".into()),
+                result: Expression::Identifier("result".into()),
+            }],
+            Some(Box::new(Expression::Literal("default".into()))),
+        );
+        let ids = ex.extract_identifiers_from_expr(&expr);
+        assert!(ids.contains(&"x".into()));
+        assert!(ids.contains(&"result".into()));
+    }
+
+    #[test]
+    fn test_expand_variable_found() {
+        let ex = executor();
+        let ctx = ctx_with_vars();
+        let val = ex.expand_variable("x", &ctx);
+        assert_eq!(val, Value::Integer(10));
+    }
+
+    #[test]
+    fn test_expand_variable_not_found() {
+        let ex = executor();
+        let ctx = ProcedureContext::new();
+        let val = ex.expand_variable("unknown", &ctx);
+        assert_eq!(val, Value::Text("unknown".into()));
+    }
+
+    #[test]
+    fn test_expand_variables_in_sql() {
+        let ex = executor();
+        let mut ctx = ctx_with_vars();
+        ctx.set_var("name", Value::Text("Alice".into()));
+        let sql = ex.expand_variables_in_sql("SELECT * FROM users WHERE name = '@name'", &ctx);
+        assert!(sql.contains("Alice"));
+        assert!(!sql.contains("@name"));
+    }
+
+    #[test]
+    fn test_expand_variables_in_sql_no_vars() {
+        let ex = executor();
+        let ctx = ProcedureContext::new();
+        let sql = ex.expand_variables_in_sql("SELECT * FROM t", &ctx);
+        assert_eq!(sql, "SELECT * FROM t");
+    }
+
+    #[test]
+    fn test_escape_sql_value_integer() {
+        let ex = executor();
+        let val = Value::Integer(42);
+        let escaped = ex.escape_sql_value(&val);
+        assert_eq!(escaped, "42");
+    }
+
+    #[test]
+    fn test_escape_sql_value_text() {
+        let ex = executor();
+        let val = Value::Text("O'Neil".into());
+        let escaped = ex.escape_sql_value(&val);
+        assert!(escaped.contains("''"));
+    }
+
+    #[test]
+    fn test_escape_sql_value_null() {
+        let ex = executor();
+        let val = Value::Null;
+        let escaped = ex.escape_sql_value(&val);
+        assert_eq!(escaped, "NULL");
+    }
+
+    #[test]
+    fn test_evaluate_constant_integer() {
+        let ex = executor();
+        let val = ex.evaluate_constant("42");
+        assert_eq!(val, Value::Integer(42));
+    }
+
+    #[test]
+    fn test_evaluate_constant_float() {
+        let ex = executor();
+        let val = ex.evaluate_constant("3.14");
+        assert_eq!(val, Value::Float(3.14));
+    }
+
+    #[test]
+    fn test_evaluate_constant_null() {
+        let ex = executor();
+        let val = ex.evaluate_constant("NULL");
+        assert_eq!(val, Value::Null);
+    }
+
+    #[test]
+    fn test_evaluate_constant_text() {
+        let ex = executor();
+        let val = ex.evaluate_constant("'hello'");
+        assert_eq!(val, Value::Text("hello".into()));
+    }
+
+    #[test]
+    fn test_value_is_true_boolean() {
+        let ex = executor();
+        assert!(ex.value_is_true(&Value::Boolean(true)));
+        assert!(!ex.value_is_true(&Value::Boolean(false)));
+    }
+
+    #[test]
+    fn test_value_is_true_null() {
+        let ex = executor();
+        assert!(!ex.value_is_true(&Value::Null));
+    }
+
+    #[test]
+    fn test_value_is_true_other() {
+        let ex = executor();
+        assert!(ex.value_is_true(&Value::Integer(42)));
+        assert!(ex.value_is_true(&Value::Text("hello".into())));
+    }
+
+    #[test]
+    fn test_evaluate_condition_true() {
+        let ex = executor();
+        let ctx = ctx_with_vars();
+        let result = ex.evaluate_condition("1 = 1", &ctx);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_evaluate_condition_false() {
+        let ex = executor();
+        let ctx = ctx_with_vars();
+        let result = ex.evaluate_condition("1 = 2", &ctx);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_evaluate_condition_with_var() {
+        let ex = executor();
+        let ctx = ctx_with_vars();
+        let result = ex.evaluate_condition("x > 5", &ctx);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_evaluate_expression() {
+        let ex = executor();
+        let ctx = ctx_with_vars();
+        let val = ex.evaluate_expression("x + 5", &ctx);
+        assert_eq!(val, Ok(Value::Integer(15)));
+    }
+
+    #[test]
+    fn test_evaluate_expression_with_row() {
+        let ex = executor();
+        let row = vec![Value::Integer(1), Value::Integer(2), Value::Integer(3)];
+        let val = ex.evaluate_expression_with_row(
+            &Expression::BinaryOp(
+                Box::new(Expression::Identifier("0".into())),
+                "+".into(),
+                Box::new(Expression::Identifier("1".into())),
+            ),
+            &row,
+        );
+        assert_eq!(val, Value::Integer(3));
+    }
+
+    #[test]
+    fn test_evaluate_expression_with_binding() {
+        let ex = executor();
+        let row = vec![Value::Integer(10), Value::Integer(20)];
+        let bindings = vec![("a".into(), 0), ("b".into(), 1)];
+        let val = ex.evaluate_expression_with_binding(
+            &Expression::BinaryOp(
+                Box::new(Expression::Identifier("a".into())),
+                "*".into(),
+                Box::new(Expression::Identifier("b".into())),
+            ),
+            &row,
+            &bindings,
+        );
+        assert_eq!(val, Value::Integer(200));
+    }
+
+    #[test]
+    fn test_evaluate_expression_with_binding_not_found() {
+        let ex = executor();
+        let row = vec![Value::Integer(10)];
+        let bindings: Vec<(String, usize)> = vec![];
+        let val = ex.evaluate_expression_with_binding(
+            &Expression::Identifier("unknown".into()),
+            &row,
+            &bindings,
+        );
+        assert_eq!(val, Value::Text("unknown".into()));
+    }
+
+    #[test]
+    fn test_ge_values_true() {
+        let ex = executor();
+        assert!(ex.ge_values(&Value::Integer(10), &Value::Integer(5)));
+        assert!(ex.ge_values(&Value::Integer(5), &Value::Integer(5)));
+    }
+
+    #[test]
+    fn test_ge_values_false() {
+        let ex = executor();
+        assert!(!ex.ge_values(&Value::Integer(3), &Value::Integer(5)));
+    }
+
+    #[test]
+    fn test_le_values_true() {
+        let ex = executor();
+        assert!(ex.le_values(&Value::Integer(3), &Value::Integer(5)));
+        assert!(ex.le_values(&Value::Integer(5), &Value::Integer(5)));
+    }
+
+    #[test]
+    fn test_le_values_false() {
+        let ex = executor();
+        assert!(!ex.le_values(&Value::Integer(10), &Value::Integer(5)));
+    }
+
+    #[test]
+    fn test_compare_values_equals() {
+        let ex = executor();
+        assert!(ex.compare_values(&Value::Integer(5), &Value::Integer(5), "="));
+    }
+
+    #[test]
+    fn test_compare_values_not_equals() {
+        let ex = executor();
+        assert!(ex.compare_values(&Value::Integer(5), &Value::Integer(3), "!="));
+    }
+
+    #[test]
+    fn test_compare_values_less() {
+        let ex = executor();
+        assert!(ex.compare_values(&Value::Integer(3), &Value::Integer(5), "<"));
+    }
+
+    #[test]
+    fn test_compare_values_greater() {
+        let ex = executor();
+        assert!(ex.compare_values(&Value::Integer(10), &Value::Integer(5), ">"));
+    }
+
+    #[test]
+    fn test_compare_values_text() {
+        let ex = executor();
+        assert!(ex.compare_values(
+            &Value::Text("apple".into()),
+            &Value::Text("banana".into()),
+            "<"
+        ));
+    }
+
+    #[test]
+    fn test_partial_cmp_ordered() {
+        let ex = executor();
+        assert_eq!(
+            ex.partial_cmp(&Value::Integer(1), &Value::Integer(2)),
+            Some(std::cmp::Ordering::Less)
+        );
+        assert_eq!(
+            ex.partial_cmp(&Value::Integer(2), &Value::Integer(1)),
+            Some(std::cmp::Ordering::Greater)
+        );
+        assert_eq!(
+            ex.partial_cmp(&Value::Integer(1), &Value::Integer(1)),
+            Some(std::cmp::Ordering::Equal)
+        );
+    }
+
+    #[test]
+    fn test_partial_cmp_null() {
+        let ex = executor();
+        assert_eq!(ex.partial_cmp(&Value::Null, &Value::Integer(1)), None);
+        assert_eq!(ex.partial_cmp(&Value::Integer(1), &Value::Null), None);
+    }
+
+    #[test]
+    fn test_like_match_exact() {
+        let ex = executor();
+        assert!(ex.like_match(&Value::Text("hello".into()), &Value::Text("hello".into())));
+        assert!(!ex.like_match(&Value::Text("hello".into()), &Value::Text("world".into())));
+    }
+
+    #[test]
+    fn test_like_match_percent() {
+        let ex = executor();
+        assert!(ex.like_match(
+            &Value::Text("hello world".into()),
+            &Value::Text("hello%".into())
+        ));
+        assert!(ex.like_match(&Value::Text("hello".into()), &Value::Text("%hello%".into())));
+        assert!(!ex.like_match(&Value::Text("world".into()), &Value::Text("hello%".into())));
+    }
+
+    #[test]
+    fn test_like_match_underscore() {
+        let ex = executor();
+        assert!(ex.like_match(&Value::Text("abc".into()), &Value::Text("a_c".into())));
+        assert!(!ex.like_match(&Value::Text("ab".into()), &Value::Text("a_c".into())));
+    }
+
+    #[test]
+    fn test_like_match_empty() {
+        let ex = executor();
+        assert!(ex.like_match(&Value::Text("".into()), &Value::Text("%".into())));
+    }
+
+    #[test]
+    fn test_between_match_in_range() {
+        let ex = executor();
+        assert!(ex.between_match(&Value::Integer(5), &Value::Integer(1), &Value::Integer(10)));
+        assert!(!ex.between_match(&Value::Integer(0), &Value::Integer(1), &Value::Integer(10)));
+    }
+
+    #[test]
+    fn test_regexp_match() {
+        let ex = executor();
+        assert!(ex.regexp_match(
+            &Value::Text("hello123".into()),
+            &Value::Text("hello".into())
+        ));
+        assert!(!ex.regexp_match(&Value::Text("world".into()), &Value::Text("hello".into())));
+    }
+}
