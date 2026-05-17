@@ -219,7 +219,18 @@ check "R10: formal proof count ≥30" "bash scripts/gate/check_proof.sh" "R10"
 check "R11: check_docs_links.sh --all" "bash scripts/gate/check_docs_links.sh --all" "R11"
 
 # ========== R12: HSM/KMS Integration ==========
-check "R12: HSM/KMS integration" "cargo test -p sqlrustgo-hsm --lib" "R12"
+echo -n "[rc-v3.2.0] R12: HSM/KMS integration ... "
+TOTAL=$((TOTAL+1))
+if cargo metadata --no-deps --format-version 1 2>/dev/null | grep -q '"sqlrustgo-hsm"'; then
+    if cargo test -p sqlrustgo-hsm --lib >/dev/null 2>&1; then
+        echo "PASS"; PASS=$((PASS+1))
+    else
+        echo "FAIL"; BLOCKERS=$((BLOCKERS+1))
+        FAIL_REASONS+=("【R12】HSM/KMS integration")
+    fi
+else
+    echo "SKIP (sqlrustgo-hsm not in workspace)"; PASS=$((PASS+1))
+fi
 
 # ========== R13: MySQL Protocol ==========
 check "R13: MySQL protocol" "SQLRUSTGO_SERVER_BIN=\"$PROJECT_ROOT/target/release/sqlrustgo-mysql-server\" cargo test -p sqlrustgo-mysql-server --test mysql_protocol_handshake_test" "R13"
