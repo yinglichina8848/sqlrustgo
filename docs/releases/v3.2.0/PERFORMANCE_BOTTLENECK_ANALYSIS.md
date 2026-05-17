@@ -1,15 +1,26 @@
 # SQLRustGo v3.2.0 性能瓶颈分析报告
 
-> **版本**: v1.0
-> **日期**: 2026-05-17
-> **状态**: RC Gate 分析
+> **版本**: v1.1
+> **日期**: 2026-05-18
+> **状态**: 更新 - Issue #1156 修复
 > **基于**: v3.1.0 SYSTEM_BOTTLENECK_ANALYSIS.md + v3.2.0 RC Gate 结果
 
 ---
 
 ## 一、当前性能基线
 
-### 1.1 QPS 基准测试结果 (v3.2.0)
+### 1.1 Storage Layer Benchmark (MemoryStorage, 2026-05-18)
+
+| 操作 | 延迟 | QPS (估算) |
+|------|------|------------|
+| DELETE indexed | 0.30µs/op | ~3,333,333 |
+| DELETE all (1k rows) | 0.65µs/op | ~1,538,462 |
+| UPDATE indexed | 24-25µs/op | ~40,000 |
+| UPDATE all (1k rows) | 34-35µs/op | ~28,753 |
+
+> 注: Storage Layer 为纯内存操作，E2E QPS 受 MySQL 协议层/事务/GMP 审计影响。
+
+### 1.2 Sysbench QPS 基准测试结果 (v3.2.0)
 
 | 基准测试 | v3.2.0 QPS | v3.1.0 目标 | 状态 |
 |----------|-------------|-------------|------|
@@ -23,7 +34,7 @@
 | concurrent_select_8t | 487K | - | ✅ 良好 |
 | **complex_where** | **368** | ≥5K | ❌ **极低** |
 
-### 1.2 v3.1.0 对比分析
+### 1.3 v3.1.0 对比分析
 
 | 指标 | v3.0.0 GA | v3.1.0 目标 | v3.2.0 当前 | 变化 |
 |------|-----------|-------------|-------------|------|
@@ -34,6 +45,17 @@
 | aggregation | 671K | ≥600K | 1.27M | +89% |
 
 **关键发现**: UPDATE/DELETE/INSERT 性能从 400K-700K 级别暴跌至 55K-62K，降幅超过 85%。
+
+### 1.4 Issue #1156 修复 (2026-05-18)
+
+| 修复项 | 修复前 | 修复后 |
+|--------|--------|--------|
+| 根因 | `audit_logger.rs` 每次插入执行 O(n) 全表扫描 | 原子计数器 `AUDIT_LOG_COUNTER` → O(1) |
+| PR | - | [#1179](http://192.168.0.252:3000/openclaw/sqlrustgo/pulls/1179) |
+
+**Storage Layer 基准**:
+- UPDATE indexed: 4.49µs/op ✅
+- DELETE indexed: 0.04µs/op ✅
 
 ---
 
