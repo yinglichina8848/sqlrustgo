@@ -32,6 +32,7 @@ k256 = "0.14.0-rc.9"
 ring = "0.17"
 clap = { version = "4.0", features = ["derive"] }
 printpdf = "0.7"
+chrono = "0.4"
 
 [[bin]]
 name = "sqlrustgo-gmp-cli"

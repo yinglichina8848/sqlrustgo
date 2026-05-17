@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use thiserror::Error;
+use rand::RngCore;
 
 /// 包清单结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,22 +58,46 @@ pub struct VerificationReport {
     pub errors: Vec<String>,
 }
 
+/// Audit Chain Record
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditChainRecord {
+    pub action: String,
+    pub block_height: u64,
+    pub hash: String,
+    pub timestamp: i64,
+}
+
+/// Evidence Record
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvidenceRecord {
+    pub operation: String,
+    pub hash: String,
+    pub timestamp: i64,
+}
+
+/// Proof
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Proof {
+    pub proof_type: String,
+    pub data: String,
+}
+
 /// JSON Exporter
 pub struct JsonExporter;
 
 impl JsonExporter {
     /// Export audit chain records to JSON bytes
-    pub fn export_records(records: &[super::AuditChainRecord]) -> Result<Vec<u8>, ExportError> {
+    pub fn export_records(records: &[AuditChainRecord]) -> Result<Vec<u8>, ExportError> {
         serde_json::to_vec_pretty(records).map_err(ExportError::SerializationError)
     }
 
     /// Export evidence records to JSON bytes
-    pub fn export_evidence(evidence: &[super::EvidenceRecord]) -> Result<Vec<u8>, ExportError> {
+    pub fn export_evidence(evidence: &[EvidenceRecord]) -> Result<Vec<u8>, ExportError> {
         serde_json::to_vec_pretty(evidence).map_err(ExportError::SerializationError)
     }
 
     /// Export proof to JSON bytes
-    pub fn export_proof(proof: &super::types::Proof) -> Result<Vec<u8>, ExportError> {
+    pub fn export_proof(proof: &Proof) -> Result<Vec<u8>, ExportError> {
         serde_json::to_vec_pretty(proof).map_err(ExportError::SerializationError)
     }
 }
@@ -84,8 +109,8 @@ impl PdfExporter {
     /// Generate a compliance report PDF from audit chain summary
     pub fn generate_compliance_report(
         title: &str,
-        records: &[super::AuditChainRecord],
-        evidence: &[super::EvidenceRecord],
+        records: &[AuditChainRecord],
+        evidence: &[EvidenceRecord],
     ) -> Result<Vec<u8>, ExportError> {
         use printpdf::*;
 
@@ -119,12 +144,15 @@ impl PdfExporter {
         }
 
         let mut bytes = Vec::new();
-        doc.save(&mut bytes).map_err(|e| ExportError::PdfError(e.to_string()))?;
+        {
+            let mut writer = std::io::BufWriter::new(&mut bytes);
+            doc.save(&mut writer).map_err(|e| ExportError::PdfError(e.to_string()))?;
+        }
         Ok(bytes)
     }
 }
 
-use ed25519_dalek::{Signature, Signer, SigningKey};
+use ed25519_dalek::{Signer, SigningKey};
 use rand::rngs::OsRng;
 
 pub struct SignerEd25519 {
@@ -133,7 +161,9 @@ pub struct SignerEd25519 {
 
 impl SignerEd25519 {
     pub fn new() -> Self {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let mut secret_key_bytes = [0u8; 32];
+        OsRng.fill_bytes(&mut secret_key_bytes);
+        let signing_key = SigningKey::from_bytes(&secret_key_bytes);
         Self { signing_key }
     }
 
@@ -173,8 +203,8 @@ pub fn verify_signature(data: &[u8], signature: &[u8], public_key: &[u8]) -> Res
 }
 
 pub struct PackageBuilder {
-    records: Vec<super::AuditChainRecord>,
-    evidence: Vec<super::EvidenceRecord>,
+    records: Vec<AuditChainRecord>,
+    evidence: Vec<EvidenceRecord>,
     signer: Option<SignerEd25519>,
     from_timestamp: i64,
     to_timestamp: i64,
@@ -191,12 +221,12 @@ impl PackageBuilder {
         }
     }
 
-    pub fn with_records(mut self, records: Vec<super::AuditChainRecord>) -> Self {
+    pub fn with_records(mut self, records: Vec<AuditChainRecord>) -> Self {
         self.records = records;
         self
     }
 
-    pub fn with_evidence(mut self, evidence: Vec<super::EvidenceRecord>) -> Self {
+    pub fn with_evidence(mut self, evidence: Vec<EvidenceRecord>) -> Self {
         self.evidence = evidence;
         self
     }
@@ -239,7 +269,10 @@ impl PackageBuilder {
 
         let manifest_json = serde_json::to_vec_pretty(&manifest).map_err(ExportError::SerializationError)?;
 
-        let signed_data = [&manifest_json, &records_json, &evidence_json, &pdf_bytes].concat();
+        let mut signed_data = manifest_json.clone();
+        signed_data.extend_from_slice(&records_json);
+        signed_data.extend_from_slice(&evidence_json);
+        signed_data.extend_from_slice(&pdf_bytes);
         let signature = signer.sign(&signed_data);
 
         std::fs::write(output_dir.join("manifest.json"), &manifest_json)?;
@@ -273,7 +306,10 @@ impl PackageBuilder {
 
         let manifest: PackageManifest = serde_json::from_slice(&manifest_bytes).map_err(ExportError::SerializationError)?;
 
-        let signed_data = [&manifest_bytes, &records_json, &evidence_json, &pdf_bytes].concat();
+        let mut signed_data = manifest_bytes.clone();
+        signed_data.extend_from_slice(&records_json);
+        signed_data.extend_from_slice(&evidence_json);
+        signed_data.extend_from_slice(&pdf_bytes);
         let sig_valid = verify_signature(&signed_data, &signature, &public_key)?;
 
         let manifest_valid = manifest.files.iter().all(|f| {
