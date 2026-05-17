@@ -228,7 +228,7 @@ bash scripts/gate/check_tpch.sh --sf1
 | L-002 | (待建) | P0 | — | v3.3.0 RC | 🔴 Open |
 | L-003 | #1198 | P1 | — | v3.3.0 RC | 🟡 Open |
 | L-004 | #1198 | P2 | — | v3.3.0 GA | 🟡 Open |
-| L-005 | (待建) | P3 | — | v3.3.0 Alpha | 🟡 Open |
+| L-005 | #1202 | P3 | — | v3.3.0 Alpha | ✅ Closed |
 
 ---
 
@@ -236,9 +236,7 @@ bash scripts/gate/check_tpch.sh --sf1
 
 | 遗留 ID | PR | 内容 | 状态 |
 |---------|-----|------|------|
-| — | — | — | — |
-
-（修复 PR 建立后在此记录）
+| L-005 | #1210 | docs: establish coverage SSOT and fix data contradiction | ✅ Closed |
 
 ---
 
