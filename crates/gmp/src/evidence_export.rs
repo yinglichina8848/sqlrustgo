@@ -123,3 +123,51 @@ impl PdfExporter {
         Ok(bytes)
     }
 }
+
+use ed25519_dalek::{Signature, Signer, SigningKey};
+use rand::rngs::OsRng;
+
+pub struct SignerEd25519 {
+    signing_key: SigningKey,
+}
+
+impl SignerEd25519 {
+    pub fn new() -> Self {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        Self { signing_key }
+    }
+
+    pub fn from_secret_key(secret_key: &[u8; 32]) -> Result<Self, ExportError> {
+        let signing_key = SigningKey::from_bytes(secret_key);
+        Ok(Self { signing_key })
+    }
+
+    pub fn sign(&self, data: &[u8]) -> Vec<u8> {
+        let signature = self.signing_key.sign(data);
+        signature.to_bytes().to_vec()
+    }
+
+    pub fn public_key(&self) -> Vec<u8> {
+        self.signing_key.verifying_key().to_bytes().to_vec()
+    }
+}
+
+impl Default for SignerEd25519 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub fn verify_signature(data: &[u8], signature: &[u8], public_key: &[u8]) -> Result<bool, ExportError> {
+    use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+
+    if signature.len() != 64 {
+        return Err(ExportError::SignatureError("Invalid signature length".to_string()));
+    }
+
+    let signature = Signature::from_bytes(signature.try_into().map_err(|_| ExportError::SignatureError("Signature parse error".to_string()))?);
+    let verifying_key = VerifyingKey::from_bytes(public_key.try_into().map_err(|_| ExportError::SignatureError("Public key parse error".to_string()))?)
+        .map_err(|e| ExportError::SignatureError(e.to_string()))?;
+
+    Ok(verifying_key.verify(data, &signature).is_ok())
+}
