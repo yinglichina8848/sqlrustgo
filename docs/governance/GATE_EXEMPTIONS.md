@@ -25,6 +25,10 @@
 | EX-004 | v3.0.0 | GA-GAP-02 Point SELECT QPS | **豁免** | 🔄 Beta 阶段 | Point SELECT QPS=7,312 < 10,000（GA-Gate 目标），但满足 B-Gate 要求。长期目标 v3.1.0 优化索引消除全表扫描。E-09 floor (UPDATE/DELETE ≥10K) 仍然强制执行。 | Tech Lead | 2026-05-08 | — | v3.0.0 GA 前 | UPDATE=42,427 ✅ DELETE=62,352 ✅ |
 | EX-005 | v3.0.0 | GA-GAP-03 SQL Corpus 94.1% | **豁免** | 🔄 Beta 阶段 | SQL Corpus 94.1% < 98%（GA-Gate 目标），但 ≥90% 满足 B-Gate 要求。R8 Beta Gate 要求 ≥80%。v3.1.0 补充测试用例。 | Tech Lead | 2026-05-08 | — | v3.0.0 GA 前 | R8 (B-Gate) 要求 ≥80%，已满足 |
 | EX-006 | v3.0.0 | GA-GAP-01 cargo audit 警告 | **延期** | 🔄 Beta 阶段 | cargo audit 存在 7 个 unmaintained/soundness 警告（RUSTSEC-2025-0056, RUSTSEC-2021-0139, RUSTSEC-2024-0375, RUSTSEC-2024-0436, RUSTSEC-2024-0370, RUSTSEC-2021-0145, RUSTSEC-2026-0002）。无真正漏洞（exit=0）。修复需要依赖上游升级，决定延期到 v3.1.0。 | Tech Lead | 2026-05-08 | — | v3.1.0 GA 前 | 所有警告均来自间接依赖，升级需要等待上游 |
+| EX-v320-001 | v3.2.0 | G5 Coverage (executor 70.7% < 85%) | **延期** | 🔴 Open | executor 模块覆盖率 70.70%，低于 GA Gate 要求的 85%。根因为 stored_proc.rs (41.8% 覆盖，1,748 行未覆盖) 架构设计问题：过长函数 + 深度嵌套控制流导致现有 417 个测试无法触达。需模块拆分重构。Issue #1196/#1197 已建。 | Tech Lead | 2026-05-18 | #1196, #1197 | **v3.3.0 Alpha 前** | 需拆分 stored_proc.rs 为独立子模块后重测 |
+| EX-v320-002 | v3.2.0 | G12 MySQL Protocol 握手失败 | **延期** | 🔴 Open | `mysql::Conn::new()` 返回 `DriverError { Could not setup connection }`。根因为 sqlrustgo-mysql-server 握手状态机/ auth plugin 兼容性问题。GA_READINESS_GAP_ANALYSIS.md §3 记录。需抓包调试 + 协议规范对照修复。 | Tech Lead | 2026-05-18 | (待建 Issue) | **v3.3.0 Alpha 前** | 握手包交换流程调试，参考 docs/releases/v3.1.0/MYSQL_PROTOCOL_OPTIMIZATION.md |
+| EX-v320-003 | v3.2.0 | G8 TPC-H SF=1 数据缺失 | **延期** | 🔴 Open | `tpch_data/` 目录不存在，无法运行 TPC-H SF=1 验证。GA_READINESS_GAP_ANALYSIS.md §3 记录。Issue #1198 部分追踪。需在 Z6G4 服务器上生成 SF=1 数据并执行 `check_tpch.sh --sf1`。 | Tech Lead | 2026-05-18 | #1198 | **v3.3.0 Alpha 前** | `bash scripts/gate/setup_tpch_env.sh --sf 1` |
+| EX-v320-004 | v3.2.0 | G-S9 Sysbench (需服务器环境) | **延期** | 🟡 Open | Sysbench 需大内存服务器环境（Z6G4），本地无法执行。GA Gate Checklist 标注为 ⬜。Issue #1198 部分追踪（72h 稳定性测试同属服务器专属项）。 | Tech Lead | 2026-05-18 | #1198 | **v3.3.0 Alpha 前** | 在 Z6G4 服务器执行 `bash scripts/gate/check_sysbench.sh` |
 
 ---
 
@@ -77,3 +81,4 @@
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | 1.0 | 2026-05-05 | 初始版本，记录 EX-001（性能基准先决条件）、EX-002（B-Gate executor 豁免）、EX-003（R10 追溯延期） |
+| 1.1 | 2026-05-18 | 新增 EX-v320-001（executor 覆盖率 70.7%）、EX-v320-002（MySQL Protocol 握手失败）、EX-v320-003（TPC-H SF=1 数据缺失）、EX-v320-004（Sysbench 服务器环境） |
