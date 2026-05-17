@@ -325,8 +325,174 @@ bash scripts/gate/check_tpch.sh --sf1
 
 ---
 
+## 九、AI 辅助开发规划
+
+### 9.1 多模型评估机制
+
+v3.3.0 引入**多模型交叉评估**模式，参考 v1.3.0 CRAFT_PLAN 的成功实践。
+
+#### 评估模型分工
+
+| AI 模型 | 角色 | 擅长领域 | 评估重点 |
+|---------|------|----------|----------|
+| **Claude Code** | 主开发 Agent | Rust/系统编程、架构设计 | 代码质量、内存安全、clippy |
+| **DeepSeek** | 文档与分析 Agent | 根因分析、测试设计 | 测试覆盖、边界条件 |
+| **MiniMax (本 Agent)** | 首席架构师 | 编排与决策 | 版本规划、风险评估、进度追踪 |
+
+#### 评估触发规则
+
+| 场景 | 触发条件 | 评估模型 |
+|------|----------|----------|
+| P0 Issue 开始前 | — | Claude + DeepSeek 双重评估 |
+| P0 Issue PR 合并前 | — | Claude + DeepSeek 交叉 Review |
+| Alpha Gate 前 | — | 三模型综合评审 |
+| Beta Gate 前 | — | 三模型综合评审 |
+| 豁免复审 | EX-v320-xxx 复审 | DeepSeek 主导分析 |
+
+### 9.2 AI 辅助开发任务
+
+#### 9.2.1 AI Test Generator（参考 QA_ENHANCEMENT_PLAN.md）
+
+基于 LLM 的测试生成器，用于快速构建覆盖率测试：
+
+```
+crates/qa/src/ai_test_generator.rs
+├── generate_tests(module, context) -> Vec<TestCase>
+├── call_llm(prompt) -> String
+└── parse_test_cases(response) -> Vec<TestCase>
+```
+
+**适用场景**：executor 子模块（expression.rs, cte.rs, cursor.rs）单元测试快速生成
+
+#### 9.2.2 Intelligent Test Selection
+
+基于历史数据预测哪些测试最可能失败，减少 CI 时间：
+
+```
+scripts/qa/intelligent_test_selection.py
+├── predict_failure_probability(code_changes)
+├── select_tests(code_changes, max_tests=100)
+└── retrain(new_data)
+```
+
+#### 9.2.3 AI-Powered Bug Triage
+
+自动分类和路由 Bug：
+
+```
+crates/qa/src/ai_bug_triage.rs
+├── BugTriageAI::triage(report) -> TriageResult
+│   ├── predict_severity
+│   ├── predict_module
+│   ├── find_similar_bugs
+│   └── suggest_fix
+```
+
+### 9.3 Self-Healing CI/CD
+
+#### 9.3.1 Flaky Test Detection
+
+```rust
+// crates/qa/src/flaky_detector.rs
+pub struct FlakyTestDetector {
+    history_db: HistoryDatabase,
+    significance_threshold: f64,  // 0.05
+    min_runs: u32,                 // 10
+}
+
+pub enum FlakyAction {
+    Retry(RetryConfig),
+    MarkKnownFlaky(KnownFlaky),
+    RequiresInvestigation,
+    NeedsFix,
+}
+```
+
+#### 9.3.2 CI 自动修复流程
+
+```
+Flaky Test Detection → Auto-Retry (3x) → Known Flaky DB Update
+                                              ↓
+Build Failure → Anomaly Detection → Auto-Isolate Failed Jobs
+                              ↓
+Performance Regression → Alert + Rollback
+```
+
+### 9.4 工具链配置
+
+```bash
+# .env 示例
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+DEEPSEEK_API_KEY=sk-...
+
+# 模型路由配置 (models.toml)
+[models.router]
+default = "claude-sonnet-4"
+
+[models.routing]
+rust_code_generation = "claude-sonnet-4"
+test_generation = "deepseek-chat"
+bug_analysis = "deepseek-chat"
+document_generation = "openai-gpt-4o"
+```
+
+### 9.5 AI 辅助开发 Issue
+
+| # | 标题 | 验收标准 |
+|---|------|----------|
+| #1225 | AI Test Generator — executor 子模块测试生成 | expression.rs/cte.rs/cursor.rs 覆盖+800 行 |
+| #1226 | Intelligent Test Selection — PR 智能测试选择 | 预测准确率 >70% |
+| #1227 | Bug Triage AI — Issue 自动分类与路由 | precision >80% |
+| #1228 | Flaky Test Detector — 稳定性测试自动标记 | pass_rate tracking |
+
+---
+
+## 十、多模型协作策略
+
+### 10.1 Agent 分工（v3.3.0）
+
+| Agent | 工作目录 | 负责任务 | 主力模型 |
+|-------|---------|----------|----------|
+| **hermes-z6g4** | `/home/openclaw/dev/yinglichina163/sqlrustgo` | P0 开发和测试执行 | Claude Code |
+| **hermes-local** | `/Users/liying/workspace/dev/yinglichina163/sqlrustgo` | 文档、Issue、PR 管理 | MiniMax |
+| **deepseek** (外部) | — | 根因分析、测试设计审查 | DeepSeek |
+
+### 10.2 协作流程
+
+```
+Issue 创建 (hermes-local)
+    ↓
+根因分析 (deepseek)
+    ↓
+双重评估 (Claude Code + deepseek)
+    ↓
+PR 创建 (hermes-z6g4)
+    ↓
+交叉 Review (Claude Code review + deepseek analysis)
+    ↓
+合并 (hermes-local)
+    ↓
+智能测试选择 (intelligent_test_selection.py)
+    ↓
+CI 执行 (Nomad/Z6G4)
+```
+
+### 10.3 v3.3.0 AI 成熟度目标
+
+| 维度 | v3.2.0 基线 | v3.3.0 目标 |
+|------|-------------|-------------|
+| AI 测试生成 | 无 | executor 子模块覆盖+800 行 |
+| 智能测试选择 | 无 | PR 覆盖减少 30% |
+| Bug 自动分类 | 无 | precision >80% |
+| Flaky Test Detection | 无 | 自动标记已知 flaky |
+| CI 自愈 | 无 | Auto-retry 3x |
+
+---
+
 ## 八、变更历史
 
-|| 版本 | 日期 | 说明 |
-||------|------|------|
-|| 1.0 | 2026-05-18 | 初始版本，基于 v3.2.0 GA 遗留问题分析 |
+||| 版本 | 日期 | 说明 |
+|||------|------|------|
+||| 1.0 | 2026-05-18 | 初始版本，基于 v3.2.0 GA 遗留问题分析 |
+||| 1.1 | 2026-05-18 | 新增第九节 AI 辅助开发规划、第十节多模型协作策略，整合 v1.3.0 CRAFT_PLAN 和 v3.3.0 QA_ENHANCEMENT_PLAN |
