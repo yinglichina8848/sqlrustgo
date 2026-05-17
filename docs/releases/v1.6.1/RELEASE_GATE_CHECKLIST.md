@@ -617,10 +617,7 @@ echo "=== 所有门禁检查通过 ($STAGE) ==="
 
 ## 十四、PostgreSQL 对比 (PR #699)
 
-PR #699 已合并，包含:
-
-- [docs/POSTGRESQL_SETUP.md](../../POSTGRESQL_SETUP.md) - PostgreSQL 安装配置指南
-- [BENCHMARK_COMPARISON_REPORT.md](../../../benchmark_results/BENCHMARK_COMPARISON_REPORT.md) - 性能基准报告
+PR #699 已合并，包含 PostgreSQL 对比功能。
 
 ### PostgreSQL 对比测试
 
