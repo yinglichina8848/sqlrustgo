@@ -59,6 +59,7 @@ pub mod electronic_signature;
 pub mod embedding;
 pub mod evidence;
 pub mod evidence_api;
+pub mod evidence_export;
 pub mod evidence_storage;
 pub mod evidence_verification;
 pub mod hsm;
