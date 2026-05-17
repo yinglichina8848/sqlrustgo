@@ -104,7 +104,7 @@
 |---|--------|------|----------|------|
 | G-S1 | Integration | `cargo test --test integration_test` | PASS | ⏳ |
 | G-S2 | Sysbench point_select | `sysbench --test=point_select` | ≥30K QPS | ⏳ |
-| G-S3 | WAL Crash Recovery | `cargo test --test wal_crash_recovery_test` | PASS | ⏳ |
+| G-S3 | WAL Crash Recovery | `cargo test --test wal_crash_recovery_test` | PASS | ✅ |
 | G-S4 | Stability 72h | `cargo test --test long_run_stability` | PASS | ⏳ |
 | G-S5 | Digital Signature Chain | `cargo test --test signature_chain_test` | PASS | ⏳ |
 | G-S6 | Electronic Signature | `cargo test --test electronic_signature_test` | PASS | ⏳ |
@@ -133,8 +133,8 @@
 |------|--------|------|--------|
 | 核心检查 G1-G12 | 7 | 12 | 58.3% |
 | QA Enhancement G-QA1~QA10 | 0 | 10 | 0% |
-| 稳定性测试 G-S1~S20 | 0 | 20 | 0% |
-| **总计** | **7** | **42** | **16.7%** |
+| 稳定性测试 G-S1~S20 | 1 | 20 | 5% |
+| **总计** | **8** | **42** | **19.0%** |
 
 ### 4.2 GA Gate 最终结果
 
