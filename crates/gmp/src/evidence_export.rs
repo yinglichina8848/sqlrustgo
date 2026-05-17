@@ -76,3 +76,50 @@ impl JsonExporter {
         serde_json::to_vec_pretty(proof).map_err(ExportError::SerializationError)
     }
 }
+
+/// PDF Exporter using printpdf
+pub struct PdfExporter;
+
+impl PdfExporter {
+    /// Generate a compliance report PDF from audit chain summary
+    pub fn generate_compliance_report(
+        title: &str,
+        records: &[super::AuditChainRecord],
+        evidence: &[super::EvidenceRecord],
+    ) -> Result<Vec<u8>, ExportError> {
+        use printpdf::*;
+
+        let (doc, page1, layer1) = PdfDocument::new(title, Mm(210.0), Mm(297.0), "Layer 1");
+        let current_layer = doc.get_page(page1).get_layer(layer1);
+
+        let font = doc.add_builtin_font(BuiltinFont::Helvetica).map_err(|e| ExportError::PdfError(e.to_string()))?;
+
+        current_layer.use_text(title.to_string(), 24.0, Mm(20.0), Mm(277.0), &font);
+
+        let mut y_pos = 260.0;
+        current_layer.use_text("Audit Chain Records", 16.0, Mm(20.0), Mm(y_pos), &font);
+        y_pos -= 10.0;
+
+        for record in records.iter().take(20) {
+            if y_pos < 40.0 { break; }
+            let text = format!("- {}: block {} hash={}", record.action, record.block_height, &record.hash[..8]);
+            current_layer.use_text(text, 10.0, Mm(25.0), Mm(y_pos), &font);
+            y_pos -= 7.0;
+        }
+
+        y_pos -= 10.0;
+        current_layer.use_text("Evidence Records", 16.0, Mm(20.0), Mm(y_pos), &font);
+        y_pos -= 10.0;
+
+        for ev in evidence.iter().take(20) {
+            if y_pos < 40.0 { break; }
+            let text = format!("- {}: {}", ev.operation, &ev.hash[..8]);
+            current_layer.use_text(text, 10.0, Mm(25.0), Mm(y_pos), &font);
+            y_pos -= 7.0;
+        }
+
+        let mut bytes = Vec::new();
+        doc.save(&mut bytes).map_err(|e| ExportError::PdfError(e.to_string()))?;
+        Ok(bytes)
+    }
+}
