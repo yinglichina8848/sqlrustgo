@@ -4,6 +4,8 @@
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crossbeam_channel::{bounded, Sender};
+use mio::net::{TcpListener, TcpStream};
+use mio::{Events, Poll, PollOpt, Token};
 use rcgen::{CertificateParams, KeyPair};
 use sha1::{Digest, Sha1};
 use sqlrustgo::execution_engine::EngineConfig;
@@ -13,7 +15,8 @@ use sqlrustgo_storage::{MemoryStorage, StorageEngine};
 use sqlrustgo_types::{SqlError, Value};
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
@@ -2635,22 +2638,57 @@ pub fn run_server_with_pool(host: &str, port: u16, pool_size: usize) -> MySqlRes
     let user_store = Arc::new(UserStore::new());
     let pool = ConnectionThreadPool::new(pool_size);
 
+    let mut poll = Poll::new()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("poll new: {}", e)))?;
+    const LISTENER: Token = Token(0);
+    poll.register(&listener, LISTENER, PollOpt::edge() | PollOpt::oneshot())
+        .map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::Other, format!("poll register: {}", e))
+        })?;
+
+    tracing::info!("Accept loop using mio (token={:?})", LISTENER);
+
+    let mut events = Events::with_capacity(1024);
     loop {
-        match listener.accept() {
-            Ok((stream, addr)) => {
-                let task = ConnectionTask {
-                    stream,
-                    addr,
-                    storage: storage.clone(),
-                    tls_config: tls_config.clone(),
-                    user_store: user_store.clone(),
-                };
-                pool.spawn(task);
+        match poll.poll(&mut events, None) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => {
+                tracing::error!("Poll error: {}", e);
+                break;
             }
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                thread::sleep(std::time::Duration::from_micros(100));
+        }
+
+        for event in &events {
+            if event.token() == LISTENER {
+                match listener.accept() {
+                    Ok((stream, addr)) => {
+                        let task = ConnectionTask {
+                            stream,
+                            addr,
+                            storage: storage.clone(),
+                            tls_config: tls_config.clone(),
+                            user_store: user_store.clone(),
+                        };
+                        pool.spawn(task);
+                        let _ = poll.reregister(
+                            &listener,
+                            LISTENER,
+                            PollOpt::edge() | PollOpt::oneshot(),
+                        );
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        let _ = poll.reregister(
+                            &listener,
+                            LISTENER,
+                            PollOpt::edge() | PollOpt::oneshot(),
+                        );
+                    }
+                    Err(e) => tracing::error!("Accept: {}", e),
+                }
             }
-            Err(e) => tracing::error!("Accept: {}", e),
         }
     }
+
+    Ok(())
 }
